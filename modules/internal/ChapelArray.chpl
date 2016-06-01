@@ -1005,7 +1005,7 @@ module ChapelArray {
 
       compilerWarning("ChapelArray leader");
       /*writeln("ChapelArray leader");*/
-      coforall f in _value.dimIter(d, ind, tag=iterKind.leader) {
+      for f in _value.dimIter(d, ind, tag=iterKind.leader) {
         yield f;
       }
     }
@@ -1036,7 +1036,7 @@ module ChapelArray {
 
       compilerWarning("ChapelArray standalone");
       /*writeln("ChapelArray standalone");*/
-      forall i in _value.dimIter(d, ind, tag=iterKind.standalone) do yield i;
+      for i in _value.dimIter(d, ind, tag=iterKind.standalone) do yield i;
     }
     
     pragma "no doc"
