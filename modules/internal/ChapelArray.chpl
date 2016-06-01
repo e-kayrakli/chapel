@@ -997,7 +997,53 @@ module ChapelArray {
     proc dim(param d : int) return _value.dsiDim(d);
 
     pragma "no doc"
-    iter dimIter(param d, ind) {
+    inline iter dimIter(d: int, ind, 
+        tasksPerLocale = dataParTasksPerLocale,
+        ignoreRunning = dataParIgnoreRunningTasks,
+        minIndicesPerTask = dataParMinGranularity,
+        param tag: iterKind) where tag==iterKind.leader {
+
+      compilerWarning("ChapelArray leader");
+      /*writeln("ChapelArray leader");*/
+      coforall f in _value.dimIter(d, ind, tag=iterKind.leader) {
+        yield f;
+      }
+    }
+  
+    pragma "no doc"
+    inline iter dimIter(d: int, ind, 
+        tasksPerLocale = dataParTasksPerLocale,
+        ignoreRunning = dataParIgnoreRunningTasks,
+        minIndicesPerTask = dataParMinGranularity,
+        param tag: iterKind, followThis) where tag==iterKind.follower {
+
+      compilerWarning("ChapelArray follower");
+      /*writeln("ChapelArray follower");*/
+
+      for i in _value.dimIter(d, ind, tag=iterKind.follower,
+          followThis=followThis) { 
+        yield i;
+      }
+    }
+
+    pragma "no doc"
+    inline iter dimIter(d: int , ind, 
+        tasksPerLocale = dataParTasksPerLocale,
+        ignoreRunning = dataParIgnoreRunningTasks,
+        minIndicesPerTask = dataParMinGranularity,
+        param tag: iterKind)
+            where tag == iterKind.standalone {
+
+      compilerWarning("ChapelArray standalone");
+      /*writeln("ChapelArray standalone");*/
+      forall i in _value.dimIter(d, ind, tag=iterKind.standalone) do yield i;
+    }
+    
+    pragma "no doc"
+    inline iter dimIter(d: int, ind,
+        tasksPerLocale = dataParTasksPerLocale,
+        ignoreRunning = dataParIgnoreRunningTasks,
+        minIndicesPerTask = dataParMinGranularity){
       for i in _value.dimIter(d, ind) do yield i;
     }
 

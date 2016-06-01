@@ -18,7 +18,7 @@
  */
 
 config param debugCSR = false;
-
+use DSIUtil;
 // In the following, I insist on SUBdomains because
 // I have not seen us test a non-"sub" CSR domain
 // and I do not want untested code in the docs.
@@ -336,12 +336,96 @@ class CSRDom: BaseSparseDom {
     rowStart = 1;
   }
 
-  iter dimIter(param d, ind) {
+  iter dimIter(d: int, ind: int,
+      tasksPerLocale = dataParTasksPerLocale,
+      ignoreRunning = dataParIgnoreRunningTasks,
+      minIndicesPerTask = dataParMinGranularity){
+
     if (d != 2) {
-      compilerError("dimIter(1, ...) not supported on CSR domains");
+      halt("dimIter(1, ...) not supported on CSR domains");
     }
+
     for i in rowStart[ind]..rowStop[ind] do
       yield colIdx[i];
+  }
+
+  iter dimIter(d: int, ind: int, 
+      tasksPerLocale = dataParTasksPerLocale,
+      ignoreRunning = dataParIgnoreRunningTasks,
+      minIndicesPerTask = dataParMinGranularity,
+      param tag: iterKind) where tag==iterKind.leader {
+
+    /*writeln("CSR leader");*/
+
+    if (d != 2) {
+      halt("dimIter(1, ...) not supported on CSR domains");
+    }
+
+    const l = rowStart[ind], h = rowStop[ind];
+    const numElems = h-l+1;
+
+    const numTasks = if tasksPerLocale==0 then here.maxTaskPar else
+      tasksPerLocale;
+
+    coforall t in 0..#numTasks {
+      const myChunk = _computeBlock(numElems, numTasks, t, h-l, 0, 0);
+      yield (myChunk[1]..myChunk[2],);
+    }
+  }
+
+  iter dimIter(d: int, ind: int, 
+      tasksPerLocale = dataParTasksPerLocale,
+      ignoreRunning = dataParIgnoreRunningTasks,
+      minIndicesPerTask = dataParMinGranularity,
+      param tag: iterKind, followThis) where tag==iterKind.follower {
+  
+    compilerWarning("In CSR follower iterator ");
+    /*writeln("CSR follower");*/
+    /*writeln("Followthis: ", followThis[1], " ", colIdx.size);*/
+    const l = rowStart[ind];
+    const followRange = followThis[1].translate(l);
+    /*writeln("l:", l);*/
+    /*writeln("followRange:", followRange);*/
+    for i in followRange {
+      /*writeln("i:", i, " colIdx[i]:", colIdx[i]);  */
+      yield colIdx[i];
+    }
+  }
+
+  iter dimIter(d: int, ind: int, 
+      tasksPerLocale = dataParTasksPerLocale,
+      ignoreRunning = dataParIgnoreRunningTasks,
+      minIndicesPerTask = dataParMinGranularity,
+      param tag: iterKind)  where tag==iterKind.standalone {
+
+    if (d != 2) {
+      halt("dimIter(1, ...) not supported on CSR domains");
+    }
+
+    compilerWarning("In CSR Standalone iterator");
+    /*writeln("CSR Standalone");*/
+
+    const l = rowStart[ind], h = rowStop[ind];
+    const numElems = h-l+1;
+
+    const numTasks = if tasksPerLocale==0 then here.maxTaskPar else
+      tasksPerLocale;
+
+    const  numChunks = if __primitive("task_get_serial") then
+      1 else
+      _computeNumChunks(numTasks, ignoreRunning, minIndicesPerTask, numElems);
+
+    /*writeln("NumChunks: ", numChunks);*/
+    if numChunks == 1 {
+      for i in l..h do yield i;
+    }
+    else {
+      coforall t in 0..#numTasks {
+        const myChunk = _computeChunk(numElems, numTasks, t, h, l, l);
+        /*writeln("MyChunk: ", myChunk);*/
+        for i in myChunk do yield i;
+      }
+    }
   }
 }
 
