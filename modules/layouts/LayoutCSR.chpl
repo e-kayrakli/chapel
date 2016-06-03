@@ -373,20 +373,27 @@ class CSRDom: BaseSparseDom {
       halt("Invalid dimension for CSR.dimIter(). Only 1 and 2 \
           allowed.");
 
-    if d==1 {
-      compilerWarning("PERFORMANCE WARNING: CSR.dimIter(1, ind) is expensive");
-      halt("More to come soon");
-    }
-
-    const l = rowStart[ind], h = rowStop[ind];
-    const numElems = h-l+1;
-
     const numTasks = if tasksPerLocale==0 then here.maxTaskPar else
       tasksPerLocale;
 
-    coforall t in 0..#numTasks {
-      const myChunk = _computeBlock(numElems, numTasks, t, h-l, 0, 0);
-      yield (myChunk[1]..myChunk[2],);
+    if d==1 {
+      compilerWarning("PERFORMANCE WARNING: CSR.dimIter(1, ind) is expensive");
+      const l = nnzDom.low, h = nnzDom.low+nnz-1;
+      const numElems = colIdx.size;
+
+      coforall t in 0..#numTasks {
+        const myChunk = _computeBlock(numElems, numTasks, t, h-l, 0, 0);
+        yield(myChunk[1]..myChunk[2], );
+      }
+    }
+    else {
+      const l = rowStart[ind], h = rowStop[ind];
+      const numElems = h-l+1;
+
+      coforall t in 0..#numTasks {
+        const myChunk = _computeBlock(numElems, numTasks, t, h-l, 0, 0);
+        yield (myChunk[1]..myChunk[2],);
+      }
     }
   }
 
@@ -397,15 +404,31 @@ class CSRDom: BaseSparseDom {
       param tag: iterKind, followThis) where tag==iterKind.follower {
   
     compilerWarning("In CSR follower iterator ");
-    /*writeln("CSR follower");*/
-    /*writeln("Followthis: ", followThis[1], " ", colIdx.size);*/
-    const l = rowStart[ind];
-    const followRange = followThis[1].translate(l);
-    /*writeln("l:", l);*/
-    /*writeln("followRange:", followRange);*/
-    for i in followRange {
-      /*writeln("i:", i, " colIdx[i]:", colIdx[i]);  */
-      yield colIdx[i];
+
+    if d==1 {
+      const l = nnzDom.low;
+      const followRange = followThis[1].translate(l);
+
+      /*writeln("followRange:", followRange);*/
+      for i in followRange {
+        if colIdx[i] == ind {
+          const (found, loc) = BinarySearch(rowStart, i);
+          /*writeln(i, " Result: ", (found, loc));*/
+          yield if found then loc else loc-1;
+        }
+      }
+    }
+    else {
+      /*writeln("CSR follower");*/
+      /*writeln("Followthis: ", followThis[1], " ", colIdx.size);*/
+      const l = rowStart[ind];
+      const followRange = followThis[1].translate(l);
+      /*writeln("l:", l);*/
+      /*writeln("followRange:", followRange);*/
+      for i in followRange {
+        /*writeln("i:", i, " colIdx[i]:", colIdx[i]);  */
+        yield colIdx[i];
+      }
     }
   }
 
@@ -419,33 +442,45 @@ class CSRDom: BaseSparseDom {
       halt("Invalid dimension for CSR.dimIter(). Only 1 and 2 \
           allowed.");
 
-    if d==1 {
-      compilerWarning("PERFORMANCE WARNING: CSR.dimIter(1, ind) is expensive");
-      halt("More to come soon");
-    }
-
-    compilerWarning("In CSR Standalone iterator");
-    /*writeln("CSR Standalone");*/
-
-    const l = rowStart[ind], h = rowStop[ind];
-    const numElems = h-l+1;
-
     const numTasks = if tasksPerLocale==0 then here.maxTaskPar else
       tasksPerLocale;
 
-    const  numChunks = if __primitive("task_get_serial") then
-      1 else
-      _computeNumChunks(numTasks, ignoreRunning, minIndicesPerTask, numElems);
+    if d==1 {
+      compilerWarning("PERFORMANCE WARNING: CSR.dimIter(1, ind) is expensive");
+      const l = nnzDom.low, h = nnzDom.high;
+      const numElems = colIdx.size;
 
-    /*writeln("NumChunks: ", numChunks);*/
-    if numChunks == 1 {
-      for i in l..h do yield i;
+      coforall t in 0..#numTasks {
+        const myChunk = _computeBlock(numElems, numTasks, t, h-l, 0, 0);
+        for i in myChunk {
+          if colIdx[i] == ind {
+            const (found, loc) = BinarySearch(rowStart, i);
+            yield if found then loc else loc-1;
+          }
+        }
+      }
     }
     else {
-      coforall t in 0..#numTasks {
-        const myChunk = _computeChunk(numElems, numTasks, t, h, l, l);
-        /*writeln("MyChunk: ", myChunk);*/
-        for i in myChunk do yield i;
+      const l = rowStart[ind], h = rowStop[ind];
+      const numElems = h-l+1;
+
+      const numTasks = if tasksPerLocale==0 then here.maxTaskPar else
+        tasksPerLocale;
+
+      const  numChunks = if __primitive("task_get_serial") then
+        1 else
+        _computeNumChunks(numTasks, ignoreRunning, minIndicesPerTask, numElems);
+
+      /*writeln("NumChunks: ", numChunks);*/
+      if numChunks == 1 {
+        for i in l..h do yield i;
+      }
+      else {
+        coforall t in 0..#numTasks {
+          const myChunk = _computeChunk(numElems, numTasks, t, h, l, l);
+          /*writeln("MyChunk: ", myChunk);*/
+          for i in myChunk do yield i;
+        }
       }
     }
   }
