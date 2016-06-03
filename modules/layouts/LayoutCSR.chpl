@@ -341,12 +341,26 @@ class CSRDom: BaseSparseDom {
       ignoreRunning = dataParIgnoreRunningTasks,
       minIndicesPerTask = dataParMinGranularity){
 
-    if (d != 2) {
-      halt("dimIter(1, ...) not supported on CSR domains");
-    }
+    if d<1 || d>2 then 
+      halt("Invalid dimension for CSR.dimIter(). Only 1 and 2 \
+          allowed.");
 
-    for i in rowStart[ind]..rowStop[ind] do
-      yield colIdx[i];
+    if d==1 {
+      /*writeln(colIdx);*/
+      /*writeln(rowStart);*/
+      compilerWarning("PERFORMANCE WARNING: CSR.dimIter(1, ind) is expensive");
+      for i in nnzDom.low..#nnz {
+        if colIdx[i] == ind {
+          const (found, loc) = BinarySearch(rowStart, i);
+          /*writeln(i, " ", colIdx[i], " ", if found then loc else loc-1);*/
+          yield if found then loc else loc-1;
+        }
+      }
+    }
+    else {
+      for i in rowStart[ind]..rowStop[ind] do
+        yield colIdx[i];
+    }
   }
 
   iter dimIter(d: int, ind: int, 
@@ -355,10 +369,13 @@ class CSRDom: BaseSparseDom {
       minIndicesPerTask = dataParMinGranularity,
       param tag: iterKind) where tag==iterKind.leader {
 
-    /*writeln("CSR leader");*/
+    if d<1 || d>2 then 
+      halt("Invalid dimension for CSR.dimIter(). Only 1 and 2 \
+          allowed.");
 
-    if (d != 2) {
-      halt("dimIter(1, ...) not supported on CSR domains");
+    if d==1 {
+      compilerWarning("PERFORMANCE WARNING: CSR.dimIter(1, ind) is expensive");
+      halt("More to come soon");
     }
 
     const l = rowStart[ind], h = rowStop[ind];
@@ -398,8 +415,13 @@ class CSRDom: BaseSparseDom {
       minIndicesPerTask = dataParMinGranularity,
       param tag: iterKind)  where tag==iterKind.standalone {
 
-    if (d != 2) {
-      halt("dimIter(1, ...) not supported on CSR domains");
+    if d<1 || d>2 then 
+      halt("Invalid dimension for CSR.dimIter(). Only 1 and 2 \
+          allowed.");
+
+    if d==1 {
+      compilerWarning("PERFORMANCE WARNING: CSR.dimIter(1, ind) is expensive");
+      halt("More to come soon");
     }
 
     compilerWarning("In CSR Standalone iterator");
