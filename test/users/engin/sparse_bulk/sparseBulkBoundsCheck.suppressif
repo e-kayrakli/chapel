@@ -8,4 +8,4 @@
 # compopts since we wouldn't be testing the default behavior, and
 # wouldn't be able to verify that checks are enabled by default. 
 
-COMPOPTS <= --fast
+COMPOPTS >= --fast
