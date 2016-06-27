@@ -110,8 +110,6 @@ module DefaultSparse {
     }
 
     iter these(param tag: iterKind, followThis) where tag == iterKind.follower {
-      /*var (followThisDom, startIx, endIx) = followThis;*/
-
       const startIdx = followThis[1].low;
       const endIdx = followThis[1].high;
       if debugDefaultSparse then
