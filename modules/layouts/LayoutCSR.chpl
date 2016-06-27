@@ -119,9 +119,6 @@ class CSRDom: BaseSparseDom {
   }
 
   iter these() {
-    //writeln("serial- rowRange=", rowRange, " colRange=", colRange, "\n",
-    //        "        rowStart=", rowStart, " colIdx=", colIdx);
-
     // faster to start at _private_findStartRow(1) ?
     var cursorRow = rowRange.low;
     for i in 1..nnz {
@@ -132,50 +129,75 @@ class CSRDom: BaseSparseDom {
     }
   }
 
+  iter these(param tag: iterKind) where tag == iterKind.standalone {
+    // same as DefaultSparseDom's leader
+    const numElems = nnz;
+    const numChunks = _computeNumChunks(numElems);
+    if debugCSR then
+      writeln("CSRDom leader: ", numChunks, " chunks, ", numElems, " elems");
+
+    // split our numElems elements over numChunks tasks
+    if numChunks == 1 {
+      var cursorRow = rowRange.low;
+      for i in 1..numElems {
+        while (rowStart(cursorRow+1) <= i) do cursorRow += 1;
+        yield (cursorRow, colIdx(i));
+      }
+    }
+    else {
+      coforall chunk in 1..numChunks do {
+        const (startIdx, endIdx) =
+          _computeChunkStartEnd(numElems, numChunks, chunk);
+          var cursorRow = _private_findStartRow(startIdx);
+          for i in startIdx..endIdx {
+            while (rowStart(cursorRow+1) <= i) do cursorRow += 1;
+            yield (cursorRow, colIdx(i));
+          }
+      }
+    }
+    // TODO: to handle large numElems and numChunks faster, it would be great
+    // to run the binary search in _private_findStartRow smarter, e.g.
+    // pass to the tasks created in 'coforall' smaller ranges to search over.
+  }
+
   iter these(param tag: iterKind) where tag == iterKind.leader {
     // same as DefaultSparseDom's leader
     const numElems = nnz;
-      const numChunks = _computeNumChunks(numElems);
-      //writeln("leader- rowRange=", rowRange, " colRange=", colRange, "\n",
-      //        "        rowStart=", rowStart, " colIdx=", colIdx);
-      if debugCSR then
-        writeln("CSRDom leader: ", numChunks, " chunks, ", numElems, " elems");
-
-      // split our numElems elements over numChunks tasks
-      if numChunks == 1 then
-        yield (this, 1, numElems);
-      else
-        coforall chunk in 1..numChunks do
-          yield (this, (..._computeChunkStartEnd(numElems, numChunks, chunk)));
-      // TODO: to handle large numElems and numChunks faster, it would be great
-      // to run the binary search in _private_findStartRow smarter, e.g.
-      // pass to the tasks created in 'coforall' smaller ranges to search over.
-  }
-
-  iter these(param tag: iterKind, followThis: (?,?,?)) where tag == iterKind.follower {
-    var (followThisDom, startIx, endIx) = followThis;
-    if boundsChecking then
-      assert(startIx <= endIx, "CSRDom follower - got nothing to iterate over");
-
-    if (followThisDom != this) then
-      halt("Sparse domains can't be zippered with anything other than themselves and their arrays (CSR layout)");
-
-    // This loop is identical to the serial iterator, except for the iteration
-    // space and finding the initial 'cursorRow'.
-    var cursorRow = _private_findStartRow(startIx);
+    const numChunks = _computeNumChunks(numElems);
     if debugCSR then
-      writeln("CSRDom follower: ", startIx, "..", endIx,
-              "  rowStart(", cursorRow, ")=", rowStart(cursorRow));
+      writeln("CSRDom leader: ", numChunks, " chunks, ", numElems, " elems");
 
-    for i in startIx..endIx {
-      while (rowStart(cursorRow+1) <= i) do cursorRow += 1;
-      yield (cursorRow, colIdx(i));
-    }
+    // split our numElems elements over numChunks tasks
+    if numChunks == 1 then
+      yield (1..numElems, );
+    else
+      coforall chunk in 1..numChunks do {
+        const (startIdx, endIdx) =
+          _computeChunkStartEnd(numElems, numChunks, chunk);
+          yield (startIdx-nnzDom.low..endIdx-nnzDom.low, );
+      }
+    // TODO: to handle large numElems and numChunks faster, it would be great
+    // to run the binary search in _private_findStartRow smarter, e.g.
+    // pass to the tasks created in 'coforall' smaller ranges to search over.
   }
 
   iter these(param tag: iterKind, followThis) where tag == iterKind.follower {
-    compilerError("Sparse iterators can't yet be zippered with others (CSR layout)");
-    yield 0;    // Dummy.
+    const startIdx = followThis[1].low;
+    const endIdx = followThis[1].high;
+    if boundsChecking then
+      assert(startIdx <= endIdx, "CSRDom follower - got nothing to iterate over");
+
+    // This loop is identical to the serial iterator, except for the iteration
+    // space and finding the initial 'cursorRow'.
+    var cursorRow = _private_findStartRow(startIdx);
+    if debugCSR then
+      writeln("CSRDom follower: ", startIdx, "..", endIdx,
+              "  rowStart(", cursorRow, ")=", rowStart(cursorRow));
+
+    for i in startIdx+nnzDom.low..endIdx+nnzDom.low {
+      while (rowStart(cursorRow+1) <= i) do cursorRow += 1;
+      yield (cursorRow, colIdx(i));
+    }
   }
 
   // Helper: find 'ix' s.t. rowStart(ix) <= startIx < rowStart(ix+1)

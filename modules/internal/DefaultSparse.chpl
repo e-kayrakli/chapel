@@ -100,28 +100,25 @@ module DefaultSparse {
       // split our numElems elements over numChunks tasks
       if numChunks <= 1 then
         // ... except if 1, just use the current thread
-        yield (this, 1, numElems);
+        yield (1..numElems, );
       else
-        coforall chunk in 1..numChunks do
-          yield (this, (..._computeChunkStartEnd(numElems, numChunks, chunk)));
-    }
-
-    iter these(param tag: iterKind, followThis:(?,?,?)) where tag == iterKind.follower {
-      var (followThisDom, startIx, endIx) = followThis;
-
-      if (followThisDom != this) then
-        halt("Sparse domains can't be zippered with anything other than themselves and their arrays");
-      if debugDefaultSparse then
-        writeln("DefaultSparseDom follower: ", startIx, "..", endIx);
-
-      for i in startIx..endIx do
-        yield indices(i);
+        coforall chunk in 1..numChunks do {
+          const (startIdx, endIdx ) = _computeChunkStartEnd(numElems, numChunks,
+              chunk);
+          yield(startIdx-nnzDom.low..endIdx-nnzDom.low, );
+        }
     }
 
     iter these(param tag: iterKind, followThis) where tag == iterKind.follower {
-      compilerError("Sparse iterators can't yet be zippered with others");
-      var dummy: rank * idxType;
-      yield dummy;
+      /*var (followThisDom, startIx, endIx) = followThis;*/
+
+      const startIdx = followThis[1].low;
+      const endIdx = followThis[1].high;
+      if debugDefaultSparse then
+        writeln("DefaultSparseDom follower: ", startIdx, "..", endIdx);
+
+      for i in startIdx+nnzDom.low..endIdx+nnzDom.low do
+        yield indices(i);
     }
 
     proc dsiDim(d : int) {
