@@ -244,7 +244,7 @@ llvm::Value *convertValueToType(
   // (e.g. calling a function that returns {int64,int64})
   if( isArrayVecOrStruct(curType) || isArrayVecOrStruct(newType) ) {
     if( isTypeEquivalent(targetData, curType, newType, force) ) {
-      std::cout << "YUP\n";
+      //std::cout << "YUP\n";
       // We turn it into a store/load to convert the type
       // since LLVM does not allow bit casts on structure types.
       llvm::Value* tmp_alloc;
