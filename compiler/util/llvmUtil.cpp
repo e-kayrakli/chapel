@@ -21,6 +21,7 @@
 
 #include <cstdio>
 #include <cassert>
+#include <iostream>
 
 #ifdef HAVE_LLVM
 
@@ -101,13 +102,19 @@ bool isTypeEquivalent(LLVM_TARGET_DATA * targetData, llvm::Type* a, llvm::Type* 
   // Are they the same size, within alignment?
   if( sizeA < sizeB ) {
     // Try making size A bigger...
-    if( sizeA + alignA > sizeB ) return true;
+    if( sizeA + alignA >= sizeB ) return true;
   } else {
     // A >= B
     // Try making size B bigger...
-    if( sizeB + alignB > sizeA ) return true;
+    if( sizeB + alignB >= sizeA ) return true;
   }
 
+  //std::cout << "\t" << a->getTypeID() << std::endl;
+  //std::cout << "\t\t" << sizeA << std::endl;
+  //std::cout << "\t\t" << alignA << std::endl;
+  //std::cout << "\t" << b->getTypeID() << std::endl;
+  //std::cout << "\t\t" << sizeB << std::endl;
+  //std::cout << "\t\t" << alignB << std::endl;
   return false;
 }
 
@@ -237,6 +244,7 @@ llvm::Value *convertValueToType(
   // (e.g. calling a function that returns {int64,int64})
   if( isArrayVecOrStruct(curType) || isArrayVecOrStruct(newType) ) {
     if( isTypeEquivalent(targetData, curType, newType, force) ) {
+      std::cout << "YUP\n";
       // We turn it into a store/load to convert the type
       // since LLVM does not allow bit casts on structure types.
       llvm::Value* tmp_alloc;
