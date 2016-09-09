@@ -340,7 +340,7 @@ class BlockArr: BaseArr {
   // allocated here is going to be local
   // communication routines must clear the memory once they are done
   // TODO we can extend this to be persisten
-  var locArrsScratchPad: [dom.dist.targetLocDom][dom.dist.targetLocDom] 
+  var locArrsScratchPad: [dom.dist.targetLocDom] 
     LocBlockArr(eltType, rank, idxType, stridable);
 
   /*var locArrsScratchPadFlags:*/
@@ -1044,10 +1044,10 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 }
 
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
-  /*writeln(locArrsScratchPad[here.id][dom.dist.targetLocsIdx(i)] != nil);*/
+  /*writeln(locArrsScratchPad[dom.dist.targetLocsIdx(i)] != nil);*/
   /*if locArrsScratchPadFlags[here.id*numLdom.dist.targetLocsIdx(i)] {*/
-  if locArrsScratchPad[here.id][dom.dist.targetLocsIdx(i)] != nil {
-    return locArrsScratchPad[here.id][dom.dist.targetLocsIdx(i)][i];
+  if locArrsScratchPad[dom.dist.targetLocsIdx(i)] != nil {
+    return locArrsScratchPad[dom.dist.targetLocsIdx(i)][i];
   }
   /*halt("oops ", here.id, " ", i, " ", dom.dist.targetLocsIdx(i), " ", */
       /*locArrsScratchPadFlags);*/
