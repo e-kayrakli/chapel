@@ -3126,7 +3126,7 @@ module ChapelArray {
 
   inline proc chpl__bulkTransferArray(a: [], b) {
     if (useBulkTransfer &&
-        chpl__compatibleForBulkTransfer(a, b) &&
+        /*chpl__compatibleForBulkTransfer(a, b) &&*/
         chpl__useBulkTransfer(a, b))
     {
       a._value.doiBulkTransfer(b);
@@ -3140,6 +3140,14 @@ module ChapelArray {
     else {
       if debugBulkTransfer {
         chpl_debug_writeln("proc =(a:[],b): bulk transfer did not happen");
+        chpl_debug_writeln(chpl__compatibleForBulkTransfer(a, b), " ", 
+            chpl__useBulkTransfer(a, b));
+        chpl_debug_writeln(
+            a.eltType != b.eltType, " ",
+            !chpl__supportedDataTypeForBulkTransfer(a.eltType), " ",
+            a._value.type != b._value.type, " ",
+            !a._value.dsiSupportsBulkTransfer());
+        chpl_debug_writeln(a.eltType == int);
       }
       chpl__transferArray(a, b);
     }

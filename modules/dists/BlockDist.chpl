@@ -335,6 +335,16 @@ class BlockArr: BaseArr {
   var dom: BlockDom(rank, idxType, stridable, sparseLayoutType);
   var locArr: [dom.dist.targetLocDom] LocBlockArr(eltType, rank, idxType, stridable);
   var myLocArr: LocBlockArr(eltType, rank, idxType, stridable);
+
+  // this scratch pad will be used on ad hoc basis. all the memory
+  // allocated here is going to be local
+  // communication routines must clear the memory once they are done
+  // TODO we can extend this to be persisten
+  var locArrsScratchPad: [dom.dist.targetLocDom][dom.dist.targetLocDom] 
+    LocBlockArr(eltType, rank, idxType, stridable);
+
+  /*var locArrsScratchPadFlags:*/
+    /*[0..#numLocales**2] bool;*/
   var pid: int = -1; // privatized object id (this should be factored out)
   const SENTINEL = max(rank*idxType);
 }
@@ -1034,6 +1044,18 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 }
 
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
+  /*writeln(locArrsScratchPad[here.id][dom.dist.targetLocsIdx(i)] != nil);*/
+  /*if locArrsScratchPadFlags[here.id*numLdom.dist.targetLocsIdx(i)] {*/
+  if locArrsScratchPad[here.id][dom.dist.targetLocsIdx(i)] != nil {
+    return locArrsScratchPad[here.id][dom.dist.targetLocsIdx(i)][i];
+  }
+  /*halt("oops ", here.id, " ", i, " ", dom.dist.targetLocsIdx(i), " ", */
+      /*locArrsScratchPadFlags);*/
+      /*locArrsScratchPad[0][0] != nil, " ", */
+      /*locArrsScratchPad[0][1] != nil, " ", */
+      /*locArrsScratchPad[1][0] != nil, " ", */
+      /*locArrsScratchPad[1][1] != nil);*/
+
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -1458,6 +1480,15 @@ proc BlockArr.dsiPrivatize(privatizeData) {
   }
   return c;
 }
+
+/*proc BlockArr.dsiGetReprivatizeData() {*/
+  /*return locArrsScratchPad;*/
+/*}*/
+
+/*proc BlockArr.dsiReprivatize(other, reprivatizeData) {*/
+  /*[>writeln("reprivatizing");<]*/
+  /*this.locArrsScratchPad = reprivatizeData;*/
+/*}*/
 
 proc BlockArr.dsiSupportsBulkTransfer() param return true;
 proc BlockArr.dsiSupportsBulkTransferInterface() param return true;
