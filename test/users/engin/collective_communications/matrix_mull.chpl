@@ -21,23 +21,21 @@ forall (i,j) in dom {
 
 var c: [dom] real;
 
-startCommDiagnostics();
+/*startCommDiagnostics();*/
 const t = new Timer();
 
 t.start();
 if optComm {
   a._value.rowWiseAllBroadcast();
-  b._value.rowWiseAllBroadcast();
+  b._value.colWiseAllBroadcast();
 }
 forall (i,j) in dom {
-  var sum = 0.0;
-  for k in 0..#N {
-    sum += a[i,k] * b[j,k];
+  for k in dom.dim(1) {
+    c[i,j] += a[i,k] * b[k,j];
   }
-  c[i,j] = sum;
 }
 t.stop();
-stopCommDiagnostics();
+/*stopCommDiagnostics();*/
 
 /*writeln(c);*/
 
@@ -45,7 +43,7 @@ writeln("Checksum : ", + reduce c);
 writeln("N : ", N);
 writeln("Time : ", t.elapsed());
 
-writeln(getCommDiagnostics());
+/*writeln(getCommDiagnostics());*/
 
 // local copies are broadcast across columns
 proc BlockArr.rowWiseAllBroadcast() {
