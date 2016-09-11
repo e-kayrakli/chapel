@@ -43,7 +43,7 @@ for blockIdx in b._value.dom.dist.targetLocDom.dim(1) { // or a.dim.(2)
       begin {
         a._value.rowWiseAllPrefetch(blockIdx+1);
         b._value.colWiseAllPrefetch(blockIdx+1);
-        /*if !relaxedPipeline then */
+        if !relaxedPipeline then
           done$=true;
       }
     }
@@ -53,7 +53,7 @@ for blockIdx in b._value.dom.dist.targetLocDom.dim(1) { // or a.dim.(2)
       c[i,j] += a[i,k] * b[k,j];
     }
   }
-  if optComm /*&& !relaxedPipeline */{
+  if optComm && !relaxedPipeline {
     if blockIdx < b._value.dom.dist.targetLocDom.dim(1).high {
       done$;
     }
@@ -110,6 +110,7 @@ proc BlockArr.rowWiseAllPrefetch(onlyCol) {
         chpl__bulkTransferArray(
             privCopy.locArrsScratchPad[sourceIdx].myElems,
             locArr[sourceIdx].myElems);
+        privCopy.locArrsScratchPadReady[sourceIdx] = true;
       /*}*/
     }
   }
@@ -156,6 +157,7 @@ proc BlockArr.colWiseAllPrefetch(onlyRow) {
         chpl__bulkTransferArray(
             privCopy.locArrsScratchPad[sourceIdx].myElems,
             locArr[sourceIdx].myElems);
+        privCopy.locArrsScratchPadReady[sourceIdx] = true;
       /*}*/
     }
   }

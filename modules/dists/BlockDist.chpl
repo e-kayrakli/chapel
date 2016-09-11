@@ -343,6 +343,8 @@ class BlockArr: BaseArr {
   var locArrsScratchPad: [dom.dist.targetLocDom] 
     LocBlockArr(eltType, rank, idxType, stridable);
 
+  var locArrsScratchPadReady: [dom.dist.targetLocDom] bool;
+
   /*var locArrsScratchPadFlags:*/
     /*[0..#numLocales**2] bool;*/
   var pid: int = -1; // privatized object id (this should be factored out)
@@ -1046,7 +1048,7 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
   /*writeln(locArrsScratchPad[dom.dist.targetLocsIdx(i)] != nil);*/
   /*if locArrsScratchPadFlags[here.id*numLdom.dist.targetLocsIdx(i)] {*/
-  if locArrsScratchPad[dom.dist.targetLocsIdx(i)] != nil {
+  if locArrsScratchPadReady[dom.dist.targetLocsIdx(i)] {
     return locArrsScratchPad[dom.dist.targetLocsIdx(i)][i];
   }
   /*halt("oops ", here.id, " ", i, " ", dom.dist.targetLocsIdx(i), " ", */
