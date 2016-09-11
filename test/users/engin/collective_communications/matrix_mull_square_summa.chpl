@@ -16,38 +16,42 @@ forall (i,j) in dom {
 }
 
 /*writeln(a);*/
+/*writeln();*/
 /*writeln(b);*/
 
 
 var c: [dom] real;
 
-/*startCommDiagnostics();*/
+startCommDiagnostics();
 const t = new Timer();
 
 t.start();
+//here the only limititaion on top of the previous implementation is
+//that we are assuming a square number of locales
+const numBlocks = b._value.dom.dist.targetLocDom.dim(1).size;
+const blockSize = N/numBlocks;
 for blockIdx in b._value.dom.dist.targetLocDom.dim(1) { // or a.dim.(2)
   if optComm {
-    /*a._value.rowWiseAllGather();*/
-    /*b._value.colWiseAllGather();*/
     a._value.rowWiseAllPrefetch(blockIdx);
     b._value.colWiseAllPrefetch(blockIdx);
   }
   forall (i,j) in dom {
-    for k in dom.dim(1) {
+    for k in blockIdx*blockSize..min(N-1, (blockIdx+1)*blockSize-1) {
       c[i,j] += a[i,k] * b[k,j];
     }
   }
 }
 t.stop();
-/*stopCommDiagnostics();*/
+stopCommDiagnostics();
 
+/*writeln();*/
 /*writeln(c);*/
 
 writeln("Checksum : ", + reduce c);
 writeln("N : ", N);
 writeln("Time : ", t.elapsed());
 
-/*writeln(getCommDiagnostics());*/
+writeln(getCommDiagnostics());
 
 // local copies are broadcast across columns
 proc BlockArr.rowWiseAllGather() {
@@ -76,9 +80,9 @@ proc BlockArr.rowWiseAllPrefetch(onlyCol) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       /*for i in dom.dist.targetLocDom.dim(2) {*/
-        const targetIdx = 
+        const sourceIdx = 
           chpl__tuplify(onlyCol).withIdx(1, localeIdx[1]);
-        const locDom = dom.getLocDom(targetIdx);
+        const locDom = dom.getLocDom(sourceIdx);
         /*writeln("Copying ", locDom.myBlock, " from ", */
             /*dom.dist.targetLocales(sourceIdx), " to ",*/
             /*dom.dist.targetLocales(localeIdx), " on ", here);*/
