@@ -92,6 +92,7 @@ proc BlockArr.rowWiseAllPrefetch(onlyCol) {
         chpl__bulkTransferArray(
             privCopy.locArrsScratchPad[sourceIdx].myElems,
             locArr[sourceIdx].myElems);
+        privCopy.locArrsScratchPadReady[sourceIdx] = true;
       /*}*/
     }
   }
@@ -138,6 +139,7 @@ proc BlockArr.colWiseAllPrefetch(onlyRow) {
         chpl__bulkTransferArray(
             privCopy.locArrsScratchPad[sourceIdx].myElems,
             locArr[sourceIdx].myElems);
+        privCopy.locArrsScratchPadReady[sourceIdx] = true;
       /*}*/
     }
   }

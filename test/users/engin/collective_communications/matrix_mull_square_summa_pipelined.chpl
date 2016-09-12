@@ -1,10 +1,10 @@
 use Time;
 use BlockDist;
-use CommDiagnostics;
+/*use CommDiagnostics;*/
 
 config const N = 4;
-config const optComm = true;
-config const relaxedPipeline = false;
+config param optComm = true;
+config param relaxedPipeline = false;
 const space = {0..#N, 0..#N};
 const dom = space dmapped Block(space);
 
@@ -23,23 +23,24 @@ forall (i,j) in dom {
 
 var c: [dom] real;
 
-startCommDiagnostics();
+/*startCommDiagnostics();*/
 const t = new Timer();
 
 t.start();
 //here the only limititaion on top of the previous implementation is
 //that we are assuming a square number of locales
-const numBlocks = b._value.dom.dist.targetLocDom.dim(1).size;
+const localeRange = b._value.dom.dist.targetLocDom.dim(1); //or a.dim(2)
+const numBlocks = localeRange.size;
 const blockSize = N/numBlocks;
 
 if optComm {
-  a._value.rowWiseAllPrefetch(b._value.dom.dist.targetLocDom.dim(1).low);
-  b._value.colWiseAllPrefetch(b._value.dom.dist.targetLocDom.dim(1).low);
+  a._value.rowWiseAllPrefetch(localeRange.low);
+  b._value.colWiseAllPrefetch(localeRange.low);
 }
-for blockIdx in b._value.dom.dist.targetLocDom.dim(1) { // or a.dim.(2)
+for blockIdx in localeRange { // or a.dim.(2)
   var done$: sync bool;
   if optComm {
-    if blockIdx < b._value.dom.dist.targetLocDom.dim(1).high {
+    if blockIdx < localeRange.high {
       begin {
         a._value.rowWiseAllPrefetch(blockIdx+1);
         b._value.colWiseAllPrefetch(blockIdx+1);
@@ -48,19 +49,23 @@ for blockIdx in b._value.dom.dist.targetLocDom.dim(1) { // or a.dim.(2)
       }
     }
   }
+
   forall (i,j) in dom {
+    var sum = 0.0;
     for k in blockIdx*blockSize..min(N-1, (blockIdx+1)*blockSize-1) {
-      c[i,j] += a[i,k] * b[k,j];
+      sum += a[i,k] * b[k,j];
     }
+    c[i,j] += sum;
   }
+
   if optComm && !relaxedPipeline {
-    if blockIdx < b._value.dom.dist.targetLocDom.dim(1).high {
+    if blockIdx < localeRange.high {
       done$;
     }
   }
 }
 t.stop();
-stopCommDiagnostics();
+/*stopCommDiagnostics();*/
 
 /*writeln();*/
 /*writeln(c);*/
@@ -69,7 +74,7 @@ writeln("Checksum : ", + reduce c);
 writeln("N : ", N);
 writeln("Time : ", t.elapsed());
 
-writeln(getCommDiagnostics());
+/*writeln(getCommDiagnostics());*/
 
 // local copies are broadcast across columns
 proc BlockArr.rowWiseAllGather() {
@@ -97,21 +102,18 @@ proc BlockArr.rowWiseAllGather() {
 proc BlockArr.rowWiseAllPrefetch(onlyCol) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
-      /*for i in dom.dist.targetLocDom.dim(2) {*/
-        const sourceIdx = 
+        const sourceIdx =
           chpl__tuplify(onlyCol).withIdx(1, localeIdx[1]);
-        const locDom = dom.getLocDom(sourceIdx);
-        /*writeln("Copying ", locDom.myBlock, " from ", */
-            /*dom.dist.targetLocales(sourceIdx), " to ",*/
-            /*dom.dist.targetLocales(localeIdx), " on ", here);*/
-        const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-        privCopy.locArrsScratchPad[sourceIdx] =
-          new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-        chpl__bulkTransferArray(
-            privCopy.locArrsScratchPad[sourceIdx].myElems,
-            locArr[sourceIdx].myElems);
-        privCopy.locArrsScratchPadReady[sourceIdx] = true;
-      /*}*/
+        if sourceIdx != localeIdx {
+          const locDom = dom.getLocDom(sourceIdx);
+          const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+          privCopy.locArrsScratchPad[sourceIdx] =
+            new LocBlockArr(eltType, rank, idxType, stridable, locDom);
+          chpl__bulkTransferArray(
+              privCopy.locArrsScratchPad[sourceIdx].myElems,
+              locArr[sourceIdx].myElems);
+          privCopy.locArrsScratchPadReady[sourceIdx] = true;
+        } 
     }
   }
   /*writeln("Gather finished");*/
@@ -147,10 +149,8 @@ proc BlockArr.colWiseAllPrefetch(onlyRow) {
       /*for i in dom.dist.targetLocDom.dim(1) {*/
         const sourceIdx =
           chpl__tuplify(onlyRow).withIdx(2, localeIdx[2]);
+        if sourceIdx != localeIdx {
         const locDom = dom.getLocDom(sourceIdx);
-        /*writeln("Copying ", locDom.myBlock, " from ", */
-            /*dom.dist.targetLocales(sourceIdx), " to ",*/
-            /*dom.dist.targetLocales(localeIdx), " on ", here);*/
         const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
         privCopy.locArrsScratchPad[sourceIdx] =
           new LocBlockArr(eltType, rank, idxType, stridable, locDom);
@@ -158,7 +158,7 @@ proc BlockArr.colWiseAllPrefetch(onlyRow) {
             privCopy.locArrsScratchPad[sourceIdx].myElems,
             locArr[sourceIdx].myElems);
         privCopy.locArrsScratchPadReady[sourceIdx] = true;
-      /*}*/
+      }
     }
   }
   /*writeln("Gather finished");*/
