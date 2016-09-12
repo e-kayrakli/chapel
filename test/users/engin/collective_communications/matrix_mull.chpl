@@ -2,6 +2,7 @@ use Time;
 use BlockDist;
 use CommDiagnostics;
 
+config param detailedTiming=false;
 config const N = 4;
 config const optComm = true;
 const space = {0..#N, 0..#N};
@@ -23,16 +24,32 @@ var c: [dom] real;
 
 startCommDiagnostics();
 const t = new Timer();
+const detailT = new Timer();
+var commTime = 0.0;
+var compTime = 0.0;
 
 t.start();
 if optComm {
+  if detailedTiming then detailT.start();
   a._value.rowWiseAllGather();
   b._value.colWiseAllGather();
+  if detailedTiming {
+    detailT.stop();
+    commTime += detailT.elapsed();
+    detailT.clear();
+  }
 }
+
+if detailedTiming then detailT.start();
 forall (i,j) in dom {
   for k in dom.dim(1) {
     c[i,j] += a[i,k] * b[k,j];
   }
+}
+if detailedTiming {
+  detailT.stop();
+  compTime += detailT.elapsed();
+  detailT.clear();
 }
 t.stop();
 stopCommDiagnostics();
@@ -42,6 +59,10 @@ stopCommDiagnostics();
 writeln("Checksum : ", + reduce c);
 writeln("N : ", N);
 writeln("Time : ", t.elapsed());
+if detailedTiming {
+  writeln("\t CommTime : ", commTime);
+  writeln("\t CompTime : ", compTime);
+}
 
 writeln(getCommDiagnostics());
 
