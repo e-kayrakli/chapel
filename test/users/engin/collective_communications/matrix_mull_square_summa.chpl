@@ -2,6 +2,7 @@ use Time;
 use BlockDist;
 use CommDiagnostics;
 
+config param detailedTiming=false;
 config const N = 4;
 config const optComm = true;
 const space = {0..#N, 0..#N};
@@ -24,6 +25,9 @@ var c: [dom] real;
 
 startCommDiagnostics();
 const t = new Timer();
+const detailT = new Timer();
+var commTime = 0.0;
+var compTime = 0.0;
 
 t.start();
 //here the only limititaion on top of the previous implementation is
@@ -32,13 +36,26 @@ const numBlocks = b._value.dom.dist.targetLocDom.dim(1).size;
 const blockSize = N/numBlocks;
 for blockIdx in b._value.dom.dist.targetLocDom.dim(1) { // or a.dim.(2)
   if optComm {
+    if detailedTiming then detailT.start();
     a._value.rowWiseAllPrefetch(blockIdx);
     b._value.colWiseAllPrefetch(blockIdx);
+    if detailedTiming {
+      detailT.stop();
+      commTime += detailT.elapsed();
+      detailT.clear();
+    }
   }
+  
+  if detailedTiming then detailT.start();
   forall (i,j) in dom {
     for k in blockIdx*blockSize..min(N-1, (blockIdx+1)*blockSize-1) {
       c[i,j] += a[i,k] * b[k,j];
     }
+  }
+  if detailedTiming {
+    detailT.stop();
+    compTime += detailT.elapsed();
+    detailT.clear();
   }
 }
 t.stop();
@@ -50,6 +67,10 @@ stopCommDiagnostics();
 writeln("Checksum : ", + reduce c);
 writeln("N : ", N);
 writeln("Time : ", t.elapsed());
+if detailedTiming {
+  writeln("\t CommTime : ", commTime);
+  writeln("\t CompTime : ", compTime);
+}
 
 writeln(getCommDiagnostics());
 
