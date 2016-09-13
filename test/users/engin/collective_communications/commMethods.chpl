@@ -33,26 +33,39 @@ proc BlockArr.rowWiseAllGather() {
   }
 }
 
-inline proc __rowWiseSliceDom(dom, i, num) {
-  const numRows = dom.dim(1).size;
-  var (start, end) = _computeChunkStartEnd(numRows, num, i);
-  start -= 1-dom.dim(1).low;
-  end -= 1-dom.dim(1).low;
+inline proc __rowWiseSliceDom(dom, numElems, i, num) {
+  /*const numRows = dom.dim(1).size;*/
+  /*var (start, end) = _computeChunkStartEnd(numRows, num, i);*/
+  /*start -= 1-dom.dim(1).low;*/
+  /*end -= 1-dom.dim(1).low;*/
+  //0-base specialization
+  const (start, end) = _computeBlock(numElems, num, i, numElems-1);
+  
   return {start..end, dom.dim(2)};
 }
+
+
 
 proc BlockArr.rowWiseAllPartialGather() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
+      const numLocalesInCol = dom.dist.targetLocDom.dim(1).size;
       const numLocalesInRow = dom.dist.targetLocDom.dim(2).size;
+      const rowSize = dom.whole.dim(2).size;
       for i in dom.dist.targetLocDom.dim(2) {
         const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
         const locDom = dom.getLocDom(sourceIdx);
+        /*writeln(localeIdx, " recieving ", */
+            /*__rowWiseSliceDom(locDom.myBlock, rowSize,*/
+              /*localeIdx[1]*numLocalesInRow+localeIdx[2],*/
+              /*dom.dist.targetLocales.size), " from ", sourceIdx);*/
         __prefetchFrom(sourceIdx, __rowWiseSliceDom(locDom.myBlock,
-              localeIdx[2]+1, numLocalesInRow));
+              rowSize, localeIdx[1]*numLocalesInRow+localeIdx[2],
+              dom.dist.targetLocales.size));
       }
     }
   }
+  /*halt("END");*/
 }
 
 proc BlockArr.rowWiseAllPrefetch(onlyCol) {
