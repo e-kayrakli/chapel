@@ -1,50 +1,67 @@
 use BlockDist;
 
+proc BlockArr.__prefetchFrom(sourceIdx) {
+  const locDom = dom.getLocDom(sourceIdx);
+  const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  privCopy.locArrsScratchPad[sourceIdx] =
+    new LocBlockArr(eltType, rank, idxType, stridable, locDom);
+  chpl__bulkTransferArray(
+      privCopy.locArrsScratchPad[sourceIdx].myElems,
+      locArr[sourceIdx].myElems);
+  privCopy.locArrsScratchPadReady[sourceIdx] = true;
+}
+
+proc BlockArr.__prefetchFrom(sourceIdx, slice) {
+  const locDom = dom.getLocDom(sourceIdx);
+  const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  privCopy.locArrsScratchPad[sourceIdx] =
+    new LocBlockArr(eltType, rank, idxType, stridable, locDom);
+  chpl__bulkTransferArray(
+      privCopy.locArrsScratchPad[sourceIdx].myElems[slice],
+      locArr[sourceIdx].myElems[slice]);
+  privCopy.locArrsScratchPadReady[sourceIdx] = true;
+}
+
 proc BlockArr.rowWiseAllGather() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for i in dom.dist.targetLocDom.dim(2) {
         const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
-        const locDom = dom.getLocDom(sourceIdx);
-        /*writeln("Copying ", locDom.myBlock, " from ", */
-            /*dom.dist.targetLocales(sourceIdx), " to ",*/
-            /*dom.dist.targetLocales(localeIdx), " on ", here);*/
-        const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-        privCopy.locArrsScratchPad[sourceIdx] =
-          new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-        chpl__bulkTransferArray(
-            privCopy.locArrsScratchPad[sourceIdx].myElems,
-            locArr[sourceIdx].myElems);
-        privCopy.locArrsScratchPadReady[sourceIdx] = true;
+        __prefetchFrom(sourceIdx);
       }
     }
   }
-  /*writeln("Gather finished");*/
-  /*writeln(locArrsScratchPadFlags);*/
+}
+
+inline proc __rowWiseSliceDom(dom, i, num) {
+  const numRows = dom.dim(1).size;
+  var (start, end) = _computeChunkStartEnd(numRows, num, i);
+  start -= 1-dom.dim(1).low;
+  end -= 1-dom.dim(1).low;
+  return {start..end, dom.dim(2)};
+}
+
+proc BlockArr.rowWiseAllPartialGather() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const numLocalesInRow = dom.dist.targetLocDom.dim(2).size;
+      for i in dom.dist.targetLocDom.dim(2) {
+        const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
+        const locDom = dom.getLocDom(sourceIdx);
+        __prefetchFrom(sourceIdx, __rowWiseSliceDom(locDom.myBlock,
+              localeIdx[2]+1, numLocalesInRow));
+      }
+    }
+  }
 }
 
 proc BlockArr.rowWiseAllPrefetch(onlyCol) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
-      /*for i in dom.dist.targetLocDom.dim(2) {*/
-        const sourceIdx = 
-          chpl__tuplify(onlyCol).withIdx(1, localeIdx[1]);
-        const locDom = dom.getLocDom(sourceIdx);
-        /*writeln("Copying ", locDom.myBlock, " from ", */
-            /*dom.dist.targetLocales(sourceIdx), " to ",*/
-            /*dom.dist.targetLocales(localeIdx), " on ", here);*/
-        const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-        privCopy.locArrsScratchPad[sourceIdx] =
-          new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-        chpl__bulkTransferArray(
-            privCopy.locArrsScratchPad[sourceIdx].myElems,
-            locArr[sourceIdx].myElems);
-        privCopy.locArrsScratchPadReady[sourceIdx] = true;
-      /*}*/
+      const sourceIdx = chpl__tuplify(onlyCol).withIdx(1, localeIdx[1]);
+      __prefetchFrom(sourceIdx);
     }
   }
-  /*writeln("Gather finished");*/
-  /*writeln(locArrsScratchPadFlags);*/
 }
 
 proc BlockArr.colWiseAllGather() {
@@ -52,66 +69,29 @@ proc BlockArr.colWiseAllGather() {
     on dom.dist.targetLocales(localeIdx) {
       for i in dom.dist.targetLocDom.dim(1) {
         const sourceIdx = chpl__tuplify(i).withIdx(2, localeIdx[2]);
-        const locDom = dom.getLocDom(sourceIdx);
-        /*writeln("Copying ", locDom.myBlock, " from ", */
-            /*dom.dist.targetLocales(sourceIdx), " to ",*/
-            /*dom.dist.targetLocales(localeIdx), " on ", here);*/
-        const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-        privCopy.locArrsScratchPad[sourceIdx] =
-          new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-        chpl__bulkTransferArray(
-            privCopy.locArrsScratchPad[sourceIdx].myElems,
-            locArr[sourceIdx].myElems);
-        privCopy.locArrsScratchPadReady[sourceIdx] = true;
+        __prefetchFrom(sourceIdx);
       }
     }
   }
-  /*writeln("Gather finished");*/
-  /*writeln(locArrsScratchPadFlags);*/
 }
 
 proc BlockArr.colWiseAllPrefetch(onlyRow) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
-      /*for i in dom.dist.targetLocDom.dim(1) {*/
-        const sourceIdx =
-          chpl__tuplify(onlyRow).withIdx(2, localeIdx[2]);
-        const locDom = dom.getLocDom(sourceIdx);
-        /*writeln("Copying ", locDom.myBlock, " from ", */
-            /*dom.dist.targetLocales(sourceIdx), " to ",*/
-            /*dom.dist.targetLocales(localeIdx), " on ", here);*/
-        const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-        privCopy.locArrsScratchPad[sourceIdx] =
-          new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-        chpl__bulkTransferArray(
-            privCopy.locArrsScratchPad[sourceIdx].myElems,
-            locArr[sourceIdx].myElems);
-        privCopy.locArrsScratchPadReady[sourceIdx] = true;
-      /*}*/
+      const sourceIdx = chpl__tuplify(onlyRow).withIdx(2, localeIdx[2]);
+      __prefetchFrom(sourceIdx);
     }
   }
-  /*writeln("Gather finished");*/
-  /*writeln(locArrsScratchPadFlags);*/
 }
 
 proc BlockArr.allGather() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
-
       for sourceIdx in dom.dist.targetLocDom {
-        const locDom = dom.getLocDom(sourceIdx);
-        const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-        privCopy.locArrsScratchPad[sourceIdx] =
-          new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-        chpl__bulkTransferArray(
-            privCopy.locArrsScratchPad[sourceIdx].myElems,
-            locArr[sourceIdx].myElems);
-        privCopy.locArrsScratchPadReady[sourceIdx] = true;
+        __prefetchFrom(sourceIdx);
       }
     }
   }
-  /*writeln("Gather finished");*/
-  /*writeln(locArrsScratchPadFlags);*/
 }
 
 proc _tuple.withIdx(idx, mergeVal) where isHomogeneousTuple(this) {
