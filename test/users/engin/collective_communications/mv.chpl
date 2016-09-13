@@ -8,6 +8,7 @@ config param optComm = true;
 config param commDiag = false;
 config const N = 4;
 config const printData = false;
+config const partial = true;
 const space = {0..#N, 0..#N};
 const matdom = space dmapped Block(space);
 const vecspace = {0..#N};
@@ -39,7 +40,8 @@ var compTime = 0.0;
 t.start();
 if optComm {
   if detailedTiming then detailT.start();
-  A._value.rowWiseAllPartialGather();
+  if partial then A._value.rowWiseAllPartialGather();
+              else A._value.rowWiseAllGather();
   b._value.allGather();
   if detailedTiming {
     detailT.stop();
