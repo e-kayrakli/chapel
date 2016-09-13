@@ -134,12 +134,14 @@ class SparseBlockDom: BaseSparseDomImpl {
   }
 
   proc bulkAdd_help(inds: [] index(rank,idxType),
-      isSorted=false, isUnique=false) {
+      dataSorted=false, isUnique=false) {
+    use Sort;
+    use Search;
 
     // without _new_, record functions throw null deref
     var comp = new TargetLocaleComparator();
 
-    if !isSorted then sort(inds, comparator=comp);
+    if !dataSorted then sort(inds, comparator=comp);
 
     var localeRanges: [dist.targetLocDom] range;
     on inds {
@@ -167,7 +169,7 @@ class SparseBlockDom: BaseSparseDomImpl {
     var _totalAdded: atomic int;
     coforall l in dist.targetLocDom do on dist.targetLocales[l] {
       const _retval = locDoms[l].mySparseBlock.bulkAdd(inds[localeRanges[l]],
-          isSorted=true, isUnique=false);
+          dataSorted=true, isUnique=false);
       _totalAdded.add(_retval);
     }
     const _retval = _totalAdded.read();
@@ -393,28 +395,28 @@ class SparseBlockArr: BaseSparseArr {
 
 
   proc dsiAccess(i: rank*idxType) ref {
-    //    local { // TODO: Turn back on once privatization is on
+    local {
       if myLocArr != nil && myLocArr.locDom.dsiMember(i) {
         return myLocArr.dsiAccess(i);
-        //      }
+      }
     }
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
   proc dsiAccess(i: rank*idxType)
   where !shouldReturnRvalueByConstRef(eltType) {
-    //    local { // TODO: Turn back on once privatization is on
+    local {
       if myLocArr != nil && myLocArr.locDom.dsiMember(i) {
         return myLocArr.dsiAccess(i);
-        //      }
+      }
     }
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
   proc dsiAccess(i: rank*idxType) const ref
   where shouldReturnRvalueByConstRef(eltType) {
-    //    local { // TODO: Turn back on once privatization is on
+    local {
       if myLocArr != nil && myLocArr.locDom.dsiMember(i) {
         return myLocArr.dsiAccess(i);
-        //      }
+      }
     }
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
@@ -655,8 +657,7 @@ proc SparseBlockArr.dsiLocalSlice(ranges) {
   for param i in 1..rank {
     low(i) = ranges(i).low;
   }
-  var A => locArr(dom.dist.targetLocsIdx(low)).myElems((...ranges));
-  return A;
+  return locArr(dom.dist.targetLocsIdx(low)).myElems((...ranges));
 }
 
 proc _extendTuple(type t, idx: _tuple, args) {
@@ -821,35 +822,36 @@ proc LocSparseBlockArr.dsiSerialWrite(f) {
 }
 
 
-proc SparseBlockDom.dsiSupportsPrivatization() param return false;
+proc SparseBlockDom.dsiSupportsPrivatization() param return true;
 
-proc SparseBlockDom.dsiGetPrivatizeData() return (dist.pid, whole.dims());
+proc SparseBlockDom.dsiGetPrivatizeData() return dist.pid;
 
 proc SparseBlockDom.dsiPrivatize(privatizeData) {
-  var privdist = chpl_getPrivatizedCopy(dist.type, privatizeData(1));
-  var c = new SparseBlockDom(rank=rank, idxType=idxType, stridable=stridable,
-      dist=privdist, whole=whole);
+  var privdist = chpl_getPrivatizedCopy(dist.type, privatizeData);
+  var c = new SparseBlockDom(rank=rank, idxType=idxType,
+      sparseLayoutType=sparseLayoutType, dist=privdist, whole=whole,
+      parentDom=parentDom);
   for i in c.dist.targetLocDom do
     c.locDoms(i) = locDoms(i);
-  c.whole = {(...privatizeData(2))};
   return c;
 }
 
-proc SparseBlockDom.dsiGetReprivatizeData() return whole.dims();
+proc SparseBlockDom.dsiGetReprivatizeData() return nil;
 
 proc SparseBlockDom.dsiReprivatize(other, reprivatizeData) {
   for i in dist.targetLocDom do
     locDoms(i) = other.locDoms(i);
-  whole = {(...reprivatizeData)};
 }
 
-proc SparseBlockArr.dsiSupportsPrivatization() param return false;
+proc SparseBlockArr.dsiSupportsPrivatization() param return true;
 
 proc SparseBlockArr.dsiGetPrivatizeData() return dom.pid;
 
 proc SparseBlockArr.dsiPrivatize(privatizeData) {
   var privdom = chpl_getPrivatizedCopy(dom.type, privatizeData);
-  var c = new SparseBlockArr(eltType=eltType, rank=rank, idxType=idxType, stridable=stridable, dom=privdom);
+  var c = new SparseBlockArr(sparseLayoutType=sparseLayoutType,
+      eltType=eltType, rank=rank, idxType=idxType, stridable=stridable,
+      dom=privdom);
   for localeIdx in c.dom.dist.targetLocDom {
     c.locArr(localeIdx) = locArr(localeIdx);
     if c.locArr(localeIdx).locale.id == here.id then
@@ -875,6 +877,8 @@ proc SparseBlockArr.doiCanBulkTransfer() {
 // TODO This function needs to be fixed. For now, explicitly returning false
 // from dsiSupportsBulkTransfer, so this function should never be compiled
 proc SparseBlockArr.doiBulkTransfer(B) {
+  halt("SparseBlockArr.doiBulkTransfer not yet implemented");
+/*
   if debugSparseBlockDistBulkTransfer then resetCommDiagnostics();
   var sameDomain: bool;
   // We need to do the following on the locale where 'this' was allocated,
@@ -884,9 +888,9 @@ proc SparseBlockArr.doiBulkTransfer(B) {
   // Use zippered iteration to piggyback data movement with the remote
   //  fork.  This avoids remote gets for each access to locArr[i] and
   //  B._value.locArr[i]
-  coforall (i, myLocArr, BmyLocArr) in (dom.dist.targetLocDom,
-                                        locArr,
-                                        B._value.locArr) do
+  coforall (i, myLocArr, BmyLocArr) in zip(dom.dist.targetLocDom,
+                                           locArr,
+                                           B._value.locArr) do
     on dom.dist.targetLocales(i) {
 
     if sameDomain &&
@@ -954,6 +958,7 @@ proc SparseBlockArr.doiBulkTransfer(B) {
     }
   }
   if debugSparseBlockDistBulkTransfer then writeln("Comms:",getCommDiagnostics());
+*/
 }
 
 iter ConsecutiveChunks(d1,d2,lid,lo) {
