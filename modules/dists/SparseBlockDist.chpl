@@ -326,6 +326,16 @@ class SparseBlockArr: BaseSparseArr {
       sparseLayoutType);
   var myLocArr: LocSparseBlockArr(eltType, rank, idxType, stridable,
       sparseLayoutType);
+
+  // this scratch pad will be used on ad hoc basis. all the memory
+  // allocated here is going to be local
+  // communication routines must clear the memory once they are done
+  // TODO we can extend this to be persisten
+  var locArrsScratchPad: [dom.dist.targetLocDom] 
+    LocBlockArr(eltType, rank, idxType, stridable);
+
+  var locArrsScratchPadReady: [dom.dist.targetLocDom] bool;
+
   var pid: int = -1; // privatized object id (this should be factored out)
 
   proc SparseBlockArr(type eltType, param rank, type idxType, param stridable,
