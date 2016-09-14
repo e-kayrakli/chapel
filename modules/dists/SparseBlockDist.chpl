@@ -386,7 +386,7 @@ class SparseBlockArr: BaseSparseArr {
 
   proc dsiAccess(i: rank*idxType) ref {
     local {
-      if myLocArr != nil && myLocArr.locDom.dsiMember(i) {
+      if myLocArr != nil && myLocArr.locDom.parentDom.member(i) {
         return myLocArr.dsiAccess(i);
       }
     }
@@ -395,7 +395,7 @@ class SparseBlockArr: BaseSparseArr {
   proc dsiAccess(i: rank*idxType)
   where !shouldReturnRvalueByConstRef(eltType) {
     local {
-      if myLocArr != nil && myLocArr.locDom.dsiMember(i) {
+      if myLocArr != nil && myLocArr.locDom.parentDom.member(i) {
         return myLocArr.dsiAccess(i);
       }
     }
@@ -404,7 +404,7 @@ class SparseBlockArr: BaseSparseArr {
   proc dsiAccess(i: rank*idxType) const ref
   where shouldReturnRvalueByConstRef(eltType) {
     local {
-      if myLocArr != nil && myLocArr.locDom.dsiMember(i) {
+      if myLocArr != nil && myLocArr.locDom.parentDom.member(i) {
         return myLocArr.dsiAccess(i);
       }
     }
