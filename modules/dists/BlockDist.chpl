@@ -1053,9 +1053,9 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
   /*writeln(locArrsScratchPad[dom.dist.targetLocsIdx(i)] != nil);*/
   /*if locArrsScratchPadFlags[here.id*numLdom.dist.targetLocsIdx(i)] {*/
-  if locArrsScratchPadReady[dom.dist.targetLocsIdx(i)] {
-    return locArrsScratchPad[dom.dist.targetLocsIdx(i)][i];
-  }
+  /*if locArrsScratchPadReady[dom.dist.targetLocsIdx(i)] {*/
+    /*return locArrsScratchPad[dom.dist.targetLocsIdx(i)][i];*/
+  /*}*/
   /*halt("oops ", here.id, " ", i, " ", dom.dist.targetLocsIdx(i), " ", */
       /*locArrsScratchPadFlags);*/
       /*locArrsScratchPad[0][0] != nil, " ", */

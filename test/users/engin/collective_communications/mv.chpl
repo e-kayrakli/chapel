@@ -4,8 +4,8 @@ use commMethods;
 use CommDiagnostics;
 
 config param detailedTiming=false;
-config param optComm = true;
-config param commDiag = false;
+config const optComm = true;
+config const commDiag = false;
 config const N = 4;
 config const printData = false;
 config const partial = true;
@@ -49,7 +49,7 @@ if optComm {
     detailT.clear();
     detailT.start();
   }
-  local forall i in vecdom {
+  forall i in vecdom {
     for k in vecdom {
       c[i] += A[i,k] * b[k];
     }

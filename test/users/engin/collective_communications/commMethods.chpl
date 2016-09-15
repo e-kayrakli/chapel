@@ -1,5 +1,6 @@
 use BlockDist;
 
+config const prefetchAmount = 1;
 proc BlockArr.__prefetchFrom(sourceIdx) {
   const locDom = dom.getLocDom(sourceIdx);
   const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
@@ -9,6 +10,21 @@ proc BlockArr.__prefetchFrom(sourceIdx) {
       privCopy.locArrsScratchPad[sourceIdx].myElems,
       locArr[sourceIdx].myElems);
   privCopy.locArrsScratchPadReady[sourceIdx] = true;
+}
+
+proc BlockArr.__native_prefetchFrom(sourceIdx) {
+  /*const locDom = dom.getLocDom(sourceIdx);*/
+  /*const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);*/
+  /*privCopy.locArrsScratchPad[sourceIdx] =*/
+    /*new LocBlockArr(eltType, rank, idxType, stridable, locDom);*/
+  /*chpl__bulkTransferArray(*/
+      /*privCopy.locArrsScratchPad[sourceIdx].myElems,*/
+      /*locArr[sourceIdx].myElems);*/
+  /*privCopy.locArrsScratchPadReady[sourceIdx] = true;*/
+  var prefetchArr = locArr[sourceIdx].myElems;
+  var prefetchDom = prefetchArr.domain;
+  const totalPrefetchSize = prefetchDom.size;
+  prefetch(prefetchArr[prefetchDom.low], prefetchAmount);
 }
 
 proc BlockArr.__prefetchFrom(sourceIdx, slice) {
@@ -27,7 +43,8 @@ proc BlockArr.rowWiseAllGather() {
     on dom.dist.targetLocales(localeIdx) {
       for i in dom.dist.targetLocDom.dim(2) {
         const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
-        __prefetchFrom(sourceIdx);
+        /*__prefetchFrom(sourceIdx);*/
+        __native_prefetchFrom(sourceIdx);
       }
     }
   }
@@ -101,10 +118,16 @@ proc BlockArr.allGather() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for sourceIdx in dom.dist.targetLocDom {
-        __prefetchFrom(sourceIdx);
+        /*__prefetchFrom(sourceIdx);*/
+        __native_prefetchFrom(sourceIdx);
       }
     }
   }
+}
+
+inline proc prefetch(ref x, len:int) {
+  __primitive("chpl_comm_remote_prefetch", x.locale.id,
+              x, len);
 }
 
 proc _tuple.withIdx(idx, mergeVal) where isHomogeneousTuple(this) {
