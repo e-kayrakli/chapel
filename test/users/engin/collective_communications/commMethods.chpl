@@ -1,0 +1,145 @@
+use BlockDist;
+
+proc BlockArr.__prefetchFrom(sourceIdx) {
+  const locDom = dom.getLocDom(sourceIdx);
+  const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  privCopy.locArrsScratchPad[sourceIdx] =
+    new LocBlockArr(eltType, rank, idxType, stridable, locDom);
+  chpl__bulkTransferArray(
+      privCopy.locArrsScratchPad[sourceIdx].myElems,
+      locArr[sourceIdx].myElems);
+  privCopy.locArrsScratchPadReady[sourceIdx] = true;
+}
+
+proc BlockArr.__prefetchFrom(sourceIdx, slice) {
+  const locDom = dom.getLocDom(sourceIdx);
+  const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  privCopy.locArrsScratchPad[sourceIdx] =
+    new LocBlockArr(eltType, rank, idxType, stridable, locDom);
+  chpl__bulkTransferArray(
+      privCopy.locArrsScratchPad[sourceIdx].myElems[slice],
+      locArr[sourceIdx].myElems[slice]);
+  privCopy.locArrsScratchPadReady[sourceIdx] = true;
+}
+
+proc BlockArr.rowWiseAllGather() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      for i in dom.dist.targetLocDom.dim(2) {
+        const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
+        __prefetchFrom(sourceIdx);
+      }
+    }
+  }
+}
+
+inline proc __rowWiseSliceDom(dom, numElems, i, num) {
+  /*const numRows = dom.dim(1).size;*/
+  /*var (start, end) = _computeChunkStartEnd(numRows, num, i);*/
+  /*start -= 1-dom.dim(1).low;*/
+  /*end -= 1-dom.dim(1).low;*/
+  //0-base specialization
+  const (start, end) = _computeBlock(numElems, num, i, numElems-1);
+  
+  return {start..end, dom.dim(2)};
+}
+
+
+
+proc BlockArr.rowWiseAllPartialGather() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const numLocalesInCol = dom.dist.targetLocDom.dim(1).size;
+      const numLocalesInRow = dom.dist.targetLocDom.dim(2).size;
+      const rowSize = dom.whole.dim(2).size;
+      for i in dom.dist.targetLocDom.dim(2) {
+        const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
+        const locDom = dom.getLocDom(sourceIdx);
+        /*writeln(localeIdx, " recieving ", */
+            /*__rowWiseSliceDom(locDom.myBlock, rowSize,*/
+              /*localeIdx[1]*numLocalesInRow+localeIdx[2],*/
+              /*dom.dist.targetLocales.size), " from ", sourceIdx);*/
+        __prefetchFrom(sourceIdx, __rowWiseSliceDom(locDom.myBlock,
+              rowSize, localeIdx[1]*numLocalesInRow+localeIdx[2],
+              dom.dist.targetLocales.size));
+      }
+    }
+  }
+  /*halt("END");*/
+}
+
+proc BlockArr.rowWiseAllPrefetch(onlyCol) {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const sourceIdx = chpl__tuplify(onlyCol).withIdx(1, localeIdx[1]);
+      __prefetchFrom(sourceIdx);
+    }
+  }
+}
+
+proc BlockArr.colWiseAllGather() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      for i in dom.dist.targetLocDom.dim(1) {
+        const sourceIdx = chpl__tuplify(i).withIdx(2, localeIdx[2]);
+        __prefetchFrom(sourceIdx);
+      }
+    }
+  }
+}
+
+proc BlockArr.colWiseAllPrefetch(onlyRow) {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const sourceIdx = chpl__tuplify(onlyRow).withIdx(2, localeIdx[2]);
+      __prefetchFrom(sourceIdx);
+    }
+  }
+}
+
+proc BlockArr.allGather() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      for sourceIdx in dom.dist.targetLocDom {
+        __prefetchFrom(sourceIdx);
+      }
+    }
+  }
+}
+
+proc _tuple.withIdx(idx, mergeVal) where isHomogeneousTuple(this) {
+
+  // FIXME this if doesn't work as expected
+  if mergeVal.type != this[1].type then
+    compilerError("Value to be merged is not of the type of tuple components");
+
+  const defVal: mergeVal.type;
+  var ret = createTuple(this.size+1, mergeVal.type, defVal);
+
+  var partialIndexOffset = 0;
+  for i in 1..ret.size {
+    if i == idx {
+      ret[i] = mergeVal;
+      partialIndexOffset = 1;
+    }
+    else {
+      ret[i] = this[i-partialIndexOffset];
+    }
+  }
+
+  return ret;
+}
+
+proc _tuple.withoutIdx(idx) where isHomogeneousTuple(this) {
+
+  const defVal: this[1].type;
+  var ret = createTuple(this.size-1, this[1].type, defVal);
+
+  for i in 1..idx-1 do
+    ret[i] = this[i];
+
+  for i in idx+1..this.size do
+    ret[i-1] = this[i];
+
+  return ret;
+}

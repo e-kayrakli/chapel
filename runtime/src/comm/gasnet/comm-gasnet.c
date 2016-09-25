@@ -743,6 +743,7 @@ void chpl_comm_post_task_init(void) {
 
   // Initialize the caching layer, if it is active.
   chpl_cache_init();
+  chpl_prefetch_init();
 }
 
 void chpl_comm_rollcall(void) {

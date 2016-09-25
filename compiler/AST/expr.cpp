@@ -2865,6 +2865,7 @@ void codegenCall(const char* fnName, GenRet a1, GenRet a2, GenRet a3,
   args.push_back(a5);
   codegenCall(fnName, args);
 }
+/*
 static
 void codegenCall(const char* fnName, GenRet a1, GenRet a2, GenRet a3,
                  GenRet a4, GenRet a5, GenRet a6)
@@ -2878,7 +2879,7 @@ void codegenCall(const char* fnName, GenRet a1, GenRet a2, GenRet a3,
   args.push_back(a6);
   codegenCall(fnName, args);
 }
-
+*/
 static
 void codegenCall(const char* fnName, GenRet a1, GenRet a2, GenRet a3,
                  GenRet a4, GenRet a5, GenRet a6, GenRet a7)
@@ -5161,7 +5162,7 @@ GenRet CallExpr::codegenPrimitive() {
 
   case PRIM_CHPL_COMM_REMOTE_PREFETCH: {
     // args are:
-    //   locale, remote addr, get(3)==size, line, file
+    //   locale, remote addr, get(3)==size, direct,  line, file
 
     // Get the locale
     GenRet locale;
@@ -5199,7 +5200,8 @@ GenRet CallExpr::codegenPrimitive() {
                 len,
                 -1,
                 get(4),
-                get(5));
+                get(5),
+                get(6));
 
     break;
   }

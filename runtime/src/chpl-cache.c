@@ -2671,7 +2671,9 @@ static struct rdcache_s* cache_create(void);
 // use pthread_setspecific/pthread_key_create so that
 // we can associate a destructor with it.
 CHPL_TLS_DECL(struct rdcache_s*,cache_remote_data);
+CHPL_TLS_DECL(struct prefetch_buffer_s*,prefetch_remote_data);
 static pthread_key_t pthread_cache_info_key; // stores struct rdcache_s*
+static pthread_key_t pthread_prefetch_info_key; // stores struct rdcache_s*
 
 static
 struct rdcache_s* tls_cache_remote_data(void) {
@@ -2682,6 +2684,47 @@ struct rdcache_s* tls_cache_remote_data(void) {
     pthread_setspecific(pthread_cache_info_key, cache);
   }
   return cache;
+}
+
+struct prefetch_buffer_s {
+  struct prefetch_entry_s *head;
+};
+
+struct prefetch_entry_s {
+  c_nodeid_t origin_node;
+  void* raddr;
+  size_t size;
+
+  void *data;
+  struct prefetch_entry_s *next;
+};
+
+/*static*/
+/*void dump_prefetch_buffer(struct prefetch_entry_s *buffer) {*/
+  /*struct prefetch_entry_s *cur = buffer;*/
+
+  /*printf("Prefetched data on node %d:\n", chpl_nodeID);*/
+
+  /*while(cur) {*/
+    /*printf("\tEntry from node %d, raddr=%p, size=%zu\n",*/
+        /*cur->origin_node, cur->raddr, cur->size);*/
+    /*cur = cur->next;*/
+  /*}*/
+/*}*/
+
+static
+struct prefetch_buffer_s* tls_prefetch_remote_data(void) {
+  struct prefetch_buffer_s *pbuf = CHPL_TLS_GET(prefetch_remote_data);
+  if( ! pbuf && chpl_cache_enabled() ) {
+    /*cache = cache_create();*/
+    // TODO when we have prefetch data store creation it should be
+    // called here
+    pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));
+    pbuf->head = NULL;
+    CHPL_TLS_SET(prefetch_remote_data, pbuf);
+    pthread_setspecific(pthread_prefetch_info_key, pbuf);
+  }
+  return pbuf;
 }
 
 static
@@ -2698,6 +2741,42 @@ void destroy_pthread_local_cache(void* arg)
   cache_destroy(s);
 }
 
+
+static
+void prefetch_destroy(struct prefetch_entry_s **prefetch_buffer) {
+
+  struct prefetch_entry_s *cur = (*prefetch_buffer);
+  struct prefetch_entry_s *next = NULL;
+
+  while(cur) {
+    next = cur->next;
+    chpl_free(cur->data);
+    chpl_free(cur);
+    cur = next;
+  }
+}
+
+static
+void destroy_pthread_local_prefetch(void* arg)
+{
+  struct prefetch_entry_s* s = (struct prefetch_entry_s*) arg;
+  prefetch_destroy(&s);
+}
+
+
+static
+void chpl_prefetch_do_init(void)
+{
+  static int inited = 0;
+  if( ! inited ) {
+  
+    CHPL_TLS_INIT(prefetch_remote_data);
+    // The second key we never read but create so that we
+    // can free the cache when the thread exits.
+    pthread_key_create(&pthread_prefetch_info_key, &destroy_pthread_local_prefetch);
+    inited = 1;
+  }
+}
 static
 void chpl_cache_do_init(void)
 {
@@ -2723,6 +2802,10 @@ void chpl_cache_do_init(void)
 
 // The implementation of functions in chpl-cache.h
 
+void chpl_prefetch_init(void) {
+
+  chpl_prefetch_do_init();
+}
 void chpl_cache_init(void) {
 
   // Take default CHPL_CACHE_REMOTE value from the environment if it is set.
@@ -2745,6 +2828,11 @@ void chpl_cache_init(void) {
 
   //printf("CACHE IS ENABLED\n");
   chpl_cache_do_init();
+}
+
+void chpl_prefetch_exit(void)
+{
+  CHPL_TLS_DELETE(prefetch_remote_data);
 }
 
 void chpl_cache_exit(void)
@@ -2837,6 +2925,144 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
             0, ln, fn);
 
   return;
+}
+
+
+
+static
+void *add_to_prefetch_buffer(struct prefetch_buffer_s* pbuf,
+    c_nodeid_t origin_node, void* raddr, size_t size){
+
+  struct prefetch_entry_s *head;
+  struct prefetch_entry_s *new_entry;
+
+  assert(pbuf);
+
+  head = pbuf->head;
+
+  //currently just add to the head
+  new_entry = chpl_malloc(sizeof(struct prefetch_entry_s)*1);
+
+  new_entry->origin_node = origin_node;
+  new_entry->raddr = raddr;
+  new_entry->size = size;
+  new_entry->data = chpl_malloc(size);
+  
+  if(head != NULL)
+    new_entry->next = head->next;
+  pbuf->head = new_entry;
+
+  return new_entry->data;
+}
+
+static
+int64_t get_data_offset(struct prefetch_entry_s* prefetch_entry,
+    c_nodeid_t node, void* raddr, size_t size) {
+  int64_t offset; //this can be negative in current logic
+
+  if(prefetch_entry->origin_node != node) {
+    /*printf("Not on the same node\n");*/
+    return -1;
+  }
+  offset = (intptr_t)raddr - (intptr_t)prefetch_entry->raddr;
+
+  if(offset < 0) {
+    return -1;
+  }
+
+  if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { //ends after block
+    /*printf("Outside range of prefetch\n");*/
+    return -1;
+  }
+  /*printf("IN YOUR FACE!!\n");*/
+  return offset;
+}
+
+static
+void *find_in_prefetch_buffer(struct prefetch_entry_s* prefetch_buffer,
+    c_nodeid_t node, void *raddr, size_t size) {
+
+  size_t offset;
+  struct prefetch_entry_s* cur = prefetch_buffer;
+  /*if(cur) {*/
+    /*printf("not null\n");*/
+  /*}*/
+  while(cur) {
+    if( (offset = get_data_offset(cur, node, raddr, size)) != -1) {
+      return (void*)(((uint64_t)cur->data)+offset);
+    }
+    cur = cur->next;
+  }
+
+  return NULL;
+}
+
+void chpl_comm_prefetch(c_nodeid_t node, void* raddr,
+                              size_t size, int32_t typeIndex,
+                              int ln, int32_t fn) {
+
+  struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
+  void* new_data;
+  TRACE_PRINT(("%d: in chpl_comm_prefetch\n", chpl_nodeID));
+  if (chpl_verbose_comm)
+    printf("%d: %s:%d: remote direct prefetch from %d\n", chpl_nodeID,
+           chpl_lookupFilename(fn), ln, node);
+
+  // add the data to the prefetch buffer
+  new_data = add_to_prefetch_buffer(pbuf, node, raddr, size);
+  
+  //this is a blocking get
+
+  /*printf("%d prefetches from %d: %p, %zu\n", chpl_nodeID, node, raddr, size);*/
+  chpl_comm_get(new_data, node, raddr, size, typeIndex,
+      ln, fn);
+}
+
+static
+int64_t prefetch_get(struct prefetch_buffer_s* pbuf,
+                unsigned char * addr, c_nodeid_t node, void *raddr,
+                size_t size, int ln, int32_t fn) {
+
+  void *addr_in_buf = find_in_prefetch_buffer(pbuf->head,
+      node, raddr, size);
+
+  if(addr_in_buf) {
+    memcpy(addr, addr_in_buf, size);
+    /*printf("Prefetch get returns %f, on locale %d\n",*/
+        /**(double*)(addr_in_buf), chpl_nodeID);*/
+  }
+
+
+  return (addr_in_buf != NULL);
+}
+
+// FIXME currently this returns   1 or 0 depending if it is able to find
+// the data in prefetch buffers. Probably there should be a lightweight
+// function that checks the data availability in prefetch buffer
+int64_t chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
+                         size_t size, int32_t typeIndex,
+                         int ln, int32_t fn)
+{
+  //printf("get len %d node %d raddr %p\n", (int) len * elemSize, node, raddr);
+  struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
+  TRACE_PRINT(("%d: task %d in chpl_prefetch_comm_get %s:%d get %d bytes from "
+               "%d:%p to %p\n",
+               chpl_nodeID, (int)chpl_task_getId(), chpl_lookupFilename(fn), ln,
+               (int)size, node, raddr, addr));
+  if (chpl_verbose_comm)
+    printf("%d: %s:%d: remote put to (chpl_prefetch_comm_get) %d\n", chpl_nodeID,
+           chpl_lookupFilename(fn), ln, node);
+
+  /*dump_prefetch_buffer(pbuf->head);*/
+  /*return prefetch_get(pbuf, addr, node, raddr, size, ln, fn);*/
+  //FIXME this is for debugging purposes
+  if(prefetch_get(pbuf, addr, node, raddr, size, ln, fn)) {
+    /*printf("%d finds %p,%zu from %d on pbuf\n", chpl_nodeID, raddr,*/
+        /*size, node);*/
+    return 1;
+  }
+  return 0;
+
 }
 
 void chpl_cache_comm_prefetch(c_nodeid_t node, void* raddr,

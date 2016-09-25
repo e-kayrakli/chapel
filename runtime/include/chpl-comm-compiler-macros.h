@@ -47,6 +47,11 @@ void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
 {
   if (chpl_nodeID == node) {
     chpl_memcpy(addr, raddr, size);
+#ifdef HAS_DIRECT_PREFETCH
+  } else if( chpl_prefetch_comm_get(addr, node, raddr, size, typeIndex, ln, fn) ) {
+    //nothing else to do here
+    //printf("Satisfied from prefetch buffer\n");
+#endif
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
     chpl_cache_comm_get(addr, node, raddr, size, typeIndex, ln, fn);
@@ -62,7 +67,7 @@ void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
 
 static inline
 void chpl_gen_comm_prefetch(c_nodeid_t node, void* raddr,
-                            size_t size, int32_t typeIndex,
+                            size_t size, int32_t typeIndex, int direct,
                             int ln, int32_t fn)
 {
   const size_t MAX_BYTES_LOCAL_PREFETCH = 1024;
@@ -76,6 +81,11 @@ void chpl_gen_comm_prefetch(c_nodeid_t node, void* raddr,
          offset += 64 ) {
       chpl_prefetch((unsigned char*)raddr + offset);
     }
+#ifdef HAS_DIRECT_PREFETCH
+  } else if (direct) {
+    printf("PREFETCH CALLED");
+    chpl_comm_prefetch(node, raddr, size, typeIndex, ln, fn);
+#endif
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
     chpl_cache_comm_prefetch(node, raddr, size, typeIndex, ln, fn);

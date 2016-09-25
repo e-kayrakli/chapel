@@ -42,6 +42,8 @@ int chpl_cache_enabled(void)
 void chpl_cache_init(void);
 void chpl_cache_exit(void);
 
+void chpl_prefetch_init(void);
+void chpl_prefetch_exit(void);
 // If release is set, waits on any pending puts in the cache.
 // If acquire is set, sets this task's last acquire fence to 
 // the cache's current request number.
@@ -87,6 +89,12 @@ void  chpl_cache_comm_put_strd(
 void chpl_cache_print(void);
 void chpl_cache_assert_released(void);
 
+void chpl_comm_prefetch(c_nodeid_t node, void* raddr,
+                              size_t size, int32_t typeIndex,
+                              int ln, int32_t fn);
+int64_t chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
+                         size_t size, int32_t typeIndex,
+                         int ln, int32_t fn);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 
