@@ -48,13 +48,14 @@ void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
   if (chpl_nodeID == node) {
     chpl_memcpy(addr, raddr, size);
 #ifdef HAS_DIRECT_PREFETCH
-  } else if( chpl_prefetch_comm_get(addr, node, raddr, size, typeIndex, ln, fn) ) {
-    //nothing else to do here
+  } else if(is_prefetched(node, raddr, size) == 1) {
+    chpl_prefetch_comm_get_fast(addr, node, raddr, size, typeIndex, ln, fn);
     //printf("Satisfied from prefetch buffer\n");
 #endif
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
     chpl_cache_comm_get(addr, node, raddr, size, typeIndex, ln, fn);
+    //printf("Satisfied from cache\n");
 #endif
   } else {
 #ifdef CHPL_TASK_COMM_GET

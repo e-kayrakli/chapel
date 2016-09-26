@@ -2687,6 +2687,7 @@ struct rdcache_s* tls_cache_remote_data(void) {
 }
 
 struct prefetch_buffer_s {
+  void *fast_access_addr;
   struct prefetch_entry_s *head;
 };
 
@@ -2743,9 +2744,9 @@ void destroy_pthread_local_cache(void* arg)
 
 
 static
-void prefetch_destroy(struct prefetch_entry_s **prefetch_buffer) {
+void prefetch_destroy(struct prefetch_buffer_s *pbuf) {
 
-  struct prefetch_entry_s *cur = (*prefetch_buffer);
+  struct prefetch_entry_s *cur = pbuf->head;
   struct prefetch_entry_s *next = NULL;
 
   while(cur) {
@@ -2754,13 +2755,14 @@ void prefetch_destroy(struct prefetch_entry_s **prefetch_buffer) {
     chpl_free(cur);
     cur = next;
   }
+  chpl_free(pbuf);
 }
 
 static
 void destroy_pthread_local_prefetch(void* arg)
 {
-  struct prefetch_entry_s* s = (struct prefetch_entry_s*) arg;
-  prefetch_destroy(&s);
+  struct prefetch_buffer_s* s = (struct prefetch_buffer_s*) arg;
+  prefetch_destroy(s);
 }
 
 
@@ -2913,8 +2915,8 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
                chpl_nodeID, (int)chpl_task_getId(), chpl_lookupFilename(fn), ln,
                (int)size, node, raddr, addr));
   if (chpl_verbose_comm)
-    printf("%d: %s:%d: remote put to %d\n", chpl_nodeID,
-           chpl_lookupFilename(fn), ln, node);
+    printf("%d: %s:%d: remote put to (chpl_cache_comm_get) %d %p\n", 
+        chpl_nodeID, chpl_lookupFilename(fn), ln, node, raddr);
 
 #ifdef DUMP
   chpl_cache_print();
@@ -2997,6 +2999,23 @@ void *find_in_prefetch_buffer(struct prefetch_entry_s* prefetch_buffer,
   return NULL;
 }
 
+int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size) {
+  struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
+  struct prefetch_entry_s* cur = pbuf->head;
+  int64_t offset;
+  if(chpl_nodeID == node) {
+    return 0; // we dont' allow local data to be in prefetch buffer
+  }
+  while(cur) {
+    if( (offset = get_data_offset(cur, node, raddr, size)) != -1) {
+      pbuf->fast_access_addr = (void*)(((uintptr_t)cur->data)+offset);
+      return 1;
+    }
+    cur = cur->next;
+  }
+  return 0;
+}
+
 void chpl_comm_prefetch(c_nodeid_t node, void* raddr,
                               size_t size, int32_t typeIndex,
                               int ln, int32_t fn) {
@@ -3019,7 +3038,7 @@ void chpl_comm_prefetch(c_nodeid_t node, void* raddr,
 }
 
 static
-int64_t prefetch_get(struct prefetch_buffer_s* pbuf,
+void prefetch_get(struct prefetch_buffer_s* pbuf,
                 unsigned char * addr, c_nodeid_t node, void *raddr,
                 size_t size, int ln, int32_t fn) {
 
@@ -3031,38 +3050,29 @@ int64_t prefetch_get(struct prefetch_buffer_s* pbuf,
     /*printf("Prefetch get returns %f, on locale %d\n",*/
         /**(double*)(addr_in_buf), chpl_nodeID);*/
   }
-
-
-  return (addr_in_buf != NULL);
 }
 
-// FIXME currently this returns   1 or 0 depending if it is able to find
-// the data in prefetch buffers. Probably there should be a lightweight
-// function that checks the data availability in prefetch buffer
-int64_t chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
+void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
+    raddr, size_t size, int32_t typeIndex, int ln, int32_t fn) {
+
+  struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
+  if (chpl_verbose_comm) 
+    printf("%d: %s:%d: remote put to (chpl_prefetch_comm_get) %d %p\n",
+        chpl_nodeID, chpl_lookupFilename(fn), ln, node, raddr);
+
+  memcpy(addr, pbuf->fast_access_addr, size);
+}
+
+void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
                          size_t size, int32_t typeIndex,
                          int ln, int32_t fn)
 {
-  //printf("get len %d node %d raddr %p\n", (int) len * elemSize, node, raddr);
   struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
-  TRACE_PRINT(("%d: task %d in chpl_prefetch_comm_get %s:%d get %d bytes from "
-               "%d:%p to %p\n",
-               chpl_nodeID, (int)chpl_task_getId(), chpl_lookupFilename(fn), ln,
-               (int)size, node, raddr, addr));
-  if (chpl_verbose_comm)
-    printf("%d: %s:%d: remote put to (chpl_prefetch_comm_get) %d\n", chpl_nodeID,
-           chpl_lookupFilename(fn), ln, node);
+  if (chpl_verbose_comm) 
+    printf("%d: %s:%d: remote put to (chpl_prefetch_comm_get) %d\n",
+        chpl_nodeID, chpl_lookupFilename(fn), ln, node);
 
-  /*dump_prefetch_buffer(pbuf->head);*/
-  /*return prefetch_get(pbuf, addr, node, raddr, size, ln, fn);*/
-  //FIXME this is for debugging purposes
-  if(prefetch_get(pbuf, addr, node, raddr, size, ln, fn)) {
-    /*printf("%d finds %p,%zu from %d on pbuf\n", chpl_nodeID, raddr,*/
-        /*size, node);*/
-    return 1;
-  }
-  return 0;
-
+  prefetch_get(pbuf, addr, node, raddr, size, ln, fn);
 }
 
 void chpl_cache_comm_prefetch(c_nodeid_t node, void* raddr,

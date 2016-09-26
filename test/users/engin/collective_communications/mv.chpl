@@ -39,7 +39,6 @@ if printData {
 var c: [vecdom] real;
 
 if commDiag then startCommDiagnostics();
-if verboseComm then startVerboseComm();
 
 const t = new Timer();
 const detailT = new Timer();
@@ -77,42 +76,30 @@ else if !rtPrefetch {
   }
 }
 else if rtPrefetch {
-  sync {
-    begin 
-  on Locales[0] {
-      /*writeln("b on Locale 0:");*/
-      /*for i in b.domain do writeln(b[i]);*/
-      /*writeln("\n****************\n");*/
-      prefetch(b[N/2], 8*N/2);
-      /*writeln("b on Locale 0:");*/
-      /*for i in b.domain do writeln(b[i]);*/
+  if verboseComm then startVerboseCommHere();
+  coforall l in Locales do on l {
+    prefetch(b[(1-here.id)*(N/2)] , 8*N/2);
+    for i in vecdom.localSubdomain() {
+      for k in vecdom {
+        c[i] += A[i,k] * b[k];
+      }
     }
-  on Locales[1] {
-      /*writeln("b on Locale 1:");*/
-      /*for i in b.domain do writeln(b[i]);*/
-      /*writeln("\n****************\n");*/
-      prefetch(b[0], 8*N/2);
-      /*writeln("b on Locale 1:");*/
-      /*for i in b.domain do writeln(b[i]);*/
-    }
-    /*[>begin<] on Locales[1] {*/
-      /*prefetch(b[0], 8*N/2);*/
-      /*writeln("b on Locale 1:");*/
-      /*for i in b.domain do writeln(b[i]);*/
+  }
+  if verboseComm then stopVerboseCommHere();
+  if verboseComm then writeln("Prefetch finished");
+  if verboseComm then startVerboseCommHere();
+  /*forall i in vecdom {*/
+    /*for k in vecdom {*/
+      /*c[i] += A[i,k] * b[k];*/
     /*}*/
-  }
-  forall i in vecdom {
-    for k in vecdom {
-      c[i] += A[i,k] * b[k];
-    }
-  }
+  /*}*/
+  if verboseComm then stopVerboseCommHere();
 }
 else {
   halt("Incorrect config flags");
 }
 t.stop();
 if commDiag then stopCommDiagnostics();
-if verboseComm then stopVerboseComm();
 
 if printData {
   writeln(c);

@@ -92,9 +92,11 @@ void chpl_cache_assert_released(void);
 void chpl_comm_prefetch(c_nodeid_t node, void* raddr,
                               size_t size, int32_t typeIndex,
                               int ln, int32_t fn);
-int64_t chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
-                         size_t size, int32_t typeIndex,
-                         int ln, int32_t fn);
+void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
+    size_t size, int32_t typeIndex, int ln, int32_t fn);
+void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
+    raddr, size_t size, int32_t typeIndex, int ln, int32_t fn);
+int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 
