@@ -2691,14 +2691,6 @@ struct prefetch_buffer_s {
   struct prefetch_entry_s *head;
 };
 
-struct prefetch_entry_s {
-  c_nodeid_t origin_node;
-  void* raddr;
-  size_t size;
-
-  void *data;
-  struct prefetch_entry_s *next;
-};
 
 /*static*/
 /*void dump_prefetch_buffer(struct prefetch_entry_s *buffer) {*/
@@ -2932,8 +2924,9 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
 
 
 static
-void *add_to_prefetch_buffer(struct prefetch_buffer_s* pbuf,
-    c_nodeid_t origin_node, void* raddr, size_t size){
+struct prefetch_entry_s * add_to_prefetch_buffer(
+    struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node, void* raddr,
+    size_t size){
 
   struct prefetch_entry_s *head;
   struct prefetch_entry_s *new_entry;
@@ -2954,10 +2947,9 @@ void *add_to_prefetch_buffer(struct prefetch_buffer_s* pbuf,
     new_entry->next = head->next;
   pbuf->head = new_entry;
 
-  return new_entry->data;
+  return new_entry;
 }
 
-static
 int64_t get_data_offset(struct prefetch_entry_s* prefetch_entry,
     c_nodeid_t node, void* raddr, size_t size) {
   int64_t offset; //this can be negative in current logic
@@ -3016,16 +3008,23 @@ int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size) {
   return 0;
 }
 
-void chpl_comm_prefetch(c_nodeid_t node, void* raddr,
-                              size_t size, int32_t typeIndex,
-                              int ln, int32_t fn) {
+int64_t is_prefetched_in_entry(struct prefetch_entry_s* entry,
+    c_nodeid_t node, void* raddr, size_t size) {
+
+  if(get_data_offset(entry, node, raddr, size) != -1)
+    return 1;
+
+  return 0;
+}
+
+struct prefetch_entry_s *chpl_comm_prefetch(c_nodeid_t node, 
+    void* raddr, size_t size) {
 
   struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
-  void* new_data;
+  struct prefetch_entry_s* new_data;
   TRACE_PRINT(("%d: in chpl_comm_prefetch\n", chpl_nodeID));
   if (chpl_verbose_comm)
-    printf("%d: %s:%d: remote direct prefetch from %d\n", chpl_nodeID,
-           chpl_lookupFilename(fn), ln, node);
+    printf("%d: remote direct prefetch from %d\n", chpl_nodeID, node);
 
   // add the data to the prefetch buffer
   new_data = add_to_prefetch_buffer(pbuf, node, raddr, size);
@@ -3033,10 +3032,15 @@ void chpl_comm_prefetch(c_nodeid_t node, void* raddr,
   //this is a blocking get
 
   /*printf("%d prefetches from %d: %p, %zu\n", chpl_nodeID, node, raddr, size);*/
-  chpl_comm_get(new_data, node, raddr, size, typeIndex,
-      ln, fn);
+  chpl_comm_get(new_data->data, node, raddr, size, -1, -1, -1);
+
+  return new_data;
 }
 
+void get_prefetched_data(struct prefetch_entry_s *entry,
+    int offset, size_t size, void *dest) {
+  memcpy(dest, ((unsigned char *)entry->data)+offset, size);
+}
 static
 void prefetch_get(struct prefetch_buffer_s* pbuf,
                 unsigned char * addr, c_nodeid_t node, void *raddr,

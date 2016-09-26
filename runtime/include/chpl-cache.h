@@ -37,6 +37,16 @@ int chpl_cache_enabled(void)
   return CHPL_CACHE_REMOTE && chpl_task_supportsRemoteCache();
 }
 
+struct prefetch_entry_s {
+  c_nodeid_t origin_node;
+  void* raddr;
+  size_t size;
+
+  void *data;
+  struct prefetch_entry_s *next;
+};
+
+typedef struct prefetch_entry_s *prefetch_entry_t;
 
 // Initialize the remote data cache layer. 
 void chpl_cache_init(void);
@@ -89,14 +99,19 @@ void  chpl_cache_comm_put_strd(
 void chpl_cache_print(void);
 void chpl_cache_assert_released(void);
 
-void chpl_comm_prefetch(c_nodeid_t node, void* raddr,
-                              size_t size, int32_t typeIndex,
-                              int ln, int32_t fn);
+struct prefetch_entry_s *chpl_comm_prefetch(c_nodeid_t node, 
+    void* raddr, size_t size);
 void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
     raddr, size_t size, int32_t typeIndex, int ln, int32_t fn);
 int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size);
+int64_t is_prefetched_in_entry(struct prefetch_entry_s* entry,
+    c_nodeid_t node, void* raddr, size_t size);
+int64_t get_data_offset(struct prefetch_entry_s* prefetch_entry,
+    c_nodeid_t node, void* raddr, size_t size);
+void get_prefetched_data(struct prefetch_entry_s *entry,
+    int offset, size_t size, void *dest);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

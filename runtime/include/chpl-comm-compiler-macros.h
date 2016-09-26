@@ -39,6 +39,7 @@
 // Note: Macros starting with CHPL_COMM involve some kind of communication
 //
 
+#undef HAS_DIRECT_PREFETCH
 
 static inline
 void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,

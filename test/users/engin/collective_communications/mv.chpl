@@ -79,7 +79,7 @@ else if rtPrefetch {
   if verboseComm then startVerboseCommHere();
   coforall l in Locales do on l {
     prefetch(b[(1-here.id)*(N/2)] , 8*N/2);
-    for i in vecdom.localSubdomain() {
+    local for i in vecdom.localSubdomain() {
       for k in vecdom {
         c[i] += A[i,k] * b[k];
       }
