@@ -41,6 +41,7 @@ struct prefetch_entry_s {
   c_nodeid_t origin_node;
   void* raddr;
   size_t size;
+  size_t serialized_base_idx;
 
   void *data;
   struct prefetch_entry_s *next;
@@ -100,7 +101,7 @@ void chpl_cache_print(void);
 void chpl_cache_assert_released(void);
 
 struct prefetch_entry_s *chpl_comm_prefetch(c_nodeid_t node, 
-    void* raddr, size_t size);
+    void* raddr, size_t size, size_t serialized_base_idx);
 void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
@@ -109,9 +110,9 @@ int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size);
 int64_t is_prefetched_in_entry(struct prefetch_entry_s* entry,
     c_nodeid_t node, void* raddr, size_t size);
 int64_t get_data_offset(struct prefetch_entry_s* prefetch_entry,
-    c_nodeid_t node, void* raddr, size_t size);
-void get_prefetched_data(struct prefetch_entry_s *entry,
-    int offset, size_t size, void *dest);
+    size_t size, size_t serialized_idx);
+int64_t get_prefetched_data(struct prefetch_entry_s* prefetch_entry,
+    size_t size, size_t serialized_idx, void* dest);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

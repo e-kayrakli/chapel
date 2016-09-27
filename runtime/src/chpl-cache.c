@@ -2926,7 +2926,7 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
 static
 struct prefetch_entry_s * add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node, void* raddr,
-    size_t size){
+    size_t size, size_t serialized_base_idx){
 
   struct prefetch_entry_s *head;
   struct prefetch_entry_s *new_entry;
@@ -2942,6 +2942,7 @@ struct prefetch_entry_s * add_to_prefetch_buffer(
   new_entry->raddr = raddr;
   new_entry->size = size;
   new_entry->data = chpl_malloc(size);
+  new_entry->serialized_base_idx = serialized_base_idx;
   
   if(head != NULL)
     new_entry->next = head->next;
@@ -2950,75 +2951,71 @@ struct prefetch_entry_s * add_to_prefetch_buffer(
   return new_entry;
 }
 
-int64_t get_data_offset(struct prefetch_entry_s* prefetch_entry,
-    c_nodeid_t node, void* raddr, size_t size) {
+int64_t get_prefetched_data(struct prefetch_entry_s* prefetch_entry,
+    size_t size, size_t serialized_idx, void* dest) {
   int64_t offset; //this can be negative in current logic
 
-  if(prefetch_entry->origin_node != node) {
-    /*printf("Not on the same node\n");*/
-    return -1;
-  }
-  offset = (intptr_t)raddr - (intptr_t)prefetch_entry->raddr;
+  offset = (int64_t)serialized_idx -
+    (int64_t)prefetch_entry->serialized_base_idx;
 
   if(offset < 0) {
     return -1;
   }
 
-  if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { //ends after block
-    /*printf("Outside range of prefetch\n");*/
+  if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { 
     return -1;
   }
-  /*printf("IN YOUR FACE!!\n");*/
+  memcpy(dest, ((unsigned char *)prefetch_entry->data)+offset, size);
   return offset;
 }
 
-static
-void *find_in_prefetch_buffer(struct prefetch_entry_s* prefetch_buffer,
-    c_nodeid_t node, void *raddr, size_t size) {
+/*static*/
+/*void *find_in_prefetch_buffer(struct prefetch_entry_s* prefetch_buffer,*/
+    /*c_nodeid_t node, void *raddr, size_t size) {*/
 
-  size_t offset;
-  struct prefetch_entry_s* cur = prefetch_buffer;
-  /*if(cur) {*/
-    /*printf("not null\n");*/
+  /*size_t offset;*/
+  /*struct prefetch_entry_s* cur = prefetch_buffer;*/
+  /*[>if(cur) {<]*/
+    /*[>printf("not null\n");<]*/
+  /*[>}<]*/
+  /*while(cur) {*/
+    /*if( (offset = get_data_offset(cur, node, raddr, size)) != -1) {*/
+      /*return (void*)(((uint64_t)cur->data)+offset);*/
+    /*}*/
+    /*cur = cur->next;*/
   /*}*/
-  while(cur) {
-    if( (offset = get_data_offset(cur, node, raddr, size)) != -1) {
-      return (void*)(((uint64_t)cur->data)+offset);
-    }
-    cur = cur->next;
-  }
 
-  return NULL;
-}
+  /*return NULL;*/
+/*}*/
 
-int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size) {
-  struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
-  struct prefetch_entry_s* cur = pbuf->head;
-  int64_t offset;
-  if(chpl_nodeID == node) {
-    return 0; // we dont' allow local data to be in prefetch buffer
-  }
-  while(cur) {
-    if( (offset = get_data_offset(cur, node, raddr, size)) != -1) {
-      pbuf->fast_access_addr = (void*)(((uintptr_t)cur->data)+offset);
-      return 1;
-    }
-    cur = cur->next;
-  }
-  return 0;
-}
+/*int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size) {*/
+  /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
+  /*struct prefetch_entry_s* cur = pbuf->head;*/
+  /*int64_t offset;*/
+  /*if(chpl_nodeID == node) {*/
+    /*return 0; // we dont' allow local data to be in prefetch buffer*/
+  /*}*/
+  /*while(cur) {*/
+    /*if( (offset = get_data_offset(cur, node, raddr, size)) != -1) {*/
+      /*pbuf->fast_access_addr = (void*)(((uintptr_t)cur->data)+offset);*/
+      /*return 1;*/
+    /*}*/
+    /*cur = cur->next;*/
+  /*}*/
+  /*return 0;*/
+/*}*/
 
-int64_t is_prefetched_in_entry(struct prefetch_entry_s* entry,
-    c_nodeid_t node, void* raddr, size_t size) {
+/*int64_t is_prefetched_in_entry(struct prefetch_entry_s* entry,*/
+    /*c_nodeid_t node, void* raddr, size_t size) {*/
 
-  if(get_data_offset(entry, node, raddr, size) != -1)
-    return 1;
+  /*if(get_data_offset(entry, node, raddr, size) != -1)*/
+    /*return 1;*/
 
-  return 0;
-}
+  /*return 0;*/
+/*}*/
 
 struct prefetch_entry_s *chpl_comm_prefetch(c_nodeid_t node, 
-    void* raddr, size_t size) {
+    void* raddr, size_t size, size_t serialized_base_idx) {
 
   struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
   struct prefetch_entry_s* new_data;
@@ -3027,7 +3024,8 @@ struct prefetch_entry_s *chpl_comm_prefetch(c_nodeid_t node,
     printf("%d: remote direct prefetch from %d\n", chpl_nodeID, node);
 
   // add the data to the prefetch buffer
-  new_data = add_to_prefetch_buffer(pbuf, node, raddr, size);
+  new_data = add_to_prefetch_buffer(pbuf, node, raddr, size,
+      serialized_base_idx);
   
   //this is a blocking get
 
@@ -3037,24 +3035,24 @@ struct prefetch_entry_s *chpl_comm_prefetch(c_nodeid_t node,
   return new_data;
 }
 
-void get_prefetched_data(struct prefetch_entry_s *entry,
-    int offset, size_t size, void *dest) {
-  memcpy(dest, ((unsigned char *)entry->data)+offset, size);
-}
-static
-void prefetch_get(struct prefetch_buffer_s* pbuf,
-                unsigned char * addr, c_nodeid_t node, void *raddr,
-                size_t size, int ln, int32_t fn) {
+/*void get_prefetched_data(struct prefetch_entry_s *entry,*/
+    /*int offset, size_t size, void *dest) {*/
+  /*memcpy(dest, ((unsigned char *)entry->data)+offset, size);*/
+/*}*/
+/*static*/
+/*void prefetch_get(struct prefetch_buffer_s* pbuf,*/
+                /*unsigned char * addr, c_nodeid_t node, void *raddr,*/
+                /*size_t size, int ln, int32_t fn) {*/
 
-  void *addr_in_buf = find_in_prefetch_buffer(pbuf->head,
-      node, raddr, size);
+  /*void *addr_in_buf = find_in_prefetch_buffer(pbuf->head,*/
+      /*node, raddr, size);*/
 
-  if(addr_in_buf) {
-    memcpy(addr, addr_in_buf, size);
-    /*printf("Prefetch get returns %f, on locale %d\n",*/
-        /**(double*)(addr_in_buf), chpl_nodeID);*/
-  }
-}
+  /*if(addr_in_buf) {*/
+    /*memcpy(addr, addr_in_buf, size);*/
+    /*[>printf("Prefetch get returns %f, on locale %d\n",<]*/
+        /*[>*(double*)(addr_in_buf), chpl_nodeID);<]*/
+  /*}*/
+/*}*/
 
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
     raddr, size_t size, int32_t typeIndex, int ln, int32_t fn) {
@@ -3067,17 +3065,17 @@ void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
   memcpy(addr, pbuf->fast_access_addr, size);
 }
 
-void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
-                         size_t size, int32_t typeIndex,
-                         int ln, int32_t fn)
-{
-  struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
-  if (chpl_verbose_comm) 
-    printf("%d: %s:%d: remote put to (chpl_prefetch_comm_get) %d\n",
-        chpl_nodeID, chpl_lookupFilename(fn), ln, node);
+/*void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,*/
+                         /*size_t size, int32_t typeIndex,*/
+                         /*int ln, int32_t fn)*/
+/*{*/
+  /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
+  /*if (chpl_verbose_comm) */
+    /*printf("%d: %s:%d: remote put to (chpl_prefetch_comm_get) %d\n",*/
+        /*chpl_nodeID, chpl_lookupFilename(fn), ln, node);*/
 
-  prefetch_get(pbuf, addr, node, raddr, size, ln, fn);
-}
+  /*prefetch_get(pbuf, addr, node, raddr, size, ln, fn);*/
+/*}*/
 
 void chpl_cache_comm_prefetch(c_nodeid_t node, void* raddr,
                               size_t size, int32_t typeIndex,
