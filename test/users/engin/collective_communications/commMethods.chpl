@@ -1,14 +1,13 @@
 use BlockDist;
 
-proc BlockArr.__prefetchFrom(sourceIdx) {
+inline proc BlockArr.__prefetchFrom(sourceIdx) {
   const locDom = dom.getLocDom(sourceIdx);
   const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-  privCopy.locArrsScratchPad[sourceIdx] =
-    new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-  chpl__bulkTransferArray(
-      privCopy.locArrsScratchPad[sourceIdx].myElems,
-      locArr[sourceIdx].myElems);
-  privCopy.locArrsScratchPadReady[sourceIdx] = true;
+  privCopy.prefetchHandles[sourceIdx] = chpl_comm_prefetch(
+      node = dom.dist.targetLocales[sourceIdx].id,
+      c_ptrTo(locArr[sourceIdx].myElems[locDom.myBlock.low]),
+      locDom.myBlock.numIndices*8,
+      dsiSerializeIdx(locDom.myBlock.low));
 }
 
 proc BlockArr.__prefetchFrom(sourceIdx, slice) {
@@ -31,6 +30,20 @@ proc BlockArr.rowWiseAllGather() {
       }
     }
   }
+}
+
+// FIXME 8's must be changed with sizeof(eltType)
+
+proc BlockArr.dsiSerializeIdx(i: idxType):int{
+  return dsiSerializeIdx(chpl__tuplify(i));
+}
+proc BlockArr.dsiSerializeIdx(i: rank*idxType):int{
+  if rank==1 then return 8*i[1];
+  if rank==2 then return 8*(i[1]*dom.whole.dim(2).size+i[2]);
+}
+proc BlockArr.dsiDeserializeIdx(i) {
+  if rank==1 then return i/8;
+  if rank==2 then return ((i/8)/dom.whole.dim(2), (i/8)%dom.whole.dim(2));
 }
 
 inline proc __rowWiseSliceDom(dom, numElems, i, num) {

@@ -1,13 +1,3 @@
-extern type prefetch_entry_t;
-extern type c_nodeid_t;
-
-extern proc chpl_comm_prefetch(node, raddr, size, serialized_base_idx): 
-  prefetch_entry_t;
-extern proc is_prefetched(node, raddr, size): c_int;
-extern proc is_prefetched_in_entry(handle, node, raddr, size): c_int;
-extern proc get_data_offset(handle, size, serialized_idx): c_int;
-extern proc get_prefetched_data(handle, offset, size, ref dest): c_int;
-
 use BlockDist;
 use Time;
 
@@ -37,8 +27,7 @@ if prefetch {
   }
   var data: arr._value.eltType;
   local for i in space {
-    var isFound = get_prefetched_data(handle, 8, getSerializedIdx(i),
-        data);
+    var isFound=get_prefetched_data(handle,8,getSerializedIdx(i), data);
     if isFound >= 0 {
       /*get_prefetched_data(handle, result, 8, data);*/
       sum+=data;

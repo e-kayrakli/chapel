@@ -312,6 +312,7 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_ARRAY_FREE:
   case PRIM_ARRAY_FREE_ELTS:
   case PRIM_STRING_COPY:
+  case PRIM_CHPL_COMM_GET_PBUF_ADDR:
     return LOCAL_NOT_FAST;
 
 

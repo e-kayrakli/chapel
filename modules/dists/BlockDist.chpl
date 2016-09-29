@@ -335,6 +335,8 @@ class BlockArr: BaseArr {
   var dom: BlockDom(rank, idxType, stridable, sparseLayoutType);
   var locArr: [dom.dist.targetLocDom] LocBlockArr(eltType, rank, idxType, stridable);
   var myLocArr: LocBlockArr(eltType, rank, idxType, stridable);
+
+  var prefetchHandles: [dom.dist.targetLocDom] prefetch_entry_t;
   var pid: int = -1; // privatized object id (this should be factored out)
   const SENTINEL = max(rank*idxType);
 }
@@ -1042,6 +1044,17 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 }
 
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
+  local {
+    const locIdx = dom.dist.targetLocsIdx(i);
+    const handle = prefetchHandles[locIdx];
+    var isPrefetched: int;
+    const data = get_prefetched_data_addr(handle, 8, 
+        dsiSerializeIdx(i),
+        isPrefetched);
+    if isPrefetched > 0 {
+      return (data:c_ptr(eltType))[0];
+    }
+  }
   if doRADOpt {
     if myLocArr {
       if boundsChecking then

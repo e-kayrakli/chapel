@@ -113,6 +113,8 @@ int64_t get_data_offset(struct prefetch_entry_s* prefetch_entry,
     size_t size, size_t serialized_idx);
 int64_t get_prefetched_data(struct prefetch_entry_s* prefetch_entry,
     size_t size, size_t serialized_idx, void* dest);
+void *get_prefetched_data_addr(struct prefetch_entry_s* 
+    prefetch_entry, size_t size, size_t serialized_idx, int64_t* dest);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

@@ -1290,9 +1290,16 @@ static void init_ref_var(VarSymbol* var, Expr* init, Expr* stmt) {
     }
   }
 
-  stmt->insertAfter(new CallExpr(PRIM_MOVE,
-                                 var,
-                                 new CallExpr(PRIM_ADDR_OF, varLocation)));
+  CallExpr* call = toCallExpr(varLocation);
+  if(call && call->isPrimitive(PRIM_CHPL_COMM_GET_PBUF_ADDR)){
+    stmt->insertAfter(new CallExpr(PRIM_MOVE, var,
+          new CallExpr(PRIM_CAST, var->getRefType()->symbol, 
+            varLocation)));
+  }
+  else {
+    stmt->insertAfter(new CallExpr(PRIM_MOVE, var,
+          new CallExpr(PRIM_ADDR_OF, varLocation)));
+  }
 }
 
 

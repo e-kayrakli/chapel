@@ -124,6 +124,7 @@ enum PrimitiveTag {
   PRIM_CHPL_COMM_ARRAY_GET,
   PRIM_CHPL_COMM_ARRAY_PUT,
   PRIM_CHPL_COMM_REMOTE_PREFETCH,
+  PRIM_CHPL_COMM_GET_PBUF_ADDR, // gets the address in prefetch buffer
   PRIM_CHPL_COMM_GET_STRD,      // Direct calls to the Chapel comm layer for strided comm
   PRIM_CHPL_COMM_PUT_STRD,      //  may eventually add others (e.g., non-blocking)
 

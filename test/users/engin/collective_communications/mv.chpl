@@ -3,11 +3,6 @@ use BlockDist;
 use commMethods;
 use CommDiagnostics;
 
-inline proc prefetch(ref x, len:int) {
-  __primitive("chpl_comm_remote_prefetch", x.locale.id,
-              x, len, 1);
-}
- 
 config param detailedTiming=false;
 config param optComm = false;
 config param commDiag = false;
@@ -15,7 +10,7 @@ config param verboseComm = false;
 config param rtPrefetch = false;
 config const N = 4;
 config const printData = false;
-config const partial = true;
+config param partial = false;
 const space = {0..#N, 0..#N};
 const matdom = space dmapped Block(space);
 const vecspace = {0..#N};
@@ -32,8 +27,8 @@ forall i in vecdom {
 }
 
 if printData {
-  writeln(A);
-  writeln(b);
+  for i in matdom do writeln(A[i]);
+  for i in vecdom do writeln(b[i]);
 }
 
 var c: [vecdom] real;
@@ -57,9 +52,10 @@ if optComm {
     detailT.clear();
     detailT.start();
   }
-  local forall i in vecdom {
+  forall i in vecdom {
     for k in vecdom {
       c[i] += A[i,k] * b[k];
+      /*c[i] += b[k];*/
     }
   }
   if detailedTiming {
@@ -68,35 +64,12 @@ if optComm {
     detailT.clear();
   }
 }
-else if !rtPrefetch {
+else {
   forall i in vecdom {
     for k in vecdom {
       c[i] += A[i,k] * b[k];
     }
   }
-}
-else if rtPrefetch {
-  if verboseComm then startVerboseCommHere();
-  coforall l in Locales do on l {
-    prefetch(b[(1-here.id)*(N/2)] , 8*N/2);
-    local for i in vecdom.localSubdomain() {
-      for k in vecdom {
-        c[i] += A[i,k] * b[k];
-      }
-    }
-  }
-  if verboseComm then stopVerboseCommHere();
-  if verboseComm then writeln("Prefetch finished");
-  if verboseComm then startVerboseCommHere();
-  /*forall i in vecdom {*/
-    /*for k in vecdom {*/
-      /*c[i] += A[i,k] * b[k];*/
-    /*}*/
-  /*}*/
-  if verboseComm then stopVerboseCommHere();
-}
-else {
-  halt("Incorrect config flags");
 }
 t.stop();
 if commDiag then stopCommDiagnostics();

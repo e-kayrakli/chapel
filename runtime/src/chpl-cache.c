@@ -2969,6 +2969,34 @@ int64_t get_prefetched_data(struct prefetch_entry_s* prefetch_entry,
   return offset;
 }
 
+void *get_prefetched_data_addr(struct prefetch_entry_s* 
+    prefetch_entry, size_t size, size_t serialized_idx, 
+    int64_t* found) {
+
+  int64_t offset; //this can be negative in current logic
+
+  if(prefetch_entry == NULL){
+    *found = 0;
+    return NULL;
+  }
+
+  offset = (int64_t)serialized_idx -
+    (int64_t)prefetch_entry->serialized_base_idx;
+
+  if(offset < 0) {
+    *found = 0;
+    return NULL;
+  }
+
+  if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { 
+    *found = 0;
+    return NULL;
+  }
+  *found = 1;
+  return (void *)((uintptr_t)prefetch_entry->data+offset);
+;
+}
+
 /*static*/
 /*void *find_in_prefetch_buffer(struct prefetch_entry_s* prefetch_buffer,*/
     /*c_nodeid_t node, void *raddr, size_t size) {*/

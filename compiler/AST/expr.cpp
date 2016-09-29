@@ -5989,6 +5989,26 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
       break;
     }
 
+    case PRIM_CHPL_COMM_GET_PBUF_ADDR: {
+      // args are:
+      //   handle, size, get(3)==serialized_idx, found
+
+      
+      if(target && target->typeInfo()->symbol->hasFlag(FLAG_REF)) {
+        ret = codegenCast(target->typeInfo(), 
+            codegenCallExpr("get_prefetched_data_addr",
+            call->get(1),
+            call->get(2),
+            call->get(3),
+            codegenCast("int64_t *", codegenAddrOf(call->get(4)))));
+      }
+      else {
+        INT_ASSERT(0);
+      }
+
+      break;
+    }
+
     case PRIM_GET_UNION_ID: {
       if (call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF)) {
         ret = codegenFieldUidPtr(call->get(1));
