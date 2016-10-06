@@ -43,9 +43,10 @@ var compTime = 0.0;
 t.start();
 if optComm {
   if detailedTiming then detailT.start();
-  if partial then A._value.rowWiseAllPartialGather();
-              else A._value.rowWiseAllGather();
+  /*if partial then A._value.rowWiseAllPartialGather();*/
+              /*else A._value.rowWiseAllGather();*/
   b._value.allGather();
+  /*halt("All gather was successful");*/
   if detailedTiming {
     detailT.stop();
     commTime += detailT.elapsed();

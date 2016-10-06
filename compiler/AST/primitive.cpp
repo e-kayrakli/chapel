@@ -84,10 +84,10 @@ returnInfoInt64(CallExpr* call) {
   return QualifiedType(dtInt[INT_SIZE_64], QUAL_VAL);
 }
 
-static QualifiedType
-returnInfoUInt64(CallExpr* call) {
-  return QualifiedType(dtUInt[INT_SIZE_64], QUAL_VAL);
-}
+//static QualifiedType
+//returnInfoUInt64(CallExpr* call) {
+  //return QualifiedType(dtUInt[INT_SIZE_64], QUAL_VAL);
+//}
 
 static QualifiedType
 returnInfoSizeType(CallExpr* call) {
@@ -455,7 +455,7 @@ initPrimitive() {
 
   prim_def(PRIM_SETCID, "setcid", returnInfoVoid, true, true);
   prim_def(PRIM_TESTCID, "testcid", returnInfoBool, false, true);
-  prim_def(PRIM_GETCID, "getcid", returnInfoBool, false, true);
+  prim_def(PRIM_GETCID, "getcid", returnInfoInt32, false, true);
   prim_def(PRIM_SET_UNION_ID, "set_union_id", returnInfoVoid, true, true);
   prim_def(PRIM_GET_UNION_ID, "get_union_id", returnInfoDefaultInt, false, true);
   prim_def(PRIM_GET_MEMBER, ".", returnInfoGetMemberRef);
@@ -557,7 +557,7 @@ initPrimitive() {
   // PRIM_WIDE_GET_NODE. It might make sense to keep both of these
   // functions for debugging.
   prim_def(PRIM_WIDE_GET_NODE, "_wide_get_node", returnInfoNodeID, false, true);
-  prim_def(PRIM_WIDE_GET_ADDR, "_wide_get_addr", returnInfoUInt64, false, true);
+  prim_def(PRIM_WIDE_GET_ADDR, "_wide_get_addr", returnInfoCVoidPtr, false, true);
   prim_def(PRIM_IS_WIDE_PTR, "is wide pointer", returnInfoBool);
 
   prim_def(PRIM_ON_LOCALE_NUM, "chpl_on_locale_num", returnInfoLocaleID);

@@ -4402,7 +4402,7 @@ GenRet CallExpr::codegenPrimitive() {
     }
 
     // _wide_get_addr promises to return a uint.  Hence the cast.
-    ret            = codegenCastPtrToInt(dtUInt[INT_SIZE_64], ret);
+    ret            = codegenCastPtrToInt(dtCVoidPtr, ret);
 
     break;
   }

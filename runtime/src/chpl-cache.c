@@ -2688,13 +2688,16 @@ struct rdcache_s* tls_cache_remote_data(void) {
 
 struct prefetch_buffer_s {
   void *fast_access_addr;
-  struct prefetch_entry_s *head;
+  struct __prefetch_entry_t *head;
 };
 
+void* get_data_from_prefetch_entry(prefetch_entry_t entry) {
+  return entry->data;
+}
 
 /*static*/
-/*void dump_prefetch_buffer(struct prefetch_entry_s *buffer) {*/
-  /*struct prefetch_entry_s *cur = buffer;*/
+/*void dump_prefetch_buffer(struct __prefetch_entry_t *buffer) {*/
+  /*struct __prefetch_entry_t *cur = buffer;*/
 
   /*printf("Prefetched data on node %d:\n", chpl_nodeID);*/
 
@@ -2738,8 +2741,8 @@ void destroy_pthread_local_cache(void* arg)
 static
 void prefetch_destroy(struct prefetch_buffer_s *pbuf) {
 
-  struct prefetch_entry_s *cur = pbuf->head;
-  struct prefetch_entry_s *next = NULL;
+  struct __prefetch_entry_t *cur = pbuf->head;
+  struct __prefetch_entry_t *next = NULL;
 
   while(cur) {
     next = cur->next;
@@ -2924,25 +2927,23 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
 
 
 static
-struct prefetch_entry_s * add_to_prefetch_buffer(
-    struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node, void* raddr,
-    size_t size, size_t serialized_base_idx){
+struct __prefetch_entry_t * add_to_prefetch_buffer(
+    struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
+    void* robjaddr){
 
-  struct prefetch_entry_s *head;
-  struct prefetch_entry_s *new_entry;
+  struct __prefetch_entry_t *head;
+  struct __prefetch_entry_t *new_entry;
 
   assert(pbuf);
 
   head = pbuf->head;
 
   //currently just add to the head
-  new_entry = chpl_malloc(sizeof(struct prefetch_entry_s)*1);
+  new_entry = chpl_malloc(sizeof(struct __prefetch_entry_t)*1);
 
   new_entry->origin_node = origin_node;
-  new_entry->raddr = raddr;
-  new_entry->size = size;
-  new_entry->data = chpl_malloc(size);
-  new_entry->serialized_base_idx = serialized_base_idx;
+  new_entry->robjaddr = robjaddr;
+  // alloc was here before
   
   if(head != NULL)
     new_entry->next = head->next;
@@ -2951,7 +2952,7 @@ struct prefetch_entry_s * add_to_prefetch_buffer(
   return new_entry;
 }
 
-int64_t get_prefetched_data(struct prefetch_entry_s* prefetch_entry,
+int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
     size_t size, size_t serialized_idx, void* dest) {
   int64_t offset; //this can be negative in current logic
 
@@ -2969,7 +2970,7 @@ int64_t get_prefetched_data(struct prefetch_entry_s* prefetch_entry,
   return offset;
 }
 
-void *get_prefetched_data_addr(struct prefetch_entry_s* 
+void *get_prefetched_data_addr(struct __prefetch_entry_t* 
     prefetch_entry, size_t size, size_t serialized_idx, 
     int64_t* found) {
 
@@ -2998,11 +2999,11 @@ void *get_prefetched_data_addr(struct prefetch_entry_s*
 }
 
 /*static*/
-/*void *find_in_prefetch_buffer(struct prefetch_entry_s* prefetch_buffer,*/
+/*void *find_in_prefetch_buffer(struct __prefetch_entry_t* prefetch_buffer,*/
     /*c_nodeid_t node, void *raddr, size_t size) {*/
 
   /*size_t offset;*/
-  /*struct prefetch_entry_s* cur = prefetch_buffer;*/
+  /*struct __prefetch_entry_t* cur = prefetch_buffer;*/
   /*[>if(cur) {<]*/
     /*[>printf("not null\n");<]*/
   /*[>}<]*/
@@ -3018,7 +3019,7 @@ void *get_prefetched_data_addr(struct prefetch_entry_s*
 
 /*int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size) {*/
   /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
-  /*struct prefetch_entry_s* cur = pbuf->head;*/
+  /*struct __prefetch_entry_t* cur = pbuf->head;*/
   /*int64_t offset;*/
   /*if(chpl_nodeID == node) {*/
     /*return 0; // we dont' allow local data to be in prefetch buffer*/
@@ -3033,7 +3034,7 @@ void *get_prefetched_data_addr(struct prefetch_entry_s*
   /*return 0;*/
 /*}*/
 
-/*int64_t is_prefetched_in_entry(struct prefetch_entry_s* entry,*/
+/*int64_t is_prefetched_in_entry(struct __prefetch_entry_t* entry,*/
     /*c_nodeid_t node, void* raddr, size_t size) {*/
 
   /*if(get_data_offset(entry, node, raddr, size) != -1)*/
@@ -3042,28 +3043,50 @@ void *get_prefetched_data_addr(struct prefetch_entry_s*
   /*return 0;*/
 /*}*/
 
-struct prefetch_entry_s *chpl_comm_prefetch(c_nodeid_t node, 
-    void* raddr, size_t size, size_t serialized_base_idx) {
+/*struct __prefetch_entry_t *chpl_comm_prefetch(c_nodeid_t node, */
+    /*void* raddr, size_t size, size_t serialized_base_idx) {*/
+
+  /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
+  /*struct __prefetch_entry_t* new_data;*/
+  /*TRACE_PRINT(("%d: in chpl_comm_prefetch\n", chpl_nodeID));*/
+  /*if (chpl_verbose_comm)*/
+    /*printf("%d: remote direct prefetch from %d\n", chpl_nodeID, node);*/
+
+  /*// add the data to the prefetch buffer*/
+  /*new_data = add_to_prefetch_buffer(pbuf, node, raddr, size,*/
+      /*serialized_base_idx);*/
+  
+  /*//this is a blocking get*/
+
+  /*[>printf("%d prefetches from %d: %p, %zu\n", chpl_nodeID, node, raddr, size);<]*/
+  /*chpl_comm_get(new_data->data, node, raddr, size, -1, -1, -1);*/
+
+  /*return new_data;*/
+/*}*/
+
+// currently we don't do slice. but when the support is added there has
+// to be new argument
+// currently, I imagine we'd need a typeIndex(not to be confused with
+// communcaiton typeIndex, to convey chplType to the other side
+struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
+    void* robjaddr) {
 
   struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
-  struct prefetch_entry_s* new_data;
-  TRACE_PRINT(("%d: in chpl_comm_prefetch\n", chpl_nodeID));
+  struct __prefetch_entry_t* new_data;
+  TRACE_PRINT(("%d: in chpl_comm_requestprefetch\n", chpl_nodeID));
   if (chpl_verbose_comm)
-    printf("%d: remote direct prefetch from %d\n", chpl_nodeID, node);
+    printf("%d: remote prefetch request from %d\n", chpl_nodeID, node);
 
   // add the data to the prefetch buffer
-  new_data = add_to_prefetch_buffer(pbuf, node, raddr, size,
-      serialized_base_idx);
-  
-  //this is a blocking get
+  new_data = add_to_prefetch_buffer(pbuf, node, robjaddr);
 
-  /*printf("%d prefetches from %d: %p, %zu\n", chpl_nodeID, node, raddr, size);*/
-  chpl_comm_get(new_data->data, node, raddr, size, -1, -1, -1);
+  chpl_comm_prefetch(&(new_data->data), node, robjaddr,
+      &(new_data->size), -1, -1, -1);
 
   return new_data;
 }
 
-/*void get_prefetched_data(struct prefetch_entry_s *entry,*/
+/*void get_prefetched_data(struct __prefetch_entry_t *entry,*/
     /*int offset, size_t size, void *dest) {*/
   /*memcpy(dest, ((unsigned char *)entry->data)+offset, size);*/
 /*}*/

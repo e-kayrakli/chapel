@@ -37,18 +37,17 @@ int chpl_cache_enabled(void)
   return CHPL_CACHE_REMOTE && chpl_task_supportsRemoteCache();
 }
 
-struct prefetch_entry_s {
+typedef struct __prefetch_entry_t{
   c_nodeid_t origin_node;
-  void* raddr;
+  void* robjaddr;
   size_t size;
   size_t serialized_base_idx;
 
   void *data;
-  struct prefetch_entry_s *next;
-};
+  struct __prefetch_entry_t *next;
+} _prefetch_entry_t, *prefetch_entry_t;
 
-typedef struct prefetch_entry_s *prefetch_entry_t;
-
+void* get_data_from_prefetch_entry(prefetch_entry_t entry);
 // Initialize the remote data cache layer. 
 void chpl_cache_init(void);
 void chpl_cache_exit(void);
@@ -100,20 +99,22 @@ void  chpl_cache_comm_put_strd(
 void chpl_cache_print(void);
 void chpl_cache_assert_released(void);
 
-struct prefetch_entry_s *chpl_comm_prefetch(c_nodeid_t node, 
-    void* raddr, size_t size, size_t serialized_base_idx);
+//struct __prefetch_entry_t *chpl_comm_prefetch(c_nodeid_t node, 
+    //void* raddr, size_t size, size_t serialized_base_idx);
+struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
+    void* robjaddr);
 void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
     raddr, size_t size, int32_t typeIndex, int ln, int32_t fn);
 int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size);
-int64_t is_prefetched_in_entry(struct prefetch_entry_s* entry,
+int64_t is_prefetched_in_entry(struct __prefetch_entry_t* entry,
     c_nodeid_t node, void* raddr, size_t size);
-int64_t get_data_offset(struct prefetch_entry_s* prefetch_entry,
+int64_t get_data_offset(struct __prefetch_entry_t* prefetch_entry,
     size_t size, size_t serialized_idx);
-int64_t get_prefetched_data(struct prefetch_entry_s* prefetch_entry,
+int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
     size_t size, size_t serialized_idx, void* dest);
-void *get_prefetched_data_addr(struct prefetch_entry_s* 
+void *get_prefetched_data_addr(struct __prefetch_entry_t* 
     prefetch_entry, size_t size, size_t serialized_idx, int64_t* dest);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS

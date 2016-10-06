@@ -1,32 +1,29 @@
 use BlockDist;
 
-inline proc BlockArr.__prefetchFrom(sourceIdx) {
-  const locDom = dom.getLocDom(sourceIdx);
-  const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-  privCopy.prefetchHandles[sourceIdx] = chpl_comm_prefetch(
-      node = dom.dist.targetLocales[sourceIdx].id,
-      c_ptrTo(locArr[sourceIdx].myElems[locDom.myBlock.low]),
-      locDom.myBlock.numIndices*8,
-      dsiSerializeIdx(locDom.myBlock.low));
+proc BlockArr.__prefetchFrom(localeIdx, sourceIdx) {
+  var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  locArr[localeIdx].prefetchHook.requestPrefetch(
+      dom.dist.targetLocales[sourceIdx].id,
+      privCopy.locArr[sourceIdx]);
 }
 
-proc BlockArr.__prefetchFrom(sourceIdx, slice) {
-  const locDom = dom.getLocDom(sourceIdx);
-  const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-  privCopy.locArrsScratchPad[sourceIdx] =
-    new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-  chpl__bulkTransferArray(
-      privCopy.locArrsScratchPad[sourceIdx].myElems[slice],
-      locArr[sourceIdx].myElems[slice]);
-  privCopy.locArrsScratchPadReady[sourceIdx] = true;
-}
+/*proc BlockArr.__prefetchFrom(sourceIdx, slice) {*/
+  /*const locDom = dom.getLocDom(sourceIdx);*/
+  /*const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);*/
+  /*privCopy.locArrsScratchPad[sourceIdx] =*/
+    /*new LocBlockArr(eltType, rank, idxType, stridable, locDom);*/
+  /*chpl__bulkTransferArray(*/
+      /*privCopy.locArrsScratchPad[sourceIdx].myElems[slice],*/
+      /*locArr[sourceIdx].myElems[slice]);*/
+  /*privCopy.locArrsScratchPadReady[sourceIdx] = true;*/
+/*}*/
 
 proc BlockArr.rowWiseAllGather() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for i in dom.dist.targetLocDom.dim(2) {
         const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
-        __prefetchFrom(sourceIdx);
+        __prefetchFrom(localeIdx, sourceIdx);
       }
     }
   }
@@ -59,33 +56,33 @@ inline proc __rowWiseSliceDom(dom, numElems, i, num) {
 
 
 
-proc BlockArr.rowWiseAllPartialGather() {
-  coforall localeIdx in dom.dist.targetLocDom {
-    on dom.dist.targetLocales(localeIdx) {
-      const numLocalesInCol = dom.dist.targetLocDom.dim(1).size;
-      const numLocalesInRow = dom.dist.targetLocDom.dim(2).size;
-      const rowSize = dom.whole.dim(2).size;
-      for i in dom.dist.targetLocDom.dim(2) {
-        const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
-        const locDom = dom.getLocDom(sourceIdx);
-        /*writeln(localeIdx, " recieving ", */
-            /*__rowWiseSliceDom(locDom.myBlock, rowSize,*/
-              /*localeIdx[1]*numLocalesInRow+localeIdx[2],*/
-              /*dom.dist.targetLocales.size), " from ", sourceIdx);*/
-        __prefetchFrom(sourceIdx, __rowWiseSliceDom(locDom.myBlock,
-              rowSize, localeIdx[1]*numLocalesInRow+localeIdx[2],
-              dom.dist.targetLocales.size));
-      }
-    }
-  }
-  /*halt("END");*/
-}
+/*proc BlockArr.rowWiseAllPartialGather() {*/
+  /*coforall localeIdx in dom.dist.targetLocDom {*/
+    /*on dom.dist.targetLocales(localeIdx) {*/
+      /*const numLocalesInCol = dom.dist.targetLocDom.dim(1).size;*/
+      /*const numLocalesInRow = dom.dist.targetLocDom.dim(2).size;*/
+      /*const rowSize = dom.whole.dim(2).size;*/
+      /*for i in dom.dist.targetLocDom.dim(2) {*/
+        /*const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);*/
+        /*const locDom = dom.getLocDom(sourceIdx);*/
+        /*[>writeln(localeIdx, " recieving ", <]*/
+            /*[>__rowWiseSliceDom(locDom.myBlock, rowSize,<]*/
+              /*[>localeIdx[1]*numLocalesInRow+localeIdx[2],<]*/
+              /*[>dom.dist.targetLocales.size), " from ", sourceIdx);<]*/
+        /*__prefetchFrom(sourceIdx, __rowWiseSliceDom(locDom.myBlock,*/
+              /*rowSize, localeIdx[1]*numLocalesInRow+localeIdx[2],*/
+              /*dom.dist.targetLocales.size));*/
+      /*}*/
+    /*}*/
+  /*}*/
+  /*[>halt("END");<]*/
+/*}*/
 
 proc BlockArr.rowWiseAllPrefetch(onlyCol) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       const sourceIdx = chpl__tuplify(onlyCol).withIdx(1, localeIdx[1]);
-      __prefetchFrom(sourceIdx);
+      __prefetchFrom(localeIdx, sourceIdx);
     }
   }
 }
@@ -95,7 +92,7 @@ proc BlockArr.colWiseAllGather() {
     on dom.dist.targetLocales(localeIdx) {
       for i in dom.dist.targetLocDom.dim(1) {
         const sourceIdx = chpl__tuplify(i).withIdx(2, localeIdx[2]);
-        __prefetchFrom(sourceIdx);
+        __prefetchFrom(localeIdx, sourceIdx);
       }
     }
   }
@@ -105,7 +102,7 @@ proc BlockArr.colWiseAllPrefetch(onlyRow) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       const sourceIdx = chpl__tuplify(onlyRow).withIdx(2, localeIdx[2]);
-      __prefetchFrom(sourceIdx);
+      __prefetchFrom(localeIdx, sourceIdx);
     }
   }
 }
@@ -114,7 +111,7 @@ proc BlockArr.allGather() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for sourceIdx in dom.dist.targetLocDom {
-        __prefetchFrom(sourceIdx);
+        __prefetchFrom(localeIdx, sourceIdx);
       }
     }
   }
