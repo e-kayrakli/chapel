@@ -37,13 +37,34 @@ int chpl_cache_enabled(void)
   return CHPL_CACHE_REMOTE && chpl_task_supportsRemoteCache();
 }
 
+// Note on throttling: Currently I am choosing to keep a big monolithic
+// chunk of data where active messages fill up gradually.
+//
+// However, I'd like to move to a world where chunks brought in by
+// active messages go to separate locations where we expose done objects
+// to prefetch functions in chpl-cache. I think this would allow us to
+// do something that we can call a prefetch stream.
+//
+// With throttling, we can even start freeing up some memory if we can
+// guarantee that prefetch data is accessed only once.
+//
+// OTOH, such application brings up other questions: how much does this
+// change affect higher layers of the stack? I think one implication is
+// that we have to separate metadata and data in the prefetch_entry
+// (albeit we can still pack them before sending). This would probably
+// lead to having dsiSerializeData dsiSerializeMetadata on the sender
+// side. And on the prefetcher side I think we can hide some of this
+// complexity.
 typedef struct __prefetch_entry_t{
   c_nodeid_t origin_node;
   void* robjaddr;
   size_t size;
   size_t serialized_base_idx;
 
-  void *data;
+  //throttling TODO new field: chunk_size
+  //throttling TODO new field: doneobj array(same size as void* array
+
+  void *data; //throttling TODO this will be an array of void pointers
   struct __prefetch_entry_t *next;
 } _prefetch_entry_t, *prefetch_entry_t;
 

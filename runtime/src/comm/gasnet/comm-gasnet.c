@@ -195,6 +195,25 @@ typedef struct {
 
 typedef struct {
   void* ack; // acknowledgement object
+  void *src; // where it begins
+  size_t size; // total size of serialized data on owner
+  gasnet_hsl_t *lock; //lock that protects the data
+} prefetch_query_response_t;
+
+typedef struct {
+  void* ack; // acknowledgement object
+  void* tgt; // target memory address
+  void* src; // source memory address
+  size_t size; // number of bytes.
+
+  void* free_addr; //address that needs to be freed on owner
+  gasnet_hsl_t* lock; //lock to unlock data
+} prefetch_xfer_info_t;
+
+typedef struct {
+  bool first_time;
+  bool last_time;
+  void* ack; // acknowledgement object
   void* tgt; // target memory address
   uint64_t packed_metadata[3]; //prefetch metadata
 } prefetch_info_t;
@@ -464,34 +483,43 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
 
   uint64_t *packed_data;
   size_t packed_data_size = sizeof(uint64_t)*3;
+  size_t response_size = sizeof(prefetch_query_response_t);
+
+  prefetch_query_response_t response;
   assert(nbytes == sizeof(xfer_info_t));
 
   //call the source object's size wrapper
   //TODO we need some size limitations here and respond with e.g. -1 to
   //denote that requested data is too big
+  
   prefetch_size = __serialized_obj_size_wrapper(x->src);
+  response.size = prefetch_size;
 
   //now allocate space for serialization
-  serial_buffer = chpl_malloc(prefetch_size);
+  serial_buffer = chpl_malloc(response.size);
+  response.src = serial_buffer;
 
   //create lock for the buffer
   gasnet_hsl_init(&buffer_lock);
+  response.lock = &buffer_lock;
 
   /*printf("%d Sending prefetch size %zd\n", chpl_nodeID, prefetch_size);*/
   //pack the data
-  packed_data = chpl_malloc(packed_data_size);
-  packed_data[0] = (uint64_t)prefetch_size;
-  packed_data[1] = (uint64_t)serial_buffer;
-  packed_data[2] = (uint64_t)&buffer_lock;
+  /*packed_data = chpl_malloc(packed_data_size);*/
+  /*packed_data[0] = (uint64_t)prefetch_size;*/
+  /*packed_data[1] = (uint64_t)serial_buffer;*/
+  /*packed_data[2] = (uint64_t)&buffer_lock;*/
 
   //and send the pointer to the destination
   //destination locale will ask for the serialized data directly with
   //the given pointer. If we can assure that the data is ready than it
   //can be even done with a gasnet_get from the destination locale.
   //however currently request for data is another AM
-  GASNET_Safe(gasnet_AMReplyLong2(token, SIGNAL_LONG, packed_data,
-        packed_data_size, x->tgt, AckArg0(x->ack), AckArg1(x->ack)));
+  /*GASNET_Safe(gasnet_AMReplyLong2(token, SIGNAL_LONG, packed_data,*/
+        /*packed_data_size, x->tgt, AckArg0(x->ack), AckArg1(x->ack)));*/
 
+  GASNET_Safe(gasnet_AMReplyLong2(token, SIGNAL_LONG, &response,
+        response_size, x->tgt, AckArg0(x->ack), AckArg1(x->ack)));
   //now we can serialize the data
   gasnet_hsl_lock(&buffer_lock);
   __serialize_wrapper(x->src, serial_buffer, prefetch_size);
@@ -503,7 +531,7 @@ static
 void AM_get_prefetch_data(gasnet_token_t token, void *buf,
     size_t nbytes) {
   
-  prefetch_info_t *x = buf;
+  prefetch_xfer_info_t *x = buf;
   size_t prefetch_size;
   void *serialized_data;
   gasnet_hsl_t buffer_lock;
@@ -511,20 +539,20 @@ void AM_get_prefetch_data(gasnet_token_t token, void *buf,
   assert(nbytes == sizeof(prefetch_info_t));
   
   // TODO put metadata in something else
-  prefetch_size = (size_t)(x->packed_metadata[0]);
-  serialized_data = (void *)(x->packed_metadata[1]);
-  buffer_lock = *((gasnet_hsl_t *)x->packed_metadata[2]);
+  prefetch_size = x->size;
+  serialized_data = x->src;
+  buffer_lock = *(x->lock);
+
 
   gasnet_hsl_lock(&buffer_lock);
-  printf("Max size %zd, cursize %zd\n", gasnet_AMMaxLongReply(),
-      prefetch_size);
+  /*printf("Max size %zd, cursize %zd\n", gasnet_AMMaxLongReply(),*/
+      /*prefetch_size);*/
   GASNET_Safe(gasnet_AMReplyLong2(token, SIGNAL_LONG,
         serialized_data, prefetch_size, x->tgt,
         AckArg0(x->ack), AckArg1(x->ack)));
   gasnet_hsl_unlock(&buffer_lock);
   gasnet_hsl_destroy(&buffer_lock);
 
-  //TODO free the serialized data buffer here
   chpl_free(serialized_data);
 
 }
@@ -1121,10 +1149,12 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
   size_t prefetch_size;
   size_t packed_data_size = sizeof(uint64_t)*3;
   uint64_t *packed_data;
+  prefetch_query_response_t response;
   done_t metadata_done;
   done_t done;
   xfer_info_t metadata_info;
-  prefetch_info_t info;
+  /*prefetch_info_t info;*/
+  prefetch_xfer_info_t info;
   size_t num_elems;
   int i;
 
@@ -1156,14 +1186,16 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     init_done_obj(&metadata_done, 1);
 
     packed_data = chpl_malloc(packed_data_size);
+
     metadata_info.ack = &metadata_done;
     // how do we know if it's in segment
-    metadata_info.tgt = packed_data;
+    /*metadata_info.tgt = packed_data;*/
+    metadata_info.tgt = &response;
     metadata_info.src = robjaddr;
-    metadata_info.size = packed_data_size;
+    /*metadata_info.size = packed_data_size; // TODO maybe assert size*/
+    metadata_info.size = sizeof(prefetch_query_response_t); // TODO maybe assert size
 
     /*printf("robjaddr on Locale %d is  >  %p\n", chpl_nodeID, robjaddr);*/
-    // TODO make sure we are passing the right arguments on this AM
     GASNET_Safe(gasnet_AMRequestMedium0(node, GET_PREFETCH_SIZE,
           &metadata_info, sizeof(metadata_info)));
 
@@ -1177,6 +1209,94 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     wait_done_obj(&metadata_done);
 
     prefetch_size = (size_t)(packed_data[0]);
+    prefetch_size = response.size;
+    /*
+    void *raddr_start = (void *)(packed_data[1]);
+
+      int local_in_segment;
+      void* local_buf = NULL;
+      size_t buf_sz = 0;
+      size_t max_chunk = gasnet_AMMaxLongReply();
+      size_t start;
+
+#ifdef GASNET_SEGMENT_EVERYTHING
+      local_in_segment = 1;
+#else
+      local_in_segment = chpl_comm_addr_gettable(chpl_nodeID, addr, size);
+#endif
+
+      // If the local address isn't in a registered segment,
+      // do the GET into a temporary buffer instead, and then
+      // copy the result back.
+      if( ! local_in_segment ) {
+        size_t buf_sz = prefetch_size;
+        if( buf_sz > max_chunk ) {
+          buf_sz = max_chunk;
+        }
+
+        local_buf = chpl_mem_alloc(buf_sz, CHPL_RT_MD_COMM_XMIT_RCV_BUF, 0, 0);
+#ifdef GASNET_SEGMENT_EVERYTHING
+        // local_buf is definitely in our segment
+#else
+        assert(chpl_comm_addr_gettable(chpl_nodeID, local_buf, buf_sz));
+#endif
+      }
+
+      // do a PUT on the remote locale back to here.
+      // But do it in chunks of size gasnet_AMMaxLongReply()
+      // since we use gasnet_AMReplyLong to do the PUT.
+      for(start = 0; start < prefetch_size; start += max_chunk) {
+        size_t this_size;
+        void* addr_chunk;
+        prefetch_info_t info;
+        done_t done;
+
+        this_size = prefetch_size - start;
+        if( this_size > max_chunk ) {
+          this_size = max_chunk;
+        }
+
+        addr_chunk = ((char*) addr) + start;
+
+        init_done_obj(&done, 1);
+
+        info.ack = &done;
+        info.tgt = local_buf?local_buf:addr_chunk;
+
+        //here we need to decide if we are doing the first access
+        //or last access. Accordingly we will change the metadata
+        info.first_time = start==0;
+        info.last_time = start+max_chunk>=prefetch_size; //TODO avoid calc
+        info.packed_data[0] = this_size; // do we need a cast here?
+        info.packed_data[1] = (uint64_t)(((char*) raddr_start) + start);
+
+        // Send an AM over to ask for a PUT back to us
+        GASNET_Safe(gasnet_AMRequestMedium0(node, DO_REPLY_PUT,
+                                            &info, sizeof(info)));
+
+        // Wait for the PUT to complete.
+        wait_done_obj(&done);
+
+        // Now copy from local_buf back to addr if necessary.
+        if( local_buf ) {
+          memcpy(addr_chunk, local_buf, this_size);
+        }
+
+        if(start == 0) {
+          //If I just finished the first chunk than make
+          //packed_data[3]=raddr_start;
+          //so that the owner of data can free the serialized data
+          //buffer
+          packed_data[3] = (uint64_t)raddr_start;
+        }
+      }
+
+      // If we were using a temporary local buffer free it
+      if( local_buf ) {
+        chpl_mem_free(local_buf, 0, 0);
+      }
+
+*/
 
 
     //TODO we need to loop here
@@ -1190,11 +1310,20 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     *addr = chpl_malloc(prefetch_size);
 
     //now start the actual data transfer AM
+    // TODO we may have to add another field, stating if we are doing
+    // the last transfer or not, so that the source can free up memory
     init_done_obj(&done, 1);
     info.ack = &done;
     info.tgt = *addr;
-    chpl_memcpy(info.packed_metadata, packed_data, packed_data_size);
+    info.src = response.src;
+    info.size = prefetch_size;
 
+    info.free_addr = response.src;
+    info.lock = response.lock;
+    /*chpl_memcpy(info.packed_metadata, packed_data, packed_data_size);*/
+
+    /*printf("info size %zd, max size %zd\n", sizeof(info), */
+        /*gasnet_AMMaxMedium());*/
     GASNET_Safe(gasnet_AMRequestMedium0(node, GET_PREFETCH_DATA,
           &info, sizeof(info)));
 

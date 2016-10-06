@@ -2999,8 +2999,9 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
     return NULL;
   }
   *found = 1;
+  // throttling TODO there will be a chunk logic here
+  // throttling TODO including a wait on corrseponding doneobj
   return (void *)((uintptr_t)prefetch_entry->data+offset);
-;
 }
 
 /*static*/
