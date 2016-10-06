@@ -375,7 +375,6 @@ class LocBlockArr {
 
   proc setup() {
     prefetchHook = new GenericPrefetchHook(this);
-    writeln("Prefetch hook initiated");
   }
 
 }

@@ -65,6 +65,7 @@ module PrefetchHooks {
   class GenericPrefetchHook:PrefetchHook {
     var obj;
     var handles: c_ptr(prefetch_entry_t);
+    var hasData: [Locales.domain] bool;
 
     proc GenericPrefetchHook(obj) {
       handles = c_calloc(prefetch_entry_t, numLocales);
@@ -85,17 +86,21 @@ module PrefetchHooks {
 
       if nodeId!=here.id {
         handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr);
+        hasData[nodeId] = true;
       }
     }
 
     proc accessPrefetchedData(localeId, idx) {
+      if !hasData[localeId] {
+        return (false, nil:c_ptr(obj.eltType));
+      }
       const handle = handles[localeId];
       const deserialIdx = obj.getByteIndex(getData(handle), idx);
       var isPrefetched: int;
       const data = get_prefetched_data_addr(handle, 8, deserialIdx,
           isPrefetched);
 
-      return (isPrefetched, data:c_ptr(obj.eltType));
+      return (isPrefetched!=0, data:c_ptr(obj.eltType));
     }
 
     proc test() {

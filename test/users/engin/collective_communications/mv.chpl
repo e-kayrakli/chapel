@@ -10,6 +10,7 @@ config param verboseComm = false;
 config param rtPrefetch = false;
 config const N = 4;
 config const printData = false;
+config const printDataAfterPrefetch = false;
 config param partial = false;
 const space = {0..#N, 0..#N};
 const matdom = space dmapped Block(space);
@@ -27,8 +28,10 @@ forall i in vecdom {
 }
 
 if printData {
-  for i in matdom do writeln(A[i]);
-  for i in vecdom do writeln(b[i]);
+  /*for i in matdom do writeln(A[i]);*/
+  /*for i in vecdom do writeln(b[i]);*/
+  writeln(A);
+  writeln(b);
 }
 
 var c: [vecdom] real;
@@ -45,7 +48,12 @@ if optComm {
   if detailedTiming then detailT.start();
   /*if partial then A._value.rowWiseAllPartialGather();*/
               /*else A._value.rowWiseAllGather();*/
+  A._value.rowWiseAllGather();
   b._value.allGather();
+  if printDataAfterPrefetch{
+    writeln(A);
+    writeln(b);
+  }
   /*halt("All gather was successful");*/
   if detailedTiming {
     detailT.stop();

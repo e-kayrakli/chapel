@@ -2692,7 +2692,10 @@ struct prefetch_buffer_s {
 };
 
 void* get_data_from_prefetch_entry(prefetch_entry_t entry) {
-  return entry->data;
+  if(entry)
+    return entry->data;
+  else
+    return NULL;
 }
 
 /*static*/
@@ -2947,6 +2950,8 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   
   if(head != NULL)
     new_entry->next = head->next;
+  else
+    new_entry->next = NULL;
   pbuf->head = new_entry;
 
   return new_entry;
