@@ -109,20 +109,20 @@ module PrefetchHooks {
   }
 
   // I dont like obj being passed here
-  proc accessPrefetchedData(obj, handle, idx) {
-    const deserialIdx = obj.getByteIndex(getData(handle), idx);
-    var isPrefetched: int;
-    const data = get_prefetched_data_addr(handle, 8, deserialIdx,
-        isPrefetched);
+  /*proc accessPrefetchedData(obj, handle, idx) {*/
+    /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
+    /*var isPrefetched: int;*/
+    /*const data = get_prefetched_data_addr(handle, 8, deserialIdx,*/
+        /*isPrefetched);*/
 
-    return (isPrefetched, data:c_ptr(obj.eltType));
-  }
+    /*return (isPrefetched, data:c_ptr(obj.eltType));*/
+  /*}*/
 
-  class OtherClass {
-    proc someProc() {
-      halt("do nothing");
-    }
-  }
+  /*class OtherClass {*/
+    /*proc someProc() {*/
+      /*halt("do nothing");*/
+    /*}*/
+  /*}*/
 
   export proc __serialized_obj_size_wrapper(__obj: c_void_ptr): size_t {
     /*writeln("Exported proc called");*/

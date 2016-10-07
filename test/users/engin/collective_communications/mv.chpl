@@ -51,8 +51,8 @@ if optComm {
   A._value.rowWiseAllGather();
   b._value.allGather();
   if printDataAfterPrefetch{
-    writeln(A);
-    writeln(b);
+    directWriteA();
+    directWriteB();
   }
   /*halt("All gather was successful");*/
   if detailedTiming {
@@ -83,9 +83,31 @@ else {
 t.stop();
 if commDiag then stopCommDiagnostics();
 
-if printData {
+if printData || printDataAfterPrefetch {
   writeln(c);
 }
+
+inline proc directWriteA() {
+  for l in Locales do on l {
+    writeln("On ", here);
+    for i in A.domain.dim(1) {
+      for j in A.domain.dim(2) {
+        write(A[i,j], " ");
+      }
+      writeln();
+    }
+  }
+}
+
+inline proc directWriteB(){
+  for l in Locales do on l {
+    for i in b.domain {
+      write(b[i], " ");
+    }
+    writeln();
+  }
+}
+
 
 writeln("Checksum : ", + reduce c);
 writeln("N : ", N);

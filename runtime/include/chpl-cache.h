@@ -59,7 +59,6 @@ typedef struct __prefetch_entry_t{
   c_nodeid_t origin_node;
   void* robjaddr;
   size_t size;
-  size_t serialized_base_idx;
 
   //throttling TODO new field: chunk_size
   //throttling TODO new field: doneobj array(same size as void* array

@@ -2961,8 +2961,10 @@ int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
     size_t size, size_t serialized_idx, void* dest) {
   int64_t offset; //this can be negative in current logic
 
-  offset = (int64_t)serialized_idx -
-    (int64_t)prefetch_entry->serialized_base_idx;
+
+  //this shouldn't be called
+  assert(0);
+  offset = (int64_t)serialized_idx;
 
   if(offset < 0) {
     return -1;
@@ -2986,8 +2988,7 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
     return NULL;
   }
 
-  offset = (int64_t)serialized_idx -
-    (int64_t)prefetch_entry->serialized_base_idx;
+  offset = (int64_t)serialized_idx;
 
   if(offset < 0) {
     *found = 0;

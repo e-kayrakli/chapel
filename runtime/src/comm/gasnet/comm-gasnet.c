@@ -476,20 +476,17 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
   //requester will only read the first value(size)
   //the rest will be transmitted back to here in a different AM
   //
-  //I am introducing some ugliness so that we can pack the data easily.
-  //prefetch_size is actually of type size_t but here it's defined as
-  //void* so that we'll simply send 3 void* to the requester
   size_t prefetch_size;
   void *serial_buffer;
   /*gasnet_hsl_t buffer_lock;*/
-  chpl_sync_aux_t *buffer_lock = chpl_malloc(sizeof(chpl_sync_aux_t));
-
-  uint64_t *packed_data;
-  size_t packed_data_size = sizeof(uint64_t)*3;
+  chpl_sync_aux_t *buffer_lock;
+  /*uint64_t *packed_data;*/
+  /*size_t packed_data_size = sizeof(uint64_t)*3;*/
   size_t response_size = sizeof(prefetch_query_response_t);
 
   prefetch_query_response_t response;
   assert(nbytes == sizeof(xfer_info_t));
+  buffer_lock = chpl_malloc(sizeof(chpl_sync_aux_t));
 
   //call the source object's size wrapper
   //TODO we need some size limitations here and respond with e.g. -1 to
@@ -551,6 +548,7 @@ void AM_get_prefetch_data(gasnet_token_t token, void *buf,
   serialized_data = x->src;
   free_addr = x->free_addr;
 
+  assert(prefetch_size <= gasnet_AMMaxLongReply());
   printf("%d Going to prefetch %zd, %p, %p\n", chpl_nodeID, 
       prefetch_size, serialized_data, x->lock);
 
@@ -1248,7 +1246,10 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     *addr = chpl_malloc(prefetch_size);
 
     //PASTE from chpl_comm_get starts here
-/*
+
+#define PREFETCH_LOOP 1
+
+#ifdef PREFETCH_LOOP
 #ifdef GASNET_SEGMENT_EVERYTHING
     local_in_segment = 1;
 #else
@@ -1281,12 +1282,13 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
       prefetch_xfer_info_t info;
       done_t done;
 
+      printf("Looping with offset %zd\n", offset);
       this_size = prefetch_size - offset;
       if( this_size > max_chunk ) {
         this_size = max_chunk;
       }
 
-      addr_chunk = ((char*) addr) + offset;
+      addr_chunk = ((char*) *addr) + offset;
 
       init_done_obj(&done, 1);
 
@@ -1319,8 +1321,8 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     if( local_buf ) {
       chpl_mem_free(local_buf, 0, 0);
     }
-*/
 
+#else
 
     //TODO we need to loop here
     //TODO also, after the first chunk we can try getting directly if
@@ -1349,7 +1351,7 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
           &info, sizeof(info)));
 
     wait_done_obj(&done);
-
+#endif
     printf("%d received data succesfully\n", chpl_nodeID);
     /*assert(0);*/
 

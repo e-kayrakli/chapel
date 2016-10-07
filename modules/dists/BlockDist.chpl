@@ -1886,10 +1886,12 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
   }
 
   // TODO do a param for loop here
-  if rank == 1 then
-    return idx[1]-low[1];
-  if rank == 2 then
-    return (idx[1]-low[1])*(hi[2]-low[2]+1)+(idx[2]-low[2]);
+  const elemCount =  if rank == 1 then
+      idx[1]-low[1]
+      else
+      (idx[1]-low[1])*(hi[2]-low[2]+1)+(idx[2]-low[2]);
+
+  return getSize(rank*2, idxType) + getSize(elemCount, eltType);
 }
 
 iter BlockArr.dsiGetSerializedObjectSize() {
