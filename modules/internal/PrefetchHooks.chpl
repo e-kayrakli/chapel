@@ -92,6 +92,8 @@ module PrefetchHooks {
 
     proc accessPrefetchedData(localeId, idx) {
       if !hasData[localeId] {
+        /*writeln(here, " doesn't have prefetched data from ", */
+            /*localeId, " with index ", idx);*/
         return (false, nil:c_ptr(obj.eltType));
       }
       const handle = handles[localeId];
@@ -100,6 +102,11 @@ module PrefetchHooks {
       const data = get_prefetched_data_addr(handle, 8, deserialIdx,
           isPrefetched);
 
+      if isPrefetched == 0 {
+        /*writeln(here, " have prefetched data from ", */
+            /*localeId, " but not with serial index ", deserialIdx, */
+            /*" for index ", idx);*/
+      }
       return (isPrefetched!=0, data:c_ptr(obj.eltType));
     }
 

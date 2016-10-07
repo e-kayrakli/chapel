@@ -2984,6 +2984,7 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
   int64_t offset; //this can be negative in current logic
 
   if(prefetch_entry == NULL){
+    /*printf("\t no prefetch entry\n");*/
     *found = 0;
     return NULL;
   }
@@ -2991,11 +2992,15 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
   offset = (int64_t)serialized_idx;
 
   if(offset < 0) {
+    /*printf("\t offset=%ld, size=%zd, sidx=%zd\n",*/
+        /*offset, size, serialized_idx);*/
     *found = 0;
     return NULL;
   }
 
   if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { 
+    /*printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",*/
+        /*offset, size, serialized_idx, prefetch_entry->size);*/
     *found = 0;
     return NULL;
   }

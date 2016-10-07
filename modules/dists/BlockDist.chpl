@@ -1061,8 +1061,12 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
           dom.dist.targetLocales[locIdx].id, i);
     // I don't really want to do any ptr logic at this level
     // but I might have to because of ref intent mechanism
-    if isPrefetched then return data.deref();
+    if isPrefetched {
+      /*writeln(here, " doing prefetch access ", i);*/
+      return data.deref();
+    }
   /*}*/
+  /*writeln(here, " doing remote access ", i);*/
   if doRADOpt {
     if myLocArr {
       if boundsChecking then

@@ -1354,8 +1354,9 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
 #endif
     printf("%d received data succesfully\n", chpl_nodeID);
     /*assert(0);*/
-
+    *size = prefetch_size;
     //PREFETCH CODE ENDS HERE
+
   }
 }
 
