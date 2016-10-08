@@ -503,8 +503,8 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
   chpl_sync_initAux(buffer_lock);
   response.lock = buffer_lock;
 
-  printf("%d Sending prefetch data %zd, %p, %p\n", chpl_nodeID, 
-      prefetch_size, serial_buffer, buffer_lock);
+  /*printf("%d Sending prefetch data %zd, %p, %p\n", chpl_nodeID, */
+      /*prefetch_size, serial_buffer, buffer_lock);*/
   //pack the data
   /*packed_data = chpl_malloc(packed_data_size);*/
   /*packed_data[0] = (uint64_t)prefetch_size;*/
@@ -524,11 +524,11 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
   //now we can serialize the data
   /*gasnet_hsl_lock(&buffer_lock);*/
   chpl_sync_lock(buffer_lock);
-  printf("  > Acquired lock(size)\n");
+  /*printf("  > Acquired lock(size)\n");*/
   __serialize_wrapper(x->src, serial_buffer, prefetch_size);
   /*gasnet_hsl_unlock(&buffer_lock);*/
   chpl_sync_unlock(buffer_lock);
-  printf("  > Released lock(size)\n");
+  /*printf("  > Released lock(size)\n");*/
 }
 
 static
@@ -549,14 +549,14 @@ void AM_get_prefetch_data(gasnet_token_t token, void *buf,
   free_addr = x->free_addr;
 
   assert(prefetch_size <= gasnet_AMMaxLongReply());
-  printf("%d Going to prefetch %zd, %p, %p\n", chpl_nodeID, 
-      prefetch_size, serialized_data, x->lock);
+  /*printf("%d Going to prefetch %zd, %p, %p\n", chpl_nodeID, */
+      /*prefetch_size, serialized_data, x->lock);*/
 
   if(x->lock){
     /*gasnet_hsl_lock(x->lock);*/
     chpl_sync_lock(x->lock);
-    printf("  >  Acquired the lock\n");
-    fflush(stdout);
+    /*printf("  >  Acquired the lock\n");*/
+    /*fflush(stdout);*/
   }
   /*printf("Max size %zd, cursize %zd\n", gasnet_AMMaxLongReply(),*/
       /*prefetch_size);*/
@@ -565,11 +565,11 @@ void AM_get_prefetch_data(gasnet_token_t token, void *buf,
         AckArg0(x->ack), AckArg1(x->ack)));
   if(x->lock) {
     chpl_sync_unlock(x->lock);
-    printf("  >  Released the lock\n");
+    /*printf("  >  Released the lock\n");*/
     chpl_sync_destroyAux(x->lock);
   }
 
-  printf("%d successfully sent the data\n", chpl_nodeID);
+  /*printf("%d successfully sent the data\n", chpl_nodeID);*/
   if(free_addr) {
     chpl_free(free_addr);
   }
@@ -1223,7 +1223,7 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     /*metadata_info.size = packed_data_size; // TODO maybe assert size*/
     metadata_info.size = sizeof(prefetch_query_response_t); // TODO maybe assert size
 
-    printf("robjaddr on Locale %d is  >  %p\n", chpl_nodeID, robjaddr);
+    /*printf("robjaddr on Locale %d is  >  %p\n", chpl_nodeID, robjaddr);*/
     GASNET_Safe(gasnet_AMRequestMedium0(node, GET_PREFETCH_SIZE,
           &metadata_info, sizeof(metadata_info)));
 
@@ -1241,7 +1241,7 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     raddr_start = response.src;
     rlock = response.lock;
 
-    printf("Locale %d received prefetch metadata\n", chpl_nodeID);
+    /*printf("Locale %d received prefetch metadata\n", chpl_nodeID);*/
     //allocate space for the local space
     *addr = chpl_malloc(prefetch_size);
 
@@ -1282,7 +1282,7 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
       prefetch_xfer_info_t info;
       done_t done;
 
-      printf("Looping with offset %zd\n", offset);
+      /*printf("Looping with offset %zd\n", offset);*/
       this_size = prefetch_size - offset;
       if( this_size > max_chunk ) {
         this_size = max_chunk;
@@ -1345,14 +1345,14 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     info.free_addr = response.src;
     info.lock = response.lock;
 
-    printf("%d requesting data at %p, with lock %p\n", chpl_nodeID,
-        response.src, info.lock);
+    /*printf("%d requesting data at %p, with lock %p\n", chpl_nodeID,*/
+        /*response.src, info.lock);*/
     GASNET_Safe(gasnet_AMRequestMedium0(node, GET_PREFETCH_DATA,
           &info, sizeof(info)));
 
     wait_done_obj(&done);
 #endif
-    printf("%d received data succesfully\n", chpl_nodeID);
+    /*printf("%d received data succesfully\n", chpl_nodeID);*/
     /*assert(0);*/
     *size = prefetch_size;
     //PREFETCH CODE ENDS HERE

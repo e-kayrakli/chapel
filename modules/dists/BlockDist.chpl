@@ -257,6 +257,7 @@ class Block : BaseDist {
   var boundingBox: domain(rank, idxType);
   var targetLocDom: domain(rank);
   var targetLocales: [targetLocDom] locale;
+  var targetLocaleIDs: [targetLocDom] int(64); //locale ID type?
   var locDist: [targetLocDom] LocBlock(rank, idxType);
   var dataParTasksPerLocale: int;
   var dataParIgnoreRunningTasks: bool;
@@ -405,6 +406,8 @@ proc Block.Block(boundingBox: domain,
 
   setupTargetLocalesArray(targetLocDom, this.targetLocales, targetLocales);
 
+  forall (id,loc) in zip(targetLocaleIDs, this.targetLocales) do
+    id = loc.id;
   const boundingBoxDims = this.boundingBox.dims();
   const targetLocDomDims = targetLocDom.dims();
   coforall locid in targetLocDom do
@@ -434,6 +437,7 @@ proc Block.dsiAssign(other: this.type) {
   boundingBox = other.boundingBox;
   targetLocDom = other.targetLocDom;
   targetLocales = other.targetLocales;
+  targetLocaleIDs = other.targetLocaleIDs;
   dataParTasksPerLocale = other.dataParTasksPerLocale;
   dataParIgnoreRunningTasks = other.dataParIgnoreRunningTasks;
   dataParMinGranularity = other.dataParMinGranularity;
@@ -1054,18 +1058,18 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 }
 
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
-  /*local {*/
+  local {
     const locIdx = dom.dist.targetLocsIdx(i);
     var (isPrefetched, data) = 
       myLocArr.getPrefetchHook().accessPrefetchedData(
-          dom.dist.targetLocales[locIdx].id, i);
+          dom.dist.targetLocaleIDs[locIdx], i);
     // I don't really want to do any ptr logic at this level
     // but I might have to because of ref intent mechanism
     if isPrefetched {
       /*writeln(here, " doing prefetch access ", i);*/
       return data.deref();
     }
-  /*}*/
+  }
   /*writeln(here, " doing remote access ", i);*/
   if doRADOpt {
     if myLocArr {
@@ -1429,6 +1433,7 @@ proc Block.Block(other: Block, privateData,
 
   for i in targetLocDom {
     targetLocales(i) = other.targetLocales(i);
+    targetLocaleIDs(i) = other.targetLocaleIDs(i);
     locDist(i) = other.locDist(i);
   }
 }
@@ -1450,6 +1455,7 @@ proc Block.dsiReprivatize(other, reprivatizeData) {
   boundingBox = {(...reprivatizeData)};
   targetLocDom = other.targetLocDom;
   targetLocales = other.targetLocales;
+  targetLocaleIDs = other.targetLocaleIDs;
   locDist = other.locDist;
   dataParTasksPerLocale = other.dataParTasksPerLocale;
   dataParIgnoreRunningTasks = other.dataParIgnoreRunningTasks;
@@ -1870,6 +1876,11 @@ proc BlockArr.doiBulkTransferFromDR(Barg)
     }
 }
 
+// a prototype for now
+inline proc LocBlockArr.getMetadataSize() param : uint(64) {
+  return rank*2*8;
+}
+
 proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
 
   if rank > 2 then
@@ -1877,7 +1888,7 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
 
   //construct metadata
   var low: rank*idxType;
-  var hi: rank*idxType;
+  var size: rank*idxType;
 
   var metadata = getElementArrayAtOffset(data, 0, idxType);
 
@@ -1886,16 +1897,19 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
   }
 
   for param i in rank+1..2*rank {
-    hi[i-rank] = metadata[i-1];
+    size[i-rank] = metadata[i-1];
   }
 
+  /*var low = getElementArrayAtOffset(data, 0, idxType);*/
+  /*var high = getElementArrayAtOffset(data, getSize(rank,idxType), */
+      /*idxType);*/
   // TODO do a param for loop here
   const elemCount =  if rank == 1 then
       idx[1]-low[1]
       else
-      (idx[1]-low[1])*(hi[2]-low[2]+1)+(idx[2]-low[2]);
+      (idx[1]-low[1])*(size[2])+(idx[2]-low[2]);
 
-  return getSize(rank*2, idxType) + getSize(elemCount, eltType);
+  return getMetadataSize() + getSize(elemCount, eltType);
 }
 
 iter BlockArr.dsiGetSerializedObjectSize() {
@@ -1927,7 +1941,7 @@ iter LocBlockArr.dsiSerialize() {
     metaDataArr[i-1] = low[i];
   }
   for param i in rank+1..2*rank {
-    metaDataArr[i-1] = hi[i-rank];
+    metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;
   }
 
   yield convertToSerialChunk(metaDataArr);

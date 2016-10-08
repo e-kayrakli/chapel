@@ -178,7 +178,7 @@ module PrefetchHooks {
 
   }
 
-  inline proc getElementArrayAtOffset(data: c_void_ptr, offset: int, 
+  inline proc getElementArrayAtOffset(data: c_void_ptr, offset, 
       type eltType) {
 
     var castPtr = data:c_ptr(uint(8));

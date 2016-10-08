@@ -29,6 +29,27 @@ proc BlockArr.rowWiseAllGather() {
   }
 }
 
+proc BlockArr.rowWiseAllGatherTranspose() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      for i in dom.dist.targetLocDom.dim(2) {
+        const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[2]);
+        __prefetchFrom(localeIdx, sourceIdx);
+      }
+    }
+  }
+}
+
+proc BlockArr.colWiseAllGather() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      for i in dom.dist.targetLocDom.dim(1) {
+        const sourceIdx = chpl__tuplify(i).withIdx(2, localeIdx[2]);
+        __prefetchFrom(localeIdx, sourceIdx);
+      }
+    }
+  }
+}
 // FIXME 8's must be changed with sizeof(eltType)
 
 proc BlockArr.dsiSerializeIdx(i: idxType):int{
@@ -83,17 +104,6 @@ proc BlockArr.rowWiseAllPrefetch(onlyCol) {
     on dom.dist.targetLocales(localeIdx) {
       const sourceIdx = chpl__tuplify(onlyCol).withIdx(1, localeIdx[1]);
       __prefetchFrom(localeIdx, sourceIdx);
-    }
-  }
-}
-
-proc BlockArr.colWiseAllGather() {
-  coforall localeIdx in dom.dist.targetLocDom {
-    on dom.dist.targetLocales(localeIdx) {
-      for i in dom.dist.targetLocDom.dim(1) {
-        const sourceIdx = chpl__tuplify(i).withIdx(2, localeIdx[2]);
-        __prefetchFrom(localeIdx, sourceIdx);
-      }
     }
   }
 }
