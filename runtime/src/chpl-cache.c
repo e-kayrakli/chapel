@@ -2671,9 +2671,11 @@ static struct rdcache_s* cache_create(void);
 // use pthread_setspecific/pthread_key_create so that
 // we can associate a destructor with it.
 CHPL_TLS_DECL(struct rdcache_s*,cache_remote_data);
-CHPL_TLS_DECL(struct prefetch_buffer_s*,prefetch_remote_data);
+/*CHPL_TLS_DECL(struct prefetch_buffer_s*,prefetch_remote_data);*/
+
+static struct prefetch_buffer_s* pbuf;
 static pthread_key_t pthread_cache_info_key; // stores struct rdcache_s*
-static pthread_key_t pthread_prefetch_info_key; // stores struct rdcache_s*
+/*static pthread_key_t pthread_prefetch_info_key; // stores struct rdcache_s**/
 
 static
 struct rdcache_s* tls_cache_remote_data(void) {
@@ -2711,20 +2713,20 @@ void* get_data_from_prefetch_entry(prefetch_entry_t entry) {
   /*}*/
 /*}*/
 
-static
-struct prefetch_buffer_s* tls_prefetch_remote_data(void) {
-  struct prefetch_buffer_s *pbuf = CHPL_TLS_GET(prefetch_remote_data);
-  if( ! pbuf && chpl_cache_enabled() ) {
-    /*cache = cache_create();*/
-    // TODO when we have prefetch data store creation it should be
-    // called here
-    pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));
-    pbuf->head = NULL;
-    CHPL_TLS_SET(prefetch_remote_data, pbuf);
-    pthread_setspecific(pthread_prefetch_info_key, pbuf);
-  }
-  return pbuf;
-}
+/*static*/
+/*struct prefetch_buffer_s* tls_prefetch_remote_data(void) {*/
+  /*struct prefetch_buffer_s *pbuf = CHPL_TLS_GET(prefetch_remote_data);*/
+  /*if( ! pbuf && chpl_cache_enabled() ) {*/
+    /*[>cache = cache_create();<]*/
+    /*// TODO when we have prefetch data store creation it should be*/
+    /*// called here*/
+    /*pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));*/
+    /*pbuf->head = NULL;*/
+    /*CHPL_TLS_SET(prefetch_remote_data, pbuf);*/
+    /*pthread_setspecific(pthread_prefetch_info_key, pbuf);*/
+  /*}*/
+  /*return pbuf;*/
+/*}*/
 
 static
 chpl_cache_taskPrvData_t* task_private_cache_data(void)
@@ -2756,12 +2758,12 @@ void prefetch_destroy(struct prefetch_buffer_s *pbuf) {
   chpl_free(pbuf);
 }
 
-static
-void destroy_pthread_local_prefetch(void* arg)
-{
-  struct prefetch_buffer_s* s = (struct prefetch_buffer_s*) arg;
-  prefetch_destroy(s);
-}
+/*static*/
+/*void destroy_pthread_local_prefetch(void* arg)*/
+/*{*/
+  /*struct prefetch_buffer_s* s = (struct prefetch_buffer_s*) arg;*/
+  /*prefetch_destroy(s);*/
+/*}*/
 
 
 static
@@ -2769,11 +2771,8 @@ void chpl_prefetch_do_init(void)
 {
   static int inited = 0;
   if( ! inited ) {
-  
-    CHPL_TLS_INIT(prefetch_remote_data);
-    // The second key we never read but create so that we
-    // can free the cache when the thread exits.
-    pthread_key_create(&pthread_prefetch_info_key, &destroy_pthread_local_prefetch);
+    pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));
+    pbuf->head = NULL;
     inited = 1;
   }
 }
@@ -2832,7 +2831,7 @@ void chpl_cache_init(void) {
 
 void chpl_prefetch_exit(void)
 {
-  CHPL_TLS_DELETE(prefetch_remote_data);
+   prefetch_destroy(pbuf);
 }
 
 void chpl_cache_exit(void)
@@ -3083,7 +3082,7 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
 struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
     void* robjaddr) {
 
-  struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
+  /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
   struct __prefetch_entry_t* new_data;
   TRACE_PRINT(("%d: in chpl_comm_requestprefetch\n", chpl_nodeID));
   if (chpl_verbose_comm)
@@ -3120,7 +3119,7 @@ struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
     raddr, size_t size, int32_t typeIndex, int ln, int32_t fn) {
 
-  struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();
+  /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
   if (chpl_verbose_comm) 
     printf("%d: %s:%d: remote put to (chpl_prefetch_comm_get) %d %p\n",
         chpl_nodeID, chpl_lookupFilename(fn), ln, node, raddr);
