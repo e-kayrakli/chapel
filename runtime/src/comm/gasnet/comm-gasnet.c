@@ -1256,8 +1256,8 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     raddr_start = response.src;
     rlock = response.lock;
 
-    printf("Locale %d received prefetch metadata. Size=%zd\n",
-        chpl_nodeID, prefetch_size);
+    /*printf("Locale %d received prefetch metadata. Size=%zd\n",*/
+        /*chpl_nodeID, prefetch_size);*/
     //allocate space for the local space
     *addr = chpl_malloc(prefetch_size);
 
@@ -1298,7 +1298,7 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
       prefetch_xfer_info_t info;
       done_t done;
 
-      printf("Looping with offset %zd\n", offset);
+      /*printf("Looping with offset %zd\n", offset);*/
       this_size = prefetch_size - offset;
       if( this_size > max_chunk ) {
         this_size = max_chunk;

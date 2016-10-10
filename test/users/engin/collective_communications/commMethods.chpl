@@ -43,7 +43,7 @@ proc BlockArr.stencilPrefetch() {
       //west
       if hasWest {
         const sourceIdx = localeIdx - (0,1);
-        writeln(here, " my west is ", sourceIdx);
+        /*writeln(here, " my west is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1),
             myDom.dim(2).low-1..myDom.dim(2).low-1};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
@@ -51,7 +51,7 @@ proc BlockArr.stencilPrefetch() {
       //east
       if hasEast {
         const sourceIdx = localeIdx + (0,1);
-        writeln(here, " my east is ", sourceIdx);
+        /*writeln(here, " my east is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1),
             myDom.dim(2).high+1..myDom.dim(2).high+1};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
@@ -59,7 +59,7 @@ proc BlockArr.stencilPrefetch() {
       //north
       if hasNorth {
         const sourceIdx = localeIdx - (1,0);
-        writeln(here, " my north is ", sourceIdx);
+        /*writeln(here, " my north is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
             myDom.dim(2)};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
@@ -67,44 +67,44 @@ proc BlockArr.stencilPrefetch() {
       //south
       if hasSouth {
         const sourceIdx = localeIdx + (1,0);
-        writeln(here, " my south is ", sourceIdx);
+        /*writeln(here, " my south is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
             myDom.dim(2)};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
       }
 
-      if hasNorth && hasWest {
-        const sourceIdx = localeIdx + (-1,-1);
-        writeln(here, " my nw is ", sourceIdx);
-        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
-            myDom.dim(2).low-1..myDom.dim(2).low-1};
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
+      /*if hasNorth && hasWest {*/
+        /*const sourceIdx = localeIdx + (-1,-1);*/
+        /*[>writeln(here, " my nw is ", sourceIdx);<]*/
+        /*const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,*/
+            /*myDom.dim(2).low-1..myDom.dim(2).low-1};*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc);*/
 
-      }
-      if hasNorth && hasEast {
-        const sourceIdx = localeIdx + (-1,1);
-        writeln(here, " my ne is ", sourceIdx);
-        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
-            myDom.dim(2).high+1..myDom.dim(2).high+1};
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
+      /*}*/
+      /*if hasNorth && hasEast {*/
+        /*const sourceIdx = localeIdx + (-1,1);*/
+        /*[>writeln(here, " my ne is ", sourceIdx);<]*/
+        /*const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,*/
+            /*myDom.dim(2).high+1..myDom.dim(2).high+1};*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc);*/
 
-      }
-      if hasSouth && hasWest {
-        const sourceIdx = localeIdx + (1,-1);
-        writeln(here, " my sw is ", sourceIdx);
-        const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
-            myDom.dim(2).low-1..myDom.dim(2).low-1};
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
+      /*}*/
+      /*if hasSouth && hasWest {*/
+        /*const sourceIdx = localeIdx + (1,-1);*/
+        /*[>writeln(here, " my sw is ", sourceIdx);<]*/
+        /*const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,*/
+            /*myDom.dim(2).low-1..myDom.dim(2).low-1};*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc);*/
 
-      }
-      if hasSouth && hasEast {
-        const sourceIdx = localeIdx + (1,1);
-        writeln(here, " my se is ", sourceIdx);
-        const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
-            myDom.dim(2).high+1..myDom.dim(2).high+1};
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
+      /*}*/
+      /*if hasSouth && hasEast {*/
+        /*const sourceIdx = localeIdx + (1,1);*/
+        /*[>writeln(here, " my se is ", sourceIdx);<]*/
+        /*const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,*/
+            /*myDom.dim(2).high+1..myDom.dim(2).high+1};*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc);*/
 
-      }
+      /*}*/
     }
   }
 }

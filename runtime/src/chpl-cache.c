@@ -2860,6 +2860,11 @@ void chpl_cache_fence(int acquire, int release, int ln, int32_t fn)
     if( acquire ) {
       task_local->last_acquire = cache->next_request_number;
       cache->next_request_number++;
+
+      // consistency TODO add a notify to refetch buffer here
+      // then, prefetch bufer should refetch all the data that are
+      // marked consistent and persistent -- crrently this will mean
+      // everything
     }
 
     if( release ) {

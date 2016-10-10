@@ -1058,7 +1058,7 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 }
 
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
-  /*local {*/
+  local {
     const locIdx = dom.dist.targetLocsIdx(i);
     var (isPrefetched, data) = 
       myLocArr.getPrefetchHook().accessPrefetchedData(
@@ -1069,8 +1069,8 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
       /*writeln(here, " doing prefetch access ", i);*/
       return data.deref();
     }
-  /*}*/
-  writeln(here, " doing remote access ", i);
+  }
+  /*writeln(here, " doing remote access ", i);*/
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -1900,11 +1900,11 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
     size[i-rank] = metadata[i-1];
   }
 
-  writeln(here, " ",
-      metadata[0],
-      metadata[1],
-      metadata[2],
-      metadata[3]);
+  /*writeln(here, " ",*/
+      /*metadata[0],*/
+      /*metadata[1],*/
+      /*metadata[2],*/
+      /*metadata[3]);*/
   /*var low = getElementArrayAtOffset(data, 0, idxType);*/
   /*var high = getElementArrayAtOffset(data, getSize(rank,idxType), */
       /*idxType);*/
