@@ -1,22 +1,81 @@
 use BlockDist;
 
-proc BlockArr.__prefetchFrom(localeIdx, sourceIdx) {
+inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
       dom.dist.targetLocales[sourceIdx].id,
       privCopy.locArr[sourceIdx]);
 }
 
-/*proc BlockArr.__prefetchFrom(sourceIdx, slice) {*/
-  /*const locDom = dom.getLocDom(sourceIdx);*/
-  /*const privCopy = chpl_getPrivatizedCopy(this.type, this.pid);*/
-  /*privCopy.locArrsScratchPad[sourceIdx] =*/
-    /*new LocBlockArr(eltType, rank, idxType, stridable, locDom);*/
-  /*chpl__bulkTransferArray(*/
-      /*privCopy.locArrsScratchPad[sourceIdx].myElems[slice],*/
-      /*locArr[sourceIdx].myElems[slice]);*/
-  /*privCopy.locArrsScratchPadReady[sourceIdx] = true;*/
-/*}*/
+inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc) {
+  var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  const sliceDescArr = domToArray(sliceDesc);
+  locArr[localeIdx].prefetchHook.requestPrefetch(
+      dom.dist.targetLocales[sourceIdx].id,
+      privCopy.locArr[sourceIdx], sliceDescArr);
+}
+
+proc BlockArr.allGather() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      for sourceIdx in dom.dist.targetLocDom {
+        __prefetchFrom(localeIdx, sourceIdx);
+      }
+    }
+  }
+}
+
+proc BlockArr.stencilPrefetch() {
+  if rank != 2 then
+    halt("This Prefetch pattern is only supprted for 2D arrays");
+
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const myDom = dom.locDoms[localeIdx].myBlock;
+
+      //west
+      if localeIdx[2] > 0 {
+        const sourceIdx = localeIdx - (0,1);
+        writeln(here, " my west is ", sourceIdx);
+        const sliceDesc = {myDom.dim(1),
+            myDom.dim(2).low-1..myDom.dim(2).low-1};
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
+      }
+      //east
+      if localeIdx[2] < dom.dist.targetLocDom.dim(2).size -1 {
+        const sourceIdx = localeIdx + (0,1);
+        writeln(here, " my east is ", sourceIdx);
+        const sliceDesc = {myDom.dim(1),
+            myDom.dim(2).high+1..myDom.dim(2).high+1};
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
+      }
+      //north
+      if localeIdx[1] > 0 {
+        const sourceIdx = localeIdx - (1,0);
+        writeln(here, " my north is ", sourceIdx);
+        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
+            myDom.dim(2)};
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
+      }
+      //south
+      if localeIdx[1] < dom.dist.targetLocDom.dim(1).size -1 {
+        const sourceIdx = localeIdx + (1,0);
+        writeln(here, " my south is ", sourceIdx);
+        const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
+            myDom.dim(2)};
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc);
+      }
+    }
+  }
+}
+
+inline proc domToArray(dom: domain) where dom.rank == 1 {
+  return [dom.dim(1).low, dom.dim(1).high];
+}
+inline proc domToArray(dom: domain) where dom.rank == 2 {
+  return [dom.dim(1).low, dom.dim(2).low,
+         dom.dim(1).high, dom.dim(2).high];
+}
 
 proc BlockArr.rowWiseAllGather() {
   coforall localeIdx in dom.dist.targetLocDom {
@@ -117,15 +176,6 @@ proc BlockArr.colWiseAllPrefetch(onlyRow) {
   }
 }
 
-proc BlockArr.allGather() {
-  coforall localeIdx in dom.dist.targetLocDom {
-    on dom.dist.targetLocales(localeIdx) {
-      for sourceIdx in dom.dist.targetLocDom {
-        __prefetchFrom(localeIdx, sourceIdx);
-      }
-    }
-  }
-}
 
 proc _tuple.withIdx(idx, mergeVal) where isHomogeneousTuple(this) {
 

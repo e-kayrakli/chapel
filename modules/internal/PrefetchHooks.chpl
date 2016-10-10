@@ -10,8 +10,8 @@ module PrefetchHooks {
   /*}*/
   extern type prefetch_entry_t;
   extern proc
-    chpl_comm_request_prefetch(node, robjaddr: c_void_ptr):
-      prefetch_entry_t;
+    chpl_comm_request_prefetch(node, robjaddr: c_void_ptr,
+        slice_desc, slice_desc_size): prefetch_entry_t;
 
   /*extern proc */
     /*chpl_comm_prefetch(node, raddr, size,*/
@@ -34,14 +34,14 @@ module PrefetchHooks {
   class PrefetchHook {
     var x = 10;
 
-    iter dsiSerialize() {
+    iter dsiSerialize(slice_desc) {
       halt("This shouldn't have been called", x);
       var dummyPtr: c_void_ptr;
       var dummySize: size_t;
       yield (dummyPtr, dummySize);
     }
 
-    proc dsiGetSerializedObjectSize(): size_t {
+    proc dsiGetSerializedObjectSize(slice_desc): size_t {
       halt("This shouldn't have been called", x);
       var val: size_t;
       return val;
@@ -50,6 +50,11 @@ module PrefetchHooks {
     proc requestPrefetch(nodeId, otherObj) {
       halt("This shouldn't have been called");
     }
+
+    proc requestPrefetch(nodeId, otherObj, sliceDesc) {
+      halt("This shouldn't have been called");
+    }
+
     proc accessPrefetchedData(localeId, idx) {
       halt("This shouldn't have been called");
       var isPrefetched = false;
@@ -72,11 +77,12 @@ module PrefetchHooks {
       x = 20;
     }
 
-    iter dsiSerialize() {
-      for val in obj.dsiSerialize() do yield val;
+    iter dsiSerialize(slice_desc) {
+      for val in obj.dsiSerialize(slice_desc:c_ptr(obj.idxType)) do yield val;
     }
-    proc dsiGetSerializedObjectSize(): size_t {
-      return + reduce obj.dsiGetSerializedObjectSize();
+    proc dsiGetSerializedObjectSize(slice_desc): size_t {
+      return + reduce 
+        obj.dsiGetSerializedObjectSize(slice_desc:c_ptr(obj.idxType));
     }
 
     // here obj needs to be a wide class refernece to another hook
@@ -85,7 +91,23 @@ module PrefetchHooks {
           otherObj.prefetchHook);
 
       if nodeId!=here.id {
-        handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr);
+        handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
+            c_nil, 0);
+        hasData[nodeId] = true;
+      }
+    }
+
+    proc requestPrefetch(nodeId, otherObj, sliceDesc) {
+      var robjaddr = __primitive("_wide_get_addr",
+          otherObj.prefetchHook);
+
+      if nodeId!=here.id {
+        /*writeln(here, " ", sliceDesc);*/
+        /*halt("REACHED END");*/
+        var (sliceDescPtr, sliceDescSize) =
+          convertToSerialChunk(sliceDesc);
+        handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
+            sliceDescPtr, sliceDescSize);
         hasData[nodeId] = true;
       }
     }
@@ -115,35 +137,14 @@ module PrefetchHooks {
     }
   }
 
-  // I dont like obj being passed here
-  /*proc accessPrefetchedData(obj, handle, idx) {*/
-    /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
-    /*var isPrefetched: int;*/
-    /*const data = get_prefetched_data_addr(handle, 8, deserialIdx,*/
-        /*isPrefetched);*/
-
-    /*return (isPrefetched, data:c_ptr(obj.eltType));*/
-  /*}*/
-
-  /*class OtherClass {*/
-    /*proc someProc() {*/
-      /*halt("do nothing");*/
-    /*}*/
-  /*}*/
-
-  export proc __serialized_obj_size_wrapper(__obj: c_void_ptr): size_t {
-    /*writeln("Exported proc called");*/
+  export proc __serialized_obj_size_wrapper(__obj: c_void_ptr,
+      slice_desc: c_void_ptr): size_t {
     var obj = __obj:PrefetchHook;
-    /*__obj.test();*/
-
-    /*halt(" REACHED END ");*/
-    /*var dummy: size_t;*/
-    /*return dummy;*/
-    return obj.dsiGetSerializedObjectSize();
+    return obj.dsiGetSerializedObjectSize(slice_desc);
   }
 
   export proc __serialize_wrapper(__obj: c_void_ptr, __buf: c_void_ptr,
-      bufsize: size_t) {
+      bufsize: size_t, slice_desc: c_void_ptr) {
 
     type bufferEltType = uint(8);
     var obj = __obj:PrefetchHook;
@@ -158,7 +159,7 @@ module PrefetchHooks {
     // currently I am providing a helper convertToSerialChunk that takes
     // a rectangular array and returns the tuple we need. if the format
     // is changed, only implementation of that function should change
-    for chunk in obj.dsiSerialize() {
+    for chunk in obj.dsiSerialize(slice_desc) {
       const chunkSize = chunk[2];
       //memcpy to buffer
       c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here

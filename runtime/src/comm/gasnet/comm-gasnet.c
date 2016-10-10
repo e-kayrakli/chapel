@@ -48,8 +48,8 @@
 #include <assert.h>
 #include <time.h>
 
-extern size_t __serialized_obj_size_wrapper(void*);
-extern void __serialize_wrapper(void *, void *, size_t);
+extern size_t __serialized_obj_size_wrapper(void*, void*);
+extern void __serialize_wrapper(void *, void *, size_t, void*);
 
 static chpl_sync_aux_t chpl_comm_diagnostics_sync;
 static chpl_commDiagnostics chpl_comm_commDiagnostics;
@@ -192,6 +192,16 @@ typedef struct {
   void* src; // source memory address
   size_t size; // number of bytes.
 } xfer_info_t;
+
+#define SLICE_DESC_BUF_SIZE 128
+typedef struct {
+  void* ack; // acknowledgement object
+  void* tgt; // target memory address
+  void* src; // source memory address
+
+  unsigned char slice_desc[SLICE_DESC_BUF_SIZE];
+  size_t size; // number of bytes in slice desc.
+} prefetch_query_t;
 
 typedef struct {
   void* ack; // acknowledgement object
@@ -470,7 +480,7 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
   // here I am playing a trick with xfer_info_t. This struct has a
   // source pointer, which I am using here as "source object" and not
   // the address of the actual data to be copied.
-  xfer_info_t* x = buf;
+  prefetch_query_t * x = buf;
 
   //next three items will be packed and transmitted to the requester
   //requester will only read the first value(size)
@@ -485,13 +495,13 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
   size_t response_size = sizeof(prefetch_query_response_t);
 
   prefetch_query_response_t response;
-  assert(nbytes == sizeof(xfer_info_t));
+  assert(nbytes == sizeof(prefetch_query_t));
   buffer_lock = chpl_malloc(sizeof(chpl_sync_aux_t));
 
   //call the source object's size wrapper
   //TODO we need some size limitations here and respond with e.g. -1 to
   //denote that requested data is too big
-  prefetch_size = __serialized_obj_size_wrapper(x->src);
+  prefetch_size = __serialized_obj_size_wrapper(x->src, x->slice_desc);
   response.size = prefetch_size;
 
   //now allocate space for serialization
@@ -525,7 +535,8 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
   /*gasnet_hsl_lock(&buffer_lock);*/
   chpl_sync_lock(buffer_lock);
   /*printf("  > Acquired lock(size)\n");*/
-  __serialize_wrapper(x->src, serial_buffer, prefetch_size);
+  __serialize_wrapper(x->src, serial_buffer, prefetch_size,
+      x->slice_desc);
   /*gasnet_hsl_unlock(&buffer_lock);*/
   chpl_sync_unlock(buffer_lock);
   /*printf("  > Released lock(size)\n");*/
@@ -1162,8 +1173,9 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
 }
 
 void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
-                    size_t *size, int32_t typeIndex,
-                    int ln, int32_t fn) {
+    size_t *size, void *slice_desc, size_t slice_desc_size,
+    int32_t typeIndex, int ln, int32_t fn) {
+
   int remote_in_segment;
   size_t prefetch_size;
   /*size_t packed_data_size = sizeof(uint64_t)*3;*/
@@ -1172,7 +1184,7 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
   done_t metadata_done;
   done_t done;
   prefetch_xfer_info_t info;
-  xfer_info_t metadata_info;
+  prefetch_query_t metadata_info;
   size_t num_elems;
   int i;
 
@@ -1220,10 +1232,13 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     /*metadata_info.tgt = packed_data;*/
     metadata_info.tgt = &response;
     metadata_info.src = robjaddr;
+    /*metadata_info.slice_desc = slice_desc;*/
+    chpl_memcpy(metadata_info.slice_desc, slice_desc, slice_desc_size);
     /*metadata_info.size = packed_data_size; // TODO maybe assert size*/
-    metadata_info.size = sizeof(prefetch_query_response_t); // TODO maybe assert size
+    metadata_info.size = slice_desc_size; // TODO maybe assert size
 
     /*printf("robjaddr on Locale %d is  >  %p\n", chpl_nodeID, robjaddr);*/
+    assert(sizeof(metadata_info) <= gasnet_AMMaxMedium());
     GASNET_Safe(gasnet_AMRequestMedium0(node, GET_PREFETCH_SIZE,
           &metadata_info, sizeof(metadata_info)));
 
@@ -1241,7 +1256,8 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
     raddr_start = response.src;
     rlock = response.lock;
 
-    /*printf("Locale %d received prefetch metadata\n", chpl_nodeID);*/
+    printf("Locale %d received prefetch metadata. Size=%zd\n",
+        chpl_nodeID, prefetch_size);
     //allocate space for the local space
     *addr = chpl_malloc(prefetch_size);
 
@@ -1282,7 +1298,7 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
       prefetch_xfer_info_t info;
       done_t done;
 
-      /*printf("Looping with offset %zd\n", offset);*/
+      printf("Looping with offset %zd\n", offset);
       this_size = prefetch_size - offset;
       if( this_size > max_chunk ) {
         this_size = max_chunk;

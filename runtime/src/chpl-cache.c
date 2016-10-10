@@ -2983,7 +2983,7 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
   int64_t offset; //this can be negative in current logic
 
   if(prefetch_entry == NULL){
-    /*printf("\t no prefetch entry\n");*/
+    printf("\t no prefetch entry\n");
     *found = 0;
     return NULL;
   }
@@ -2991,15 +2991,15 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
   offset = (int64_t)serialized_idx;
 
   if(offset < 0) {
-    /*printf("\t offset=%ld, size=%zd, sidx=%zd\n",*/
-        /*offset, size, serialized_idx);*/
+    printf("\t offset=%ld, size=%zd, sidx=%zd\n",
+        offset, size, serialized_idx);
     *found = 0;
     return NULL;
   }
 
   if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { 
-    /*printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",*/
-        /*offset, size, serialized_idx, prefetch_entry->size);*/
+    printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",
+        offset, size, serialized_idx, prefetch_entry->size);
     *found = 0;
     return NULL;
   }
@@ -3080,7 +3080,7 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
 // currently, I imagine we'd need a typeIndex(not to be confused with
 // communcaiton typeIndex, to convey chplType to the other side
 struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
-    void* robjaddr) {
+    void* robjaddr, void *slice_desc, size_t slice_desc_size) {
 
   /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
   struct __prefetch_entry_t* new_data;
@@ -3092,7 +3092,7 @@ struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
   new_data = add_to_prefetch_buffer(pbuf, node, robjaddr);
 
   chpl_comm_prefetch(&(new_data->data), node, robjaddr,
-      &(new_data->size), -1, -1, -1);
+      &(new_data->size), slice_desc, slice_desc_size, -1, -1, -1);
 
   return new_data;
 }

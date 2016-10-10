@@ -1058,7 +1058,7 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 }
 
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
-  local {
+  /*local {*/
     const locIdx = dom.dist.targetLocsIdx(i);
     var (isPrefetched, data) = 
       myLocArr.getPrefetchHook().accessPrefetchedData(
@@ -1069,8 +1069,8 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
       /*writeln(here, " doing prefetch access ", i);*/
       return data.deref();
     }
-  }
-  /*writeln(here, " doing remote access ", i);*/
+  /*}*/
+  writeln(here, " doing remote access ", i);
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -1900,6 +1900,11 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
     size[i-rank] = metadata[i-1];
   }
 
+  writeln(here, " ",
+      metadata[0],
+      metadata[1],
+      metadata[2],
+      metadata[3]);
   /*var low = getElementArrayAtOffset(data, 0, idxType);*/
   /*var high = getElementArrayAtOffset(data, getSize(rank,idxType), */
       /*idxType);*/
@@ -1912,11 +1917,11 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
   return getMetadataSize() + getSize(elemCount, eltType);
 }
 
-iter BlockArr.dsiGetSerializedObjectSize() {
+iter BlockArr.dsiGetSerializedObjectSize(slice_desc) {
   //FIXME fix this ....thing
   for ij in dom.dist.targetLocDom {
     if dom.dist.targetLocales[ij].id == here.id {
-      for val in locArr[ij].dsiGetSerializedObjectSize() {
+      for val in locArr[ij].dsiGetSerializedObjectSize(slice_desc) {
         yield val;
       }
     }
@@ -1924,26 +1929,62 @@ iter BlockArr.dsiGetSerializedObjectSize() {
   }
 }
 
-iter LocBlockArr.dsiGetSerializedObjectSize() {
+// BlockArr slice descriptors are range tuples
+iter LocBlockArr.dsiGetSerializedObjectSize(slice_desc) {
   yield getSize(rank*2, idxType);
-  yield getSize(myElems.size, eltType);
+  if slice_desc != nil {
+    var rangeTuple: rank*range(idxType);
+    for param i in 1..rank {
+      /*rangeTuple[i] = slice_desc[2*(i-1)]..slice_desc[2*(i-1)+1];*/
+      rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
+    }
+    const sliceDom = {(...rangeTuple)};
+    yield getSize(sliceDom.size, eltType);
+  }
+  else {
+    yield getSize(myElems.size, eltType);
+  }
 }
 
-iter LocBlockArr.dsiSerialize() {
+iter LocBlockArr.dsiSerialize(slice_desc) {
   // two points is enough to describe a slice
   // therefore we need rank*2 idxType variables for metadata
   const space = 0..#(rank*2);
   var metaDataArr: [space] idxType;
-  const low = chpl__tuplify(locDom.myBlock.low);
-  const hi = chpl__tuplify(locDom.myBlock.high);
 
-  for param i in 1..rank {
-    metaDataArr[i-1] = low[i];
-  }
-  for param i in rank+1..2*rank {
-    metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;
-  }
+  if slice_desc != nil {
+    /*for i in space do*/
+      /*metaDataArr[i] = slice_desc[i];*/
 
+    for param i in 1..rank {
+      metaDataArr[i-1] = slice_desc[i-1];
+      metaDataArr[i-1+rank] = slice_desc[i-1+rank] - slice_desc[i-1] +1;
+    }
+  }
+  else {
+    const low = chpl__tuplify(locDom.myBlock.low);
+    const hi = chpl__tuplify(locDom.myBlock.high);
+
+    for param i in 1..rank {
+      metaDataArr[i-1] = low[i];
+    }
+    for param i in rank+1..2*rank {
+      metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;
+    }
+  }
   yield convertToSerialChunk(metaDataArr);
-  yield convertToSerialChunk(myElems);
+  if slice_desc != nil {
+    var rangeTuple: rank*range(idxType);
+
+    for param i in 1..rank {
+      /*rangeTuple[i] = slice_desc[2*(i-1)]..slice_desc[2*(i-1)+1];*/
+      rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
+    }
+    const sliceDom = {(...rangeTuple)};
+    var sliceToSend = myElems[sliceDom];
+    yield convertToSerialChunk(sliceToSend);
+  }
+  else {
+    yield convertToSerialChunk(myElems);
+  }
 }
