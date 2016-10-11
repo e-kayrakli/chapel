@@ -26,6 +26,8 @@ module PrefetchHooks {
 
   extern proc
     get_data_from_prefetch_entry(handle): c_void_ptr;
+  extern proc
+    prefetch_entry_init_seqn_n(handle);
 
   inline proc getData(handle) {
     return get_data_from_prefetch_entry(handle);
@@ -60,6 +62,10 @@ module PrefetchHooks {
       var isPrefetched = false;
       var dummyPtr: c_ptr(real);
       return (isPrefetched, dummyPtr);
+    }
+
+    proc finalizePrefetch() {
+      halt("This shouldn't have been called");
     }
 
     proc test() {
@@ -130,6 +136,12 @@ module PrefetchHooks {
             /*" for index ", idx);*/
       }
       return (isPrefetched!=0, data:c_ptr(obj.eltType));
+    }
+
+    proc finalizePrefetch() {
+      for i in 0..#numLocales {
+        prefetch_entry_init_seqn_n(handles[i]);
+      }
     }
 
     proc test() {

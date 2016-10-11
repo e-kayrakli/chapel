@@ -16,11 +16,11 @@ forall (i,j) in dom do arr[i,j] = i*N+j;
 arr._value.stencilPrefetch();
 
 /*writeln(arr);*/
-writeln();
-writeln("Accessing prefetched data");
+/*writeln();*/
+/*writeln("Accessing prefetched data");*/
 var sum = 0;
 if east {
-  writeln("East");
+  /*writeln("East");*/
   on Locales[1] {
     for i in 0..#(N/2) {
       sum += arr[i, N/2-1]; //test east
@@ -28,8 +28,8 @@ if east {
   }
 }
 if west {
-  writeln(sum);
-  writeln("West");
+  /*writeln(sum);*/
+  /*writeln("West");*/
   on Locales[0] {
     for i in 0..#(N/2) {
       sum += arr[i, N/2]; //test west
@@ -37,8 +37,8 @@ if west {
   }
 }
 if north {
-  writeln(sum);
-  writeln("North");
+  /*writeln(sum);*/
+  /*writeln("North");*/
   on Locales[2] {
     for i in 0..#(N/2) {
       sum += arr[N/2-1, i]; //test north
@@ -46,8 +46,8 @@ if north {
   }
 }
 if south {
-  writeln(sum);
-  writeln("South");
+  /*writeln(sum);*/
+  /*writeln("South");*/
   on Locales[0] {
     for i in 0..#(N/2) {
       sum += arr[N/2, i]; //test south

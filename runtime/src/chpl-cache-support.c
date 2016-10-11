@@ -22,9 +22,9 @@
 #include <assert.h>
 #include "chpl-bitops.h"
 #include "chpl-align.h"
+#include "chpl-cache.h"
 
 // ----------  SUPPORT FUNCTIONS 
-typedef int64_t cache_seqn_t;
 #define NO_SEQUENCE_NUMBER 0
 static inline
 cache_seqn_t seqn_min(cache_seqn_t a, cache_seqn_t b)

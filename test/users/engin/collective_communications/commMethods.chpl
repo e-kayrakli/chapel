@@ -10,6 +10,7 @@ inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx) {
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   const sliceDescArr = domToArray(sliceDesc);
+  /*writeln(sliceDescArr);*/
   locArr[localeIdx].prefetchHook.requestPrefetch(
       dom.dist.targetLocales[sourceIdx].id,
       privCopy.locArr[sourceIdx], sliceDescArr);
@@ -107,7 +108,17 @@ proc BlockArr.stencilPrefetch() {
       /*}*/
     }
   }
+  finalizePrefetch();
 }
+
+inline proc BlockArr.finalizePrefetch() {
+  coforall l in dom.dist.targetLocDom {
+    on dom.dist.targetLocales[l] {
+      locArr[l].prefetchHook.finalizePrefetch();
+    }
+  }
+}
+
 
 inline proc domToArray(dom: domain) where dom.rank == 1 {
   return [dom.dim(1).low, dom.dim(1).high];

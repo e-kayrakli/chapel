@@ -31,6 +31,7 @@
 // Is the cache enabled? (set at compile time)
 extern const int CHPL_CACHE_REMOTE;
 
+typedef int64_t cache_seqn_t;
 static inline
 int chpl_cache_enabled(void)
 {
@@ -59,6 +60,11 @@ typedef struct __prefetch_entry_t{
   c_nodeid_t origin_node;
   void* robjaddr;
   size_t size;
+
+  cache_seqn_t sn;
+  // we need to keep slice info, in case we need to reprefetch
+  void *slice_desc;
+  size_t slice_desc_size;
 
   //throttling TODO new field: chunk_size
   //throttling TODO new field: doneobj array(same size as void* array
@@ -136,6 +142,9 @@ int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
     size_t size, size_t serialized_idx, void* dest);
 void *get_prefetched_data_addr(struct __prefetch_entry_t* 
     prefetch_entry, size_t size, size_t serialized_idx, int64_t* dest);
+void chpl_comm_pbuf_acq(void);
+void chpl_comm_reprefetch(struct __prefetch_entry_t *entry);
+void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 
