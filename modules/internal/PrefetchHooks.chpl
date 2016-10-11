@@ -11,12 +11,14 @@ module PrefetchHooks {
   extern type prefetch_entry_t;
   extern proc
     chpl_comm_request_prefetch(node, robjaddr: c_void_ptr,
-        slice_desc, slice_desc_size): prefetch_entry_t;
+        slice_desc, slice_desc_size, consistent): prefetch_entry_t;
 
   /*extern proc */
     /*chpl_comm_prefetch(node, raddr, size,*/
       /*serialized_base_idx): prefetch_entry_t;*/
   
+  extern proc
+    entry_has_data(handle): bool;
   extern proc 
     get_prefetched_data(handle, offset, size, ref dest): c_int;
 
@@ -53,7 +55,8 @@ module PrefetchHooks {
       halt("This shouldn't have been called");
     }
 
-    proc requestPrefetch(nodeId, otherObj, sliceDesc) {
+    proc requestPrefetch(nodeId, otherObj, sliceDesc,
+        consistent=true) {
       halt("This shouldn't have been called");
     }
 
@@ -76,6 +79,8 @@ module PrefetchHooks {
   class GenericPrefetchHook:PrefetchHook {
     var obj;
     var handles: c_ptr(prefetch_entry_t);
+    //FIXME this is a dangerous field now, since we can evict data with
+    //no callback to this object
     var hasData: [Locales.domain] bool;
 
     proc GenericPrefetchHook(obj) {
@@ -103,7 +108,8 @@ module PrefetchHooks {
       }
     }
 
-    proc requestPrefetch(nodeId, otherObj, sliceDesc) {
+    proc requestPrefetch(nodeId, otherObj, sliceDesc,
+        consistent=true) {
       var robjaddr = __primitive("_wide_get_addr",
           otherObj.prefetchHook);
 
@@ -113,13 +119,14 @@ module PrefetchHooks {
         var (sliceDescPtr, sliceDescSize) =
           convertToSerialChunk(sliceDesc);
         handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
-            sliceDescPtr, sliceDescSize);
+            sliceDescPtr, sliceDescSize, consistent);
         hasData[nodeId] = true;
       }
     }
 
     proc accessPrefetchedData(localeId, idx) {
-      if !hasData[localeId] {
+      /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
+      if(entry_has_data(handles[localeId])) {
         /*writeln(here, " doesn't have prefetched data from ", */
             /*localeId, " with index ", idx);*/
         return (false, nil:c_ptr(obj.eltType));

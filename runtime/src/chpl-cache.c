@@ -2702,6 +2702,12 @@ void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry) {
     entry->sn = pbuf->prefetch_sequence_number;
 }
 
+bool entry_has_data(struct __prefetch_entry_t *entry) {
+  if(entry) {
+    return entry->data!=NULL;
+  }
+  return false;
+}
 void* get_data_from_prefetch_entry(struct __prefetch_entry_t *entry) {
   if(entry)
     return entry->data;
@@ -2872,15 +2878,11 @@ void chpl_cache_fence(int acquire, int release, int ln, int32_t fn)
       task_local->last_acquire = cache->next_request_number;
       cache->next_request_number++;
 
-      // consistency TODO add a notify to refetch buffer here
-      // then, prefetch bufer should refetch all the data that are
-      // marked consistent and persistent -- crrently this will mean
-      // everything
-      /*printf("Acquire fence\n");*/
       pbuf->prefetch_sequence_number++;
     }
 
     if( release ) {
+      prefetch_update();
       cache_clean_dirty(cache);
       wait_all(cache);
     }
@@ -2944,12 +2946,44 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
   return;
 }
 
+#define PF_CONSISTENT 1
+#define PF_CANREAD 2
+#define PF_CANWRITE 4
+#define PF_PERSISTENT 8
 
+#define PF_DEFAULT (PF_CONSISTENT|PF_CANREAD)
+#define PF_INCONSISTENT 0
+
+
+// FIXME how de store pbuf, global or pass as argument
+static
+void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
+    struct __prefetch_entry_t *entry) {
+  assert(pbuf);
+  if(entry->prev) {
+    entry->prev->next = entry->next;
+  }
+  else {
+    assert(pbuf->head == entry);
+    pbuf->head = entry->next;
+  }
+  if(entry->next) {
+    entry->next->prev = entry->prev;
+  }
+
+
+  chpl_free(entry->data);
+  entry->data = NULL;
+  chpl_free(entry->slice_desc); // ..ugh
+  chpl_free(entry);
+  entry = NULL;
+}
 
 static
 struct __prefetch_entry_t * add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
-    void* robjaddr, void *slice_desc, size_t slice_desc_size){
+    void* robjaddr, void *slice_desc, size_t slice_desc_size,
+    bool consistent){
 
   struct __prefetch_entry_t *head;
   struct __prefetch_entry_t *new_entry;
@@ -2965,12 +2999,28 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   new_entry->robjaddr = robjaddr;
   new_entry->slice_desc = slice_desc;
   new_entry->slice_desc_size = slice_desc_size;
-  // alloc was here before
+  new_entry->pf_type = PF_DEFAULT;
   
-  if(head != NULL)
+  // make sure that thype of prefetch is somethin reasonable
+  // at least one of these must be set
+  assert(new_entry->pf_type & (PF_CANREAD|PF_CANWRITE));
+
+  // TODO if not consistent, rest doesn't really matter, but we are not
+  // checking it. Maybe we should for sanity?
+  
+
+  // currentyl we are always adding to head
+  if(head != NULL) {
     new_entry->next = head->next;
-  else
+    if(head->next) {
+      head->next->prev = new_entry;
+    }
+  }
+  else {
     new_entry->next = NULL;
+  }
+
+  new_entry->prev = NULL;
   pbuf->head = new_entry;
 
   return new_entry;
@@ -3002,7 +3052,8 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
 
   int64_t offset; //this can be negative in current logic
 
-  if(prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
+  if((prefetch_entry->pf_type&PF_CONSISTENT) &&
+      prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
     // TODO writeback, evict, update
     printf("\t stale data: %ld %ld\n",
         prefetch_entry->sn, pbuf->prefetch_sequence_number);
@@ -3037,6 +3088,47 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
   return (void *)((uintptr_t)prefetch_entry->data+offset);
 }
 
+void prefetch_update() {
+  struct __prefetch_entry_t *cur = pbuf->head;
+  assert(pbuf);
+  while(cur) {
+    //we don't care at all if the entry is inconsistent
+    if(cur->pf_type&PF_CONSISTENT) {
+      //currently we don't have module support for write-back prefetch
+      if(cur->pf_type&PF_CANWRITE) {
+        //unimplemented
+        assert(0);
+      }
+      if(cur->pf_type&PF_CANREAD) {
+        //if the data is stale
+        if(cur->sn < pbuf->prefetch_sequence_number-1) {
+          if(cur->pf_type&PF_PERSISTENT) {
+            //keep the data in buffer but update it by reprefetching
+            chpl_comm_reprefetch(cur);
+          }
+          else {
+            //simply evict the data from the buffer
+            remove_from_prefetch_buffer(pbuf, cur);
+          }
+        }
+      }
+      else {
+        //with unimplemented write-back we shouldn't end up here
+        assert(0);
+      }
+    }
+    cur = cur->next;
+  }
+
+  //we updated the data in the buffer, now it's time to update sequence
+  //numbers
+  cur = pbuf->head;
+  while(cur) {
+    // TODO function should be update not init
+    prefetch_entry_init_seqn_n(cur); 
+  }
+}
+
 void chpl_comm_pbuf_acq() {
   struct __prefetch_entry_t *cur = pbuf->head;
   assert(pbuf);
@@ -3059,7 +3151,8 @@ void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
 }
 
 struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
-    void* robjaddr, void *slice_desc, size_t slice_desc_size) {
+    void* robjaddr, void *slice_desc, size_t slice_desc_size,
+    bool consistent) {
 
   /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
   struct __prefetch_entry_t* new_data;
@@ -3069,7 +3162,8 @@ struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
 
   // add the data to the prefetch buffer
   new_data = add_to_prefetch_buffer(pbuf, node, robjaddr,
-      slice_desc, slice_desc_size);
+      slice_desc, slice_desc_size,
+      consistent);
 
   chpl_comm_prefetch(&(new_data->data), node, robjaddr,
       &(new_data->size), slice_desc, slice_desc_size, -1, -1, -1);

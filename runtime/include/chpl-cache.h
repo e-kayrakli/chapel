@@ -61,6 +61,9 @@ typedef struct __prefetch_entry_t{
   void* robjaddr;
   size_t size;
 
+  // prefetch type controls consistency protocol on a sync event
+  uint8_t pf_type;
+
   cache_seqn_t sn;
   // we need to keep slice info, in case we need to reprefetch
   void *slice_desc;
@@ -70,7 +73,10 @@ typedef struct __prefetch_entry_t{
   //throttling TODO new field: doneobj array(same size as void* array
 
   void *data; //throttling TODO this will be an array of void pointers
+
+  // buffer data structure
   struct __prefetch_entry_t *next;
+  struct __prefetch_entry_t *prev;
 } _prefetch_entry_t, *prefetch_entry_t;
 
 void* get_data_from_prefetch_entry(prefetch_entry_t entry);
@@ -128,7 +134,8 @@ void chpl_cache_assert_released(void);
 //struct __prefetch_entry_t *chpl_comm_prefetch(c_nodeid_t node, 
     //void* raddr, size_t size, size_t serialized_base_idx);
 struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
-    void* robjaddr, void* slice_desc, size_t slice_desc_size);
+    void* robjaddr, void* slice_desc, size_t slice_desc_size,
+    bool consistent);
 void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
@@ -145,6 +152,8 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
 void chpl_comm_pbuf_acq(void);
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry);
 void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry);
+void prefetch_update(void);
+bool entry_has_data(struct __prefetch_entry_t *entry);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 
