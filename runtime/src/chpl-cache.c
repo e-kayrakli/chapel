@@ -2688,18 +2688,45 @@ struct rdcache_s* tls_cache_remote_data(void) {
   return cache;
 }
 
+/*struct task_id_seqn_pair_s {*/
+  /*chpl_taskID_t task_id;*/
+  /*cache_seqn_t sn;*/
+  /*struct task_id_seqn_pair_s *next;*/
+/*};*/
+
+/*static*/
+/*void safe_inc_min_task_seqn() {*/
+  /*chpl_sync_lock(&(pbuf->min_task_seqn_lock));*/
+  /*// we can store a hash table with task id and minimums*/
+
+
+  /*chpl_sync_unlock(&(pbuf->min_task_seqn_lock));*/
+/*}*/
+
 struct prefetch_buffer_s {
   void *fast_access_addr;
   struct __prefetch_entry_t *head;
 
   // incremented with acquire fence
   cache_seqn_t prefetch_sequence_number;
+
+  //minimum task sequence number
+  cache_seqn_t min_task_seqn;
+  chpl_sync_aux_t min_task_seqn_lock;
+
+  bool being_updated;
+  chpl_sync_aux_t update_lock;
 };
 
 
-void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry) {
-  if(entry)
-    entry->sn = pbuf->prefetch_sequence_number;
+void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
+    cache_seqn_t offset) {
+  if(entry) {
+    /*printf("%p has new sn = %ld\n", entry,*/
+        /*pbuf->prefetch_sequence_number);*/
+    entry->sn = pbuf->prefetch_sequence_number + offset;
+    entry->sn_updated = true;
+  }
 }
 
 bool entry_has_data(struct __prefetch_entry_t *entry) {
@@ -2788,6 +2815,9 @@ void chpl_prefetch_do_init(void)
   if( ! inited ) {
     pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));
     pbuf->head = NULL;
+    pbuf->min_task_seqn = 0;
+    chpl_sync_initAux(&(pbuf->update_lock));
+    pbuf->being_updated = false;
     inited = 1;
   }
 }
@@ -2878,10 +2908,14 @@ void chpl_cache_fence(int acquire, int release, int ln, int32_t fn)
       task_local->last_acquire = cache->next_request_number;
       cache->next_request_number++;
 
+      // consistency TODO here we will need to increment pbuf's
+      // minimum task sn
+
       pbuf->prefetch_sequence_number++;
     }
 
     if( release ) {
+      /*full_memory_barrier();*/
       prefetch_update();
       cache_clean_dirty(cache);
       wait_all(cache);
@@ -2951,7 +2985,7 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
 #define PF_CANWRITE 4
 #define PF_PERSISTENT 8
 
-#define PF_DEFAULT (PF_CONSISTENT|PF_CANREAD)
+#define PF_DEFAULT (PF_CONSISTENT|PF_CANREAD|PF_PERSISTENT)
 #define PF_INCONSISTENT 0
 
 
@@ -3000,6 +3034,7 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   new_entry->slice_desc = slice_desc;
   new_entry->slice_desc_size = slice_desc_size;
   new_entry->pf_type = PF_DEFAULT;
+  new_entry->sn = -1;
   
   // make sure that thype of prefetch is somethin reasonable
   // at least one of these must be set
@@ -3046,6 +3081,10 @@ int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
   return offset;
 }
 
+static void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
+  chpl_comm_reprefetch(entry);
+  prefetch_entry_init_seqn_n(entry, 0);
+}
 void *get_prefetched_data_addr(struct __prefetch_entry_t* 
     prefetch_entry, size_t size, size_t serialized_idx, 
     int64_t* found) {
@@ -3053,12 +3092,14 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
   int64_t offset; //this can be negative in current logic
 
   if((prefetch_entry->pf_type&PF_CONSISTENT) &&
+      // TODO this should compare task local data's sequence number
+      // if it's less then or equal to then we are in the same time fram
+      // as the data has been prefetched therefore we can read it
       prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
     // TODO writeback, evict, update
-    printf("\t stale data: %ld %ld\n",
-        prefetch_entry->sn, pbuf->prefetch_sequence_number);
-    *found = 0;
-    /*return NULL;*/
+    /*printf("\t stale data: %ld %ld\n",*/
+        /*prefetch_entry->sn, pbuf->prefetch_sequence_number);*/
+    reprefetch_single_entry(prefetch_entry);
   }
 
   if(prefetch_entry == NULL){
@@ -3088,45 +3129,85 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
   return (void *)((uintptr_t)prefetch_entry->data+offset);
 }
 
+
 void prefetch_update() {
-  struct __prefetch_entry_t *cur = pbuf->head;
-  assert(pbuf);
-  while(cur) {
-    //we don't care at all if the entry is inconsistent
-    if(cur->pf_type&PF_CONSISTENT) {
-      //currently we don't have module support for write-back prefetch
-      if(cur->pf_type&PF_CANWRITE) {
-        //unimplemented
-        assert(0);
-      }
-      if(cur->pf_type&PF_CANREAD) {
-        //if the data is stale
-        if(cur->sn < pbuf->prefetch_sequence_number-1) {
-          if(cur->pf_type&PF_PERSISTENT) {
-            //keep the data in buffer but update it by reprefetching
-            chpl_comm_reprefetch(cur);
+
+  if(pbuf->head) {
+    /*full_memory_barrier();*/
+    /*chpl_comm_barrier("prefetch update");*/
+
+    //here only one task will get the lock
+    // is there a CAS for runtime?
+    chpl_sync_lock(&pbuf->update_lock);
+    if(!pbuf->being_updated) {
+      struct __prefetch_entry_t *cur = pbuf->head;
+
+      pbuf->being_updated = true;
+      chpl_sync_unlock(&pbuf->update_lock);
+
+      assert(pbuf);
+      /*printf("prefe3tch update on node %d started\n",*/
+          /*chpl_nodeID);*/
+      while(cur) {
+        //we don't care at all if the entry is inconsistent
+        if(cur->pf_type&PF_CONSISTENT) {
+          //currently we don't have module support for write-back
+          //prefetch
+          if(cur->pf_type&PF_CANWRITE) {
+            //unimplemented
+            assert(0);
+          }
+          if(cur->pf_type&PF_CANREAD) {
+            //if the data is stale
+            if(cur->sn >= 0 &&
+                cur->sn < pbuf->prefetch_sequence_number-1) {
+              if(cur->pf_type&PF_PERSISTENT) {
+                //keep the data in buffer but update it by reprefetching
+                /*printf("data was found stale, updating : %p\n", cur);*/
+                chpl_comm_reprefetch(cur);
+                cur->sn_updated = false;
+              }
+              else {
+                /*printf("data was found stale, evicting : %p\n", cur);*/
+                //simply evict the data from the buffer
+                remove_from_prefetch_buffer(pbuf, cur);
+                // .. or do nothing? - don't think so
+                // this way, next read to this entry will invalidate it
+              }
+            }
           }
           else {
-            //simply evict the data from the buffer
-            remove_from_prefetch_buffer(pbuf, cur);
+            //with unimplemented write-back we shouldn't end up here
+            assert(0);
           }
         }
+        cur = cur->next;
       }
-      else {
-        //with unimplemented write-back we shouldn't end up here
-        assert(0);
+      //we updated the data in the buffer, now it's time to update
+      //sequence numbers
+      cur = pbuf->head;
+      while(cur) {
+        // TODO function should be update not init
+        // TODO we can choose to update only the ones that we prefetched
+        // again
+        //
+        if(!cur->sn_updated) {
+          prefetch_entry_init_seqn_n(cur, 0);
+        }
+        cur = cur->next;
       }
     }
-    cur = cur->next;
+    else {
+      // nothing to do but hit the barrier
+      chpl_sync_unlock(&pbuf->update_lock);
+    }
+
+    /*full_memory_barrier();*/
+    /*chpl_comm_barrier("prefetch update exit");*/
+    pbuf->being_updated = false;
+    /*printf("prefech update on %d complete\n", chpl_nodeID);*/
   }
 
-  //we updated the data in the buffer, now it's time to update sequence
-  //numbers
-  cur = pbuf->head;
-  while(cur) {
-    // TODO function should be update not init
-    prefetch_entry_init_seqn_n(cur); 
-  }
 }
 
 void chpl_comm_pbuf_acq() {

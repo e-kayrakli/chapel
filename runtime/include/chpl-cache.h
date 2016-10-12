@@ -65,6 +65,7 @@ typedef struct __prefetch_entry_t{
   uint8_t pf_type;
 
   cache_seqn_t sn;
+  bool sn_updated;
   // we need to keep slice info, in case we need to reprefetch
   void *slice_desc;
   size_t slice_desc_size;
@@ -151,7 +152,8 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
     prefetch_entry, size_t size, size_t serialized_idx, int64_t* dest);
 void chpl_comm_pbuf_acq(void);
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry);
-void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry);
+void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
+    cache_seqn_t offset);
 void prefetch_update(void);
 bool entry_has_data(struct __prefetch_entry_t *entry);
 #endif

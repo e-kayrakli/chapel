@@ -24,6 +24,7 @@ proc BlockArr.allGather() {
       }
     }
   }
+  finalizePrefetch();
 }
 
 proc BlockArr.stencilPrefetch() {

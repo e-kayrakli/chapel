@@ -29,7 +29,7 @@ module PrefetchHooks {
   extern proc
     get_data_from_prefetch_entry(handle): c_void_ptr;
   extern proc
-    prefetch_entry_init_seqn_n(handle);
+    prefetch_entry_init_seqn_n(handle, offset);
 
   inline proc getData(handle) {
     return get_data_from_prefetch_entry(handle);
@@ -37,6 +37,19 @@ module PrefetchHooks {
 
   class PrefetchHook {
     var x = 10;
+
+    iter dsiSerialize() {
+      halt("This shouldn't have been called", x);
+      var dummyPtr: c_void_ptr;
+      var dummySize: size_t;
+      yield (dummyPtr, dummySize);
+    }
+
+    proc dsiGetSerializedObjectSize(): size_t {
+      halt("This shouldn't have been called", x);
+      var val: size_t;
+      return val;
+    }
 
     iter dsiSerialize(slice_desc) {
       halt("This shouldn't have been called", x);
@@ -51,7 +64,7 @@ module PrefetchHooks {
       return val;
     }
 
-    proc requestPrefetch(nodeId, otherObj) {
+    proc requestPrefetch(nodeId, otherObj, consistent=true) {
       halt("This shouldn't have been called");
     }
 
@@ -92,18 +105,34 @@ module PrefetchHooks {
       for val in obj.dsiSerialize(slice_desc:c_ptr(obj.idxType)) do yield val;
     }
     proc dsiGetSerializedObjectSize(slice_desc): size_t {
-      return + reduce 
-        obj.dsiGetSerializedObjectSize(slice_desc:c_ptr(obj.idxType));
+      var size: size_t;
+      for v in 
+        obj.dsiGetSerializedObjectSize(slice_desc:c_ptr(obj.idxType)) {
+
+        size += v;
+      }
+      return size;
+    }
+
+    iter dsiSerialize() {
+      for val in obj.dsiSerialize() do yield val;
+    }
+    proc dsiGetSerializedObjectSize(): size_t {
+      var size: size_t;
+      for v in obj.dsiGetSerializedObjectSize() {
+        size += v;
+      }
+      return size;
     }
 
     // here obj needs to be a wide class refernece to another hook
-    proc requestPrefetch(nodeId, otherObj) {
+    proc requestPrefetch(nodeId, otherObj, consistent=true) {
       var robjaddr = __primitive("_wide_get_addr",
           otherObj.prefetchHook);
 
       if nodeId!=here.id {
         handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
-            c_nil, 0);
+            c_nil, 0, consistent);
         hasData[nodeId] = true;
       }
     }
@@ -114,7 +143,7 @@ module PrefetchHooks {
           otherObj.prefetchHook);
 
       if nodeId!=here.id {
-        /*writeln(here, " ", sliceDesc);*/
+        writeln(here, " ", sliceDesc);
         /*halt("REACHED END");*/
         var (sliceDescPtr, sliceDescSize) =
           convertToSerialChunk(sliceDesc);
@@ -126,9 +155,9 @@ module PrefetchHooks {
 
     proc accessPrefetchedData(localeId, idx) {
       /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
-      if(entry_has_data(handles[localeId])) {
-        /*writeln(here, " doesn't have prefetched data from ", */
-            /*localeId, " with index ", idx);*/
+      if(!entry_has_data(handles[localeId])) {
+        writeln(here, " doesn't have prefetched data from ", 
+            localeId, " with index ", idx);
         return (false, nil:c_ptr(obj.eltType));
       }
       const handle = handles[localeId];
@@ -138,16 +167,18 @@ module PrefetchHooks {
           isPrefetched);
 
       if isPrefetched == 0 {
-        /*writeln(here, " have prefetched data from ", */
-            /*localeId, " but not with serial index ", deserialIdx, */
-            /*" for index ", idx);*/
+        writeln(here, " have prefetched data from ", 
+            localeId, " but not with serial index ", deserialIdx, 
+            " for index ", idx);
       }
       return (isPrefetched!=0, data:c_ptr(obj.eltType));
     }
 
     proc finalizePrefetch() {
       for i in 0..#numLocales {
-        prefetch_entry_init_seqn_n(handles[i]);
+        // 2 acquires are added by the current finalization logic
+        // this may not be necessary
+        prefetch_entry_init_seqn_n(handles[i], 0);
       }
     }
 
@@ -157,13 +188,17 @@ module PrefetchHooks {
   }
 
   export proc __serialized_obj_size_wrapper(__obj: c_void_ptr,
-      slice_desc: c_void_ptr): size_t {
+      slice_desc: c_void_ptr, slice_desc_size: size_t): size_t {
     var obj = __obj:PrefetchHook;
-    return obj.dsiGetSerializedObjectSize(slice_desc);
+    if slice_desc_size > 0 then
+      return obj.dsiGetSerializedObjectSize(slice_desc);
+    else
+      return obj.dsiGetSerializedObjectSize();
+
   }
 
   export proc __serialize_wrapper(__obj: c_void_ptr, __buf: c_void_ptr,
-      bufsize: size_t, slice_desc: c_void_ptr) {
+      bufsize: size_t, slice_desc: c_void_ptr, slice_desc_size: size_t) {
 
     type bufferEltType = uint(8);
     var obj = __obj:PrefetchHook;
@@ -178,15 +213,26 @@ module PrefetchHooks {
     // currently I am providing a helper convertToSerialChunk that takes
     // a rectangular array and returns the tuple we need. if the format
     // is changed, only implementation of that function should change
-    for chunk in obj.dsiSerialize(slice_desc) {
-      const chunkSize = chunk[2];
-      //memcpy to buffer
-      c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
-          chunk[1]:c_ptr(bufferEltType), chunkSize);
+    if slice_desc_size > 0 {
+      for chunk in obj.dsiSerialize(slice_desc) {
+        const chunkSize = chunk[2];
+        //memcpy to buffer
+        c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
+            chunk[1]:c_ptr(bufferEltType), chunkSize);
 
-      curBufferSize += chunkSize;
+        curBufferSize += chunkSize;
+      }
     }
- 
+    else {
+      for chunk in obj.dsiSerialize() {
+        const chunkSize = chunk[2];
+        //memcpy to buffer
+        c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
+            chunk[1]:c_ptr(bufferEltType), chunkSize);
+
+        curBufferSize += chunkSize;
+      }
+    }
   }
 
   // TODO this needs some error checking
@@ -195,6 +241,12 @@ module PrefetchHooks {
     const startIdx = a.domain.low; // or first?
     return (c_ptrTo(a[startIdx]):c_void_ptr,
         getSize(a.size, a._value.eltType));
+
+  }
+
+  inline proc convertToSerialChunk(ref a: integral) {
+    return (c_ptrTo(a):c_void_ptr,
+        getSize(1, a.type));
 
   }
 

@@ -10,7 +10,7 @@ config param verboseComm = false;
 config param rtPrefetch = false;
 config const N = 4;
 config const printData = false;
-config const printDataAfterPrefetch = false;
+config param printDataAfterPrefetch = false;
 config param partial = false;
 const space = {0..#N, 0..#N};
 const matdom = space dmapped Block(space);
@@ -48,7 +48,7 @@ if optComm {
   if detailedTiming then detailT.start();
   /*if partial then A._value.rowWiseAllPartialGather();*/
               /*else A._value.rowWiseAllGather();*/
-  A._value.rowWiseAllGather();
+  /*A._value.rowWiseAllGather();*/
   b._value.allGather();
   if printDataAfterPrefetch{
     directWriteA();
@@ -67,6 +67,17 @@ if optComm {
       /*c[i] += b[k];*/
     }
   }
+  writeln("First loop finished");
+  writeln("Checksum : ", + reduce c);
+  forall bb in b do bb *= 2;
+  directWriteB();
+  forall i in vecdom {
+    for k in vecdom {
+      c[i] += A[i,k] * b[k];
+      /*c[i] += b[k];*/
+    }
+  }
+  writeln("Checksum : ", + reduce c);
   if detailedTiming {
     detailT.stop();
     compTime += detailT.elapsed();

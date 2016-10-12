@@ -1070,7 +1070,7 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
       return data.deref();
     }
   /*}*/
-  /*writeln(here, " doing remote access ", i);*/
+  writeln(here, " doing remote access ", i);
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -1917,6 +1917,17 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
   return getMetadataSize() + getSize(elemCount, eltType);
 }
 
+iter BlockArr.dsiGetSerializedObjectSize() {
+  //FIXME fix this ....thing
+  for ij in dom.dist.targetLocDom {
+    if dom.dist.targetLocales[ij].id == here.id {
+      for val in locArr[ij].dsiGetSerializedObjectSize() {
+        yield val;
+      }
+    }
+    return;
+  }
+}
 iter BlockArr.dsiGetSerializedObjectSize(slice_desc) {
   //FIXME fix this ....thing
   for ij in dom.dist.targetLocDom {
@@ -1930,20 +1941,43 @@ iter BlockArr.dsiGetSerializedObjectSize(slice_desc) {
 }
 
 // BlockArr slice descriptors are range tuples
+iter LocBlockArr.dsiGetSerializedObjectSize() {
+  yield getSize(rank*2, idxType);
+  yield getSize(myElems.size, eltType);
+}
+// BlockArr slice descriptors are range tuples
 iter LocBlockArr.dsiGetSerializedObjectSize(slice_desc) {
   yield getSize(rank*2, idxType);
-  if slice_desc != nil {
-    var rangeTuple: rank*range(idxType);
-    for param i in 1..rank {
-      /*rangeTuple[i] = slice_desc[2*(i-1)]..slice_desc[2*(i-1)+1];*/
-      rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
-    }
-    const sliceDom = {(...rangeTuple)};
-    yield getSize(sliceDom.size, eltType);
+  var rangeTuple: rank*range(idxType);
+  for param i in 1..rank {
+    /*rangeTuple[i] = slice_desc[2*(i-1)]..slice_desc[2*(i-1)+1];*/
+    rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
   }
-  else {
-    yield getSize(myElems.size, eltType);
+  const sliceDom = {(...rangeTuple)};
+  yield getSize(sliceDom.size, eltType);
+}
+
+iter LocBlockArr.dsiSerialize() {
+  // two points is enough to describe a slice
+  // therefore we need rank*2 idxType variables for metadata
+  /*const space = 0..#(rank*2);*/
+  /*var metaDataArr: [space] idxType;*/
+
+  var low = chpl__tuplify(locDom.myBlock.low);
+  var hi = chpl__tuplify(locDom.myBlock.high);
+  var size = hi-low + 1;
+
+  for param i in 1..rank {
+    /*metaDataArr[i-1] = low[i];*/
+    yield convertToSerialChunk(low[i]);
   }
+  for param i in rank+1..2*rank {
+    /*metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;*/
+    /*yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);*/
+    yield convertToSerialChunk(size[rank]);
+  }
+  /*yield convertToSerialChunk(metaDataArr);*/
+  yield convertToSerialChunk(myElems);
 }
 
 iter LocBlockArr.dsiSerialize(slice_desc) {
@@ -1952,39 +1986,21 @@ iter LocBlockArr.dsiSerialize(slice_desc) {
   const space = 0..#(rank*2);
   var metaDataArr: [space] idxType;
 
-  if slice_desc != nil {
-    /*for i in space do*/
-      /*metaDataArr[i] = slice_desc[i];*/
+  /*for i in space do*/
+  /*metaDataArr[i] = slice_desc[i];*/
 
-    for param i in 1..rank {
-      metaDataArr[i-1] = slice_desc[i-1];
-      metaDataArr[i-1+rank] = slice_desc[i-1+rank] - slice_desc[i-1] +1;
-    }
-  }
-  else {
-    const low = chpl__tuplify(locDom.myBlock.low);
-    const hi = chpl__tuplify(locDom.myBlock.high);
-
-    for param i in 1..rank {
-      metaDataArr[i-1] = low[i];
-    }
-    for param i in rank+1..2*rank {
-      metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;
-    }
+  for param i in 1..rank {
+    metaDataArr[i-1] = slice_desc[i-1];
+    metaDataArr[i-1+rank] = slice_desc[i-1+rank] - slice_desc[i-1] +1;
   }
   yield convertToSerialChunk(metaDataArr);
-  if slice_desc != nil {
-    var rangeTuple: rank*range(idxType);
+  var rangeTuple: rank*range(idxType);
 
-    for param i in 1..rank {
-      /*rangeTuple[i] = slice_desc[2*(i-1)]..slice_desc[2*(i-1)+1];*/
-      rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
-    }
-    const sliceDom = {(...rangeTuple)};
-    var sliceToSend = myElems[sliceDom];
-    yield convertToSerialChunk(sliceToSend);
+  for param i in 1..rank {
+    /*rangeTuple[i] = slice_desc[2*(i-1)]..slice_desc[2*(i-1)+1];*/
+    rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
   }
-  else {
-    yield convertToSerialChunk(myElems);
-  }
+  const sliceDom = {(...rangeTuple)};
+  var sliceToSend = myElems[sliceDom];
+  yield convertToSerialChunk(sliceToSend);
 }
