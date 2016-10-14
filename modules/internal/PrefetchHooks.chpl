@@ -167,12 +167,12 @@ module PrefetchHooks {
 
     proc accessPrefetchedData(localeId, idx) {
       var localIdx = idx;
-      start_read(handles[localeId]);
+      /*start_read(handles[localeId]);*/
       /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
       if(!entry_has_data(handles[localeId])) {
         /*writeln(here, " doesn't have prefetched data from ", */
             /*localeId, " with index ", idx);*/
-        stop_read(handles[localeId]);
+        /*stop_read(handles[localeId]);*/
         return (false, nil:c_ptr(obj.eltType));
       }
       const handle = handles[localeId];
@@ -196,7 +196,7 @@ module PrefetchHooks {
             /*" for index ", idx);*/
         /*stop_read(handles[localeId]);*/
       }
-      stop_read(handles[localeId]);
+      /*stop_read(handles[localeId]);*/
       return (isPrefetched!=0, data:c_ptr(obj.eltType));
     }
 

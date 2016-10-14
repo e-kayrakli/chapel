@@ -3015,19 +3015,17 @@ void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
 
 //these locks are managed from PrefetchHooks
 void start_read(struct __prefetch_entry_t *entry) {
-  if(entry) {
-    chpl_sync_lock(&(entry->state_lock));
-    entry->state_counter++;
-    chpl_sync_unlock(&(entry->state_lock));
-  }
+  //assert entry?
+  chpl_sync_lock(&(entry->state_lock));
+  entry->state_counter++;
+  chpl_sync_unlock(&(entry->state_lock));
 }
 
 void stop_read(struct __prefetch_entry_t *entry) {
-  if(entry) {
-    chpl_sync_lock(&(entry->state_lock));
-    entry->state_counter--;
-    chpl_sync_unlock(&(entry->state_lock));
-  }
+  //assert entry?
+  chpl_sync_lock(&(entry->state_lock));
+  entry->state_counter--;
+  chpl_sync_unlock(&(entry->state_lock));
 }
 
 static inline
@@ -3041,7 +3039,7 @@ void start_update(struct __prefetch_entry_t *entry) {
   bool done = false;
   do {
     chpl_sync_lock(&(entry->state_lock));
-    if(entry->state_counter == 1){ //I'm the only one
+    if(entry->state_counter == 0){
       entry->state_counter = -1;
       done = true;
       //the lock should be unlocked by stop_update
@@ -3059,7 +3057,7 @@ void stop_update(struct __prefetch_entry_t *entry) {
   // here we are assuming that state_counter is -1 and there is
   // definitely no readers in the entry
   assert(entry->state_counter == -1);
-  entry->state_counter = 1; // I must be the only one
+  entry->state_counter = 0;
   chpl_sync_unlock(&(entry->state_lock));
 }
 
@@ -3168,17 +3166,16 @@ void *get_prefetched_data_addr(void *accessor,
     stop_update(prefetch_entry);
   }
 
-  /*offset = (int64_t)serialized_idx;*/
-  offset = (int64_t)(__get_byte_idx_wrapper(accessor, 
-        prefetch_entry->data, idx));
+  if(prefetch_entry->pf_type&PF_CONSISTENT) {
+    //we only need to lock if the entry is marked consistent
+    //we are assuming that the user will call updatePrefetch only from a
+    //sequential context from one locale, similar to our assumption that
+    //data will be prefetch only from single task from one locale
+    start_read(prefetch_entry);
+  }
 
-  /*if(prefetch_entry->pf_type&PF_CONSISTENT) {*/
-    /*//we only need to lock if the entry is marked consistent*/
-    /*//we are assuming that the user will call updatePrefetch only from a*/
-    /*//sequential context from one locale, similar to our assumption that*/
-    /*//data will be prefetch only from single task from one locale*/
-    /*start_read(prefetch_entry);*/
-  /*}*/
+  offset = (int64_t)(__get_byte_idx_wrapper(accessor,
+        prefetch_entry->data, idx));
 
   if(prefetch_entry == NULL){
     printf("\t no prefetch entry\n");
@@ -3202,9 +3199,9 @@ void *get_prefetched_data_addr(void *accessor,
 
   // throttling TODO there will be a chunk logic here
   // throttling TODO including a wait on corrseponding doneobj
-  /*if(prefetch_entry->pf_type&PF_CONSISTENT) {*/
-    /*stop_read(prefetch_entry);*/
-  /*}*/
+  if(prefetch_entry->pf_type&PF_CONSISTENT) {
+    stop_read(prefetch_entry);
+  }
   return ret_addr;
 }
 
