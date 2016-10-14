@@ -1069,7 +1069,7 @@ proc BlockArr.nonLocalAccess(i: rank*idxType)  {
       return data;
     }
   }
-  /*writeln(here, " doing remote nonref access ", i);*/
+  writeln(here, " doing remote nonref access ", i);
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -1136,7 +1136,7 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
       /*return data;*/
     /*}*/
   /*}*/
-  /*writeln(here, " doing remote ref access ", i);*/
+  writeln(here, " doing remote ref access ", i);
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -2061,14 +2061,18 @@ iter LocBlockArr.dsiSerialize(slice_desc) {
   // therefore we need rank*2 idxType variables for metadata
   const space = 0..#(rank*2);
   var metaDataArr: [space] idxType;
+  const myDom = locDom.myBlock;
 
   /*for i in space do*/
   /*metaDataArr[i] = slice_desc[i];*/
 
   for param i in 1..rank {
-    metaDataArr[i-1] = slice_desc[i-1];
-    metaDataArr[i-1+rank] = slice_desc[i-1+rank] - slice_desc[i-1] +1;
+    metaDataArr[i-1] = max(myDom.dim(i).low, slice_desc[i-1]);
+    metaDataArr[i-1+rank] =
+      min(myDom.dim(i).high, slice_desc[i-1+rank]) -
+      max(myDom.dim(i).low, slice_desc[i-1]) + 1;
   }
+
   yield convertToSerialChunk(metaDataArr);
   var rangeTuple: rank*range(idxType);
 

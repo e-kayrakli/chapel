@@ -149,12 +149,66 @@ proc BlockArr.rowWiseAllGather(consistent=true) {
 proc BlockArr.rowWiseAllGatherTranspose(consistent=true) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
+      const myDom = dom.locDoms[localeIdx].myBlock;
+      //what is the row range I am going to prefetch?
+      const myColRange = dom.locDoms[localeIdx].myBlock.dim(2);
+      const prefetchStartRowIdx = myColRange.low;
+      const prefetchStopRowIdx = myColRange.high;
+      const prefetchStartLocaleRowIdx =
+        dom.dist.targetLocsIdx((prefetchStartRowIdx, 0))[1];
+      const prefetchStopLocaleRowIdx =
+        dom.dist.targetLocsIdx((prefetchStopRowIdx, 0))[1];
+
+      /*writeln("**** ", here, " reports : ",*/
+          /*prefetchStartRowIdx, " ", prefetchStopRowIdx, " ",*/
+          /*prefetchStartLocaleRowIdx, " ",  prefetchStopLocaleRowIdx);*/
+      const sliceDesc = {prefetchStartRowIdx..prefetchStopRowIdx,
+        dom.whole.dim(2)};
+
+      //prefetch from starting locales
       for i in dom.dist.targetLocDom.dim(2) {
-        const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[2]);
-        __prefetchFrom(localeIdx, sourceIdx, consistent);
+        const sourceIdx = chpl__tuplify(i).withIdx(1,
+            prefetchStartLocaleRowIdx);
+        if(sourceIdx != localeIdx) {
+          /*const sliceDesc = {prefetchStartRowIdx..myDom.dim(1).low-1,*/
+            /*myDom.dim(2)};*/
+          /*writeln(here, " will get ", sliceDesc, " from ",*/
+              /*dom.dist.targetLocales[sourceIdx], " (start)");*/
+          __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        }
+      }
+      //prefetch from locales in between
+      for row in
+            prefetchStartLocaleRowIdx+1..prefetchStopLocaleRowIdx-1{
+        for i in dom.dist.targetLocDom.dim(2) {
+          const sourceIdx = chpl__tuplify(i).withIdx(1,
+              row);
+          if(sourceIdx != localeIdx) {
+            /*writeln(here, " will get everything from ",*/
+                /*dom.dist.targetLocales[sourceIdx], " (mid)");*/
+            __prefetchFrom(localeIdx, sourceIdx, consistent);
+          }
+        }
+      }
+      //prefetch from ending locales
+      if(prefetchStartLocaleRowIdx != prefetchStopLocaleRowIdx) {
+        for i in dom.dist.targetLocDom.dim(2) {
+          const sourceIdx = chpl__tuplify(i).withIdx(1,
+              prefetchStopLocaleRowIdx);
+          if(sourceIdx != localeIdx) {
+            /*const sliceDesc = {myDom.dim(1).high+1..prefetchStopRowIdx,*/
+              /*myDom.dim(2)};*/
+
+            /*writeln(here, " will get ", sliceDesc, " from ",*/
+                /*dom.dist.targetLocales[sourceIdx], " (end)");*/
+            __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+          }
+        }
       }
     }
   }
+  /*halt("END");*/
+  finalizePrefetch();
 }
 
 proc BlockArr.colWiseAllGather() {
