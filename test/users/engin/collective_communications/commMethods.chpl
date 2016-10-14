@@ -144,12 +144,12 @@ proc BlockArr.rowWiseAllGather(consistent=true) {
   finalizePrefetch();
 }
 
-proc BlockArr.rowWiseAllGatherTranspose() {
+proc BlockArr.rowWiseAllGatherTranspose(consistent=true) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for i in dom.dist.targetLocDom.dim(2) {
         const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[2]);
-        __prefetchFrom(localeIdx, sourceIdx);
+        __prefetchFrom(localeIdx, sourceIdx, consistent);
       }
     }
   }
