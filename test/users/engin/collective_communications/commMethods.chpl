@@ -30,6 +30,86 @@ proc BlockArr.allGather(consistent=true) {
   finalizePrefetch();
 }
 
+proc BlockArr.stencilPrefetch3d(consistent=true) {
+
+  if rank != 3 then
+    halt("This Prefetch pattern is only supprted for 3D arrays");
+
+  //TODO FIXME TODO FIXME coforall --fixed
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const myDom = dom.locDoms[localeIdx].myBlock;
+      const tlDom = dom.dist.targetLocDom;
+
+      const hasFront = localeIdx[1] > 0;
+      const hasBack = localeIdx[1] < tlDom.dim(1).size-1;
+
+      const hasTop = localeIdx[2] > 0;
+      const hasBottom = localeIdx[2] < tlDom.dim(2).size-1;
+
+      const hasLeft = localeIdx[3] > 0;
+      const hasRight = localeIdx[3] < tlDom.dim(3).size-1;
+
+      if hasFront {
+        const sourceIdx = localeIdx + (-1,0,0);
+        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
+          myDom.dim(2), myDom.dim(3)};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      if hasBack {
+        const sourceIdx = localeIdx + (1,0,0);
+        const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
+          myDom.dim(2), myDom.dim(3)};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+
+      if hasTop {
+        const sourceIdx = localeIdx + (0,-1,0);
+        const sliceDesc = {myDom.dim(1),
+          myDom.dim(2).low-1..myDom.dim(2).low-1, myDom.dim(3)};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      if hasBottom {
+        const sourceIdx = localeIdx + (0,1,0);
+        const sliceDesc = {myDom.dim(1),
+          myDom.dim(2).high+1..myDom.dim(2).high+1, myDom.dim(3)};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+
+      if hasLeft {
+        const sourceIdx = localeIdx + (0,0,-1);
+        const sliceDesc = {myDom.dim(1),
+          myDom.dim(2), myDom.dim(3).low-1..myDom.dim(3).low-1};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      if hasRight {
+        const sourceIdx = localeIdx + (0,0,1);
+        const sliceDesc = {myDom.dim(1),
+          myDom.dim(2), myDom.dim(3).high+1..myDom.dim(3).high+1};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+    }
+  }
+  finalizePrefetch();
+}
 proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
   if rank != 2 then
     halt("This Prefetch pattern is only supprted for 2D arrays");
@@ -132,6 +212,10 @@ inline proc domToArray(dom: domain) where dom.rank == 1 {
 inline proc domToArray(dom: domain) where dom.rank == 2 {
   return [dom.dim(1).low, dom.dim(2).low,
          dom.dim(1).high, dom.dim(2).high];
+}
+inline proc domToArray(dom: domain) where dom.rank == 3 {
+  return [dom.dim(1).low, dom.dim(2).low, dom.dim(3).low,
+         dom.dim(1).high, dom.dim(2).high, dom.dim(3).high];
 }
 
 proc BlockArr.rowWiseAllGather(consistent=true) {

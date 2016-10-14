@@ -1949,7 +1949,7 @@ inline proc LocBlockArr.getMetadataSize() param : uint(64) {
 
 inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
 
-  if rank > 2 then
+  if rank > 3 then
     halt("I don't know how to do this yet");
 
   //construct metadata
@@ -1974,14 +1974,28 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
   /*var low = getElementArrayAtOffset(data, 0, idxType);*/
   /*var high = getElementArrayAtOffset(data, getSize(rank,idxType), */
       /*idxType);*/
-  // TODO do a param for loop here
-  const elemCount =  if rank == 1 then
+  const elemCount =
+    if rank == 1 then
       /*idx[1]-low[1]*/
       idx[1]-metadata[0]
-      else
+    else if rank == 2 then
       /*(idx[1]-low[1])*(size[2])+(idx[2]-low[2]);*/
-      (idx[1]-metadata[0])*(metadata[3])+(idx[2]-metadata[1]);
-      
+      (idx[1]-metadata[0])*(metadata[3])+(idx[2]-metadata[1])
+    else
+      (idx[3]-metadata[2]) +
+      (idx[2]-metadata[1])*metadata[5]+
+      (idx[1]-metadata[0])*metadata[5]*metadata[4];
+
+
+  // TODO this loop should work but it has one extra multiplication so I
+  // am typing the code explicitly
+
+  /*var coeff = 1;*/
+  /*var sum = 0;*/
+  /*for param i in 1..rank by -1{*/
+    /*sum += coeff*(idx[i] - metadata[i-1]);*/
+    /*coeff *= metadata[i+rank-1];*/
+  /*}*/
 
   return getMetadataSize() + getSize(elemCount, eltType);
 }
