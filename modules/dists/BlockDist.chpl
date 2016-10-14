@@ -1060,19 +1060,16 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) {
 }
 
 proc BlockArr.nonLocalAccess(i: rank*idxType)  {
-  /*local {*/
+  local {
     const locIdx = dom.dist.targetLocsIdx(i);
-    var (isPrefetched, data) = 
+    var (isPrefetched, data) =
       myLocArr.getPrefetchHook().accessPrefetchedData(
           dom.dist.targetLocaleIDs[locIdx], i);
-    // I don't really want to do any ptr logic at this level
-    // but I might have to because of ref intent mechanism
     if isPrefetched {
-      /*writeln(here, " doing prefetch access ", i);*/
       return data;
     }
-  /*}*/
-  writeln(here, " doing remote nonref access ", i);
+  }
+  /*writeln(here, " doing remote nonref access ", i);*/
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -1139,7 +1136,7 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
       /*return data;*/
     /*}*/
   /*}*/
-  writeln(here, " doing remote ref access ", i);
+  /*writeln(here, " doing remote ref access ", i);*/
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -2017,13 +2014,18 @@ iter LocBlockArr.dsiGetSerializedObjectSize() {
 // BlockArr slice descriptors are range tuples
 iter LocBlockArr.dsiGetSerializedObjectSize(slice_desc) {
   yield getSize(rank*2, idxType);
+
   var rangeTuple: rank*range(idxType);
+  var size = 1;
   for param i in 1..rank {
     /*rangeTuple[i] = slice_desc[2*(i-1)]..slice_desc[2*(i-1)+1];*/
     rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
   }
-  const sliceDom = {(...rangeTuple)};
-  yield getSize(sliceDom.size, eltType);
+  for param i in 1..rank {
+    size *= rangeTuple[i].length;
+  }
+  /*const sliceDom = {(...rangeTuple)};*/
+  yield getSize(size, eltType);
 }
 
 iter LocBlockArr.dsiSerialize() {

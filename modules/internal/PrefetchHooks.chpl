@@ -117,10 +117,9 @@ module PrefetchHooks {
       for val in obj.dsiSerialize(slice_desc:c_ptr(obj.idxType)) do yield val;
     }
     proc dsiGetSerializedObjectSize(slice_desc): size_t {
-      var size: size_t;
+      var size = 0: size_t;
       for v in 
-        obj.dsiGetSerializedObjectSize(slice_desc:c_ptr(obj.idxType)) {
-
+          obj.dsiGetSerializedObjectSize(slice_desc:c_ptr(obj.idxType)) {
         size += v;
       }
       return size;
@@ -155,9 +154,9 @@ module PrefetchHooks {
           otherObj.prefetchHook);
 
       if nodeId!=here.id {
-        writeln(here, " ", sliceDesc);
+        /*writeln(here, " ", sliceDesc);*/
         /*halt("REACHED END");*/
-        var (sliceDescPtr, sliceDescSize) =
+        var (sliceDescPtr, sliceDescSize, dummyBool) =
           convertToSerialChunk(sliceDesc);
         handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
             sliceDescPtr, sliceDescSize, consistent);
@@ -167,16 +166,16 @@ module PrefetchHooks {
 
     proc accessPrefetchedData(localeId, idx) {
       var localIdx = idx;
+      const handle = handles[localeId];
       /*start_read(handles[localeId]);*/
       /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
-      if(!entry_has_data(handles[localeId])) {
+      if(!entry_has_data(handle)) {
         /*writeln(here, " doesn't have prefetched data from ", */
             /*localeId, " with index ", idx);*/
         /*stop_read(handles[localeId]);*/
         var dummy: obj.eltType;
         return (false, dummy);
       }
-      const handle = handles[localeId];
 
       // TODO here data must be accessed only once therefore
       // getByteIndex must be called from runtime from insde
@@ -190,14 +189,14 @@ module PrefetchHooks {
       get_prefetched_data(thisaddr, handle, 8, localIdx, isPrefetched,
           data);
 
-      if isPrefetched == 0 {
+      /*if isPrefetched == 0 {*/
         /*const cast_data = __data:c_ptr(int);*/
         /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
         /*writeln(here, " have prefetched data from ", */
             /*localeId, " but not with serial index ", deserialIdx, */
             /*" for index ", idx);*/
         /*stop_read(handles[localeId]);*/
-      }
+      /*}*/
       /*stop_read(handles[localeId]);*/
       return (isPrefetched!=0, data);
     }

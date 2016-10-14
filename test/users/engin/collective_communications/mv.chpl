@@ -9,6 +9,7 @@ config param commDiag = false;
 config param verboseComm = false;
 config param rtPrefetch = false;
 config const N = 4;
+config const consistent = true;
 config const printData = false;
 config param printDataAfterPrefetch = false;
 config param partial = false;
@@ -48,8 +49,8 @@ if optComm {
   if detailedTiming then detailT.start();
   /*if partial then A._value.rowWiseAllPartialGather();*/
               /*else A._value.rowWiseAllGather();*/
-  A._value.rowWiseAllGather();
-  b._value.allGather();
+  A._value.rowWiseAllGather(consistent);
+  b._value.allGather(consistent);
   if printDataAfterPrefetch{
     directWriteA();
     directWriteB();
@@ -68,15 +69,15 @@ if optComm {
     }
   }
   /*writeln("First loop finished");*/
-  writeln("Checksum : ", + reduce c);
-  forall bb in b do bb *= 2;
-  /*directWriteB();*/
-  forall i in vecdom {
-    for k in vecdom {
-      c[i] += A[i,k] * b[k];
-      /*c[i] += b[k];*/
-    }
-  }
+  /*writeln("Checksum : ", + reduce c);*/
+  /*forall bb in b do bb *= 2;*/
+  /*[>directWriteB();<]*/
+  /*forall i in vecdom {*/
+    /*for k in vecdom {*/
+      /*c[i] += A[i,k] * b[k];*/
+      /*[>c[i] += b[k];<]*/
+    /*}*/
+  /*}*/
   /*writeln("Checksum : ", + reduce c);*/
   if detailedTiming {
     detailT.stop();
