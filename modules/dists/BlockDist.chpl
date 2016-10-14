@@ -2083,8 +2083,8 @@ iter LocBlockArr.dsiSerialize(slice_desc) {
   for param i in 1..rank {
     metaDataArr[i-1] = max(myDom.dim(i).low, slice_desc[i-1]);
     metaDataArr[i-1+rank] =
-      min(myDom.dim(i).high, slice_desc[i-1+rank]) -
-      max(myDom.dim(i).low, slice_desc[i-1]) + 1;
+      min(myDom.dim(i).high,
+          slice_desc[i-1+rank])-max(myDom.dim(i).low, slice_desc[i-1])+1;
   }
 
   yield convertToSerialChunk(metaDataArr);
