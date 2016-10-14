@@ -209,7 +209,7 @@ module PrefetchHooks {
       }
     }
 
-    proc getByteIndex(data: c_void_ptr, __idx: c_void_ptr) {
+    inline proc getByteIndex(data: c_void_ptr, __idx: c_void_ptr) {
       var idx = __idx:c_ptr(obj.rank*obj.idxType);
 
       return obj.getByteIndex(data, idx.deref());

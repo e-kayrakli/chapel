@@ -1953,18 +1953,18 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
     halt("I don't know how to do this yet");
 
   //construct metadata
-  var low: rank*idxType;
-  var size: rank*idxType;
+  /*var low: rank*idxType;*/
+  /*var size: rank*idxType;*/
 
   var metadata = getElementArrayAtOffset(data, 0, idxType);
 
-  for param i in 1..rank {
-    low[i] = metadata[i-1];
-  }
+  /*for param i in 1..rank {*/
+    /*low[i] = metadata[i-1];*/
+  /*}*/
 
-  for param i in rank+1..2*rank {
-    size[i-rank] = metadata[i-1];
-  }
+  /*for param i in rank+1..2*rank {*/
+    /*size[i-rank] = metadata[i-1];*/
+  /*}*/
 
   /*writeln(here, " ",*/
       /*metadata[0], " ",*/
@@ -1976,9 +1976,12 @@ proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
       /*idxType);*/
   // TODO do a param for loop here
   const elemCount =  if rank == 1 then
-      idx[1]-low[1]
+      /*idx[1]-low[1]*/
+      idx[1]-metadata[0]
       else
-      (idx[1]-low[1])*(size[2])+(idx[2]-low[2]);
+      /*(idx[1]-low[1])*(size[2])+(idx[2]-low[2]);*/
+      (idx[1]-metadata[0])*(metadata[3])+(idx[2]-metadata[1]);
+      
 
   return getMetadataSize() + getSize(elemCount, eltType);
 }

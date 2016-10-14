@@ -1272,7 +1272,8 @@ void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
 #ifdef GASNET_SEGMENT_EVERYTHING
     local_in_segment = 1;
 #else
-    local_in_segment = chpl_comm_addr_gettable(chpl_nodeID, addr, size);
+    local_in_segment = chpl_comm_addr_gettable(chpl_nodeID, addr,
+        prefetch_size);
 #endif
 
     // If the local address isn't in a registered segment,
