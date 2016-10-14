@@ -3140,8 +3140,11 @@ static void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
   chpl_comm_reprefetch(entry);
   prefetch_entry_init_seqn_n(entry, 0);
 }
-void *get_prefetched_data_addr(struct __prefetch_entry_t* 
-    prefetch_entry, size_t size, size_t serialized_idx, 
+
+extern uint64_t __get_byte_idx_wrapper(void*, void*, void*);
+
+void *get_prefetched_data_addr(void *accessor, 
+    struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
     int64_t* found) {
 
   int64_t offset; //this can be negative in current logic
@@ -3165,7 +3168,9 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
     stop_update(prefetch_entry);
   }
 
-  offset = (int64_t)serialized_idx;
+  /*offset = (int64_t)serialized_idx;*/
+  offset = (int64_t)(__get_byte_idx_wrapper(accessor, 
+        prefetch_entry->data, idx));
 
   /*if(prefetch_entry->pf_type&PF_CONSISTENT) {*/
     /*//we only need to lock if the entry is marked consistent*/
@@ -3181,12 +3186,12 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
   } 
   else if(offset < 0) {
     printf("\t offset=%ld, size=%zd, sidx=%zd\n",
-        offset, size, serialized_idx);
+        offset, size, offset);
     *found = 0;
   }
   else if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
     printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",
-        offset, size, serialized_idx, prefetch_entry->size);
+        offset, size, offset, prefetch_entry->size);
     *found = 0;
   }
   else {

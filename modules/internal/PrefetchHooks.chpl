@@ -22,9 +22,9 @@ module PrefetchHooks {
   extern proc 
     get_prefetched_data(handle, offset, size, ref dest): c_int;
 
-  extern proc 
-    get_prefetched_data_addr(handle, offset, size, ref isPrefetched):
-      c_void_ptr;
+  extern proc
+    get_prefetched_data_addr(accessor: c_void_ptr, handle, size, ref idx,
+        ref isPrefetched): c_void_ptr;
 
   extern proc
     get_data_from_prefetch_entry(handle): c_void_ptr;
@@ -88,6 +88,12 @@ module PrefetchHooks {
 
     proc finalizePrefetch() {
       halt("This shouldn't have been called");
+    }
+
+    proc getByteIndex(data: c_void_ptr, __idx: c_void_ptr) {
+      halt("This shouldn't have been called");
+      var dummy: uint(64);
+      return dummy;
     }
 
     proc test() {
@@ -160,6 +166,7 @@ module PrefetchHooks {
     }
 
     proc accessPrefetchedData(localeId, idx) {
+      var localIdx = idx;
       start_read(handles[localeId]);
       /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
       if(!entry_has_data(handles[localeId])) {
@@ -174,14 +181,15 @@ module PrefetchHooks {
       // getByteIndex must be called from runtime from insde
       // get_prefetched_data_addr
 
-      const __data = getData(handle);
-      const deserialIdx = obj.getByteIndex(getData(handle), idx);
+      /*const __data = getData(handle);*/
+      /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
       var isPrefetched: int;
-      const data = get_prefetched_data_addr(handle, 8, deserialIdx,
-          isPrefetched);
+      var thisaddr = __primitive("_wide_get_addr", this);
+      const data = get_prefetched_data_addr(thisaddr, handle, 8,
+          localIdx, isPrefetched);
 
       if isPrefetched == 0 {
-        const cast_data = __data:c_ptr(int);
+        /*const cast_data = __data:c_ptr(int);*/
         /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
         /*writeln(here, " have prefetched data from ", */
             /*localeId, " but not with serial index ", deserialIdx, */
@@ -212,8 +220,8 @@ module PrefetchHooks {
   }
 
   export proc __get_byte_idx_wrapper(__obj: c_void_ptr,
-      idx: c_void_ptr) {
-    car obj = __obj:PrefetchHook;
+      data: c_void_ptr, idx: c_void_ptr) {
+    var obj = __obj:PrefetchHook;
     return obj.getByteIndex(data, idx);
   }
 
