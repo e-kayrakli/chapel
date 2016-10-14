@@ -79,7 +79,7 @@ module PrefetchHooks {
       halt("This shouldn't have been called");
     }
 
-    proc accessPrefetchedData(localeId, idx) {
+    inline proc accessPrefetchedData(localeId, idx) {
       halt("This shouldn't have been called");
       var isPrefetched = false;
       var dummyPtr: c_ptr(real);
@@ -164,7 +164,7 @@ module PrefetchHooks {
       }
     }
 
-    proc accessPrefetchedData(localeId, idx) {
+    inline proc accessPrefetchedData(localeId, idx) {
       var localIdx = idx;
       const handle = handles[localeId];
       /*start_read(handles[localeId]);*/

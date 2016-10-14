@@ -1947,7 +1947,7 @@ inline proc LocBlockArr.getMetadataSize() param : uint(64) {
   return rank*2*8;
 }
 
-proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
+inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
 
   if rank > 2 then
     halt("I don't know how to do this yet");
