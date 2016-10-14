@@ -66,6 +66,7 @@ typedef struct __prefetch_entry_t{
   //variable/c intrinsics. So I am relying on locks
   int16_t state_counter;
   chpl_sync_aux_t state_lock;
+  bool should_lock;
 
   // prefetch type controls consistency protocol on a sync event
   uint8_t pf_type;

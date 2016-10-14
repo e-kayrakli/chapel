@@ -3018,7 +3018,7 @@ void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
 static inline
 void start_read(struct __prefetch_entry_t *entry) {
   //assert entry?
-  if(entry->pf_type&PF_CONSISTENT) {
+  if(entry->should_lock) {
     //we only need to lock if the entry is marked consistent
     //we are assuming that the user will call updatePrefetch only from a
     //sequential context from one locale, similar to our assumption that
@@ -3032,7 +3032,7 @@ void start_read(struct __prefetch_entry_t *entry) {
 static inline
 void stop_read(struct __prefetch_entry_t *entry) {
   //assert entry?
-  if(entry->pf_type&PF_CONSISTENT) {
+  if(entry->should_lock) {
     chpl_sync_lock(&(entry->state_lock));
     entry->state_counter--;
     chpl_sync_unlock(&(entry->state_lock));
@@ -3095,6 +3095,9 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   if(consistent) {
     new_entry->pf_type |= (PF_CONSISTENT|PF_PERSISTENT);
   }
+
+  new_entry->should_lock = (new_entry->pf_type &
+    (PF_CONSISTENT|PF_PERSISTENT)) == (PF_CONSISTENT|PF_PERSISTENT) ;
 
   // currently everything has canread and nothing can have canwrite
   new_entry->pf_type |= PF_CANREAD;
@@ -3162,14 +3165,12 @@ void get_prefetched_data(void *accessor,
     int64_t* found, void *dest) {
 
   int64_t offset; //this can be negative in current logic
-  /*void *ret_addr;*/
 
-  if((prefetch_entry->pf_type&PF_CONSISTENT) &&
+  if((prefetch_entry->should_lock) &&
       // TODO this should compare task local data's sequence number
       // if it's less then or equal to then we are in the same time fram
       // as the data has been prefetched therefore we can read it
       prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
-    // TODO writeback, evict, update
     /*printf("\t stale data: %ld %ld\n",*/
         /*prefetch_entry->sn, pbuf->prefetch_sequence_number);*/
 
@@ -3188,16 +3189,8 @@ void get_prefetched_data(void *accessor,
         prefetch_entry->data, idx));
 
   // NULL check for prefetch entry has been handled by PrefethcHooks
-  /*if(prefetch_entry == NULL){*/
-    /*printf("\t no prefetch entry\n");*/
-    /**found = 0;*/
-  /*} */
-  if(offset < 0) {
-    printf("\t offset=%ld, size=%zd, sidx=%zd\n",
-        offset, size, offset);
-    *found = 0;
-  }
-  else if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
+  if(offset < 0 ||
+      (intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
     printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",
         offset, size, offset, prefetch_entry->size);
     *found = 0;
@@ -3207,8 +3200,6 @@ void get_prefetched_data(void *accessor,
     chpl_memcpy(dest,
         (void *)((uintptr_t)prefetch_entry->data+offset), size);
   }
-  /*ret_addr = found ?*/
-    /*(void *)((uintptr_t)prefetch_entry->data+offset) : NULL;*/
 
   // throttling TODO there will be a chunk logic here
   // throttling TODO including a wait on corrseponding doneobj
