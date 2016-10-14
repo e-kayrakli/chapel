@@ -19,12 +19,12 @@ module PrefetchHooks {
   
   extern proc
     entry_has_data(handle): bool;
-  extern proc 
-    get_prefetched_data(handle, offset, size, ref dest): c_int;
+  /*extern proc */
+    /*get_prefetched_data(handle, offset, size, ref dest): c_int;*/
 
   extern proc
-    get_prefetched_data_addr(accessor: c_void_ptr, handle, size, ref idx,
-        ref isPrefetched): c_void_ptr;
+    get_prefetched_data(accessor: c_void_ptr, handle, size, ref idx,
+        ref isPrefetched, ref data);
 
   extern proc
     get_data_from_prefetch_entry(handle): c_void_ptr;
@@ -173,7 +173,8 @@ module PrefetchHooks {
         /*writeln(here, " doesn't have prefetched data from ", */
             /*localeId, " with index ", idx);*/
         /*stop_read(handles[localeId]);*/
-        return (false, nil:c_ptr(obj.eltType));
+        var dummy: obj.eltType;
+        return (false, dummy);
       }
       const handle = handles[localeId];
 
@@ -185,8 +186,9 @@ module PrefetchHooks {
       /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
       var isPrefetched: int;
       var thisaddr = __primitive("_wide_get_addr", this);
-      const data = get_prefetched_data_addr(thisaddr, handle, 8,
-          localIdx, isPrefetched);
+      var data: obj.eltType;
+      get_prefetched_data(thisaddr, handle, 8, localIdx, isPrefetched,
+          data);
 
       if isPrefetched == 0 {
         /*const cast_data = __data:c_ptr(int);*/
@@ -197,7 +199,7 @@ module PrefetchHooks {
         /*stop_read(handles[localeId]);*/
       }
       /*stop_read(handles[localeId]);*/
-      return (isPrefetched!=0, data:c_ptr(obj.eltType));
+      return (isPrefetched!=0, data);
     }
 
     proc finalizePrefetch() {

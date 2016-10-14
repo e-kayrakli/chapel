@@ -1041,6 +1041,75 @@ inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
   return myLocArr.this(i);
 }
 
+
+// nonref versions
+//
+// the global accessor for the array
+//
+// TODO: Do we need a global bounds check here or in targetLocsIdx?
+//
+// By splitting the non-local case into its own function, we can inline the
+// fast/local path and get better performance.
+//
+inline proc BlockArr.dsiAccess(i: rank*idxType) {
+  local {
+    if myLocArr != nil && myLocArr.locDom.member(i) then
+      return myLocArr.this(i);
+  }
+  return nonLocalAccess(i);
+}
+
+proc BlockArr.nonLocalAccess(i: rank*idxType)  {
+  /*local {*/
+    const locIdx = dom.dist.targetLocsIdx(i);
+    var (isPrefetched, data) = 
+      myLocArr.getPrefetchHook().accessPrefetchedData(
+          dom.dist.targetLocaleIDs[locIdx], i);
+    // I don't really want to do any ptr logic at this level
+    // but I might have to because of ref intent mechanism
+    if isPrefetched {
+      /*writeln(here, " doing prefetch access ", i);*/
+      return data;
+    }
+  /*}*/
+  writeln(here, " doing remote nonref access ", i);
+  if doRADOpt {
+    if myLocArr {
+      if boundsChecking then
+        if !dom.dsiMember(i) then
+          halt("array index out of bounds: ", i);
+      var rlocIdx = dom.dist.targetLocsIdx(i);
+      if !disableBlockLazyRAD {
+        if myLocArr.locRAD == nil {
+          myLocArr.lockLocRAD();
+          if myLocArr.locRAD == nil {
+            var tempLocRAD = new LocRADCache(eltType, rank, idxType, dom.dist.targetLocDom);
+            tempLocRAD.RAD.blk = SENTINEL;
+            myLocArr.locRAD = tempLocRAD;
+          }
+          myLocArr.unlockLocRAD();
+        }
+        // NOTE: This is a known, benign race.  Multiple tasks may be
+        // initializing the RAD cache entries at once, but our belief is
+        // that this is infrequent enough that the potential extra gets
+        // are worth *not* having to synchronize.  If this turns out to be
+        // an incorrect assumption, we can add an atomic variable and use
+        // a fetchAdd to decide which task does the update.
+        if myLocArr.locRAD.RAD(rlocIdx).blk == SENTINEL {
+          myLocArr.locRAD.RAD(rlocIdx) = locArr(rlocIdx).myElems._value.dsiGetRAD();
+        }
+      }
+      pragma "no copy" pragma "no auto destroy" var myLocRAD = myLocArr.locRAD;
+      pragma "no copy" pragma "no auto destroy" var radata = myLocRAD.RAD;
+      if radata(rlocIdx).shiftedData != nil {
+        var dataIdx = radata(rlocIdx).getDataIndex(myLocArr.stridable, i);
+        return radata(rlocIdx).shiftedData(dataIdx);
+      }
+    }
+  }
+  return locArr(dom.dist.targetLocsIdx(i))(i);
+}
+//ref versions
 //
 // the global accessor for the array
 //
@@ -1059,18 +1128,18 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
   /*local {*/
-    const locIdx = dom.dist.targetLocsIdx(i);
-    var (isPrefetched, data) = 
-      myLocArr.getPrefetchHook().accessPrefetchedData(
-          dom.dist.targetLocaleIDs[locIdx], i);
-    // I don't really want to do any ptr logic at this level
-    // but I might have to because of ref intent mechanism
-    if isPrefetched {
-      /*writeln(here, " doing prefetch access ", i);*/
-      return data.deref();
-    }
+    /*const locIdx = dom.dist.targetLocsIdx(i);*/
+    /*var (isPrefetched, data) = */
+      /*myLocArr.getPrefetchHook().accessPrefetchedData(*/
+          /*dom.dist.targetLocaleIDs[locIdx], i);*/
+    /*// I don't really want to do any ptr logic at this level*/
+    /*// but I might have to because of ref intent mechanism*/
+    /*if isPrefetched {*/
+      /*[>writeln(here, " doing prefetch access ", i);<]*/
+      /*return data;*/
+    /*}*/
   /*}*/
-  writeln(here, " doing remote access ", i);
+  writeln(here, " doing remote ref access ", i);
   if doRADOpt {
     if myLocArr {
       if boundsChecking then

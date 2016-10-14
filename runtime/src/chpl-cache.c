@@ -3114,25 +3114,25 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   return new_entry;
 }
 
-int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
-    size_t size, size_t serialized_idx, void* dest) {
-  int64_t offset; //this can be negative in current logic
+/*int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,*/
+    /*size_t size, size_t serialized_idx, void* dest) {*/
+  /*int64_t offset; //this can be negative in current logic*/
 
 
-  //this shouldn't be called
-  assert(0);
-  offset = (int64_t)serialized_idx;
+  /*//this shouldn't be called*/
+  /*assert(0);*/
+  /*offset = (int64_t)serialized_idx;*/
 
-  if(offset < 0) {
-    return -1;
-  }
+  /*if(offset < 0) {*/
+    /*return -1;*/
+  /*}*/
 
-  if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { 
-    return -1;
-  }
-  memcpy(dest, ((unsigned char *)prefetch_entry->data)+offset, size);
-  return offset;
-}
+  /*if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { */
+    /*return -1;*/
+  /*}*/
+  /*memcpy(dest, ((unsigned char *)prefetch_entry->data)+offset, size);*/
+  /*return offset;*/
+/*}*/
 
 static void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
   chpl_comm_reprefetch(entry);
@@ -3141,12 +3141,12 @@ static void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
 
 extern uint64_t __get_byte_idx_wrapper(void*, void*, void*);
 
-void *get_prefetched_data_addr(void *accessor, 
+void get_prefetched_data(void *accessor,
     struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
-    int64_t* found) {
+    int64_t* found, void *dest) {
 
   int64_t offset; //this can be negative in current logic
-  void *ret_addr;
+  /*void *ret_addr;*/
 
   if((prefetch_entry->pf_type&PF_CONSISTENT) &&
       // TODO this should compare task local data's sequence number
@@ -3193,16 +3193,18 @@ void *get_prefetched_data_addr(void *accessor,
   }
   else {
     *found = 1;
+    chpl_memcpy(dest,
+        (void *)((uintptr_t)prefetch_entry->data+offset), size);
   }
-  ret_addr = found ?
-    (void *)((uintptr_t)prefetch_entry->data+offset) : NULL;
+  /*ret_addr = found ?*/
+    /*(void *)((uintptr_t)prefetch_entry->data+offset) : NULL;*/
 
   // throttling TODO there will be a chunk logic here
   // throttling TODO including a wait on corrseponding doneobj
   if(prefetch_entry->pf_type&PF_CONSISTENT) {
     stop_read(prefetch_entry);
   }
-  return ret_addr;
+  /*return ret_addr;*/
 }
 
 

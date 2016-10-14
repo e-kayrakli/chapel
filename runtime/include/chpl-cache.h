@@ -152,11 +152,11 @@ int64_t is_prefetched_in_entry(struct __prefetch_entry_t* entry,
     c_nodeid_t node, void* raddr, size_t size);
 int64_t get_data_offset(struct __prefetch_entry_t* prefetch_entry,
     size_t size, size_t serialized_idx);
-int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
-    size_t size, size_t serialized_idx, void* dest);
-void *get_prefetched_data_addr(void *accessor, struct
-    __prefetch_entry_t* prefetch_entry, size_t size, void* idx, int64_t*
-    dest);
+//int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
+    //size_t size, size_t serialized_idx, void* dest);
+void get_prefetched_data(void *accessor,
+    struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
+    int64_t* found, void *dest);
 void chpl_comm_pbuf_acq(void);
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry);
 void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
