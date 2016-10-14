@@ -138,6 +138,7 @@ proc BlockArr.rowWiseAllGather() {
       }
     }
   }
+  finalizePrefetch();
 }
 
 proc BlockArr.rowWiseAllGatherTranspose() {

@@ -3013,6 +3013,56 @@ void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
   entry = NULL;
 }
 
+//these locks are managed from PrefetchHooks
+void start_read(struct __prefetch_entry_t *entry) {
+  if(entry) {
+    chpl_sync_lock(&(entry->state_lock));
+    entry->state_counter++;
+    chpl_sync_unlock(&(entry->state_lock));
+  }
+}
+
+void stop_read(struct __prefetch_entry_t *entry) {
+  if(entry) {
+    chpl_sync_lock(&(entry->state_lock));
+    entry->state_counter--;
+    chpl_sync_unlock(&(entry->state_lock));
+  }
+}
+
+static inline
+void start_update(struct __prefetch_entry_t *entry) {
+  /*chpl_sync_lock(&(entry->state_lock));*/
+  /*while(entry->state_counter != 0) {*/
+    /*chpl_task_yield();*/
+  /*}*/
+  /*entry->state_counter--;*/
+
+  bool done = false;
+  do {
+    chpl_sync_lock(&(entry->state_lock));
+    if(entry->state_counter == 1){ //I'm the only one
+      entry->state_counter = -1;
+      done = true;
+      //the lock should be unlocked by stop_update
+    }
+    else {
+      // we only unlock if we weren't able to get the lock
+      chpl_sync_unlock(&(entry->state_lock));
+      chpl_task_yield();
+    }
+  } while(!done);
+}
+
+static inline
+void stop_update(struct __prefetch_entry_t *entry) {
+  // here we are assuming that state_counter is -1 and there is
+  // definitely no readers in the entry
+  assert(entry->state_counter == -1);
+  entry->state_counter = 1; // I must be the only one
+  chpl_sync_unlock(&(entry->state_lock));
+}
+
 static
 struct __prefetch_entry_t * add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
@@ -3036,6 +3086,11 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   new_entry->pf_type = PF_DEFAULT;
   new_entry->sn = -1;
   
+  // runtime assumes that prefetching happens with one task per
+  // locale
+  new_entry->state_counter = 0;
+  chpl_sync_initAux(&(new_entry->state_lock));
+
   // make sure that thype of prefetch is somethin reasonable
   // at least one of these must be set
   assert(new_entry->pf_type & (PF_CANREAD|PF_CANWRITE));
@@ -3090,6 +3145,7 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
     int64_t* found) {
 
   int64_t offset; //this can be negative in current logic
+  void *ret_addr;
 
   if((prefetch_entry->pf_type&PF_CONSISTENT) &&
       // TODO this should compare task local data's sequence number
@@ -3099,34 +3155,52 @@ void *get_prefetched_data_addr(struct __prefetch_entry_t*
     // TODO writeback, evict, update
     /*printf("\t stale data: %ld %ld\n",*/
         /*prefetch_entry->sn, pbuf->prefetch_sequence_number);*/
-    reprefetch_single_entry(prefetch_entry);
-  }
 
-  if(prefetch_entry == NULL){
-    printf("\t no prefetch entry\n");
-    *found = 0;
-    return NULL;
+    start_update(prefetch_entry);
+    // someone might have already updated the entry, so check again if
+    // it's still stale
+    if(prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
+      reprefetch_single_entry(prefetch_entry);
+    }
+    stop_update(prefetch_entry);
   }
 
   offset = (int64_t)serialized_idx;
 
-  if(offset < 0) {
+  /*if(prefetch_entry->pf_type&PF_CONSISTENT) {*/
+    /*//we only need to lock if the entry is marked consistent*/
+    /*//we are assuming that the user will call updatePrefetch only from a*/
+    /*//sequential context from one locale, similar to our assumption that*/
+    /*//data will be prefetch only from single task from one locale*/
+    /*start_read(prefetch_entry);*/
+  /*}*/
+
+  if(prefetch_entry == NULL){
+    printf("\t no prefetch entry\n");
+    *found = 0;
+  } 
+  else if(offset < 0) {
     printf("\t offset=%ld, size=%zd, sidx=%zd\n",
         offset, size, serialized_idx);
     *found = 0;
-    return NULL;
   }
-
-  if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) { 
+  else if((intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
     printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",
         offset, size, serialized_idx, prefetch_entry->size);
     *found = 0;
-    return NULL;
   }
-  *found = 1;
+  else {
+    *found = 1;
+  }
+  ret_addr = found ?
+    (void *)((uintptr_t)prefetch_entry->data+offset) : NULL;
+
   // throttling TODO there will be a chunk logic here
   // throttling TODO including a wait on corrseponding doneobj
-  return (void *)((uintptr_t)prefetch_entry->data+offset);
+  /*if(prefetch_entry->pf_type&PF_CONSISTENT) {*/
+    /*stop_read(prefetch_entry);*/
+  /*}*/
+  return ret_addr;
 }
 
 
@@ -3164,8 +3238,12 @@ void prefetch_update() {
               if(cur->pf_type&PF_PERSISTENT) {
                 //keep the data in buffer but update it by reprefetching
                 /*printf("data was found stale, updating : %p\n", cur);*/
-                chpl_comm_reprefetch(cur);
-                cur->sn_updated = false;
+                /*chpl_comm_reprefetch(cur);*/
+                /*cur->sn_updated = false;*/
+                
+                // if the data was prefetched with persistent flag, then
+                // updates to it must be done whenever a task tries to
+                // read that data and realizes that it was stale
               }
               else {
                 /*printf("data was found stale, evicting : %p\n", cur);*/

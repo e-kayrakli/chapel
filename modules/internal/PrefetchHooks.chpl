@@ -31,6 +31,12 @@ module PrefetchHooks {
   extern proc
     prefetch_entry_init_seqn_n(handle, offset);
 
+  extern proc
+    start_read(handle);
+
+  extern proc
+    stop_read(handle);
+
   inline proc getData(handle) {
     return get_data_from_prefetch_entry(handle);
   }
@@ -42,7 +48,7 @@ module PrefetchHooks {
       halt("This shouldn't have been called", x);
       var dummyPtr: c_void_ptr;
       var dummySize: size_t;
-      yield (dummyPtr, dummySize);
+      yield (dummyPtr, dummySize, false);
     }
 
     proc dsiGetSerializedObjectSize(): size_t {
@@ -55,7 +61,7 @@ module PrefetchHooks {
       halt("This shouldn't have been called", x);
       var dummyPtr: c_void_ptr;
       var dummySize: size_t;
-      yield (dummyPtr, dummySize);
+      yield (dummyPtr, dummySize, false);
     }
 
     proc dsiGetSerializedObjectSize(slice_desc): size_t {
@@ -154,23 +160,35 @@ module PrefetchHooks {
     }
 
     proc accessPrefetchedData(localeId, idx) {
+      start_read(handles[localeId]);
       /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
       if(!entry_has_data(handles[localeId])) {
-        writeln(here, " doesn't have prefetched data from ", 
-            localeId, " with index ", idx);
+        /*writeln(here, " doesn't have prefetched data from ", */
+            /*localeId, " with index ", idx);*/
+        stop_read(handles[localeId]);
         return (false, nil:c_ptr(obj.eltType));
       }
       const handle = handles[localeId];
+
+      // TODO here data must be accessed only once therefore
+      // getByteIndex must be called from runtime from insde
+      // get_prefetched_data_addr
+
+      const __data = getData(handle);
       const deserialIdx = obj.getByteIndex(getData(handle), idx);
       var isPrefetched: int;
       const data = get_prefetched_data_addr(handle, 8, deserialIdx,
           isPrefetched);
 
       if isPrefetched == 0 {
-        writeln(here, " have prefetched data from ", 
-            localeId, " but not with serial index ", deserialIdx, 
-            " for index ", idx);
+        const cast_data = __data:c_ptr(int);
+        /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
+        /*writeln(here, " have prefetched data from ", */
+            /*localeId, " but not with serial index ", deserialIdx, */
+            /*" for index ", idx);*/
+        /*stop_read(handles[localeId]);*/
       }
+      stop_read(handles[localeId]);
       return (isPrefetched!=0, data:c_ptr(obj.eltType));
     }
 
@@ -182,9 +200,21 @@ module PrefetchHooks {
       }
     }
 
+    proc getByteIndex(data: c_void_ptr, __idx: c_void_ptr) {
+      var idx = __idx:c_ptr(obj.rank*obj.idxType);
+
+      return obj.getByteIndex(data, idx.deref());
+    }
+
     proc test() {
       writeln("Subclass", x);
     }
+  }
+
+  export proc __get_byte_idx_wrapper(__obj: c_void_ptr,
+      idx: c_void_ptr) {
+    car obj = __obj:PrefetchHook;
+    return obj.getByteIndex(data, idx);
   }
 
   export proc __serialized_obj_size_wrapper(__obj: c_void_ptr,
@@ -220,6 +250,10 @@ module PrefetchHooks {
         c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
             chunk[1]:c_ptr(bufferEltType), chunkSize);
 
+        if chunk[3] {
+          c_free(chunk[1]:c_ptr(bufferEltType));
+        }
+
         curBufferSize += chunkSize;
       }
     }
@@ -240,13 +274,17 @@ module PrefetchHooks {
   inline proc convertToSerialChunk(a: []) {
     const startIdx = a.domain.low; // or first?
     return (c_ptrTo(a[startIdx]):c_void_ptr,
-        getSize(a.size, a._value.eltType));
+        getSize(a.size, a._value.eltType),
+        false); //buffer needs to be freed?
 
   }
 
-  inline proc convertToSerialChunk(ref a: integral) {
-    return (c_ptrTo(a):c_void_ptr,
-        getSize(1, a.type));
+  inline proc convertToSerialChunk(a: integral) {
+    var dyn_mem = c_malloc(a.type, 1);
+    dyn_mem[0] = a;
+    return (dyn_mem:c_void_ptr,
+        getSize(1, a.type),
+        true); //buffer needs to be freed?
 
   }
 

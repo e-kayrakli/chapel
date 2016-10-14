@@ -61,6 +61,12 @@ typedef struct __prefetch_entry_t{
   void* robjaddr;
   size_t size;
 
+  //we need to store and atomic state of the entry if it's marked to be
+  //consistent I couldn't figure out a way to do that with an atomic
+  //variable/c intrinsics. So I am relying on locks
+  int16_t state_counter;
+  chpl_sync_aux_t state_lock;
+
   // prefetch type controls consistency protocol on a sync event
   uint8_t pf_type;
 
@@ -156,6 +162,8 @@ void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
     cache_seqn_t offset);
 void prefetch_update(void);
 bool entry_has_data(struct __prefetch_entry_t *entry);
+void start_read(struct __prefetch_entry_t *entry);
+void stop_read(struct __prefetch_entry_t *entry);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

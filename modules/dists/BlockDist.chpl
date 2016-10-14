@@ -1967,6 +1967,8 @@ iter LocBlockArr.dsiSerialize() {
   var hi = chpl__tuplify(locDom.myBlock.high);
   var size = hi-low + 1;
 
+  /*writeln(here, " serializing, ", low, " ", hi, " ", size);*/
+
   for param i in 1..rank {
     /*metaDataArr[i-1] = low[i];*/
     yield convertToSerialChunk(low[i]);
