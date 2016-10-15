@@ -3155,8 +3155,10 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
 
 void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
   if(entry) {
+    /*chpl_sync_lock(&(entry->state_lock));*/
     chpl_comm_reprefetch(entry);
     prefetch_entry_init_seqn_n(entry, 0);
+    /*chpl_sync_unlock(&(entry->state_lock));*/
   }
 }
 

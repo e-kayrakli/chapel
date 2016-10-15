@@ -113,7 +113,7 @@ module PrefetchHooks {
     var handles: c_ptr(prefetch_entry_t);
     //FIXME this is a dangerous field now, since we can evict data with
     //no callback to this object
-    var hasData: [Locales.domain] bool; // only to be use for reprefetch
+    var hasData: [Locales.domain] bool = false; // only to be use for reprefetch
 
     proc GenericPrefetchHook(obj) {
       handles = c_calloc(prefetch_entry_t, numLocales);
@@ -172,9 +172,11 @@ module PrefetchHooks {
     }
 
     proc updatePrefetch() {
-      for i in 0..numLocales {
-        if hasData[i] then
+      for i in 0..#numLocales {
+        if hasData[i] {
+          /*writeln(here.id, " will update from ", i);*/
           reprefetch_single_entry(handles[i]);
+        }
       }
     }
 
