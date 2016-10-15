@@ -304,6 +304,16 @@ module PrefetchHooks {
 
   }
 
+  // TODO this needs some error checking
+  // this will be dsi-facing helper
+  inline proc convertToSerialChunk(a: [], count) {
+    const startIdx = a.domain.low; // or first?
+    return (c_ptrTo(a[startIdx]):c_void_ptr,
+        getSize(count, a._value.eltType),
+        false); //buffer needs to be freed?
+
+  }
+
   inline proc convertToSerialChunk(a: integral) {
     var dyn_mem = c_malloc(a.type, 1);
     dyn_mem[0] = a;

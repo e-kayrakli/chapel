@@ -459,6 +459,57 @@ class LocSparseBlockArr {
   where shouldReturnRvalueByConstRef(eltType) {
     return myElems[i];
   }
+
+  iter dsiGetSerialObjectSize() {
+    yield (rank*2, idxType);
+    yield (1, int); //numIndices
+    const numIndices = locDom.mySparseBlock.size;
+    if sparseLayoutType == DefaultDist {
+      yield (rank*numIndices, idxType); //index list
+      yield (numIndices, eltType); //data
+    }
+    else
+      halt("Not supported yet");
+  }
+  iter dsiGetSerialObjectSize(sliceDesc) {
+    halt("Slice prefetching is not supported(Sparse Block Dist)");
+    yield(1, int);
+  }
+
+  iter dsiSerialize () {
+    var low = chpl__tuplify(locDom.mySparseBlock.low);
+    var hi = chpl__tuplify(locDom.mySparseBlock.high);
+    var size = hi-low + 1;
+
+    /*writeln(here, " serializing, ", low, " ", hi, " ", size);*/
+
+    for param i in 1..rank {
+      /*metaDataArr[i-1] = low[i];*/
+      yield convertToSerialChunk(low[i]);
+    }
+    for param i in rank+1..2*rank {
+      /*metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;*/
+      /*yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);*/
+      yield convertToSerialChunk(size[rank]);
+    }
+    const numIndices = locDom.mySparseBlock.numIndices;
+    yield convertToSerialChunk(numIndices);
+
+    if sparseLayoutType == DefaultDist {
+      yield convertToSerialChunk(locDom.mySparseBlock._value.indices,
+          numIndices);
+      yield convertToSerialChunk(myElems._value.data, numIndices);
+    }
+    else {
+      halt("Not supported yet");
+    }
+  }
+  iter dsiSerialize(sliceDesc) {
+    halt("Slice prefetching is not supported(Sparse Block Dist)");
+    var dummy: int;
+    yield(convertToSerialChunk(dummy));
+  }
+
 }
 
 /*
