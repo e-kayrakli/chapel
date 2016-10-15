@@ -26,6 +26,9 @@ module PrefetchHooks {
     get_prefetched_data(accessor: c_void_ptr, handle, size, ref idx,
         ref isPrefetched, ref data);
 
+  extern proc 
+    reprefetch_single_entry(handle);
+
   extern proc
     get_data_from_prefetch_entry(handle): c_void_ptr;
   extern proc
@@ -79,6 +82,10 @@ module PrefetchHooks {
       halt("This shouldn't have been called");
     }
 
+    proc updatePrefetch() {
+      halt("This shouldn't have been called");
+    }
+
     inline proc accessPrefetchedData(localeId, idx) {
       halt("This shouldn't have been called");
       var isPrefetched = false;
@@ -106,7 +113,7 @@ module PrefetchHooks {
     var handles: c_ptr(prefetch_entry_t);
     //FIXME this is a dangerous field now, since we can evict data with
     //no callback to this object
-    var hasData: [Locales.domain] bool;
+    var hasData: [Locales.domain] bool; // only to be use for reprefetch
 
     proc GenericPrefetchHook(obj) {
       handles = c_calloc(prefetch_entry_t, numLocales);
@@ -161,6 +168,13 @@ module PrefetchHooks {
         handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
             sliceDescPtr, sliceDescSize, consistent);
         hasData[nodeId] = true;
+      }
+    }
+
+    proc updatePrefetch() {
+      for i in 0..numLocales {
+        if hasData[i] then
+          reprefetch_single_entry(handles[i]);
       }
     }
 

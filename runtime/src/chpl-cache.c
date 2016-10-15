@@ -3153,9 +3153,11 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   /*return offset;*/
 /*}*/
 
-static void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
-  chpl_comm_reprefetch(entry);
-  prefetch_entry_init_seqn_n(entry, 0);
+void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
+  if(entry) {
+    chpl_comm_reprefetch(entry);
+    prefetch_entry_init_seqn_n(entry, 0);
+  }
 }
 
 extern uint64_t __get_byte_idx_wrapper(void*, void*, void*);
