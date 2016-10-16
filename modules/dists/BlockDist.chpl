@@ -2095,6 +2095,8 @@ iter BlockArr.dsiGetSerializedObjectSize(slice_desc) {
 // BlockArr slice descriptors are range tuples
 iter LocBlockArr.dsiGetSerializedObjectSize() {
   yield getSize(rank*2, idxType);
+  writeln(here, " ", myElems.domain, " ", getSize(myElems.size,
+        eltType));
   yield getSize(myElems.size, eltType);
 }
 // BlockArr slice descriptors are range tuples
