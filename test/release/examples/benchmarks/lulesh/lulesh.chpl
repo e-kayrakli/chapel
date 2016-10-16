@@ -70,7 +70,8 @@ config param useBlockDist = (CHPL_COMM != "none"),
              useSparseMaterials = true,
              printWarnings = true;
 
-
+config param prefetch = false;
+config const consistent = true;
 //
 // Sanity check to ensure that input files aren't used with the 3D
 // representation
@@ -276,26 +277,13 @@ var time = 0.0,          // current time
 
     cycle = 0;           // iteration count for simulation
 
-inline proc prefetchAll() {
-  /*for a in Nodes._value._arrs {*/
-    /*(a:xd._value.type).luleshStencilPrefetch3d();*/
-  /*}*/
-  x._value.luleshStencilPrefetch3d();
-  y._value.luleshStencilPrefetch3d();
-  z._value.luleshStencilPrefetch3d();
-  xd._value.luleshStencilPrefetch3d();
-  yd._value.luleshStencilPrefetch3d();
-  zd._value.luleshStencilPrefetch3d();
-  xdd._value.luleshStencilPrefetch3d();
-  ydd._value.luleshStencilPrefetch3d();
-  zdd._value.luleshStencilPrefetch3d();
-  fx._value.luleshStencilPrefetch3d();
-  fy._value.luleshStencilPrefetch3d();
-  fz._value.luleshStencilPrefetch3d();
-  nodalMass._value.luleshStencilPrefetch3d();
-  /*for a in Elems._value._arrs {*/
-    /*(a:v._value.type).luleshStencilPrefetch3d();*/
-  /*}*/
+inline proc prefetchAll(consistent) {
+  x._value.luleshStencilPrefetch3d(consistent);
+  y._value.luleshStencilPrefetch3d(consistent);
+  z._value.luleshStencilPrefetch3d(consistent);
+  xd._value.luleshStencilPrefetch3d(consistent);
+  yd._value.luleshStencilPrefetch3d(consistent);
+  zd._value.luleshStencilPrefetch3d(consistent);
 }
 
 proc main() {
@@ -305,7 +293,7 @@ proc main() {
 
   var st: real;
   if doTiming then st = getCurrentTime();
-  prefetchAll();
+  if prefetch then prefetchAll(consistent);
   while (time < stoptime && cycle < maxcycles) {
     const iterTime = if showProgress then getCurrentTime() else 0.0;
 
@@ -382,6 +370,13 @@ proc initMasses() {
   // without losing updates by using 'atomic' variables
   var massAccum: [Nodes] atomic real;
 
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+    }
+  }
   forall eli in Elems {
     var x_local, y_local, z_local: 8*real;
     localizeNeighborNodes(eli, x, x_local, y, y_local, z, z_local);
@@ -1026,6 +1021,13 @@ proc CalcVolumeForceForElems() {
 
 
 proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+    }
+  }
   forall k in Elems {
     var b_x, b_y, b_z: 8*real;
     var x_local, y_local, z_local: 8*real;
@@ -1056,6 +1058,13 @@ proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
 proc CalcHourglassControlForElems(determ) {
   var dvdx, dvdy, dvdz, x8n, y8n, z8n: [Elems] 8*real;
 
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+    }
+  }
   forall eli in Elems {
     /* Collect domain nodes to elem nodes */
     var x1, y1, z1: 8*real;
@@ -1095,6 +1104,13 @@ const gammaCoef: 4*(8*real) = // WAS: [1..4, 1..8] real =
 /* Calculates the Flanagan-Belytschko anti-hourglass force. */
 proc CalcFBHourglassForceForElems(determ, x8n, y8n, z8n, dvdx, dvdy, dvdz) {
 
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+    }
+  }
   /* compute the hourglass modes */
   forall eli in Elems {
     var hourgam: 8*(4*real);
@@ -1215,6 +1231,16 @@ proc CalcLagrangeElements() {
 
 
 proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+      xd._value.updatePrefetch();
+      yd._value.updatePrefetch();
+      zd._value.updatePrefetch();
+    }
+  }
   // loop over all elements
   forall k in Elems {
     var b_x, b_y, b_z: 8*real,
@@ -1332,6 +1358,16 @@ proc UpdateVolumesForElems() {
 
 proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta, 
                                      delx_xi, delx_eta, delx_zeta) {
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+      xd._value.updatePrefetch();
+      yd._value.updatePrefetch();
+      zd._value.updatePrefetch();
+    }
+  }
   forall eli in Elems {
     const ptiny = 1.0e-36;
     var xl, yl, zl: 8*real;

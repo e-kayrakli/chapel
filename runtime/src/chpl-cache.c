@@ -3217,7 +3217,7 @@ void *get_prefetched_data_addr(void *accessor,
     int64_t* found) {
 
   int64_t offset; //this can be negative in current logic
-  void *retaddr;
+  void *retaddr=NULL;
 
   if((prefetch_entry->should_lock) &&
       // TODO this should compare task local data's sequence number
