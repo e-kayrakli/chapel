@@ -35,7 +35,7 @@
 
 use Time,       // to get timing routines for benchmarking
     BlockDist;  // for block-distributed arrays
-
+use commMethods;
 use luleshInit;   // initialization code for data set
 
 /* The configuration parameters for lulesh.  These can be set on the
@@ -276,6 +276,27 @@ var time = 0.0,          // current time
 
     cycle = 0;           // iteration count for simulation
 
+inline proc prefetchAll() {
+  /*for a in Nodes._value._arrs {*/
+    /*(a:xd._value.type).luleshStencilPrefetch3d();*/
+  /*}*/
+  x._value.luleshStencilPrefetch3d();
+  y._value.luleshStencilPrefetch3d();
+  z._value.luleshStencilPrefetch3d();
+  xd._value.luleshStencilPrefetch3d();
+  yd._value.luleshStencilPrefetch3d();
+  zd._value.luleshStencilPrefetch3d();
+  xdd._value.luleshStencilPrefetch3d();
+  ydd._value.luleshStencilPrefetch3d();
+  zdd._value.luleshStencilPrefetch3d();
+  fx._value.luleshStencilPrefetch3d();
+  fy._value.luleshStencilPrefetch3d();
+  fz._value.luleshStencilPrefetch3d();
+  nodalMass._value.luleshStencilPrefetch3d();
+  /*for a in Elems._value._arrs {*/
+    /*(a:v._value.type).luleshStencilPrefetch3d();*/
+  /*}*/
+}
 
 proc main() {
   if debug then writeln("Lulesh -- Problem Size = ", numElems);
@@ -284,6 +305,7 @@ proc main() {
 
   var st: real;
   if doTiming then st = getCurrentTime();
+  prefetchAll();
   while (time < stoptime && cycle < maxcycles) {
     const iterTime = if showProgress then getCurrentTime() else 0.0;
 

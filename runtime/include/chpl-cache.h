@@ -158,6 +158,9 @@ int64_t get_data_offset(struct __prefetch_entry_t* prefetch_entry,
 void get_prefetched_data(void *accessor,
     struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
     int64_t* found, void *dest);
+void *get_prefetched_data_addr(void *accessor,
+    struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
+    int64_t* found);
 void chpl_comm_pbuf_acq(void);
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry);
 void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,

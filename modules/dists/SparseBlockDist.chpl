@@ -86,6 +86,7 @@ class SparseBlockDom: BaseSparseDomImpl {
          locDoms(localeIdx) = new LocSparseBlockDom(rank, idxType, stridable,
              sparseLayoutType, dist.getChunk(whole,localeIdx));
           //                    writeln("Back on ", here.id);
+         /*locDoms(localeIdx).setup();*/
         }
       }
       //      writeln("Past coforall");
@@ -278,6 +279,11 @@ class LocSparseBlockDom {
   var sparseDist = new sparseLayoutType; //unresolved call workaround
   var mySparseBlock: sparse subdomain(parentDom) dmapped new dmap(sparseDist);
 
+  /*var prefetchHook: PrefetchHook;*/
+  /*proc setup() {*/
+    /*prefetchHook = new GenericPrefetchHook(this);*/
+  /*}*/
+
   proc initialize() {
     //    writeln("On locale ", here.id, " LocSparseBlockDom = ", this);
   }
@@ -303,6 +309,53 @@ class LocSparseBlockDom {
   proc dsiNumIndices {
     return mySparseBlock.numIndices;
   }
+
+  /*iter dsiGetSerialObjectSize() {*/
+    /*yield (rank*2, idxType); //boundingBox*/
+    /*yield (1, int); //numIndices*/
+    /*const numIndices = mySparseBlock.size;*/
+    /*if sparseLayoutType == DefaultDist {*/
+      /*yield (rank*numIndices, idxType); //index list*/
+    /*}*/
+    /*else*/
+      /*halt("Not supported yet");*/
+  /*}*/
+  /*iter dsiGetSerialObjectSize(sliceDesc) {*/
+    /*halt("Slice prefetching is not supported(Sparse Block Dist)");*/
+    /*yield(1, int);*/
+  /*}*/
+  /*iter dsiSerialize () {*/
+    /*var low = chpl__tuplify(locDom.mySparseBlock.low);*/
+    /*var hi = chpl__tuplify(locDom.mySparseBlock.high);*/
+    /*var size = hi-low + 1;*/
+
+    /*[>writeln(here, " serializing, ", low, " ", hi, " ", size);<]*/
+
+    /*for param i in 1..rank {*/
+      /*[>metaDataArr[i-1] = low[i];<]*/
+      /*yield convertToSerialChunk(low[i]);*/
+    /*}*/
+    /*for param i in rank+1..2*rank {*/
+      /*[>metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;<]*/
+      /*[>yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);<]*/
+      /*yield convertToSerialChunk(size[rank]);*/
+    /*}*/
+    /*const numIndices = locDom.mySparseBlock.numIndices;*/
+    /*yield convertToSerialChunk(numIndices);*/
+
+    /*if sparseLayoutType == DefaultDist {*/
+      /*yield convertToSerialChunk(locDom.mySparseBlock._value.indices,*/
+          /*numIndices);*/
+    /*}*/
+    /*else {*/
+      /*halt("Not supported yet");*/
+    /*}*/
+  /*}*/
+  /*iter dsiSerialize(sliceDesc) {*/
+    /*halt("Slice prefetching is not supported(Sparse Block Dist)");*/
+    /*var dummy: int;*/
+    /*yield(convertToSerialChunk(dummy));*/
+  /*}*/
 }
 
 //
@@ -460,56 +513,87 @@ class LocSparseBlockArr {
     return myElems[i];
   }
 
-  iter dsiGetSerialObjectSize() {
-    yield (rank*2, idxType);
-    yield (1, int); //numIndices
-    const numIndices = locDom.mySparseBlock.size;
-    if sparseLayoutType == DefaultDist {
-      yield (rank*numIndices, idxType); //index list
-      yield (numIndices, eltType); //data
-    }
-    else
-      halt("Not supported yet");
-  }
-  iter dsiGetSerialObjectSize(sliceDesc) {
-    halt("Slice prefetching is not supported(Sparse Block Dist)");
-    yield(1, int);
-  }
+  /*iter dsiGetSerialObjectSize() {*/
+    /*yield (rank*2, idxType); //boundingBox*/
+    /*yield (1, int); //numIndices*/
+    /*const numIndices = locDom.mySparseBlock.size;*/
+    /*if sparseLayoutType == DefaultDist {*/
+      /*yield (rank*numIndices, idxType); //index list*/
+      /*yield (numIndices, eltType); //data*/
+      /*yield (1, eltType); //irv*/
+    /*}*/
+    /*else*/
+      /*halt("Not supported yet");*/
+  /*}*/
+  /*iter dsiGetSerialObjectSize(sliceDesc) {*/
+    /*halt("Slice prefetching is not supported(Sparse Block Dist)");*/
+    /*yield(1, int);*/
+  /*}*/
 
-  iter dsiSerialize () {
-    var low = chpl__tuplify(locDom.mySparseBlock.low);
-    var hi = chpl__tuplify(locDom.mySparseBlock.high);
-    var size = hi-low + 1;
+  /*iter dsiSerialize () {*/
+    /*var low = chpl__tuplify(locDom.mySparseBlock.low);*/
+    /*var hi = chpl__tuplify(locDom.mySparseBlock.high);*/
+    /*var size = hi-low + 1;*/
 
-    /*writeln(here, " serializing, ", low, " ", hi, " ", size);*/
+    /*[>writeln(here, " serializing, ", low, " ", hi, " ", size);<]*/
 
-    for param i in 1..rank {
-      /*metaDataArr[i-1] = low[i];*/
-      yield convertToSerialChunk(low[i]);
-    }
-    for param i in rank+1..2*rank {
-      /*metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;*/
-      /*yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);*/
-      yield convertToSerialChunk(size[rank]);
-    }
-    const numIndices = locDom.mySparseBlock.numIndices;
-    yield convertToSerialChunk(numIndices);
+    /*for param i in 1..rank {*/
+      /*[>metaDataArr[i-1] = low[i];<]*/
+      /*yield convertToSerialChunk(low[i]);*/
+    /*}*/
+    /*for param i in rank+1..2*rank {*/
+      /*[>metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;<]*/
+      /*[>yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);<]*/
+      /*yield convertToSerialChunk(size[rank]);*/
+    /*}*/
+    /*const numIndices = locDom.mySparseBlock.numIndices;*/
+    /*yield convertToSerialChunk(numIndices);*/
 
-    if sparseLayoutType == DefaultDist {
-      yield convertToSerialChunk(locDom.mySparseBlock._value.indices,
-          numIndices);
-      yield convertToSerialChunk(myElems._value.data, numIndices);
-    }
-    else {
-      halt("Not supported yet");
-    }
-  }
-  iter dsiSerialize(sliceDesc) {
-    halt("Slice prefetching is not supported(Sparse Block Dist)");
-    var dummy: int;
-    yield(convertToSerialChunk(dummy));
-  }
+    /*if sparseLayoutType == DefaultDist {*/
+      /*yield convertToSerialChunk(locDom.mySparseBlock._value.indices,*/
+          /*numIndices);*/
+      /*yield convertToSerialChunk(myElems._value.data, numIndices);*/
+      /*yield convertToSerialChunk(myElems.IRV);*/
+    /*}*/
+    /*else {*/
+      /*halt("Not supported yet");*/
+    /*}*/
+  /*}*/
+  /*iter dsiSerialize(sliceDesc) {*/
+    /*halt("Slice prefetching is not supported(Sparse Block Dist)");*/
+    /*var dummy: int;*/
+    /*yield(convertToSerialChunk(dummy));*/
+  /*}*/
 
+  /*inline proc getByteIndex(data: c_void_ptr,*/
+      /*idx:rank*idxType) {*/
+
+    /*// TODO check if index is in bounding box*/
+
+    /*const boundingBoxSize = getSize(rank*2, idxType);*/
+    /*const numIndices = getElementArrayAtOffset(data, boundingBoxSize,*/
+        /*int)[0];*/
+    /*const metadataSize = boundingBoxSize + getSize(1, int);*/
+
+    /*var indexArray = getElementArrayAtOffset(data, metadataSize,*/
+        /*rank*idxType);*/
+
+    /*const indexArraySize = getSize(numIndices*rank, idxType);*/
+
+    /*var dataArray = getElementArrayAtOffset(data,*/
+        /*metadataSize+indexArraySize, eltType);*/
+     
+    /*const dataArraySize = getSize(numIndices, eltType); //for irv at end*/
+
+    /*const (found, loc) = binarySearch(dataArray, idx);*/
+    /*if found {*/
+      /*return metadataSize+indexArraySize+getSize(loc, eltType);*/
+
+    /*}*/
+    /*else {*/
+      /*return metadataSize+indexArraySize+dataArraySize;*/
+    /*}*/
+  /*}*/
 }
 
 /*

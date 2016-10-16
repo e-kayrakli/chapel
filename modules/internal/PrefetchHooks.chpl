@@ -26,6 +26,9 @@ module PrefetchHooks {
     get_prefetched_data(accessor: c_void_ptr, handle, size, ref idx,
         ref isPrefetched, ref data);
 
+  extern proc
+    get_prefetched_data_addr(accessor: c_void_ptr, handle, size, ref idx,
+        ref isPrefetched): c_void_ptr;
   extern proc 
     reprefetch_single_entry(handle);
 
@@ -87,6 +90,13 @@ module PrefetchHooks {
     }
 
     inline proc accessPrefetchedData(localeId, idx) {
+      halt("This shouldn't have been called");
+      var isPrefetched = false;
+      var dummyPtr: c_ptr(real);
+      return (isPrefetched, dummyPtr);
+    }
+
+    inline proc accessPrefetchedDataRef(localeId, idx) {
       halt("This shouldn't have been called");
       var isPrefetched = false;
       var dummyPtr: c_ptr(real);
@@ -217,6 +227,41 @@ module PrefetchHooks {
       return (isPrefetched!=0, data);
     }
 
+    inline proc accessPrefetchedDataRef(localeId, idx) {
+      var localIdx = idx;
+      const handle = handles[localeId];
+      /*start_read(handles[localeId]);*/
+      /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
+      if(!entry_has_data(handle)) {
+        /*writeln(here, " doesn't have prefetched data from ", */
+            /*localeId, " with index ", idx);*/
+        /*stop_read(handles[localeId]);*/
+        var dummy: obj.eltType;
+        return (false, c_ptrTo(dummy));
+      }
+
+      // TODO here data must be accessed only once therefore
+      // getByteIndex must be called from runtime from insde
+      // get_prefetched_data_addr
+
+      /*const __data = getData(handle);*/
+      /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
+      var isPrefetched: int;
+      var thisaddr = __primitive("_wide_get_addr", this);
+      var data = get_prefetched_data_addr(thisaddr, handle, 8, localIdx,
+          isPrefetched);
+
+      /*if isPrefetched == 0 {*/
+        /*const cast_data = __data:c_ptr(int);*/
+        /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
+        /*writeln(here, " have prefetched data from ", */
+            /*localeId, " but not with serial index ", deserialIdx, */
+            /*" for index ", idx);*/
+        /*stop_read(handles[localeId]);*/
+      /*}*/
+      /*stop_read(handles[localeId]);*/
+      return (isPrefetched!=0, data:c_ptr(obj.eltType));
+    }
     proc finalizePrefetch() {
       for i in 0..#numLocales {
         // 2 acquires are added by the current finalization logic

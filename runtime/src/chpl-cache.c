@@ -3212,6 +3212,54 @@ void get_prefetched_data(void *accessor,
   stop_read(prefetch_entry);
 }
 
+void *get_prefetched_data_addr(void *accessor,
+    struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
+    int64_t* found) {
+
+  int64_t offset; //this can be negative in current logic
+  void *retaddr;
+
+  if((prefetch_entry->should_lock) &&
+      // TODO this should compare task local data's sequence number
+      // if it's less then or equal to then we are in the same time fram
+      // as the data has been prefetched therefore we can read it
+      prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
+    /*printf("\t stale data: %ld %ld\n",*/
+        /*prefetch_entry->sn, pbuf->prefetch_sequence_number);*/
+
+    start_update(prefetch_entry);
+    // someone might have already updated the entry, so check again if
+    // it's still stale
+    if(prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
+      reprefetch_single_entry(prefetch_entry);
+    }
+    stop_update(prefetch_entry);
+  }
+
+  start_read(prefetch_entry);
+
+  offset = (int64_t)(__get_byte_idx_wrapper(accessor,
+        prefetch_entry->data, idx));
+
+  // NULL check for prefetch entry has been handled by PrefethcHooks
+  if(offset < 0 ||
+      (intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
+    printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",
+        offset, size, offset, prefetch_entry->size);
+    *found = 0;
+  }
+  else {
+    *found = 1;
+    retaddr = (void *)((uintptr_t)prefetch_entry->data+offset);
+  }
+
+  // throttling TODO there will be a chunk logic here
+  // throttling TODO including a wait on corrseponding doneobj
+
+
+  stop_read(prefetch_entry);
+  return retaddr;
+}
 
 void prefetch_update() {
 

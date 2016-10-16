@@ -11,7 +11,16 @@ inline proc BlockArr.updatePrefetch() {
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
-      dom.dist.targetLocales[sourceIdx].id,
+      dom.dist.targetLocales[sourceIdx].id, // TODO this can be avoided
+      privCopy.locArr[sourceIdx],
+      consistent);
+}
+
+inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
+    consistent) {
+  var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  locArr[localeIdx].prefetchHook.requestPrefetch(
+      dom.dist.targetLocales[sourceIdx].id, //TODO this can be avoided
       privCopy.locArr[sourceIdx],
       consistent);
 }
@@ -38,6 +47,174 @@ proc BlockArr.allGather(consistent=true) {
   finalizePrefetch();
 }
 
+proc SparseBlockArr.allGather(consistent=true) {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      for sourceIdx in dom.dist.targetLocDom {
+        __prefetchFrom(localeIdx, sourceIdx, consistent);
+      }
+    }
+  }
+  finalizePrefetch();
+}
+
+proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
+
+  if rank != 3 then
+    halt("This Prefetch pattern is only supprted for 3D arrays");
+
+  //TODO FIXME TODO FIXME coforall --fixed
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const myDom = dom.locDoms[localeIdx].myBlock;
+      const tlDom = dom.dist.targetLocDom;
+
+      const hasFront = localeIdx[1] > 0;
+      /*const hasBack = localeIdx[1] < tlDom.dim(1).size-1;*/
+
+      const hasTop = localeIdx[2] > 0;
+      /*const hasBottom = localeIdx[2] < tlDom.dim(2).size-1;*/
+
+      const hasLeft = localeIdx[3] > 0;
+      /*const hasRight = localeIdx[3] < tlDom.dim(3).size-1;*/
+
+      if hasFront {
+        const sourceIdx = localeIdx + (-1,0,0);
+        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
+          myDom.dim(2), myDom.dim(3)};
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      /*if hasBack {*/
+        /*const sourceIdx = localeIdx + (1,0,0);*/
+        /*const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,*/
+          /*myDom.dim(2), myDom.dim(3)};*/
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);*/
+      /*}*/
+
+      if hasTop {
+        const sourceIdx = localeIdx + (0,-1,0);
+        const sliceDesc = {myDom.dim(1),
+          myDom.dim(2).low-1..myDom.dim(2).low-1, myDom.dim(3)};
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      /*if hasBottom {*/
+        /*const sourceIdx = localeIdx + (0,1,0);*/
+        /*const sliceDesc = {myDom.dim(1),*/
+          /*myDom.dim(2).high+1..myDom.dim(2).high+1, myDom.dim(3)};*/
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);*/
+      /*}*/
+
+      if hasLeft {
+        const sourceIdx = localeIdx + (0,0,-1);
+        const sliceDesc = {myDom.dim(1),
+          myDom.dim(2), myDom.dim(3).low-1..myDom.dim(3).low-1};
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      /*if hasRight {*/
+        /*const sourceIdx = localeIdx + (0,0,1);*/
+        /*const sliceDesc = {myDom.dim(1),*/
+          /*myDom.dim(2), myDom.dim(3).high+1..myDom.dim(3).high+1};*/
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);*/
+      /*}*/
+
+      if hasFront && hasLeft {
+        const sourceIdx = localeIdx + (-1,0,-1);
+        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
+          myDom.dim(2), myDom.dim(3).low-1..myDom.dim(3).low-1};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      /*if hasBack && hasRight {*/
+        /*const sourceIdx = localeIdx + (1,0,1);*/
+        /*const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,*/
+          /*myDom.dim(2), myDom.dim(3).high+1..myDom.dim(3).high+1};*/
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);*/
+      /*}*/
+      if hasFront && hasTop {
+        const sourceIdx = localeIdx + (-1,-1,0);
+        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
+          myDom.dim(2).low-1..myDom.dim(2).low-1, myDom.dim(3)};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      /*if hasBack && hasBottom {*/
+        /*const sourceIdx = localeIdx + (1,1,0);*/
+        /*const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,*/
+          /*myDom.dim(2).high+1..myDom.dim(2).high+1, myDom.dim(3)};*/
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);*/
+      /*}*/
+      if hasFront && hasTop && hasLeft {
+        const sourceIdx = localeIdx + (-1,-1,-1);
+        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
+          myDom.dim(2).low-1..myDom.dim(2).low-1,
+          myDom.dim(3).low-1..myDom.dim(3).low-1};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      /*if hasBack && hasBottom && hasRight{*/
+        /*const sourceIdx = localeIdx + (1,1,1);*/
+        /*const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,*/
+          /*myDom.dim(2).high+1..myDom.dim(2).high+1,*/
+          /*myDom.dim(3).high+1..myDom.dim(3).high+1};*/
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);*/
+      /*}*/
+      if hasLeft && hasTop {
+        const sourceIdx = localeIdx + (0,-1,-1);
+        const sliceDesc = {myDom.dim(1),
+          myDom.dim(2).low-1..myDom.dim(2).low-1,
+          myDom.dim(3).low-1..myDom.dim(3).low-1};
+
+        /*writeln(here, " will get " , sliceDesc, " from ",*/
+            /*dom.dist.targetLocales(sourceIdx));*/
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+      }
+      /*if hasRight && hasBottom {*/
+        /*const sourceIdx = localeIdx + (0,1,1);*/
+        /*const sliceDesc = {myDom.dim(1),*/
+          /*myDom.dim(2).high+1..myDom.dim(2).high+1,*/
+          /*myDom.dim(3).high+1..myDom.dim(3).high+1};*/
+
+        /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
+            /*[>dom.dist.targetLocales(sourceIdx));<]*/
+        /*__prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);*/
+      /*}*/
+    }
+  }
+  finalizePrefetch();
+}
 proc BlockArr.stencilPrefetch3d(consistent=true) {
 
   if rank != 3 then
