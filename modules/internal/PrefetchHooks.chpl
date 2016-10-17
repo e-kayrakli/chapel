@@ -146,7 +146,7 @@ module PrefetchHooks {
       for val in obj.dsiSerialize() do yield val;
     }
     proc dsiGetSerializedObjectSize(): size_t {
-      var size: size_t;
+      var size = 0: size_t;
       for v in obj.dsiGetSerializedObjectSize() {
         size += v;
       }
@@ -212,8 +212,8 @@ module PrefetchHooks {
       var isPrefetched: int;
       var thisaddr = __primitive("_wide_get_addr", this);
       var data: obj.eltType;
-      get_prefetched_data(thisaddr, handle, 8, localIdx, isPrefetched,
-          data);
+      get_prefetched_data(thisaddr, handle, getSize(1,obj.eltType),
+          localIdx, isPrefetched, data);
 
       /*if isPrefetched == 0 {*/
         /*const cast_data = __data:c_ptr(int);*/
@@ -248,8 +248,8 @@ module PrefetchHooks {
       /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
       var isPrefetched: int;
       var thisaddr = __primitive("_wide_get_addr", this);
-      var data = get_prefetched_data_addr(thisaddr, handle, 8, localIdx,
-          isPrefetched);
+      var data = get_prefetched_data_addr(thisaddr, handle, getSize(1,
+            obj.eltType), localIdx, isPrefetched);
 
       /*if isPrefetched == 0 {*/
         /*const cast_data = __data:c_ptr(int);*/

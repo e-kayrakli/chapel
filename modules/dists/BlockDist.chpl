@@ -2012,8 +2012,8 @@ proc BlockArr.doiBulkTransferFromDR(Barg)
 }
 
 // a prototype for now
-inline proc LocBlockArr.getMetadataSize() param : uint(64) {
-  return rank*2*8;
+inline proc LocBlockArr.getMetadataSize() : uint(64) {
+  return rank*2*getSize(1, idxType);
 }
 
 inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
@@ -2095,9 +2095,15 @@ iter BlockArr.dsiGetSerializedObjectSize(slice_desc) {
 // BlockArr slice descriptors are range tuples
 iter LocBlockArr.dsiGetSerializedObjectSize() {
   yield getSize(rank*2, idxType);
-  writeln(here, " ", myElems.domain, " ", getSize(myElems.size,
-        eltType));
-  yield getSize(myElems.size, eltType);
+  /*writeln(here, " ", myElems.domain, " ", getSize(myElems.size,*/
+        /*eltType));*/
+  /*yield getSize(myElems.size, eltType);*/
+  const dataSize = getSize(myElems.size, eltType);
+  /*if dataSize == 360 {*/
+    /*writeln(here, " ", myElems.domain, " ", " ", myElems.size,  " ",*/
+        /*360);*/
+  /*}*/
+  yield dataSize;
 }
 // BlockArr slice descriptors are range tuples
 iter LocBlockArr.dsiGetSerializedObjectSize(slice_desc) {
@@ -2135,7 +2141,7 @@ iter LocBlockArr.dsiSerialize() {
   for param i in rank+1..2*rank {
     /*metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;*/
     /*yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);*/
-    yield convertToSerialChunk(size[rank]);
+    yield convertToSerialChunk(size[i-rank]);
   }
   /*yield convertToSerialChunk(metaDataArr);*/
   yield convertToSerialChunk(myElems);

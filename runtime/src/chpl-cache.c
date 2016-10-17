@@ -3244,8 +3244,9 @@ void *get_prefetched_data_addr(void *accessor,
   // NULL check for prefetch entry has been handled by PrefethcHooks
   if(offset < 0 ||
       (intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
-    printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",
-        offset, size, offset, prefetch_entry->size);
+    printf("\t offset=%ld, size=%zd, origin=%d, entry_size=%zd\n",
+        offset, size, prefetch_entry->origin_node,
+        prefetch_entry->size); 
     *found = 0;
   }
   else {

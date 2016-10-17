@@ -1494,18 +1494,18 @@ proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta,
 proc CalcMonotonicQForElems(delv_xi, delv_eta, delv_zeta, 
                             delx_xi, delx_eta, delx_zeta) {
   //got rid of call through to "CalcMonotonicQRegionForElems"
-  /*if prefetch {*/
-    /*if !consistent {*/
-      /*lxim._value.updatePrefetch();*/
-      /*lxip._value.updatePrefetch();*/
-      /*letam._value.updatePrefetch();*/
-      /*letap._value.updatePrefetch();*/
-      /*lzetam._value.updatePrefetch();*/
-      /*lzetap._value.updatePrefetch();*/
+  if prefetch {
+    if !consistent {
+      lxim._value.updatePrefetch();
+      lxip._value.updatePrefetch();
+      letam._value.updatePrefetch();
+      letap._value.updatePrefetch();
+      lzetam._value.updatePrefetch();
+      lzetap._value.updatePrefetch();
 
-      /*delv_zeta._value.updatePrefetch();*/
-    /*}*/
-  /*}*/
+      delv_zeta._value.updatePrefetch();
+    }
+  }
 
   forall i in MatElems {
     const ptiny = 1.0e-36;
