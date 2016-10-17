@@ -1124,7 +1124,7 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
 }
 
 proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
-  local {
+  local { //this is completely risky
     const locIdx = dom.dist.targetLocsIdx(i);
     var (isPrefetched, data) =
       myLocArr.getPrefetchHook().accessPrefetchedDataRef(

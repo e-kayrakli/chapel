@@ -3051,6 +3051,7 @@ void start_update(struct __prefetch_entry_t *entry) {
       entry->state_counter = -1;
       done = true;
       //the lock should be unlocked by stop_update
+      /*printf("%d Started update\n", chpl_nodeID);*/
     }
     else {
       // we only unlock if we weren't able to get the lock
@@ -3066,7 +3067,9 @@ void stop_update(struct __prefetch_entry_t *entry) {
   // definitely no readers in the entry
   assert(entry->state_counter == -1);
   entry->state_counter = 0;
+  /*printf("%d Trying to stop update\n", chpl_nodeID);*/
   chpl_sync_unlock(&(entry->state_lock));
+  /*printf("%d Stopped update\n", chpl_nodeID);*/
 }
 
 static
@@ -3096,9 +3099,10 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
     new_entry->pf_type |= (PF_CONSISTENT|PF_PERSISTENT);
   }
 
-  new_entry->should_lock = (new_entry->pf_type &
-    (PF_CONSISTENT|PF_PERSISTENT)) == (PF_CONSISTENT|PF_PERSISTENT) ;
+  /*new_entry->should_lock = (new_entry->pf_type &*/
+    /*(PF_CONSISTENT|PF_PERSISTENT)) == (PF_CONSISTENT|PF_PERSISTENT) ;*/
 
+  new_entry->should_lock = true;
   // currently everything has canread and nothing can have canwrite
   new_entry->pf_type |= PF_CANREAD;
   new_entry->sn = -1;
@@ -3170,10 +3174,10 @@ void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
 #if CHECK_PFENTRY_INTEGRITY
     check_integrity(entry);
 #endif
-    /*chpl_sync_lock(&(entry->state_lock));*/
+    start_update(entry);
     chpl_comm_reprefetch(entry);
     prefetch_entry_init_seqn_n(entry, 0);
-    /*chpl_sync_unlock(&(entry->state_lock));*/
+    stop_update(entry);
   }
 }
 
@@ -3227,6 +3231,8 @@ void get_prefetched_data(void *accessor,
   stop_read(prefetch_entry);
 }
 
+#define LOG_IDX 0
+
 void *get_prefetched_data_addr(void *accessor,
     struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
     int64_t* found) {
@@ -3234,7 +3240,8 @@ void *get_prefetched_data_addr(void *accessor,
   int64_t offset; //this can be negative in current logic
   void *retaddr=NULL;
 
-  if((prefetch_entry->should_lock) &&
+  /*if((prefetch_entry->should_lock) &&*/
+  if(prefetch_entry->pf_type&PF_CONSISTENT &&
       // TODO this should compare task local data's sequence number
       // if it's less then or equal to then we are in the same time fram
       // as the data has been prefetched therefore we can read it
@@ -3266,6 +3273,14 @@ void *get_prefetched_data_addr(void *accessor,
   }
   else {
     *found = 1;
+#if LOG_IDX
+    printf("%ld %ld %ld FOUND > offset=%ld, entry_size=%zd, metadata=%ld %ld %ld %ld %ld %ld\n",
+        ((int64_t*)idx)[0],((int64_t*)idx)[1],((int64_t*)idx)[2],
+        offset, prefetch_entry->size,
+        ((int64_t*)prefetch_entry->data)[0],((int64_t*)prefetch_entry->data)[1],
+        ((int64_t*)prefetch_entry->data)[2],((int64_t*)prefetch_entry->data)[3],
+        ((int64_t*)prefetch_entry->data)[4],((int64_t*)prefetch_entry->data)[5]);
+#endif
     retaddr = (void *)((uintptr_t)prefetch_entry->data+offset);
   }
 
