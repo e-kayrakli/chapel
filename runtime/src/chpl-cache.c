@@ -3158,7 +3158,10 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
 #if CHECK_PFENTRY_INTEGRITY
 static void check_integrity(struct __prefetch_entry_t *entry) {
   int cmp = strncmp(entry->data, entry->base_data, entry->size);
-  assert(!cmp);
+  if(cmp) {
+    printf("Data integrity is broken on node %d\n", chpl_nodeID);
+    assert(0);
+  }
 }
 #endif
 
