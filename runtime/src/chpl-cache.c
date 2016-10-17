@@ -3153,8 +3153,20 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   /*return offset;*/
 /*}*/
 
+
+
+#if CHECK_PFENTRY_INTEGRITY
+static void check_integrity(struct __prefetch_entry_t *entry) {
+  int cmp = strncmp(entry->data, entry->base_data, entry->size);
+  assert(!cmp);
+}
+#endif
+
 void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
   if(entry) {
+#if CHECK_PFENTRY_INTEGRITY
+    check_integrity(entry);
+#endif
     /*chpl_sync_lock(&(entry->state_lock));*/
     chpl_comm_reprefetch(entry);
     prefetch_entry_init_seqn_n(entry, 0);
@@ -3384,6 +3396,10 @@ struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
 
   chpl_comm_prefetch(&(new_data->data), node, robjaddr,
       &(new_data->size), slice_desc, slice_desc_size, -1, -1, -1);
+#if CHECK_PFENTRY_INTEGRITY
+  new_data->base_data = chpl_malloc(new_data->size);
+  chpl_memcpy(new_data->base_data, new_data->data, new_data->size);
+#endif
 
   return new_data;
 }

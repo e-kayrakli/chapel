@@ -38,6 +38,7 @@ int chpl_cache_enabled(void)
   return CHPL_CACHE_REMOTE && chpl_task_supportsRemoteCache();
 }
 
+#define CHECK_PFENTRY_INTEGRITY 1
 // Note on throttling: Currently I am choosing to keep a big monolithic
 // chunk of data where active messages fill up gradually.
 //
@@ -81,7 +82,9 @@ typedef struct __prefetch_entry_t{
   //throttling TODO new field: doneobj array(same size as void* array
 
   void *data; //throttling TODO this will be an array of void pointers
-
+#if CHECK_PFENTRY_INTEGRITY
+  void *base_data;
+#endif
   // buffer data structure
   struct __prefetch_entry_t *next;
   struct __prefetch_entry_t *prev;
