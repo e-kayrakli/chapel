@@ -85,7 +85,6 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
   if rank != 3 then
     halt("This Prefetch pattern is only supprted for 3D arrays");
 
-  //TODO FIXME TODO FIXME coforall --fixed
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       const myDom = dom.locDoms[localeIdx].myBlock;

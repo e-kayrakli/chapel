@@ -3242,10 +3242,7 @@ void *get_prefetched_data_addr(void *accessor,
   void *retaddr=NULL;
 
   /*if((prefetch_entry->should_lock) &&*/
-  if(prefetch_entry->pf_type&PF_CONSISTENT &&
-      // TODO this should compare task local data's sequence number
-      // if it's less then or equal to then we are in the same time fram
-      // as the data has been prefetched therefore we can read it
+  if(prefetch_entry->should_lock &&
       prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
     /*printf("\t stale data: %ld %ld\n",*/
         /*prefetch_entry->sn, pbuf->prefetch_sequence_number);*/
