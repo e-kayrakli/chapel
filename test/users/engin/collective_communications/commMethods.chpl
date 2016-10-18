@@ -54,7 +54,7 @@ proc BlockCyclicArr.transposePrefetch(consistent=true) {
       __prefetchFrom(localeIdx, sourceIdx, consistent);
     }
   }
-  writeln("Finalizing prefetch");
+  /*writeln("Finalizing prefetch");*/
   finalizePrefetch();
 }
 
