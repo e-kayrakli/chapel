@@ -285,12 +285,12 @@ var delv_xi, delv_eta, delv_zeta: [Elems] real;
 var delx_xi, delx_eta, delx_zeta: [Elems] real;
 
 inline proc prefetchAll(consistent) {
-  x._value.allGather(consistent);
-  y._value.allGather(consistent);
-  z._value.allGather(consistent);
-  xd._value.allGather(consistent);
-  yd._value.allGather(consistent);
-  zd._value.allGather(consistent);
+  /*x._value.allGather(consistent);*/
+  /*y._value.allGather(consistent);*/
+  /*z._value.allGather(consistent);*/
+  /*xd._value.allGather(consistent);*/
+  /*yd._value.allGather(consistent);*/
+  /*zd._value.allGather(consistent);*/
   /*xdd._value.allGather(consistent);*/
   /*ydd._value.allGather(consistent);*/
   /*zdd._value.allGather(consistent);*/
@@ -314,22 +314,23 @@ inline proc prefetchAll(consistent) {
   /*ss._value.allGather(consistent);*/
   /*elemMass._value.allGather(consistent);*/
 
-  lxim._value.allGather(consistent);
-  lxip._value.allGather(consistent);
-  letam._value.allGather(consistent);
-  letap._value.allGather(consistent);
-  lzetam._value.allGather(consistent);
-  lzetap._value.allGather(consistent);
+  /*lxim._value.allGather(consistent);*/
+  /*lxip._value.allGather(consistent);*/
+  /*letam._value.allGather(consistent);*/
+  /*letap._value.allGather(consistent);*/
+  /*lzetam._value.allGather(consistent);*/
+  /*lzetap._value.allGather(consistent);*/
 
   delv_zeta._value.allGather(consistent);
   delv_xi._value.allGather(consistent);
   delv_eta._value.allGather(consistent);
-  /*x._value.luleshStencilPrefetch3d(consistent);*/
-  /*y._value.luleshStencilPrefetch3d(consistent);*/
-  /*z._value.luleshStencilPrefetch3d(consistent);*/
-  /*xd._value.luleshStencilPrefetch3d(consistent);*/
-  /*yd._value.luleshStencilPrefetch3d(consistent);*/
-  /*zd._value.luleshStencilPrefetch3d(consistent);*/
+  x._value.luleshStencilPrefetch3d(consistent);
+  y._value.luleshStencilPrefetch3d(consistent);
+  z._value.luleshStencilPrefetch3d(consistent);
+  xd._value.luleshStencilPrefetch3d(consistent);
+  yd._value.luleshStencilPrefetch3d(consistent);
+  zd._value.luleshStencilPrefetch3d(consistent);
+
 }
 
 proc main() {
@@ -1498,12 +1499,12 @@ proc CalcMonotonicQForElems(delv_xi, delv_eta, delv_zeta,
   //got rid of call through to "CalcMonotonicQRegionForElems"
   if prefetch {
     if !consistent {
-      lxim._value.updatePrefetch();
-      lxip._value.updatePrefetch();
-      letam._value.updatePrefetch();
-      letap._value.updatePrefetch();
-      lzetam._value.updatePrefetch();
-      lzetap._value.updatePrefetch();
+      /*lxim._value.updatePrefetch();*/
+      /*lxip._value.updatePrefetch();*/
+      /*letam._value.updatePrefetch();*/
+      /*letap._value.updatePrefetch();*/
+      /*lzetam._value.updatePrefetch();*/
+      /*lzetap._value.updatePrefetch();*/
 
       delv_zeta._value.updatePrefetch();
       delv_eta._value.updatePrefetch();
