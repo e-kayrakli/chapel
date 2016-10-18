@@ -32,11 +32,10 @@
  */
 
 
-use CommDiagnostics;
 
 use Time,       // to get timing routines for benchmarking
     BlockDist;  // for block-distributed arrays
-
+use commMethods;
 use luleshInit;   // initialization code for data set
 
 /* The configuration parameters for lulesh.  These can be set on the
@@ -71,7 +70,9 @@ config param useBlockDist = (CHPL_COMM != "none"),
              useSparseMaterials = true,
              printWarnings = true;
 
-
+config param prefetch = false;
+config const consistent = true;
+config const verboseComm = false;
 //
 // Sanity check to ensure that input files aren't used with the 3D
 // representation
@@ -277,6 +278,59 @@ var time = 0.0,          // current time
 
     cycle = 0;           // iteration count for simulation
 
+// sungeun: Temporary array reused throughout
+/* velocity gradient */
+var delv_xi, delv_eta, delv_zeta: [Elems] real;
+/* position gradient */
+var delx_xi, delx_eta, delx_zeta: [Elems] real;
+
+inline proc prefetchAll(consistent) {
+  x._value.allGather(consistent);
+  y._value.allGather(consistent);
+  z._value.allGather(consistent);
+  xd._value.allGather(consistent);
+  yd._value.allGather(consistent);
+  zd._value.allGather(consistent);
+  /*xdd._value.allGather(consistent);*/
+  /*ydd._value.allGather(consistent);*/
+  /*zdd._value.allGather(consistent);*/
+
+  /*elemBC._value.allGather(consistent);*/
+  /*e._value.allGather(consistent);*/
+  /*p._value.allGather(consistent);*/
+
+  /*q._value.allGather(consistent);*/
+  /*ql._value.allGather(consistent);*/
+  /*qq._value.allGather(consistent);*/
+
+  /*v._value.allGather(consistent);*/
+  /*vnew._value.allGather(consistent);*/
+
+  /*volo._value.allGather(consistent);*/
+  /*delv._value.allGather(consistent);*/
+  /*vdov._value.allGather(consistent);*/
+
+  /*arealg._value.allGather(consistent);*/
+  /*ss._value.allGather(consistent);*/
+  /*elemMass._value.allGather(consistent);*/
+
+  lxim._value.allGather(consistent);
+  lxip._value.allGather(consistent);
+  letam._value.allGather(consistent);
+  letap._value.allGather(consistent);
+  lzetam._value.allGather(consistent);
+  lzetap._value.allGather(consistent);
+
+  delv_zeta._value.allGather(consistent);
+  delv_xi._value.allGather(consistent);
+  delv_eta._value.allGather(consistent);
+  /*x._value.luleshStencilPrefetch3d(consistent);*/
+  /*y._value.luleshStencilPrefetch3d(consistent);*/
+  /*z._value.luleshStencilPrefetch3d(consistent);*/
+  /*xd._value.luleshStencilPrefetch3d(consistent);*/
+  /*yd._value.luleshStencilPrefetch3d(consistent);*/
+  /*zd._value.luleshStencilPrefetch3d(consistent);*/
+}
 
 proc main() {
   if debug then writeln("Lulesh -- Problem Size = ", numElems);
@@ -285,7 +339,8 @@ proc main() {
 
   var st: real;
   if doTiming then st = getCurrentTime();
-  startVerboseComm();
+  if prefetch then prefetchAll(consistent);
+  if verboseComm then startVerboseComm();
   while (time < stoptime && cycle < maxcycles) {
     const iterTime = if showProgress then getCurrentTime() else 0.0;
 
@@ -303,7 +358,7 @@ proc main() {
              if doTiming then ", elapsed = " + (getCurrentTime()-iterTime) +"\n"
                          else "\n");
   }
-  stopVerboseComm();
+  if verboseComm then stopVerboseComm();
   if (cycle == maxcycles) {
     writeln("Stopped early due to reaching maxnumsteps");
   }
@@ -363,6 +418,13 @@ proc initMasses() {
   // without losing updates by using 'atomic' variables
   var massAccum: [Nodes] atomic real;
 
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+    }
+  }
   forall eli in Elems {
     var x_local, y_local, z_local: 8*real;
     localizeNeighborNodes(eli, x, x_local, y, y_local, z, z_local);
@@ -1007,6 +1069,13 @@ proc CalcVolumeForceForElems() {
 
 
 proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+    }
+  }
   forall k in Elems {
     var b_x, b_y, b_z: 8*real;
     var x_local, y_local, z_local: 8*real;
@@ -1037,6 +1106,13 @@ proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
 proc CalcHourglassControlForElems(determ) {
   var dvdx, dvdy, dvdz, x8n, y8n, z8n: [Elems] 8*real;
 
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+    }
+  }
   forall eli in Elems {
     /* Collect domain nodes to elem nodes */
     var x1, y1, z1: 8*real;
@@ -1076,6 +1152,13 @@ const gammaCoef: 4*(8*real) = // WAS: [1..4, 1..8] real =
 /* Calculates the Flanagan-Belytschko anti-hourglass force. */
 proc CalcFBHourglassForceForElems(determ, x8n, y8n, z8n, dvdx, dvdy, dvdz) {
 
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+    }
+  }
   /* compute the hourglass modes */
   forall eli in Elems {
     var hourgam: 8*(4*real);
@@ -1196,6 +1279,16 @@ proc CalcLagrangeElements() {
 
 
 proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+      xd._value.updatePrefetch();
+      yd._value.updatePrefetch();
+      zd._value.updatePrefetch();
+    }
+  }
   // loop over all elements
   forall k in Elems {
     var b_x, b_y, b_z: 8*real,
@@ -1244,11 +1337,6 @@ proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
 }
 
 
-// sungeun: Temporary array reused throughout
-/* velocity gradient */
-var delv_xi, delv_eta, delv_zeta: [Elems] real;
-/* position gradient */
-var delx_xi, delx_eta, delx_zeta: [Elems] real;
 
 proc CalcQForElems() {
   // MONOTONIC Q option
@@ -1313,6 +1401,16 @@ proc UpdateVolumesForElems() {
 
 proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta, 
                                      delx_xi, delx_eta, delx_zeta) {
+  if prefetch {
+    if !consistent {
+      x._value.updatePrefetch();
+      y._value.updatePrefetch();
+      z._value.updatePrefetch();
+      xd._value.updatePrefetch();
+      yd._value.updatePrefetch();
+      zd._value.updatePrefetch();
+    }
+  }
   forall eli in Elems {
     const ptiny = 1.0e-36;
     var xl, yl, zl: 8*real;
@@ -1398,6 +1496,20 @@ proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta,
 proc CalcMonotonicQForElems(delv_xi, delv_eta, delv_zeta, 
                             delx_xi, delx_eta, delx_zeta) {
   //got rid of call through to "CalcMonotonicQRegionForElems"
+  if prefetch {
+    if !consistent {
+      lxim._value.updatePrefetch();
+      lxip._value.updatePrefetch();
+      letam._value.updatePrefetch();
+      letap._value.updatePrefetch();
+      lzetam._value.updatePrefetch();
+      lzetap._value.updatePrefetch();
+
+      delv_zeta._value.updatePrefetch();
+      delv_eta._value.updatePrefetch();
+      delv_xi._value.updatePrefetch();
+    }
+  }
 
   forall i in MatElems {
     const ptiny = 1.0e-36;

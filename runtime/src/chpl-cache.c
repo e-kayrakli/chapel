@@ -3099,10 +3099,10 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
     new_entry->pf_type |= (PF_CONSISTENT|PF_PERSISTENT);
   }
 
-  /*new_entry->should_lock = (new_entry->pf_type &*/
-    /*(PF_CONSISTENT|PF_PERSISTENT)) == (PF_CONSISTENT|PF_PERSISTENT) ;*/
+  new_entry->should_lock = (new_entry->pf_type &
+    (PF_CONSISTENT|PF_PERSISTENT)) == (PF_CONSISTENT|PF_PERSISTENT) ;
 
-  new_entry->should_lock = true;
+  /*new_entry->should_lock = true;*/
   // currently everything has canread and nothing can have canwrite
   new_entry->pf_type |= PF_CANREAD;
   new_entry->sn = -1;
@@ -3188,6 +3188,7 @@ void get_prefetched_data(void *accessor,
     int64_t* found, void *dest) {
 
   int64_t offset; //this can be negative in current logic
+  printf("in here\n");
 
   if((prefetch_entry->should_lock) &&
       // TODO this should compare task local data's sequence number
