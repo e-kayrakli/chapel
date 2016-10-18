@@ -10,6 +10,7 @@
 // Use standard Chapel modules for Block-Cyclic distributions and timings
 //
 use BlockCycDist, Time;
+use commMethods;
 
 
 //
@@ -38,6 +39,8 @@ config const numrows = computeProblemSize(numMatrices, eltType, rank=2),
              colBlkSize = rowBlkSize,
              beta = 1.0;
 
+config const prefetch = false;
+config const consistent = true;
 //
 // Configuration constant used for verification thresholds
 //
@@ -91,7 +94,33 @@ proc main() {
   // ------------------------
 
   const startTime = getCurrentTime();
-    
+  /*writeln("Before prefetch");*/
+  /*for l in Locales do on l {*/
+    /*writeln(here);*/
+    /*for i in 1..numrows {*/
+      /*for j in 1..numcols {*/
+        /*write(A[i,j], " ");*/
+      /*}*/
+      /*writeln();*/
+    /*}*/
+    /*writeln();*/
+  /*}*/
+  /*writeln();*/
+  if prefetch then A._value.transposePrefetch(consistent);
+
+
+  /*writeln("After prefetch");*/
+  /*for l in Locales do on l {*/
+    /*writeln(here);*/
+    /*for i in 1..numrows {*/
+      /*for j in 1..numcols {*/
+        /*write(A[i,j], " ");*/
+      /*}*/
+      /*writeln();*/
+    /*}*/
+    /*writeln();*/
+  /*}*/
+  /*halt("write finished");*/
   if (beta == 1.0) then
     forall (i,j) in TransposeDom do
       C[i,j] += A[j,i];

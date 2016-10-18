@@ -1,4 +1,5 @@
 use BlockDist;
+use BlockCycDist;
 
 inline proc BlockArr.updatePrefetch() {
   coforall localeIdx in dom.dist.targetLocDom {
@@ -34,6 +35,27 @@ inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
       dom.dist.targetLocales[sourceIdx].id,
       privCopy.locArr[sourceIdx], sliceDescArr,
       consistent);
+}
+
+proc BlockCyclicArr.__prefetchFrom(localeIdx, sourceIdx,
+    consistent) {
+
+  var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  locArr[localeIdx].prefetchHook.requestPrefetch(
+      dom.dist.targetLocales[sourceIdx].id, //TODO this can be avoided
+      privCopy.locArr[sourceIdx],
+      consistent);
+}
+
+proc BlockCyclicArr.transposePrefetch(consistent=true) {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const sourceIdx = (localeIdx[2], localeIdx[1]);
+      __prefetchFrom(localeIdx, sourceIdx, consistent);
+    }
+  }
+  writeln("Finalizing prefetch");
+  finalizePrefetch();
 }
 
 proc BlockArr.allGather(consistent=true) {
@@ -390,6 +412,13 @@ inline proc BlockArr.finalizePrefetch() {
   }
 }
 
+inline proc BlockCyclicArr.finalizePrefetch() {
+  coforall l in dom.dist.targetLocDom {
+    on dom.dist.targetLocales[l] {
+      locArr[l].prefetchHook.finalizePrefetch();
+    }
+  }
+}
 
 inline proc domToArray(dom: domain) where dom.rank == 1 {
   return [dom.dim(1).low, dom.dim(1).high];

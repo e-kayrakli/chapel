@@ -790,6 +790,7 @@ proc BlockCyclicArr.setup() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       locArr(localeIdx) = new LocBlockCyclicArr(eltType, rank, idxType, stridable, dom.locDoms(localeIdx), dom.locDoms(localeIdx));
+      locArr(localeIdx).setup();
       if this.locale == here then
         myLocArr = locArr(localeIdx);
     }
@@ -836,6 +837,18 @@ proc BlockCyclicArr.dsiAccess(i: rank*idxType) ref {
   if rank == 1 {
     return dsiAccess(i(1));
   } else {
+    const locIdx = dom.dist.idxToLocaleInd(i);
+    var (isPrefetched, data) =
+      myLocArr.getPrefetchHook().accessPrefetchedDataRef(
+          dom.dist.targetLocales[locIdx].id, i); //avoid this
+    if isPrefetched {
+      /*writeln("prefetch access");*/
+      return data.deref();
+    }
+    else {
+      /*writeln("data prefetched but not with idx ", i);*/
+    }
+    /*writeln(" remote access");*/
     return locArr(dom.dist.idxToLocaleInd(i))(i);
   }
 }
@@ -922,6 +935,7 @@ proc BlockCyclicArr.dsiSlice(d: BlockCyclicDom) {
   for i in dom.dist.targetLocDom {
     on dom.dist.targetLocales(i) {
       alias.locArr[i] = new LocBlockCyclicArr(eltType=eltType, rank=rank, idxType=idxType, stridable=d.stridable, allocDom=locArr[i].allocDom, indexDom=d.locDoms[i], myElems=>locArr[i].myElems);
+      alias.locArr(i).setup();
     }
   }
 
@@ -990,6 +1004,7 @@ class LocBlockCyclicArr {
   param rank: int;
   type idxType;
   param stridable: bool;
+  
 
   //
   // LEFT LINK: a reference to the local domain class for this array and locale
@@ -1011,6 +1026,11 @@ class LocBlockCyclicArr {
   const locsize: [1..rank] int = [d in 1..rank] allocDom.globDom.dist.targetLocDom.dim(d).length;
   const numblocks: [1..rank] int = [d in 1..rank] (allocDom.myStarts.dim(d).length);
 
+  var prefetchHook: PrefetchHook;
+}
+
+proc LocBlockCyclicArr.setup() {
+  prefetchHook = new GenericPrefetchHook(this);
 }
 
 
@@ -1025,6 +1045,100 @@ proc LocBlockCyclicArr.mdInd2FlatInd(i: ?t, dim = 1) where t == idxType {
   const blkOff = ind0 % blksize;
   //  writeln("returning");
   return  blkNum * blksize + blkOff;
+}
+
+proc LocBlockCyclicArr.getPrefetchHook(){
+  return prefetchHook:GenericPrefetchHook(this.type);
+}
+
+iter LocBlockCyclicArr.dsiSerialize() {
+  // blocksize
+  if rank != 2 then
+    halt("not supported");
+  yield convertToSerialChunk(blocksize);
+  yield convertToSerialChunk(low[1]);
+  yield convertToSerialChunk(low[2]); //TODO write a tuple version
+  yield convertToSerialChunk(locsize);
+  yield convertToSerialChunk(numblocks);
+  yield convertToSerialChunk(myElems);
+
+}
+
+iter LocBlockCyclicArr.dsiGetSerializedObjectSize() {
+  yield getSize((4*rank), int);
+  yield getSize(myElems.size, eltType);
+}
+
+iter LocBlockCyclicArr.dsiSerialize(slice_desc) {
+  halt("not supported");
+  var dummy = 0;
+  yield convertToSerialChunk(dummy);
+}
+iter LocBlockCyclicArr.dsiGetSerializedObjectSize(slice_desc) {
+  halt("not supported");
+  yield getSize(1, int);
+}
+
+proc LocBlockCyclicArr.getMetadataSize() {
+  return getSize((4*rank), int);
+}
+
+proc LocBlockCyclicArr.getByteIndex(data:c_void_ptr, idx: rank*idxType)
+{
+  if rank != 2 then
+    halt("not supported");
+
+  var offset = 0:uint;
+  var blocksizeP = getElementArrayAtOffset(data, offset, int);
+  offset += getSize(rank, int);
+  var lowP = getElementArrayAtOffset(data, offset, int);
+  offset += getSize(rank, int);
+  var locsizeP = getElementArrayAtOffset(data, offset, int);
+  offset += getSize(rank, int);
+  var numblocksP = getElementArrayAtOffset(data, offset, int);
+  offset += getSize(rank, int);
+
+  var dataP = getElementArrayAtOffset(data, offset, eltType);
+
+  //TODO: want negative scan: var blkmults = * scan [d in 1..rank] blocksize(d);
+  var blkmults: [1..rank] int;
+  blkmults(rank) = blocksizeP(rank-1);
+  for d in 1..rank-1 by -1 do
+    blkmults(d) = blkmults(d+1) * blocksizeP(d-1);
+  //    writeln("blkmults = ", blkmults);
+  var numwholeblocks = 0;
+  var blkOff = 0;
+  for param d in 1..rank {
+    const blksize = blocksizeP(d-1);
+    const ind0 = (idx(d) - lowP(d-1)): int;
+    const blkNum = ind0 / (blksize * locsizeP(d-1));
+    const blkDimOff = ind0 % blksize;
+    if (d != 1) {
+      numwholeblocks *= numblocksP(rank-d+2-1);
+      blkOff *= blksize;
+    }
+    numwholeblocks += blkNum;
+    blkOff += blkDimOff;
+    /*if (false && (i == (13,0) || i == (1,32))) {*/
+      /*writeln(here.id, ":", "blksize = ", blksize);*/
+      /*writeln(here.id, ":", "ind0 = ", ind0);*/
+      /*writeln(here.id, ":", "blkNum = ", blkNum);*/
+      /*writeln(here.id, ":", "blkDimOff = ", blkDimOff);*/
+    /*}*/
+  }
+
+  /*if (false && (i == (13,0) || i == (1,32))) {*/
+    /*writeln(here.id, ":", "numblocks = ", numblocks);*/
+    /*writeln(here.id, ":", i, "->");*/
+    /*writeln(here.id, ":","numwholeblocks = ", numwholeblocks);*/
+    /*writeln(here.id, ":","blkOff = ", blkOff);*/
+    /*writeln(here.id, ":","total = ", numwholeblocks * blkmults(1) + blkOff);*/
+  /*}*/
+  /*writeln("Byte index for ", idx, " : ", getMetadataSize() + */
+    /*getSize((numwholeblocks * blkmults(1)) + blkOff, eltType));*/
+
+  return getMetadataSize() + 
+    getSize((numwholeblocks * blkmults(1)) + blkOff, eltType);
 }
 
 proc LocBlockCyclicArr.mdInd2FlatInd(i: ?t) where t == rank*idxType {
