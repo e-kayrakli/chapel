@@ -38,7 +38,7 @@ int chpl_cache_enabled(void)
   return CHPL_CACHE_REMOTE && chpl_task_supportsRemoteCache();
 }
 
-#define CHECK_PFENTRY_INTEGRITY 1
+#define CHECK_PFENTRY_INTEGRITY 0
 // Note on throttling: Currently I am choosing to keep a big monolithic
 // chunk of data where active messages fill up gradually.
 //

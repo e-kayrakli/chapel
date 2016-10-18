@@ -3174,10 +3174,10 @@ void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
 #if CHECK_PFENTRY_INTEGRITY
     check_integrity(entry);
 #endif
-    start_update(entry);
+    /*start_update(entry);*/
     chpl_comm_reprefetch(entry);
     prefetch_entry_init_seqn_n(entry, 0);
-    stop_update(entry);
+    /*stop_update(entry);*/
   }
 }
 
