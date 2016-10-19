@@ -63,6 +63,7 @@ config param debugBlockDistBulkTransfer = false;
 config const disableAliasedBulkTransfer = true;
 
 config param sanityCheckDistribution = false;
+config param allowPrefetchUnpacking = false;
 
 //
 // If the testFastFollowerOptimization flag is set to true, the
@@ -375,14 +376,17 @@ class LocBlockArr {
   }
 
   proc setup() {
-    prefetchHook = new GenericPrefetchHook(this);
+    prefetchHook = if allowPrefetchUnpacking then 
+      getNewPrefetchHook(this, myElems._value.type) else
+      getNewPrefetchHook(this);
+
   }
 
 }
-proc LocBlockArr.getPrefetchHook(){
-  return prefetchHook:GenericPrefetchHook(this.type);
-  /*return prefetchHook;*/
-}
+/*proc LocBlockArr.getPrefetchHook(){*/
+  /*return prefetchHook:GenericPrefetchHook(this.type);*/
+  /*[>return prefetchHook;<]*/
+/*}*/
 
 //
 // Block constructor for clients of the Block distribution
@@ -1055,20 +1059,18 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) {
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);
-  }
-  return nonLocalAccess(i);
-}
-
-proc BlockArr.nonLocalAccess(i: rank*idxType)  {
-  local {
     const locIdx = dom.dist.targetLocsIdx(i);
     var (isPrefetched, data) =
-      myLocArr.getPrefetchHook().accessPrefetchedData(
+      myLocArr.prefetchHook.accessPrefetchedData(
           dom.dist.targetLocaleIDs[locIdx], i);
     if isPrefetched {
       return data;
     }
   }
+  return nonLocalAccess(i);
+}
+
+proc BlockArr.nonLocalAccess(i: rank*idxType)  {
   writeln(here, " doing remote nonref access ", i);
   if doRADOpt {
     if myLocArr {
@@ -1119,21 +1121,21 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);
-  }
-  return nonLocalAccess(i);
-}
-
-proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
-  local { //this is completely risky
     const locIdx = dom.dist.targetLocsIdx(i);
     var (isPrefetched, data) =
-      myLocArr.getPrefetchHook().accessPrefetchedDataRef(
+      myLocArr.prefetchHook.accessPrefetchedDataRef(
           dom.dist.targetLocaleIDs[locIdx], i);
     if isPrefetched {
       /*writeln(here, " doing prefetch ref access ", i);*/
       return data.deref();
     }
   }
+  return nonLocalAccess(i);
+}
+
+proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
+  /*local { //this is completely risky*/
+  /*}*/
   /*writeln(here, " doing remote ref access ", i);*/
   /*local {*/
     /*const locIdx = dom.dist.targetLocsIdx(i);*/
@@ -2014,6 +2016,74 @@ proc BlockArr.doiBulkTransferFromDR(Barg)
 // a prototype for now
 inline proc LocBlockArr.getMetadataSize() : uint(64) {
   return rank*2*getSize(1, idxType);
+}
+
+inline proc LocBlockArr.getUnpackContainer(data:c_void_ptr) {
+  var metadata = getElementArrayAtOffset(data, 0, idxType);
+  var ranges: rank*range;
+
+  for param i in 1..rank {
+    ranges[i] = metadata[i-1]..#metadata[i+rank-1];
+  }
+
+  var container: [(...ranges)] eltType;
+  return container._value;
+
+}
+
+inline proc LocBlockArr.getUnpackContainerDirect(data: c_void_ptr) {
+  var metadata = getElementArrayAtOffset(data, 0, idxType);
+  var ranges: rank*range;
+
+  for param i in 1..rank {
+    ranges[i] = metadata[i-1]..#metadata[i+rank-1];
+  }
+
+  /*var container: [(...ranges)] eltType;*/
+  var dom = {(...ranges)};
+
+  return new DefaultRectangularArr(rank=rank, eltType=eltType,
+      idxType=idxType, stridable=stridable, dom=dom._value);
+
+}
+inline proc LocBlockArr.getUnpackContainerSafe(data: c_void_ptr) {
+  var metadata = getElementArrayAtOffset(data, 0, idxType);
+  var ranges: rank*range;
+
+  for param i in 1..rank {
+    ranges[i] = metadata[i-1]..#metadata[i+rank-1];
+  }
+
+  var container: [(...ranges)] eltType;
+  var containerV = container._value;
+
+  var ptr = c_calloc(container._value.type, 1);
+  c_memcpy(ptr, c_ptrTo(containerV), getSize(1,
+        container._value.type));
+  return ptr;
+
+}
+
+inline proc LocBlockArr.getUnpackContainerDesc(data:c_void_ptr) {
+  var metadata = getElementArrayAtOffset(data, 0, idxType);
+  var ranges: rank*range;
+
+  for param i in 1..rank {
+    ranges[i] = metadata[i-1]..#metadata[i+rank-1];
+  }
+  /*var container: [(...ranges)] eltType;*/
+  /*[>writeln(ranges);<]*/
+  /*[>writeln(container);<]*/
+  /*[>halt("asd");<]*/
+  /*return container;*/
+
+  return ranges;
+
+}
+
+
+inline proc LocBlockArr.getDataStartByteIndex(data: c_void_ptr) {
+  return getSize(rank*2, idxType);
 }
 
 inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {

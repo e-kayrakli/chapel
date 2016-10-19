@@ -2736,6 +2736,7 @@ bool entry_has_data(struct __prefetch_entry_t *entry) {
   return false;
 }
 void* get_data_from_prefetch_entry(struct __prefetch_entry_t *entry) {
+  assert(entry);
   if(entry)
     return entry->data;
   else

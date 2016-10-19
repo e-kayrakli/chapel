@@ -118,15 +118,29 @@ module PrefetchHooks {
     }
   }
 
+  inline proc getNewPrefetchHook(obj, type unpackType) {
+    return new GenericPrefetchHook(obj, unpackType, true);
+  }
+
+  inline proc getNewPrefetchHook(obj) {
+    return new GenericPrefetchHook(obj, int, false); //int is dummy
+  }
+
   class GenericPrefetchHook:PrefetchHook {
     var obj;
+    type unpackType;
+    param unpackAccess;
+
     var handles: c_ptr(prefetch_entry_t);
+    var unpackedData: c_ptr(unpackType);
     //FIXME this is a dangerous field now, since we can evict data with
     //no callback to this object
     var hasData: [Locales.domain] bool = false; // only to be use for reprefetch
 
-    proc GenericPrefetchHook(obj) {
+
+    proc GenericPrefetchHook(obj, type unpackType, param unpackAccess) {
       handles = c_calloc(prefetch_entry_t, numLocales);
+      unpackedData = c_calloc(unpackType, numLocales);
       x = 20;
     }
 
@@ -161,6 +175,28 @@ module PrefetchHooks {
       if nodeId!=here.id {
         handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
             c_nil, 0, consistent);
+        /*local {*/
+          if unpackAccess {
+            var dataReceived = getData(handles[nodeId]);
+            /*var ucd = obj.getUnpackContainerDesc(dataReceived);*/
+            /*const containerDom = {(...ucd)};*/
+            /*var container: [containerDom] obj.eltType;*/
+            /*unpackedData[nodeId] = container;*/
+            /*writeln("unpacked data container");*/
+            /*writeln(unpackedData[nodeId]);*/
+            /*halt("asdf");*/
+            unpackedData[nodeId] =
+              obj.getUnpackContainerDirect(dataReceived);
+
+            /*unpackedData[nodeId] = obj.getUnpackContainer(dataReceived);*/
+            // here comes the DefaultRectangular assumption
+            unpackedData[nodeId].theData = 
+              __primitive("cast", _ddata(obj.eltType),
+                  getElementArrayAtOffset(dataReceived,
+                    obj.getDataStartByteIndex(dataReceived),
+                    obj.eltType));
+          }
+        /*}*/
         hasData[nodeId] = true;
       }
     }
@@ -209,22 +245,21 @@ module PrefetchHooks {
 
       /*const __data = getData(handle);*/
       /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
-      var isPrefetched: int;
-      var thisaddr = __primitive("_wide_get_addr", this);
       var data: obj.eltType;
-      get_prefetched_data(thisaddr, handle, getSize(1,obj.eltType),
-          localIdx, isPrefetched, data);
+      if !unpackAccess {
+        var isPrefetched: int;
+        var thisaddr = __primitive("_wide_get_addr", this);
+        get_prefetched_data(thisaddr, handle, getSize(1,obj.eltType),
+            localIdx, isPrefetched, data);
 
-      /*if isPrefetched == 0 {*/
-        /*const cast_data = __data:c_ptr(int);*/
-        /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
-        /*writeln(here, " have prefetched data from ", */
-            /*localeId, " but not with serial index ", deserialIdx, */
-            /*" for index ", idx);*/
-        /*stop_read(handles[localeId]);*/
-      /*}*/
-      /*stop_read(handles[localeId]);*/
-      return (isPrefetched!=0, data);
+        writeln("accessing packed data");
+        return (isPrefetched!=0, data);
+      }
+      else {
+        /*return (true, data);*/
+        writeln("accessing unpacked data");
+        return (true, unpackData[localeId].dsiAccess(idx));
+      }
     }
 
     inline proc accessPrefetchedDataRef(localeId, idx) {
@@ -246,21 +281,29 @@ module PrefetchHooks {
 
       /*const __data = getData(handle);*/
       /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
-      var isPrefetched: int;
-      var thisaddr = __primitive("_wide_get_addr", this);
-      var data = get_prefetched_data_addr(thisaddr, handle, getSize(1,
-            obj.eltType), localIdx, isPrefetched);
+      if !unpackAccess {
+        var isPrefetched: int;
+        var thisaddr = __primitive("_wide_get_addr", this);
+        var data = get_prefetched_data_addr(thisaddr, handle, getSize(1,
+              obj.eltType), localIdx, isPrefetched);
 
-      /*if isPrefetched == 0 {*/
+        /*if isPrefetched == 0 {*/
         /*const cast_data = __data:c_ptr(int);*/
         /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
         /*writeln(here, " have prefetched data from ", */
-            /*localeId, " but not with serial index ", deserialIdx, */
-            /*" for index ", idx);*/
+        /*localeId, " but not with serial index ", deserialIdx, */
+        /*" for index ", idx);*/
         /*stop_read(handles[localeId]);*/
-      /*}*/
-      /*stop_read(handles[localeId]);*/
-      return (isPrefetched!=0, data:c_ptr(obj.eltType));
+        /*}*/
+        /*stop_read(handles[localeId]);*/
+        /*writeln("packed access to prefetched data?");*/
+        return (isPrefetched!=0, data:c_ptr(obj.eltType));
+      }
+      else {
+        /*writeln("unpacked access to prefetched data?");*/
+        ref refData = unpackedData[localeId].dsiAccess(idx);
+        return (true, c_ptrTo(refData));
+      }
     }
     proc finalizePrefetch() {
       for i in 0..#numLocales {
