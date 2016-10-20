@@ -100,7 +100,7 @@ module PrefetchHooks {
       halt("This shouldn't have been called");
       var isPrefetched = false;
       var dummyPtr: c_ptr(real);
-      return (isPrefetched, dummyPtr);
+      return dummyPtr;
     }
 
     proc finalizePrefetch() {
@@ -111,6 +111,11 @@ module PrefetchHooks {
       halt("This shouldn't have been called");
       var dummy: uint(64);
       return dummy;
+    }
+
+    inline proc hasPrefetchedFrom(localeId: int) {
+      halt("This shouldn't have been called");
+      return false;;
     }
 
     proc test() {
@@ -262,18 +267,20 @@ module PrefetchHooks {
       }
     }
 
+    inline proc hasPrefetchedFrom(localeId: int) {
+      return entry_has_data(handles[localeId]);
+    }
+
     inline proc accessPrefetchedDataRef(localeId, idx) {
-      var localIdx = idx;
-      const handle = handles[localeId];
       /*start_read(handles[localeId]);*/
       /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
-      if(!entry_has_data(handle)) {
-        /*writeln(here, " doesn't have prefetched data from ", */
-            /*localeId, " with index ", idx);*/
-        /*stop_read(handles[localeId]);*/
-        var dummy: obj.eltType;
-        return (false, c_ptrTo(dummy));
-      }
+      /*if(!entry_has_data(handle)) {*/
+        /*[>writeln(here, " doesn't have prefetched data from ", <]*/
+            /*[>localeId, " with index ", idx);<]*/
+        /*[>stop_read(handles[localeId]);<]*/
+        /*var dummy: obj.eltType;*/
+        /*return (false, c_ptrTo(dummy));*/
+      /*}*/
 
       // TODO here data must be accessed only once therefore
       // getByteIndex must be called from runtime from insde
@@ -282,6 +289,8 @@ module PrefetchHooks {
       /*const __data = getData(handle);*/
       /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
       if !unpackAccess {
+        var localIdx = idx;
+        const handle = handles[localeId];
         var isPrefetched: int;
         var thisaddr = __primitive("_wide_get_addr", this);
         var data = get_prefetched_data_addr(thisaddr, handle, getSize(1,
@@ -297,12 +306,13 @@ module PrefetchHooks {
         /*}*/
         /*stop_read(handles[localeId]);*/
         /*writeln("packed access to prefetched data?");*/
-        return (isPrefetched!=0, data:c_ptr(obj.eltType));
+        /*return (isPrefetched!=0, data:c_ptr(obj.eltType));*/
+        return data:c_ptr(obj.eltType);
       }
       else {
         /*writeln("unpacked access to prefetched data?");*/
         ref refData = unpackedData[localeId].dsiAccess(idx);
-        return (true, c_ptrTo(refData));
+        return c_ptrTo(refData);
       }
     }
     proc finalizePrefetch() {

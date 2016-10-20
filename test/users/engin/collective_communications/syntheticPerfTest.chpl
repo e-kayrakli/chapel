@@ -117,11 +117,15 @@ proc accessRemotePrefetched() {
 
   arr._value.allGather(consistent = false);
   on Locales[1] {
+    /*const locNumToRead = numToRead;*/
+    /*const locStride = stride;*/
+    var localSum = 0.0;
     t.start();
     for i in 0..#numToRead*stride by stride {
-      sum += arr[i];
+      localSum += arr[i];
     }
     t.stop();
+    sum = localSum;
 
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);

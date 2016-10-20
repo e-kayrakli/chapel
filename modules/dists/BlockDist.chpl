@@ -383,10 +383,13 @@ class LocBlockArr {
   }
 
 }
-/*proc LocBlockArr.getPrefetchHook(){*/
-  /*return prefetchHook:GenericPrefetchHook(this.type);*/
-  /*[>return prefetchHook;<]*/
-/*}*/
+inline proc LocBlockArr.getPrefetchHook(){
+  if allowPrefetchUnpacking then 
+    return prefetchHook:GenericPrefetchHook(this.type,
+        myElems._value.type, true);
+  else
+    return prefetchHook:GenericPrefetchHook(this.type);
+}
 
 //
 // Block constructor for clients of the Block distribution
@@ -1121,12 +1124,12 @@ inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);
-    const locIdx = dom.dist.targetLocsIdx(i);
-    var (isPrefetched, data) =
-      myLocArr.prefetchHook.accessPrefetchedDataRef(
-          dom.dist.targetLocaleIDs[locIdx], i);
-    if isPrefetched {
-      /*writeln(here, " doing prefetch ref access ", i);*/
+    const myDist = dom.dist;
+    const locIdx = myDist.targetLocsIdx(i);
+    const localeId = myDist.targetLocaleIDs[locIdx];
+    const hook = myLocArr.getPrefetchHook();
+    if hook.hasPrefetchedFrom(localeId) {
+      var data = hook.accessPrefetchedDataRef( localeId, i);
       return data.deref();
     }
   }
