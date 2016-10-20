@@ -16,12 +16,13 @@ proc accessRemote() {
   forall i in arr.domain do arr[i] = sin(i);
 
   on Locales[1] {
+    car localSum = 0.0;
     t.start();
     for i in 0..#numToRead {
-      sum += arr[i];
+      localSum += arr[i];
     }
     t.stop();
-
+    sum = localSum;
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);
   }
