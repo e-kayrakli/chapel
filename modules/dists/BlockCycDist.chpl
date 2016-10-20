@@ -188,9 +188,25 @@ class BlockCyclic : BaseDist {
   const blocksize: rank*int;
   const targetLocDom: domain(rank);
   const targetLocales: [targetLocDom] locale;
+  var targetLocaleIDs: [targetLocDom] int; //locale type?
   const locDist: [targetLocDom] LocBlockCyclic(rank, idxType);
 
   var tasksPerLocale: int; // tasks per locale for forall iteration
+
+  var pid = -1;
+
+/*proc BlockCyclic.BlockCyclic(other: BlockCyclic, privateData,*/
+                /*param rank = other.rank,*/
+                /*type idxType = other.idxType) {*/
+  /*targetLocDom = {(...privateData(1))};*/
+
+  /*for i in targetLocDom {*/
+    /*targetLocales(i) = other.targetLocales(i);*/
+    /*targetLocaleIDs(i) = other.targetLocaleIDs(i);*/
+    /*locDist(i) = other.locDist(i);*/
+  /*}*/
+/*}*/
+
 
   proc BlockCyclic(startIdx,  // ?nd*?idxType
                    blocksize,     // nd*int
@@ -246,6 +262,7 @@ class BlockCyclic : BaseDist {
       on this.targetLocales(locid) do
         locDist(locid) = new LocBlockCyclic(rank, idxType, locid, this);
 
+    forall (id, l) in zip(targetLocaleIDs, targetLocales) do id = l.id;
     if tasksPerLocale == 0 then
       this.tasksPerLocale = 1;   // TODO: here.maxTaskPar;
     else
@@ -261,6 +278,7 @@ class BlockCyclic : BaseDist {
     blocksize = other.blocksize;
     targetLocDom = other.targetLocDom;
     targetLocales = other.targetLocales;
+    targetLocaleIDs = other.targetLocaleIDs;
     locDist = other.locDist;
     tasksPerLocale = other.tasksPerLocale;
   }
@@ -632,12 +650,23 @@ proc BlockCyclicDom.enumerateBlocks() {
   }
 }
 
+proc BlockCyclic.dsiSupportsPrivatization() param return true;
+
+proc BlockCyclic.dsiGetPrivatizeData() {
+  return 0;
+}
+
+proc BlockCyclic.dsiPrivatize(privatizeData) {
+  return new BlockCyclic(rank, idxType, this);
+}
+
 proc BlockCyclicDom.dsiSupportsPrivatization() param return true;
 
-proc BlockCyclicDom.dsiGetPrivatizeData() return 0;
+proc BlockCyclicDom.dsiGetPrivatizeData() return dist.pid;
 
 proc BlockCyclicDom.dsiPrivatize(privatizeData) {
-  var privateDist = new BlockCyclic(rank, idxType, dist);
+  /*var privateDist = new BlockCyclic(rank, idxType, dist);*/
+  var privateDist = chpl_getPrivatizedCopy(dist.type, privatizeData);
   var c = new BlockCyclicDom(rank=rank, idxType=idxType, stridable=stridable, dist=privateDist);
   c.locDoms = locDoms;
   c.whole = whole;
@@ -837,17 +866,23 @@ proc BlockCyclicArr.dsiAccess(i: rank*idxType) ref {
   if rank == 1 {
     return dsiAccess(i(1));
   } else {
-    const locIdx = dom.dist.idxToLocaleInd(i);
-    var (isPrefetched, data) =
-      myLocArr.getPrefetchHook().accessPrefetchedDataRef(
-          dom.dist.targetLocales[locIdx].id, i); //avoid this
-    if isPrefetched {
-      /*writeln("prefetch access");*/
-      return data.deref();
+    local {
+      const locIdx = dom.dist.idxToLocaleInd(i);
+      const localeId = dom.dist.targetLocaleIDs[locIdx];
+      const hook = myLocArr.prefetchHook;
+      if hook.hasPrefetchedFrom(localeId) {
+        var data = hook.accessPrefetchedDataRef( localeId, i);
+        /*writeln("yay");*/
+        return data.deref();
+      }
     }
-    else {
-      /*writeln("data prefetched but not with idx ", i);*/
-    }
+    /*var (isPrefetched, data) =*/
+      /*myLocArr.prefetchHook.accessPrefetchedDataRef(*/
+          /*dom.dist.targetLocales[locIdx].id, i); //avoid this*/
+    /*if isPrefetched {*/
+      /*[>writeln("prefetch access");<]*/
+      /*return data.deref();*/
+    /*}*/
     /*writeln(" remote access");*/
     return locArr(dom.dist.idxToLocaleInd(i))(i);
   }
@@ -1030,7 +1065,7 @@ class LocBlockCyclicArr {
 }
 
 proc LocBlockCyclicArr.setup() {
-  prefetchHook = new GenericPrefetchHook(this);
+  prefetchHook = getNewPrefetchHook(this);
 }
 
 
@@ -1047,9 +1082,9 @@ proc LocBlockCyclicArr.mdInd2FlatInd(i: ?t, dim = 1) where t == idxType {
   return  blkNum * blksize + blkOff;
 }
 
-proc LocBlockCyclicArr.getPrefetchHook(){
-  return prefetchHook:GenericPrefetchHook(this.type);
-}
+/*proc LocBlockCyclicArr.getPrefetchHook(){*/
+  /*return prefetchHook:GenericPrefetchHook(this.type);*/
+/*}*/
 
 iter LocBlockCyclicArr.dsiSerialize() {
   // blocksize
