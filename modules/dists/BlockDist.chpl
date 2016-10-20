@@ -388,7 +388,7 @@ inline proc LocBlockArr.getPrefetchHook(){
     return prefetchHook:GenericPrefetchHook(this.type,
         myElems._value.type, true);
   else
-    return prefetchHook:GenericPrefetchHook(this.type);
+    return prefetchHook:GenericPrefetchHook(this.type, int, false);
 }
 
 //
