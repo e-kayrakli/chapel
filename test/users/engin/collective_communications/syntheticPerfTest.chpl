@@ -112,12 +112,12 @@ proc accessRemotePrefetched() {
   var dom = space dmapped Block(space);
   var arr: [dom] real;
   var sum = 0.0;
-  var t = new Timer();
 
   forall i in arr.domain do arr[i] = sin(i);
 
   arr._value.allGather(consistent = false);
   on Locales[1] {
+    var t = new Timer();
     /*const locNumToRead = numToRead;*/
     /*const locStride = stride;*/
     var localSum = 0.0;
@@ -130,5 +130,7 @@ proc accessRemotePrefetched() {
 
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);
+
+    arr._value.myLocArr.getPrefetchHook().printTimeStats();
   }
 }

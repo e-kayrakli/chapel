@@ -1120,14 +1120,23 @@ proc BlockArr.nonLocalAccess(i: rank*idxType)  {
 // By splitting the non-local case into its own function, we can inline the
 // fast/local path and get better performance.
 //
-inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
+proc BlockArr.dsiAccess(i: rank*idxType) ref {
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);
+    if measureTime {
+      myLocArr.getPrefetchHook().t.start();
+    }
     const myDist = dom.dist;
     const locIdx = myDist.targetLocsIdx(i);
     const localeId = myDist.targetLocaleIDs[locIdx];
-    const hook = myLocArr.getPrefetchHook();
+    const hook = myLocArr.prefetchHook;
+    if measureTime {
+      myLocArr.getPrefetchHook().t.stop();
+      myLocArr.getPrefetchHook().accessOutTime +=
+        myLocArr.getPrefetchHook().t.elapsed();
+      myLocArr.getPrefetchHook().t.clear();
+    }
     if hook.hasPrefetchedFrom(localeId) {
       var data = hook.accessPrefetchedDataRef( localeId, i);
       return data.deref();

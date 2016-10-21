@@ -1,8 +1,10 @@
 module PrefetchHooks {
   use BlockDist;
+  use Time;
   // this is currently a totatlly random value
   config param initSerializeBufSize = 1024;
   config param serializeBufferGrowthFactor = 1.5;
+  config param measureTime = false;
 
   extern type c_nodeid_t;
   /*extern class prefetch_entry_t {*/
@@ -96,7 +98,7 @@ module PrefetchHooks {
       return (isPrefetched, dummyPtr);
     }
 
-    inline proc accessPrefetchedDataRef(localeId, idx) {
+    inline proc accessPrefetchedDataRef(localeId: int, idx) {
       halt("This shouldn't have been called");
       var isPrefetched = false;
       var dummyPtr: c_ptr(real);
@@ -135,6 +137,11 @@ module PrefetchHooks {
     var obj;
     type unpackType;
     param unpackAccess;
+
+    var accessPrepTime = 0.0;
+    var accessRealTime = 0.0;
+    var accessOutTime = 0.0;
+    var t = new Timer();
 
     var handles: c_ptr(prefetch_entry_t);
     var unpackedData: c_ptr(unpackType);
@@ -271,7 +278,7 @@ module PrefetchHooks {
       return entry_has_data(handles[localeId]);
     }
 
-    inline proc accessPrefetchedDataRef(localeId, idx) {
+    proc accessPrefetchedDataRef(localeId: int, idx) {
       /*start_read(handles[localeId]);*/
       /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
       /*if(!entry_has_data(handle)) {*/
@@ -289,31 +296,53 @@ module PrefetchHooks {
       /*const __data = getData(handle);*/
       /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
       if !unpackAccess {
-        var localIdx = idx;
-        const handle = handles[localeId];
-        var isPrefetched: int;
-        var thisaddr = __primitive("_wide_get_addr", this);
-        var data = get_prefetched_data_addr(thisaddr, handle, getSize(1,
-              obj.eltType), localIdx, isPrefetched);
+        local{
+          if measureTime {
+            t.start();
+          }
+          var localIdx = idx;
+          const handle = handles[localeId];
+          var isPrefetched: int;
+          var thisaddr = __primitive("_wide_get_addr", this);
+          if measureTime {
+            t.stop();
+            accessPrepTime += t.elapsed();
+            t.clear();
+            t.start();
+          }
+          var data = get_prefetched_data_addr(thisaddr, handle, getSize(1,
+                obj.eltType), localIdx, isPrefetched);
+          if measureTime {
+            t.stop();
+            accessRealTime += t.elapsed();
+            t.clear();
+          }
 
-        /*if isPrefetched == 0 {*/
-        /*const cast_data = __data:c_ptr(int);*/
-        /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
-        /*writeln(here, " have prefetched data from ", */
-        /*localeId, " but not with serial index ", deserialIdx, */
-        /*" for index ", idx);*/
-        /*stop_read(handles[localeId]);*/
-        /*}*/
-        /*stop_read(handles[localeId]);*/
-        /*writeln("packed access to prefetched data?");*/
-        /*return (isPrefetched!=0, data:c_ptr(obj.eltType));*/
-        return data:c_ptr(obj.eltType);
+          /*if isPrefetched == 0 {*/
+          /*const cast_data = __data:c_ptr(int);*/
+          /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
+          /*writeln(here, " have prefetched data from ", */
+          /*localeId, " but not with serial index ", deserialIdx, */
+          /*" for index ", idx);*/
+          /*stop_read(handles[localeId]);*/
+          /*}*/
+          /*stop_read(handles[localeId]);*/
+          /*writeln("packed access to prefetched data?");*/
+          /*return (isPrefetched!=0, data:c_ptr(obj.eltType));*/
+          return data:c_ptr(obj.eltType);
+        }
       }
       else {
         /*writeln("unpacked access to prefetched data?");*/
         ref refData = unpackedData[localeId].dsiAccess(idx);
         return c_ptrTo(refData);
       }
+    }
+
+    proc printTimeStats() {
+      writeln("Hook access prep time : ", accessPrepTime);
+      writeln("Hook access real time : ", accessRealTime);
+      writeln("Hook access out time : ", accessOutTime);
     }
     proc finalizePrefetch() {
       for i in 0..#numLocales {
