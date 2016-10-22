@@ -234,17 +234,17 @@ module PrefetchHooks {
                 getElementArrayAtOffset(dataReceived,
                   obj.getDataStartByteIndex(dataReceived),
                   obj.eltType));
-          const dataElementArray = getElementArrayAtOffset(dataReceived,
-              obj.getDataStartByteIndex(dataReceived), obj.eltType);
-          writeln("After prefetch on ", here);
-          for i in unpackedData[localeIdx].dom.ranges[1] {
-            write(unpackedData[localeIdx].dsiAccess(i), " ");
-          }
-          writeln();
-          for i in unpackedData[localeIdx].dom.ranges[1] {
-            write(dataElementArray[i], " ");
-          }
-          writeln();
+          /*const dataElementArray = getElementArrayAtOffset(dataReceived,*/
+              /*obj.getDataStartByteIndex(dataReceived), obj.eltType);*/
+          /*writeln("After prefetch on ", here);*/
+          /*for i in unpackedData[localeIdx].dom.ranges[1] {*/
+            /*write(unpackedData[localeIdx].dsiAccess(i), " ");*/
+          /*}*/
+          /*writeln();*/
+          /*for i in unpackedData[localeIdx].dom.ranges[1] {*/
+            /*write(dataElementArray[i], " ");*/
+          /*}*/
+          /*writeln();*/
         }
         /*}*/
         hasData[localeIdx] = true;
