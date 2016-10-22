@@ -323,7 +323,7 @@ module PrefetchHooks {
     }
 
     proc updatePrefetch() {
-      for i in localeIDs {
+      for i in localeDom {
         if hasData[i] {
           /*writeln(here.id, " will update from ", i);*/
           reprefetch_single_entry(handles[i]);
