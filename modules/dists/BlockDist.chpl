@@ -375,10 +375,10 @@ class LocBlockArr {
     locRADLock.clear();
   }
 
-  proc setup() {
+  proc setup(targetLocales) {
     prefetchHook = if allowPrefetchUnpacking then 
-      getNewPrefetchHook(this, myElems._value.type) else
-      getNewPrefetchHook(this);
+      getNewPrefetchHook(this, myElems._value.type, targetLocales) else
+      getNewPrefetchHook(this, targetLocales);
 
   }
 
@@ -1018,7 +1018,7 @@ proc BlockArr.setup() {
     on dom.dist.targetLocales(localeIdx) {
       const locDom = dom.getLocDom(localeIdx);
       locArr(localeIdx) = new LocBlockArr(eltType, rank, idxType, stridable, locDom);
-      locArr(localeIdx).setup();
+      locArr(localeIdx).setup(dom.dist.targetLocales);
       if thisid == here.id then
         myLocArr = locArr(localeIdx);
     }
@@ -1127,19 +1127,31 @@ proc BlockArr.dsiAccess(i: rank*idxType) ref {
     if measureTime {
       myLocArr.getPrefetchHook().t.start();
     }
-    const myDist = dom.dist;
-    const locIdx = myDist.targetLocsIdx(i);
-    const localeId = myDist.targetLocaleIDs[locIdx];
-    const hook = myLocArr.prefetchHook;
+    const locIdx = dom.dist.targetLocsIdx(i);
+    const hook = myLocArr.getPrefetchHook();
+
     if measureTime {
       myLocArr.getPrefetchHook().t.stop();
       myLocArr.getPrefetchHook().accessOutTime +=
         myLocArr.getPrefetchHook().t.elapsed();
       myLocArr.getPrefetchHook().t.clear();
     }
-    if hook.hasPrefetchedFrom(localeId) {
-      var data = hook.accessPrefetchedDataRef( localeId, i);
-      return data.deref();
+    
+    if allowPrefetchUnpacking {
+      const unpackData = hook.getUnpackedData(locIdx);
+      if unpackData != nil {
+        if unpackData.dom.dsiMember(i) then
+          return unpackData.dsiAccess(i);
+        else
+          halt("boom");
+      }
+
+    }
+    else {
+      if hook.hasPrefetchedFrom(locIdx) {
+        var data = hook.accessPrefetchedDataRef(locIdx, i);
+        return data.deref();
+      }
     }
   }
   return nonLocalAccess(i);

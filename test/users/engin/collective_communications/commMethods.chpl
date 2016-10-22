@@ -12,7 +12,7 @@ inline proc BlockArr.updatePrefetch() {
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
-      dom.dist.targetLocales[sourceIdx].id, // TODO this can be avoided
+      sourceIdx,
       privCopy.locArr[sourceIdx],
       consistent);
 }
@@ -30,9 +30,8 @@ inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
     consistent) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   const sliceDescArr = domToArray(sliceDesc);
-  /*writeln(sliceDescArr);*/
   locArr[localeIdx].prefetchHook.requestPrefetch(
-      dom.dist.targetLocales[sourceIdx].id,
+      sourceIdx,
       privCopy.locArr[sourceIdx], sliceDescArr,
       consistent);
 }

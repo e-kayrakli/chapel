@@ -78,11 +78,11 @@ module PrefetchHooks {
       return val;
     }
 
-    proc requestPrefetch(nodeId, otherObj, consistent=true) {
+    proc requestPrefetch(localeIdx, otherObj, consistent=true) {
       halt("This shouldn't have been called");
     }
 
-    proc requestPrefetch(nodeId, otherObj, sliceDesc,
+    proc requestPrefetch(localeIdx, otherObj, sliceDesc,
         consistent=true) {
       halt("This shouldn't have been called");
     }
@@ -120,17 +120,29 @@ module PrefetchHooks {
       return false;;
     }
 
+    /*inline proc getUnpackedData(localeIdx) {*/
+      /*halt("This shouldn't have been called");*/
+      /*var c: c_void_ptr;*/
+      /*return c;*/
+    /*}*/
+
     proc test() {
       writeln("Superclass", x);
     }
   }
 
-  inline proc getNewPrefetchHook(obj, type unpackType) {
-    return new GenericPrefetchHook(obj, unpackType, true);
+  inline proc getNewPrefetchHook(obj, type unpackType, localeContainer) {
+    return new GenericPrefetchHook(obj, unpackType, true,
+        localeContainer);
   }
 
   inline proc getNewPrefetchHook(obj) {
     return new GenericPrefetchHook(obj, int, false); //int is dummy
+  }
+
+  inline proc getNewPrefetchHook(obj, localeContainer) {
+    return new GenericPrefetchHook(obj, obj.type, false,
+        localeContainer);
   }
 
   class GenericPrefetchHook:PrefetchHook {
@@ -138,27 +150,45 @@ module PrefetchHooks {
     type unpackType;
     param unpackAccess;
 
+    var hasLocaleContainer = false;
+    var localeDom: domain(obj.rank);
+    var localeIDs: [localeDom] int;
+
+    // for performance debugging
     var accessPrepTime = 0.0;
     var accessRealTime = 0.0;
     var accessOutTime = 0.0;
     var t = new Timer();
 
-    var handles: c_ptr(prefetch_entry_t);
-    var unpackedData: c_ptr(unpackType);
+    /*var handles: c_ptr(prefetch_entry_t);*/
+    var handles: [localeDom] prefetch_entry_t;
+    var unpackedData: [localeDom] unpackType;
     //FIXME this is a dangerous field now, since we can evict data with
-    //no callback to this object
-    var hasData: [Locales.domain] bool = false; // only to be use for reprefetch
+    //no callback to change this array
+    var hasData: [localeDom] bool = false; // only to be use for reprefetch
 
 
-    proc GenericPrefetchHook(obj, type unpackType, param unpackAccess) {
-      handles = c_calloc(prefetch_entry_t, numLocales);
-      unpackedData = c_calloc(unpackType, numLocales);
-      x = 20;
+    /*proc GenericPrefetchHook(obj, type unpackType, param unpackAccess) {*/
+      /*handles = c_calloc(prefetch_entry_t, numLocales);*/
+      /*unpackedData = c_calloc(unpackType, numLocales);*/
+      /*localeD = {1..0};*/
+      /*x = 20;*/
+    /*}*/
+
+    proc GenericPrefetchHook(obj, type unpackType, param unpackAccess,
+        localeContainer: [?D] locale) {
+      /*handles = c_calloc(prefetch_entry_t, numLocales);*/
+      /*unpackedData = c_calloc(unpackType, numLocales);*/
+      localeDom = D;
+      forall (i,l) in zip(localeIDs, localeContainer) do i = l.id;
+      hasLocaleContainer = true;
     }
+
 
     iter dsiSerialize(slice_desc) {
       for val in obj.dsiSerialize(slice_desc:c_ptr(obj.idxType)) do yield val;
     }
+
     proc dsiGetSerializedObjectSize(slice_desc): size_t {
       var size = 0: size_t;
       for v in 
@@ -180,57 +210,69 @@ module PrefetchHooks {
     }
 
     // here obj needs to be a wide class refernece to another hook
-    proc requestPrefetch(nodeId, otherObj, consistent=true) {
+    proc requestPrefetch(localeIdx, otherObj, consistent=true) {
       var robjaddr = __primitive("_wide_get_addr",
           otherObj.prefetchHook);
 
+      const nodeId = localeIDs[localeIdx];
+      /*writeln(here, " prefetching from nodeID ", nodeId, " localeIdx ",*/
+          /*localeIdx);*/
+
       if nodeId!=here.id {
-        handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
+        handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,
             c_nil, 0, consistent);
         /*local {*/
-          if unpackAccess {
-            var dataReceived = getData(handles[nodeId]);
-            /*var ucd = obj.getUnpackContainerDesc(dataReceived);*/
-            /*const containerDom = {(...ucd)};*/
-            /*var container: [containerDom] obj.eltType;*/
-            /*unpackedData[nodeId] = container;*/
-            /*writeln("unpacked data container");*/
-            /*writeln(unpackedData[nodeId]);*/
-            /*halt("asdf");*/
-            unpackedData[nodeId] =
-              obj.getUnpackContainerDirect(dataReceived);
+        if unpackAccess {
+          var dataReceived = getData(handles[localeIdx]);
+          unpackedData[localeIdx] =
+            obj.getUnpackContainerDirect(dataReceived);
 
-            /*unpackedData[nodeId] = obj.getUnpackContainer(dataReceived);*/
-            // here comes the DefaultRectangular assumption
-            unpackedData[nodeId].theData = 
-              __primitive("cast", _ddata(obj.eltType),
-                  getElementArrayAtOffset(dataReceived,
-                    obj.getDataStartByteIndex(dataReceived),
-                    obj.eltType));
-          }
+          /*unpackedData[nodeId] = obj.getUnpackContainer(dataReceived);*/
+          // here comes the DefaultRectangular assumption
+          unpackedData[localeIdx].theData = 
+            __primitive("cast", _ddata(obj.eltType),
+                getElementArrayAtOffset(dataReceived,
+                  obj.getDataStartByteIndex(dataReceived),
+                  obj.eltType));
+        }
         /*}*/
-        hasData[nodeId] = true;
+        hasData[localeIdx] = true;
       }
     }
 
-    proc requestPrefetch(nodeId, otherObj, sliceDesc,
+    proc requestPrefetch(localeIdx, otherObj, sliceDesc,
         consistent=true) {
       var robjaddr = __primitive("_wide_get_addr",
           otherObj.prefetchHook);
+      
+      const nodeId = localeIDs[localeIdx];
 
       if nodeId!=here.id {
         /*writeln(here, " ", sliceDesc);*/
         /*halt("REACHED END");*/
         var (sliceDescPtr, sliceDescSize, dummyBool) =
           convertToSerialChunk(sliceDesc);
-        handles[nodeId] = chpl_comm_request_prefetch(nodeId, robjaddr,
+        handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,
             sliceDescPtr, sliceDescSize, consistent);
-        hasData[nodeId] = true;
+        if unpackAccess {
+          var dataReceived = getData(handles[localeIdx]);
+          unpackedData[localeIdx] =
+            obj.getUnpackContainerDirect(dataReceived);
+
+          /*unpackedData[nodeId] = obj.getUnpackContainer(dataReceived);*/
+          // here comes the DefaultRectangular assumption
+          unpackedData[localeIdx].theData = 
+            __primitive("cast", _ddata(obj.eltType),
+                getElementArrayAtOffset(dataReceived,
+                  obj.getDataStartByteIndex(dataReceived),
+                  obj.eltType));
+        }
+        hasData[localeIdx] = true;
       }
     }
 
     proc updatePrefetch() {
-      for i in 0..#numLocales {
+      for i in localeIDs {
         if hasData[i] {
           /*writeln(here.id, " will update from ", i);*/
           reprefetch_single_entry(handles[i]);
@@ -274,11 +316,11 @@ module PrefetchHooks {
       }
     }
 
-    inline proc hasPrefetchedFrom(localeId: int) {
+    inline proc hasPrefetchedFrom(localeId) {
       return entry_has_data(handles[localeId]);
     }
 
-    proc accessPrefetchedDataRef(localeId: int, idx) {
+    proc accessPrefetchedDataRef(localeId, idx) {
       /*start_read(handles[localeId]);*/
       /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
       /*if(!entry_has_data(handle)) {*/
@@ -310,8 +352,8 @@ module PrefetchHooks {
             t.clear();
             t.start();
           }
-          var data = get_prefetched_data_addr(thisaddr, handle, getSize(1,
-                obj.eltType), localIdx, isPrefetched);
+          var data = get_prefetched_data_addr(thisaddr, handle,
+              getSize(1, obj.eltType), localIdx, isPrefetched);
           if measureTime {
             t.stop();
             accessRealTime += t.elapsed();
@@ -333,10 +375,13 @@ module PrefetchHooks {
         }
       }
       else {
-        /*writeln("unpacked access to prefetched data?");*/
         ref refData = unpackedData[localeId].dsiAccess(idx);
         return c_ptrTo(refData);
       }
+    }
+
+    inline proc getUnpackedData(localeIdx) {
+      return unpackedData[localeIdx];
     }
 
     proc printTimeStats() {
@@ -345,10 +390,10 @@ module PrefetchHooks {
       writeln("Hook access out time : ", accessOutTime);
     }
     proc finalizePrefetch() {
-      for i in 0..#numLocales {
+      for h in handles {
         // 2 acquires are added by the current finalization logic
         // this may not be necessary
-        prefetch_entry_init_seqn_n(handles[i], 0);
+        prefetch_entry_init_seqn_n(h, 0);
       }
     }
 
