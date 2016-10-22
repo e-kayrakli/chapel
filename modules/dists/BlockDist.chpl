@@ -383,6 +383,7 @@ class LocBlockArr {
   }
 
 }
+// this got real ugly
 inline proc LocBlockArr.getPrefetchHook(){
   if allowPrefetchUnpacking then 
     return prefetchHook:GenericPrefetchHook(this.type,
@@ -1124,20 +1125,20 @@ proc BlockArr.dsiAccess(i: rank*idxType) ref {
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);
-    if measureTime {
-      myLocArr.getPrefetchHook().t.start();
-    }
+    /*if measureTime {*/
+      /*myLocArr.getPrefetchHook().t.start();*/
+    /*}*/
     const locIdx = dom.dist.targetLocsIdx(i);
-    const hook = myLocArr.getPrefetchHook();
 
-    if measureTime {
-      myLocArr.getPrefetchHook().t.stop();
-      myLocArr.getPrefetchHook().accessOutTime +=
-        myLocArr.getPrefetchHook().t.elapsed();
-      myLocArr.getPrefetchHook().t.clear();
-    }
+    /*if measureTime {*/
+      /*myLocArr.getPrefetchHook().t.stop();*/
+      /*myLocArr.getPrefetchHook().accessOutTime +=*/
+        /*myLocArr.getPrefetchHook().t.elapsed();*/
+      /*myLocArr.getPrefetchHook().t.clear();*/
+    /*}*/
     
     if allowPrefetchUnpacking {
+      const hook = myLocArr.getPrefetchHook();
       const unpackData = hook.getUnpackedData(locIdx);
       if unpackData != nil {
         if unpackData.dom.dsiMember(i) then
@@ -1148,6 +1149,10 @@ proc BlockArr.dsiAccess(i: rank*idxType) ref {
 
     }
     else {
+      const hook =
+        /*myLocArr.getPrefetchHook(dom.dist.targetLocales.type);*/
+        myLocArr.getPrefetchHook();
+      /*const hook = myLocArr.prefetchHook;*/
       if hook.hasPrefetchedFrom(locIdx) {
         var data = hook.accessPrefetchedDataRef(locIdx, i);
         return data.deref();
@@ -2059,15 +2064,31 @@ inline proc LocBlockArr.getUnpackContainerDirect(data: c_void_ptr) {
   var metadata = getElementArrayAtOffset(data, 0, idxType);
   var ranges: rank*range;
 
+  var origin = 0;
   for param i in 1..rank {
     ranges[i] = metadata[i-1]..#metadata[i+rank-1];
+    origin += metadata[i-1];
   }
 
   /*var container: [(...ranges)] eltType;*/
   var dom = {(...ranges)};
+  /*writeln(here, " unpacking the data with domain ", dom);*/
 
-  return new DefaultRectangularArr(rank=rank, eltType=eltType,
+  /*var debugDataArr = getElementArrayAtOffset(data, 8*rank*2, uint(8));*/
+  /*for i in ranges[2] {*/
+    /*write(debugDataArr[i], " ");*/
+  /*}*/
+  /*writeln();*/
+
+  var ret =  new DefaultRectangularArr(rank=rank, eltType=eltType,
       idxType=idxType, stridable=stridable, dom=dom._value);
+  /*writeln("Pre initialize ", ret.origin , " ", ret.factoredOffs,  " ",*/
+      /*ret.blk, " ", ret.off);*/
+  /*ret.origin = origin;*/
+  /*ret.initialize();*/
+  /*writeln("Post initialize ", ret.origin, " ", ret.factoredOffs, " ",*/
+      /*ret.blk, " ", ret.off);*/
+  return ret;
 
 }
 inline proc LocBlockArr.getUnpackContainerSafe(data: c_void_ptr) {
@@ -2253,9 +2274,8 @@ iter LocBlockArr.dsiSerialize(slice_desc) {
 
   for param i in 1..rank {
     metaDataArr[i-1] = max(myDom.dim(i).low, slice_desc[i-1]);
-    metaDataArr[i-1+rank] =
-      min(myDom.dim(i).high,
-          slice_desc[i-1+rank])-max(myDom.dim(i).low, slice_desc[i-1])+1;
+    metaDataArr[i-1+rank] = min(myDom.dim(i).high,
+        slice_desc[i-1+rank])-max(myDom.dim(i).low, slice_desc[i-1])+1;
   }
 
   yield convertToSerialChunk(metaDataArr);

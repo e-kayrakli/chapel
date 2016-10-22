@@ -917,6 +917,7 @@ module DefaultRectangular {
           halt("array index out of bounds: " + _stringify_tuple(ind));
         }
       var dataInd = getDataIndex(ind);
+      /*chpl_debug_writeln(" Data index for ", ind, " is ", dataInd);*/
       return theData(dataInd);
     }
 
