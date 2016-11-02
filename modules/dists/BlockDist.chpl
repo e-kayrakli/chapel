@@ -1178,7 +1178,7 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
       /*return data;*/
     /*}*/
   /*}*/
-  /*writeln(here, " doing remote ref access ", i);*/
+  halt(here, " doing remote ref access ", i);
   if doRADOpt {
     if myLocArr {
       if boundsChecking then

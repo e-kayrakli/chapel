@@ -221,32 +221,21 @@ module PrefetchHooks {
       if nodeId!=here.id {
         handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,
             c_nil, 0, consistent);
-        /*local {*/
+
         if unpackAccess {
           var dataReceived = getData(handles[localeIdx]);
           unpackedData[localeIdx] =
             obj.getUnpackContainerDirect(dataReceived);
 
-          /*unpackedData[nodeId] = obj.getUnpackContainer(dataReceived);*/
           // here comes the DefaultRectangular assumption
-          unpackedData[localeIdx].theData = 
+          unpackedData[localeIdx].data = 
             __primitive("cast", _ddata(obj.eltType),
                 getElementArrayAtOffset(dataReceived,
                   obj.getDataStartByteIndex(dataReceived),
                   obj.eltType));
-          /*const dataElementArray = getElementArrayAtOffset(dataReceived,*/
-              /*obj.getDataStartByteIndex(dataReceived), obj.eltType);*/
-          /*writeln("After prefetch on ", here);*/
-          /*for i in unpackedData[localeIdx].dom.ranges[1] {*/
-            /*write(unpackedData[localeIdx].dsiAccess(i), " ");*/
-          /*}*/
-          /*writeln();*/
-          /*for i in unpackedData[localeIdx].dom.ranges[1] {*/
-            /*write(dataElementArray[i], " ");*/
-          /*}*/
-          /*writeln();*/
+
+          unpackedData[localeIdx].initShiftedData();
         }
-        /*}*/
         hasData[localeIdx] = true;
       }
     }
@@ -265,12 +254,12 @@ module PrefetchHooks {
           convertToSerialChunk(sliceDesc);
         handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,
             sliceDescPtr, sliceDescSize, consistent);
+
         if unpackAccess {
           var dataReceived = getData(handles[localeIdx]);
           unpackedData[localeIdx] =
             obj.getUnpackContainerDirect(dataReceived);
 
-          /*unpackedData[nodeId] = obj.getUnpackContainer(dataReceived);*/
           // here comes the DefaultRectangular assumption
           unpackedData[localeIdx].data =
             __primitive("cast", _ddata(obj.eltType),
@@ -278,45 +267,7 @@ module PrefetchHooks {
                   obj.getDataStartByteIndex(dataReceived),
                   obj.eltType));
 
-          /*unpackedData[localeIdx].origin = 32;*/
-          /*unpackedData[localeIdx].initialize();*/
           unpackedData[localeIdx].initShiftedData();
-
-          /*const dataElementArray = getElementArrayAtOffset(dataReceived,*/
-              /*obj.getDataStartByteIndex(dataReceived), obj.eltType);*/
-          /*if here.id == 0 {*/
-            /*writeln("serial print out of first 50 data");*/
-            /*for i in 0..50 {*/
-              /*writeln(unpackedData[localeIdx].data[i]);*/
-            /*}*/
-            /*writeln("Serialized data");*/
-            /*for i in 0..50 {*/
-              /*writeln(unpackedData[localeIdx].shiftedData[i]);*/
-            /*}*/
-            /*writeln("Prefetched  data");*/
-            /*for i in 0..50 {*/
-              /*writeln(dataElementArray[i]);*/
-            /*}*/
-          /*}*/
-          /*[>unpackedData[localeIdx].dsiAccess((0,0)) = 55:uint(8);<]*/
-
-          /*writeln("After prefetch on ", here);*/
-          /*writeln("Data start index : ",*/
-              /*obj.getDataStartByteIndex(dataReceived));*/
-          /*for i in unpackedData[localeIdx].dom.ranges[1] {*/
-            /*for j in unpackedData[localeIdx].dom.ranges[2] {*/
-              /*write((i,j),":",unpackedData[localeIdx].dsiAccess((i,j)),*/
-                  /*" ");*/
-              /*writeln( " Data index : ",*/
-                  /*unpackedData[localeIdx].getDataIndex((i,j)));*/
-            /*}*/
-            /*writeln();*/
-          /*}*/
-          /*writeln("Packed data ");*/
-          /*for i in 0..#(unpackedData[localeIdx].dom.dsiNumIndices) {*/
-            /*write(dataElementArray[i], " ");*/
-          /*}*/
-          /*writeln();*/
         }
         hasData[localeIdx] = true;
       }
