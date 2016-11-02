@@ -1121,7 +1121,7 @@ proc BlockArr.nonLocalAccess(i: rank*idxType)  {
 // By splitting the non-local case into its own function, we can inline the
 // fast/local path and get better performance.
 //
-proc BlockArr.dsiAccess(i: rank*idxType) ref {
+inline proc BlockArr.dsiAccess(i: rank*idxType) ref {
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);
