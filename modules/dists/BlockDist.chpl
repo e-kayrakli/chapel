@@ -422,9 +422,9 @@ class LocBlockArr {
   }
 
   proc setup(targetLocales) {
-    prefetchHook = if allowPrefetchUnpacking then 
-      getNewPrefetchHook(this, myElems._value.type, targetLocales) else
-      getNewPrefetchHook(this, targetLocales);
+    prefetchHook = if allowPrefetchUnpacking then
+      getNewPrefetchHook(this, myElems._instance.type, targetLocales)
+      else getNewPrefetchHook(this, targetLocales);
 
   }
 
@@ -1243,7 +1243,7 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
       /*return data;*/
     /*}*/
   /*}*/
-  halt(here, " doing remote ref access ", i);
+  writeln(here, " doing remote ref access ", i);
   if doRADOpt {
     if myLocArr {
       if boundsChecking then
@@ -1469,7 +1469,7 @@ proc BlockArr.dsiSlice(d: BlockDom) {
   coforall i in d.dist.targetLocDom {
     on d.dist.targetLocales(i) {
       alias.locArr[i] = new LocBlockArr(eltType=eltType, rank=rank, idxType=idxType, stridable=d.stridable, locDom=d.locDoms[i], myElems=>locArr[i].myElems[d.locDoms[i].myBlock]);
-      alias.locArr[i].setup();
+      alias.locArr[i].setup(dom.dist.targetLocales);
       if thisid == here.id then
         alias.myLocArr = alias.locArr[i];
     }
@@ -2145,8 +2145,9 @@ inline proc LocBlockArr.getUnpackContainerDirect(data: c_void_ptr) {
   /*}*/
   /*writeln();*/
 
-  var ret =  new DefaultRectangularArr(rank=rank, eltType=eltType,
-      idxType=idxType, stridable=stridable, dom=dom._value);
+  var ret =  new DefaultRectangularArr(eltType=eltType,rank=rank,
+      idxType=idxType, stridable=dom._instance.stridable,
+      dom=dom._instance);
   /*writeln("Pre initialize ", ret.origin , " ", ret.factoredOffs,  " ",*/
       /*ret.blk, " ", ret.off);*/
   /*ret.origin = origin;*/
