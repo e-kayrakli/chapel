@@ -28,6 +28,7 @@
 #include "clangUtil.h"
 #include "expr.h"
 #include "externCResolve.h"
+#include "initializerRules.h"
 #include "LoopStmt.h"
 #include "passes.h"
 #include "stlUtil.h"
@@ -807,6 +808,7 @@ static void build_type_constructor(AggregateType* ct) {
   if (ct->symbol->hasFlag(FLAG_TUPLE)) {
     fn->addFlag(FLAG_TUPLE);
     fn->addFlag(FLAG_INLINE);
+    gGenericTupleTypeCtor = fn;
   }
 
   // and insert it into the class type.
@@ -934,17 +936,7 @@ static void build_type_constructor(AggregateType* ct) {
             fn->insertAtTail(new CallExpr(PRIM_SET_MEMBER,
                                           fn->_this,
                                           new_CStringSymbol(field->name),
-                                          new CallExpr("chpl__initCopy",
-                                                       new CallExpr(PRIM_TYPE_INIT, arg))));
-          #if 0
-          // Leaving this case in for Tom's work.  He will remove it if it is
-          // unnecessary
-          else
-            fn->insertAtTail(new CallExpr(PRIM_SET_MEMBER,
-                                          fn->_this,
-                                          new_CStringSymbol(field->name),
                                           new CallExpr(PRIM_TYPE_INIT, arg)));
-          #endif
         } else if (exprType) {
           CallExpr* newInit = new CallExpr(PRIM_TYPE_INIT, exprType->copy());
           CallExpr* newSet  = new CallExpr(PRIM_SET_MEMBER, 
@@ -1017,6 +1009,7 @@ static void build_constructor(AggregateType* ct) {
   if (ct->symbol->hasFlag(FLAG_TUPLE)) {
     fn->addFlag(FLAG_TUPLE);
     fn->addFlag(FLAG_INLINE);
+    gGenericTupleInit = fn;
   }
 
   // And insert it into the class type.
@@ -1190,26 +1183,28 @@ static void build_constructor(AggregateType* ct) {
                                                                       init->copy())));
 
         toBlockStmt(exprType)->insertAtTail(new CallExpr(PRIM_TYPEOF, tmp));
-      }
 
+        // This is set up for initializers (but we don't know if this type has
+        // one just yet).  This must be done before the initCopies or
+        // _createFieldDefault information is wrapped around the init, because
+        // we likely don't need those for the initializer omitted fields
+        // TODO: verify my claim about the _createFieldDefault call
+        storeFieldInit(ct, field->name, init, NULL);
+      }
     } else if (hadType &&
                !field->isType() &&
                !field->hasFlag(FLAG_PARAM)) {
       init = new CallExpr(PRIM_INIT, exprType->copy());
     }
 
-    if (!field->isType() && !field->hasFlag(FLAG_PARAM)) {
-      if (hadType)
-        init = new CallExpr("_createFieldDefault", exprType->copy(), init);
-      else if (init)
-        init = new CallExpr("chpl__initCopy", init);
-    }
 
-    if (init) {
-      if (hadInit)
-        arg->defaultExpr = new BlockStmt(init, BLOCK_SCOPELESS);
-      else
-        arg->defaultExpr = new BlockStmt(new SymExpr(gTypeDefaultToken));
+    if (!field->isType() && !field->hasFlag(FLAG_PARAM)) {
+      if (hadType) {
+        if (hadInit)
+          storeFieldInit(ct, field->name, init, NULL);
+        init = new CallExpr("_createFieldDefault", exprType->copy(), init);
+      } else if (init)
+        init = new CallExpr("chpl__initCopy", init);
     }
 
     if (exprType) {
@@ -1217,6 +1212,19 @@ static void build_constructor(AggregateType* ct) {
         arg->typeExpr = new BlockStmt(exprType, BLOCK_TYPE);
       else
         arg->typeExpr = toBlockStmt(exprType);
+    }
+
+    if (init) {
+      if (hadInit)
+        arg->defaultExpr = new BlockStmt(init, BLOCK_SCOPELESS);
+      else {
+        Expr* initVal = new SymExpr(gTypeDefaultToken);
+        arg->defaultExpr = new BlockStmt(initVal);
+        if (arg->typeExpr)
+          storeFieldInit(ct, field->name, initVal, arg->typeExpr);
+        else
+          storeFieldInit(ct, field->name, NULL, NULL);
+      }
     }
 
     if (field->isType())
@@ -1865,7 +1873,7 @@ static bool tryCResolve_set(ModuleSymbol* module, const char* name,
 
     if (c_exprs.count()) {
       forv_Vec(Expr*, c_expr, c_exprs) {
-        Vec<DefExpr*> v;
+        std::vector<DefExpr*> v;
 
         collectDefExprs(c_expr, v);
 

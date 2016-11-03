@@ -97,6 +97,7 @@ enum PrimitiveTag {
 
   PRIM_ADDR_OF,             // set a reference to a value
   PRIM_DEREF,               // dereference a reference
+  PRIM_SET_REFERENCE,       // set a reference
 
   PRIM_LOCAL_CHECK,         // assert that a wide ref is on this locale
 
@@ -220,6 +221,7 @@ enum PrimitiveTag {
   PRIM_FIELD_NUM_TO_NAME,
   PRIM_FIELD_NAME_TO_NUM,
   PRIM_FIELD_BY_NUM,
+  PRIM_ITERATOR_RECORD_FIELD_VALUE_BY_FORMAL,
   PRIM_IS_UNION_TYPE,
   PRIM_IS_ATOMIC_TYPE,
   PRIM_IS_REF_ITER_TYPE,
@@ -240,6 +242,9 @@ enum PrimitiveTag {
   PRIM_LOOKUP_FILENAME,   // Given an index, get a given filename (c_string)
 
   PRIM_GET_COMPILER_VAR,
+
+  PRIM_ZIP,
+  PRIM_REQUIRE,
 
   NUM_KNOWN_PRIMS
 };

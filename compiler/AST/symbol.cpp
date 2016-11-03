@@ -98,6 +98,15 @@ FnSymbol *gPrintModuleInitFn = NULL;
 FnSymbol* gChplHereAlloc = NULL;
 FnSymbol* gChplHereFree = NULL;
 FnSymbol* gChplDoDirectExecuteOn = NULL;
+FnSymbol *gGenericTupleTypeCtor = NULL;
+FnSymbol *gGenericTupleInit = NULL;
+FnSymbol *gGenericTupleDestroy = NULL;
+FnSymbol *gBuildTupleType = NULL;
+FnSymbol *gBuildStarTupleType = NULL;
+FnSymbol *gBuildTupleTypeNoRef = NULL;
+FnSymbol *gBuildStarTupleTypeNoRef = NULL;
+
+
 
 std::map<FnSymbol*,int> ftableMap;
 std::vector<FnSymbol*> ftableVec;
@@ -114,7 +123,7 @@ Map<FnSymbol*,Vec<FnSymbol*>*> virtualRootsMap;
 
 Symbol::Symbol(AstTag astTag, const char* init_name, Type* init_type) :
   BaseAST(astTag),
-  qual(QUAL_BLANK),
+  qual(QUAL_UNKNOWN),
   type(init_type),
   flags(),
   defPoint(NULL)
@@ -165,20 +174,28 @@ static Qualifier qualifierForArgIntent(IntentTag intent)
     case INTENT_CONST_IN:  return QUAL_CONST_VAL;
     case INTENT_REF:       return QUAL_REF;
     case INTENT_CONST_REF: return QUAL_CONST_REF;
-    case INTENT_PARAM:     return QUAL_BLANK; // TODO
-    case INTENT_TYPE:      return QUAL_BLANK; // TODO
-    case INTENT_BLANK:     return QUAL_BLANK;
+    case INTENT_PARAM:     return QUAL_PARAM; // TODO
+    case INTENT_TYPE:      return QUAL_UNKNOWN; // TODO
+    case INTENT_BLANK:     return QUAL_UNKNOWN;
     // no default to get compiler warning if other intents are added
   }
-  return QUAL_BLANK;
+  return QUAL_UNKNOWN;
 }
 
 QualifiedType Symbol::qualType() {
+  QualifiedType ret(dtUnknown, QUAL_UNKNOWN);
+
   if (ArgSymbol* arg = toArgSymbol(this)) {
-    return QualifiedType(type, qualifierForArgIntent(arg->intent));
+    Qualifier q = qualifierForArgIntent(arg->intent);
+    if (qual == QUAL_WIDE_REF && (q == QUAL_REF || q == QUAL_CONST_REF)) {
+      q = QUAL_WIDE_REF;
+    }
+    ret = QualifiedType(type, q);
+  } else {
+    ret = QualifiedType(type, qual);
   }
 
-  return QualifiedType(type, qual);
+  return ret;
 }
 
 
@@ -196,6 +213,20 @@ bool Symbol::isParameter() const {
 
 bool Symbol::isRenameable() const {
   return !(hasFlag(FLAG_EXPORT) || hasFlag(FLAG_EXTERN));
+}
+
+bool Symbol::isRef() {
+  QualifiedType q = qualType();
+  return (q.isRef() || type->symbol->hasFlag(FLAG_REF));
+}
+
+bool Symbol::isWideRef() {
+  QualifiedType q = qualType();
+  return (q.isWideRef() || type->symbol->hasFlag(FLAG_WIDE_REF));
+}
+
+bool Symbol::isRefOrWideRef() {
+  return isRef() || isWideRef();
 }
 
 
@@ -323,6 +354,15 @@ VarSymbol::VarSymbol(const char *init_name,
   llvmDIVariable(NULL)
 {
   gVarSymbols.add(this);
+  if (type == dtUnknown || type->symbol == NULL) {
+    this->qual = QUAL_UNKNOWN;
+  } else if (type->symbol->hasFlag(FLAG_REF)) {
+    this->qual = QUAL_REF;
+  } else if (type->symbol->hasFlag(FLAG_WIDE_REF)) {
+    this->qual = QUAL_WIDE_REF;
+  } else {
+    this->qual = QUAL_VAL;
+  }
 }
 
 
@@ -588,7 +628,7 @@ llvm::Value* codegenImmediateLLVM(Immediate* i)
 }
 #endif
 
-GenRet VarSymbol::codegen() {
+GenRet VarSymbol::codegenVarSymbol(bool lhsInSetReference) {
   GenInfo* info = gGenInfo;
   FILE* outfile = info->cfile;
   GenRet ret;
@@ -689,9 +729,30 @@ GenRet VarSymbol::codegen() {
         ret.isLVPtr = GEN_VAL;
         ret.c = cname;
       } else {
-        ret.c = '&';
-        ret.c += cname;
-        ret.isLVPtr = GEN_PTR;
+        QualifiedType qt = qualType();
+        if (lhsInSetReference) {
+          ret.c = '&';
+          ret.c += cname;
+          ret.isLVPtr = GEN_PTR;
+          if (qt.isRef() && !qt.isRefType())
+            ret.chplType = getOrMakeRefTypeDuringCodegen(typeInfo());
+          else if (qt.isWideRef() && !qt.isWideRefType()) {
+            Type* refType = getOrMakeRefTypeDuringCodegen(typeInfo());
+            ret.chplType = getOrMakeWideTypeDuringCodegen(refType);
+          }
+        } else {
+          if (qt.isRef() && !qt.isRefType()) {
+            ret.c = cname;
+            ret.isLVPtr = GEN_PTR;
+          } else if(qt.isWideRef() && !qt.isWideRefType()) {
+            ret.c = cname;
+            ret.isLVPtr = GEN_WIDE_PTR;
+          } else {
+            ret.c = '&';
+            ret.c += cname;
+            ret.isLVPtr = GEN_PTR;
+          }
+        }
       }
       // Print string contents in a comment if developer mode
       // and savec is set.
@@ -806,6 +867,9 @@ GenRet VarSymbol::codegen() {
   return ret;
 }
 
+GenRet VarSymbol::codegen() {
+  return codegenVarSymbol(true);
+}
 
 void VarSymbol::codegenDefC(bool global, bool isHeader) {
   GenInfo* info = gGenInfo;
@@ -816,9 +880,24 @@ void VarSymbol::codegenDefC(bool global, bool isHeader) {
     return;
 
   AggregateType* ct = toAggregateType(type);
+  QualifiedType qt = qualType();
+
+  if (qt.isRef() && !qt.isRefType()) {
+    Type* refType = getOrMakeRefTypeDuringCodegen(type);
+    ct = toAggregateType(refType);
+  }
+  if (qt.isWideRef() && !qt.isWideRefType()) {
+    Type* refType = getOrMakeRefTypeDuringCodegen(type);
+    Type* wideType = getOrMakeWideTypeDuringCodegen(refType);
+    ct = toAggregateType(wideType);
+  }
+
+  Type* useType = type;
+  if (ct) useType = ct;
+
   std::string typestr =  (this->hasFlag(FLAG_SUPER_CLASS) ?
-                          std::string(ct->classStructName(true)) :
-                          type->codegen().c);
+                          std::string(toAggregateType(useType)->classStructName(true)) :
+                          useType->codegen().c);
 
   //
   // a variable can be codegen'd as static if it is global and neither
@@ -929,6 +1008,9 @@ void VarSymbol::codegenGlobalDef(bool isHeader) {
 
 void VarSymbol::codegenDef() {
   GenInfo* info = gGenInfo;
+
+  if (id == breakOnCodegenID)
+    gdbShouldBreakHere();
 
   // Local variable symbols should never be
   // generated for extern or void types
@@ -1109,7 +1191,10 @@ void ArgSymbol::replaceChild(BaseAST* old_ast, BaseAST* new_ast) {
 }
 
 bool argMustUseCPtr(Type* type) {
-  if (isRecord(type) || isUnion(type))
+  if (isUnion(type))
+    return true;
+  if (isRecord(type) &&
+      !type->symbol->hasEitherFlag(FLAG_WIDE_REF, FLAG_WIDE_CLASS))
     return true;
   return false;
 }
@@ -1230,23 +1315,36 @@ const char* intentDescrString(IntentTag intent) {
 }
 
 
+static Type* getArgSymbolCodegenType(ArgSymbol* arg) {
+  QualifiedType q = arg->qualType();
+  Type* useType = q.type();
+
+  if (q.isRef() && !q.isRefType())
+    useType = getOrMakeRefTypeDuringCodegen(useType);
+
+  if (q.isWideRef() && !q.isWideRefType()) {
+    Type* refType = getOrMakeRefTypeDuringCodegen(useType);
+    useType = getOrMakeWideTypeDuringCodegen(refType);
+  }
+  return useType;
+}
+
 GenRet ArgSymbol::codegenType() {
   GenInfo* info = gGenInfo;
   FILE* outfile = info->cfile;
   GenRet ret;
+
+  Type* useType = getArgSymbolCodegenType(this);
+
   if( outfile ) {
-    ret.c = type->codegen().c;
-    if (requiresCPtr())
-      ret.c += "* const";
+    ret.c = useType->codegen().c;
   } else {
 #ifdef HAVE_LLVM
-    llvm::Type *argType = type->codegen().type;
-    if(requiresCPtr()) {
-      argType = argType->getPointerTo();
-    }
+    llvm::Type *argType = useType->codegen().type;
     ret.type = argType;
 #endif
   }
+  ret.chplType = useType;
   return ret;
 }
 
@@ -1256,22 +1354,44 @@ GenRet ArgSymbol::codegen() {
   GenRet ret;
 
   if( outfile ) {
+    QualifiedType qt = qualType();
     ret.c = '&';
     ret.c += cname;
     ret.isLVPtr = GEN_PTR;
+    if (qt.isRef() && !qt.isRefType())
+      ret.chplType = getOrMakeRefTypeDuringCodegen(typeInfo());
+    else if (qt.isWideRef() && !qt.isWideRefType()) {
+      Type* refType = getOrMakeRefTypeDuringCodegen(typeInfo());
+      ret.chplType = getOrMakeWideTypeDuringCodegen(refType);
+    }
+    /*
+    // BHARSH TODO: Is this still necessary?
+    if (q.isRef() && !q.isRefType()) {
+      ret.c = cname;
+      ret.isLVPtr = GEN_PTR;
+    } else if(q.isWideRef() && !q.isWideRefType()) {
+      ret.c = cname;
+      ret.isLVPtr = GEN_WIDE_PTR;
+    } else {
+      ret.c = '&';
+      ret.c += cname;
+      ret.isLVPtr = GEN_PTR;
+    }
+    */
   } else {
 #ifdef HAVE_LLVM
     ret = info->lvt->getValue(cname);
 #endif
   }
 
-  if( requiresCPtr() ) {
-    // Don't try to use chplType.
-    ret.chplType = NULL;
-    ret = codegenLocalDeref(ret);
-  }
+  // BHARSH TODO: Is this still necessary?
+  //if( requiresCPtr() ) {
+  //  // Don't try to use chplType.
+  //  ret.chplType = NULL;
+  //  ret = codegenLocalDeref(ret);
+  //}
 
-  ret.chplType = typeInfo();
+  //ret.chplType = this->type;
 
   return ret;
 }
@@ -1559,8 +1679,6 @@ FnSymbol::FnSymbol(const char* initName) :
   valueFunction(NULL),
   codegenUniqueNum(1),
   doc(NULL),
-  partialCopySource(NULL),
-  varargOldFormal(NULL),
   retSymbol(NULL)
 #ifdef HAVE_LLVM
   ,
@@ -1622,9 +1740,6 @@ void FnSymbol::verify() {
   // Should those even persist between passes?
   verifyInTree(valueFunction, "FnSymbol::valueFunction");
   verifyInTree(retSymbol, "FnSymbol::retSymbol");
-  // Used only during resolution. Ditto partialCopyMap, varargNewFormals.
-  INT_ASSERT(partialCopySource == NULL);
-  INT_ASSERT(varargOldFormal == NULL);
 }
 
 
@@ -1681,6 +1796,44 @@ FnSymbol::copyInnerCore(SymbolMap* map) {
   return newFn;
 }
 
+
+// FnSymbol id -> PartialCopyData
+// Todo: this really should be a hashtable, as it accumulates lots of entries.
+static std::map<int,PartialCopyData> partialCopyFnMap;
+
+// Return the entry for 'fn' in partialCopyFnMap or NULL if it does not exist.
+PartialCopyData* getPartialCopyInfo(FnSymbol* fn) {
+  std::map<int,PartialCopyData>::iterator it = partialCopyFnMap.find(fn->id);
+  if (it == partialCopyFnMap.end()) return NULL;
+  else                              return &(it->second);
+}
+
+// Add 'fn' to partialCopyFnMap; remove the corresponding entry.
+PartialCopyData& addPartialCopyInfo(FnSymbol* fn) {
+  // A duplicate addition does not make sense, although technically possible.
+  INT_ASSERT(!partialCopyFnMap.count(fn->id));
+  return partialCopyFnMap[fn->id];
+}
+
+// Remove 'fn' from partialCopyFnMap.
+void clearPartialCopyInfo(FnSymbol* fn) {
+  size_t cnt = partialCopyFnMap.erase(fn->id);
+  INT_ASSERT(cnt == 1); // Convention: clear only what was added before.
+}
+
+void clearPartialCopyFnMap() {
+  partialCopyFnMap.clear();
+}
+
+// Since FnSymbols can get removed at pass boundaries, leaving them
+// in here may result in useless entries.
+// As of this writing, PartialCopyData is used only within resolution.
+void checkEmptyPartialCopyFnMap() {
+  if (partialCopyFnMap.size())
+    INT_FATAL("partialCopyFnMap is not empty");
+}
+
+
 /** Copy just enough of the AST to get through filter candidate and
  *  disambiguate-by-match.
  *
@@ -1695,7 +1848,10 @@ FnSymbol::copyInnerCore(SymbolMap* map) {
  */
 FnSymbol* FnSymbol::partialCopy(SymbolMap* map) {
   FnSymbol* newFn = this->copyInnerCore(map);
-  newFn->partialCopySource  = this;
+
+  // Indicate that we need to instantiate its body later.
+  PartialCopyData& pci = addPartialCopyInfo(newFn);
+  pci.partialCopySource  = this;
 
   if (this->_this == NULL) {
     // Case 1: No _this pointer.
@@ -1767,13 +1923,7 @@ FnSymbol* FnSymbol::partialCopy(SymbolMap* map) {
   update_symbols(newFn, map);
 
   // Copy over the partialCopyMap, to be used later in finalizeCopy.
-  newFn->partialCopyMap.copy(*map);
-
-  /*
-   * Add the PARTIAL_COPY flag so we will know if we need to instantiate its
-   * body later.
-   */
-  newFn->addFlag(FLAG_PARTIAL_COPY);
+  pci.partialCopyMap.copy(*map);
 
   return newFn;
 }
@@ -1787,15 +1937,16 @@ FnSymbol* FnSymbol::partialCopy(SymbolMap* map) {
  * \param map Map from symbols in the old function to symbols in the new one
  */
 void FnSymbol::finalizeCopy(void) {
-  if (this->hasFlag(FLAG_PARTIAL_COPY)) {
+  if (PartialCopyData* pci = getPartialCopyInfo(this)) {
+    FnSymbol* const partialCopySource = pci->partialCopySource;
 
     // Make sure that the source has been finalized.
-    this->partialCopySource->finalizeCopy();
+    partialCopySource->finalizeCopy();
 
     SET_LINENO(this);
 
     // Retrieve our old/new symbol map from the partial copy process.
-    SymbolMap* map = &(this->partialCopyMap);
+    SymbolMap* map = &(pci->partialCopyMap);
 
     /*
      * When we reach this point we will be in one of three scenarios:
@@ -1810,7 +1961,7 @@ void FnSymbol::finalizeCopy(void) {
     if (this->hasFlag(FLAG_EXPANDED_VARARGS)) {
       // Alias the old body and make a new copy of the body from the source.
       BlockStmt* varArgNodes = this->body;
-      this->body->replace( COPY_INT(this->partialCopySource->body) );
+      this->body->replace( COPY_INT(partialCopySource->body) );
 
       /*
        * Iterate over the statements that have been added to the function body
@@ -1823,10 +1974,10 @@ void FnSymbol::finalizeCopy(void) {
       this->removeFlag(FLAG_EXPANDED_VARARGS);
 
     } else if (this->body->body.length == 0) {
-      this->body->replace( COPY_INT(this->partialCopySource->body) );
+      this->body->replace( COPY_INT(partialCopySource->body) );
     }
 
-    Symbol* replacementThis = map->get(this->partialCopySource->_this);
+    Symbol* replacementThis = map->get(partialCopySource->_this);
 
     /*
      * Two cases may arise here.  The first is when the _this symbol is defined
@@ -1838,14 +1989,14 @@ void FnSymbol::finalizeCopy(void) {
     if (replacementThis != this->_this) {
       /*
        * In Case 2:
-       * this->partialCopySource->_this := A
-       * this->_this                    := B
+       * partialCopySource->_this := A
+       * this->_this              := B
        *
        * map[A] := C
        */
 
       // Set map[A] := B
-      map->put(this->partialCopySource->_this, this->_this);
+      map->put(partialCopySource->_this, this->_this);
       // Set map[C] := B
       map->put(replacementThis, this->_this);
 
@@ -1858,7 +2009,7 @@ void FnSymbol::finalizeCopy(void) {
      * additional actions.
      */
     if (this->retSymbol != gVoid && this->retSymbol != this->_this) {
-      Symbol* replacementRet = map->get(this->partialCopySource->getReturnSymbol());
+      Symbol* replacementRet = map->get(partialCopySource->getReturnSymbol());
 
       if (replacementRet != this->retSymbol) {
         /*
@@ -1869,7 +2020,7 @@ void FnSymbol::finalizeCopy(void) {
          */
         replacementRet->defPoint->replace(this->retSymbol->defPoint);
 
-        map->put(this->partialCopySource->getReturnSymbol(), this->retSymbol);
+        map->put(partialCopySource->getReturnSymbol(), this->retSymbol);
         map->put(replacementRet, this->retSymbol);
       }
     }
@@ -1890,18 +2041,13 @@ void FnSymbol::finalizeCopy(void) {
     update_symbols(this, map);
 
     // Replace vararg formal if appropriate.
-    if (this->varargOldFormal) {
-      substituteVarargTupleRefs(this->body, this->varargNewFormals.size(),
-                                this->varargOldFormal, this->varargNewFormals);
-      // Done, clean up.
-      this->varargOldFormal = NULL;
-      this->varargNewFormals.clear();
+    if (pci->varargOldFormal) {
+      substituteVarargTupleRefs(this->body, pci->varargNewFormals.size(),
+                                pci->varargOldFormal, pci->varargNewFormals);
     }
 
     // Clean up book keeping information.
-    this->partialCopyMap.clear();
-    this->partialCopySource = NULL;
-    this->removeFlag(FLAG_PARTIAL_COPY);
+    clearPartialCopyInfo(this);
   }
 }
 
@@ -2496,7 +2642,7 @@ bool FnSymbol::returnsRefOrConstRef() const {
 }
 
 QualifiedType FnSymbol::getReturnQualType() const {
-  Qualifier q = QUAL_BLANK;
+  Qualifier q = QUAL_UNKNOWN;
   if (retTag == RET_REF)
     q = QUAL_REF;
   else if(retTag == RET_CONST_REF)
@@ -3593,6 +3739,16 @@ FlagSet getRecordWrappedFlags(Symbol* s) {
   }
 
   return s->flags & mask;
+}
+
+VarSymbol* newTemp(const char* name, QualifiedType qt) {
+  VarSymbol* vs = newTemp(name, qt.type());
+  vs->qual = qt.getQual();
+  return vs;
+}
+
+VarSymbol* newTemp(QualifiedType qt) {
+  return newTemp((const char*)NULL, qt);
 }
 
 VarSymbol* newTemp(const char* name, Type* type) {
