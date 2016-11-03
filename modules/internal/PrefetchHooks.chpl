@@ -166,6 +166,8 @@ module PrefetchHooks {
     //FIXME this is a dangerous field now, since we can evict data with
     //no callback to change this array
     var hasData: [localeDom] bool = false; // only to be use for reprefetch
+    
+    var commInProgress: [localeDom] sync bool;
 
 
     /*proc GenericPrefetchHook(obj, type unpackType, param unpackAccess) {*/
@@ -274,10 +276,63 @@ module PrefetchHooks {
     }
 
     proc updatePrefetch() {
-      for i in localeDom {
+      local for i in localeDom {
         if hasData[i] {
-          /*writeln(here.id, " will update from ", i);*/
+          commInProgress[i] = true;
+          /*if allowPrefetchUnpacking {*/
+            /*if here.id == 0 {*/
+              /*for idx in unpackedData[i].dom {*/
+                /*writeln(here.id, " ", idx, " was ",*/
+                    /*unpackedData[i].dsiAccess(idx));*/
+              /*}*/
+            /*}*/
+            /*else if here.id == 1 {*/
+              /*for idx in unpackedData[i].dom {*/
+                /*writeln("\t", here.id, " ", idx, " was ",*/
+                    /*unpackedData[i].dsiAccess(idx));*/
+              /*}*/
+            /*}*/
+            /*else if here.id == 2 {*/
+              /*for idx in unpackedData[i].dom {*/
+                /*writeln("\t\t", here.id, " ", idx, " was ",*/
+                    /*unpackedData[i].dsiAccess(idx));*/
+              /*}*/
+            /*}*/
+            /*else if here.id == 3 {*/
+              /*for idx in unpackedData[i].dom {*/
+                /*writeln("\t\t\t", here.id, " ", idx, " was ",*/
+                    /*unpackedData[i].dsiAccess(idx));*/
+              /*}*/
+            /*}*/
+          /*}*/
           reprefetch_single_entry(handles[i]);
+          /*if allowPrefetchUnpacking {*/
+            /*if here.id == 0 {*/
+              /*for idx in unpackedData[i].dom {*/
+                /*writeln(here.id, " ", idx, " is ",*/
+                    /*unpackedData[i].dsiAccess(idx));*/
+              /*}*/
+            /*}*/
+            /*else if here.id == 1 {*/
+              /*for idx in unpackedData[i].dom {*/
+                /*writeln("\t", here.id, " ", idx, " is ",*/
+                    /*unpackedData[i].dsiAccess(idx));*/
+              /*}*/
+            /*}*/
+            /*else if here.id == 2 {*/
+              /*for idx in unpackedData[i].dom {*/
+                /*writeln("\t\t", here.id, " ", idx, " is ",*/
+                    /*unpackedData[i].dsiAccess(idx));*/
+              /*}*/
+            /*}*/
+            /*else if here.id == 3 {*/
+              /*for idx in unpackedData[i].dom {*/
+                /*writeln("\t\t\t", here.id, " ", idx, " is ",*/
+                    /*unpackedData[i].dsiAccess(idx));*/
+              /*}*/
+            /*}*/
+          /*}*/
+          commInProgress[i];
         }
       }
     }

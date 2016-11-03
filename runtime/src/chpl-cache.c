@@ -3052,10 +3052,10 @@ void start_update(struct __prefetch_entry_t *entry) {
       entry->state_counter = -1;
       done = true;
       //the lock should be unlocked by stop_update
-      /*printf("%d Started update\n", chpl_nodeID);*/
+      printf("%d Started update\n", chpl_nodeID);
     }
     else {
-      // we only unlock if we weren't able to get the lock
+      // we only unlock if we weren't able to start the update
       chpl_sync_unlock(&(entry->state_lock));
       chpl_task_yield();
     }
@@ -3068,9 +3068,9 @@ void stop_update(struct __prefetch_entry_t *entry) {
   // definitely no readers in the entry
   assert(entry->state_counter == -1);
   entry->state_counter = 0;
-  /*printf("%d Trying to stop update\n", chpl_nodeID);*/
+  printf("%d Trying to stop update\n", chpl_nodeID);
   chpl_sync_unlock(&(entry->state_lock));
-  /*printf("%d Stopped update\n", chpl_nodeID);*/
+  printf("%d Stopped update\n", chpl_nodeID);
 }
 
 static
@@ -3170,15 +3170,14 @@ static void check_integrity(struct __prefetch_entry_t *entry) {
 }
 #endif
 
+// assumed to be called from a thread-safe context
 void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
   if(entry) {
 #if CHECK_PFENTRY_INTEGRITY
     check_integrity(entry);
 #endif
-    /*start_update(entry);*/
     chpl_comm_reprefetch(entry);
     prefetch_entry_init_seqn_n(entry, 0);
-    /*stop_update(entry);*/
   }
 }
 
@@ -3242,11 +3241,10 @@ void *get_prefetched_data_addr(void *accessor,
   int64_t offset; //this can be negative in current logic
   void *retaddr=NULL;
 
-  /*if((prefetch_entry->should_lock) &&*/
+
+  // shuold_lock also implies the data is consistetn
   if(prefetch_entry->should_lock &&
       prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
-    /*printf("\t stale data: %ld %ld\n",*/
-        /*prefetch_entry->sn, pbuf->prefetch_sequence_number);*/
 
     start_update(prefetch_entry);
     // someone might have already updated the entry, so check again if
@@ -3390,7 +3388,7 @@ void chpl_comm_pbuf_acq() {
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
   chpl_free(entry->data);
 
-  /*printf("Reprefetching\n");*/
+  printf("%d Reprefetching from %d\n", chpl_nodeID, entry->origin_node);
   chpl_comm_prefetch(&(entry->data), entry->origin_node,
       entry->robjaddr, &(entry->size), entry->slice_desc,
       entry->slice_desc_size, -1, -1, -1);
