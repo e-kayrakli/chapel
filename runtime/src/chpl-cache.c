@@ -3073,8 +3073,9 @@ void stop_update(struct __prefetch_entry_t *entry) {
   printf("%d Stopped update\n", chpl_nodeID);
 }
 
+
 static
-struct __prefetch_entry_t * add_to_prefetch_buffer(
+struct __prefetch_entry_t *add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
     void* robjaddr, void *slice_desc, size_t slice_desc_size,
     bool consistent){
@@ -3136,6 +3137,22 @@ struct __prefetch_entry_t * add_to_prefetch_buffer(
   pbuf->head = new_entry;
 
   return new_entry;
+}
+
+// this is intended to be a thin wrapper around add_to_prefetch_buffer
+// that should only be used from PrefetchHook code
+void *initialize_prefetch_handle(c_nodeid_t origin_node,
+    void* robjaddr, struct __prefetch_entry_t **new_entry,
+    size_t prefetch_size, void *slice_desc, size_t slice_desc_size,
+    bool consistent) {
+
+  *new_entry = add_to_prefetch_buffer(pbuf, origin_node, robjaddr,
+      slice_desc, slice_desc_size, consistent);
+
+  (*new_entry)->size = prefetch_size;
+  (*new_entry)->data = chpl_malloc(prefetch_size);
+
+  return (*new_entry)->data;
 }
 
 /*int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,*/
