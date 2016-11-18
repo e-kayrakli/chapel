@@ -47,8 +47,8 @@ module PrefetchHooks {
 
   extern proc create_prefetch_handle(ref handle);
 
-  extern proc initialize_prefetch_handle(origin_node, robjaddr,
-      new_entry, prefetch_size, slice_desc, slice_desc_size,
+  extern proc initialize_prefetch_handle(owner_obj, origin_node,
+      robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
       consistent): c_void_ptr;
 
   inline proc getData(handle) {
@@ -264,7 +264,7 @@ module PrefetchHooks {
           /*consistent);*/
 
       data = __primitive("cast", _ddata(uint(8)),
-          initialize_prefetch_handle(srcLocaleId, srcObj,
+          initialize_prefetch_handle(this, srcLocaleId, srcObj,
             c_ptrTo(new_handle_ptr), size, slice_desc:c_void_ptr,
             slice_desc_size, consistent));
 

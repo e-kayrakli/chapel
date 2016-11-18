@@ -59,6 +59,7 @@ int chpl_cache_enabled(void)
 // complexity.
 typedef struct __prefetch_entry_t{
   c_nodeid_t origin_node;
+  void* owner_obj;
   void* robjaddr;
   size_t size;
 
@@ -171,10 +172,10 @@ void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
 void prefetch_update(void);
 bool entry_has_data(struct __prefetch_entry_t *entry);
 void reprefetch_single_entry(struct __prefetch_entry_t *entry);
-void *initialize_prefetch_handle(c_nodeid_t origin_node, void*
-    robjaddr, struct __prefetch_entry_t **new_entry,
-    size_t prefetch_size, void *slice_desc, size_t slice_desc_size,
-    bool consistent);
+void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
+    origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
+    size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
+    consistent);
 void create_prefetch_handle(struct __prefetch_entry_t **entry);
 //void start_read(struct __prefetch_entry_t *entry);
 //void stop_read(struct __prefetch_entry_t *entry);

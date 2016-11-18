@@ -3145,16 +3145,19 @@ void create_prefetch_handle(struct __prefetch_entry_t **entry) {
 
 // this is intended to be a thin wrapper around add_to_prefetch_buffer
 // that should only be used from PrefetchHook code
-void *initialize_prefetch_handle(c_nodeid_t origin_node,
-    void* robjaddr, struct __prefetch_entry_t **new_entry,
-    size_t prefetch_size, void *slice_desc, size_t slice_desc_size,
-    bool consistent) {
+//
+// TODO revise this function and add_to_prefetch_buffer
+void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
+    origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
+    size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
+    consistent) {
 
   *new_entry = add_to_prefetch_buffer(pbuf, origin_node, robjaddr,
       slice_desc, slice_desc_size, consistent);
 
   (*new_entry)->size = prefetch_size;
   (*new_entry)->data = chpl_malloc(prefetch_size);
+  (*new_entry)->owner_obj = owner_obj;
 
   return (*new_entry)->data;
 }
