@@ -2299,6 +2299,7 @@ iter LocBlockArr.dsiGetSerializedObjectSize(slice_desc) {
   for param i in 1..rank {
     size *= rangeTuple[i].length;
   }
+  writeln(here, " calculates size for slice :", rangeTuple);
   /*const sliceDom = {(...rangeTuple)};*/
   yield getSize(size, eltType);
 }
@@ -2352,6 +2353,8 @@ iter LocBlockArr.dsiSerialize(slice_desc) {
     rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
   }
   const sliceDom = {(...rangeTuple)};
+  writeln(here, " will serialize slice : ", sliceDom);
+  /*halt("END");*/
   var sliceToSend = myElems[sliceDom];
   yield convertToSerialChunk(sliceToSend);
 }

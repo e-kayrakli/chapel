@@ -48,8 +48,8 @@
 #include <assert.h>
 #include <time.h>
 
-extern size_t __serialized_obj_size_wrapper(void*, void*, size_t);
-extern void __serialize_wrapper(void *, void *, size_t, void*, size_t);
+/*extern size_t __serialized_obj_size_wrapper(void*, void*, size_t);*/
+/*extern void __serialize_wrapper(void *, void *, size_t, void*, size_t);*/
 
 static chpl_sync_aux_t chpl_comm_diagnostics_sync;
 static chpl_commDiagnostics chpl_comm_commDiagnostics;
@@ -501,8 +501,9 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
   //call the source object's size wrapper
   //TODO we need some size limitations here and respond with e.g. -1 to
   //denote that requested data is too big
-  prefetch_size = __serialized_obj_size_wrapper(x->src, x->slice_desc,
-      x->size);
+  /*prefetch_size = __serialized_obj_size_wrapper(x->src, x->slice_desc,*/
+      /*x->size);*/
+  prefetch_size = 0;
   response.size = prefetch_size;
 
   //now allocate space for serialization
@@ -537,8 +538,8 @@ void AM_get_prefetch_size(gasnet_token_t token, void *buf,
   /*gasnet_hsl_lock(&buffer_lock);*/
   chpl_sync_lock(buffer_lock);
   /*printf("  > Acquired lock(size)\n");*/
-  __serialize_wrapper(x->src, serial_buffer, prefetch_size,
-      x->slice_desc, x->size);
+  /*__serialize_wrapper(x->src, serial_buffer, prefetch_size,*/
+      /*x->slice_desc, x->size);*/
   /*gasnet_hsl_unlock(&buffer_lock);*/
   chpl_sync_unlock(buffer_lock);
   /*printf("  > Released lock(size)\n");*/

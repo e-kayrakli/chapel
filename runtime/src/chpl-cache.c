@@ -3139,6 +3139,10 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   return new_entry;
 }
 
+void create_prefetch_handle(struct __prefetch_entry_t **entry) {
+  *entry = NULL;
+}
+
 // this is intended to be a thin wrapper around add_to_prefetch_buffer
 // that should only be used from PrefetchHook code
 void *initialize_prefetch_handle(c_nodeid_t origin_node,

@@ -45,6 +45,8 @@ module PrefetchHooks {
   extern proc
     stop_read(handle);
 
+  extern proc create_prefetch_handle(ref handle);
+
   extern proc initialize_prefetch_handle(origin_node, robjaddr,
       new_entry, prefetch_size, slice_desc, slice_desc_size,
       consistent): c_void_ptr;
@@ -188,11 +190,14 @@ module PrefetchHooks {
       localeDom = D;
       forall (i,l) in zip(localeIDs, localeContainer) do i = l.id;
       hasLocaleContainer = true;
+
+      for h in handles do create_prefetch_handle(h);
     }
 
 
     iter dsiSerialize(slice_desc) {
-      for val in obj.dsiSerialize(slice_desc:c_ptr(obj.idxType)) do yield val;
+      for val in obj.dsiSerialize(slice_desc:c_ptr(obj.idxType)) do
+        yield val;
     }
 
     proc dsiGetSerializedObjectSize(slice_desc): size_t {
@@ -220,16 +225,37 @@ module PrefetchHooks {
     proc doPrefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
         slice_desc_size: size_t, consistent) {
 
+      if destLocaleId != here.id {
+        halt("doPrefetch can only be called from the prefetching \
+            locale");
+      }
+
       // here we could also use actual fields in the prefetch_entry_t
       var new_handle_ptr: prefetch_entry_t;
       var data: _ddata(uint(8));
       var size_ptr: c_ptr(size_t);
       var size = 0: size_t;
 
+      /*writeln("\t", here, " is going to prefetch ",*/
+          /*(slice_desc:c_ptr(int))[0]);*/
+
+      /*var slice_desc_start = (slice_desc:c_ptr(uint(8)))[0];*/
+
+      /*var slice_desc_ddata= __primitive("cast", _ddata(uint(8)),*/
+          /*slice_desc);*/
+
+      /*var slice_desc_start = slice_desc_ddata[0];*/
+
       on Locales[srcLocaleId] {
         // write size to destLocales handle's size
+
+        var slice_desc_local = c_malloc(uint(8),
+            slice_desc_size):c_ptr(int);
+        __primitive("chpl_comm_array_get", slice_desc_local[0],
+            destLocaleId, (slice_desc:c_ptr(uint(8)))[0], slice_desc_size);
+
         size = __serialized_obj_size_wrapper(srcObj,
-            slice_desc, slice_desc_size);
+            slice_desc_local, slice_desc_size);
       }
 
       //initialize the handle on the receiving end
@@ -239,21 +265,29 @@ module PrefetchHooks {
 
       data = __primitive("cast", _ddata(uint(8)),
           initialize_prefetch_handle(srcLocaleId, srcObj,
-            c_ptrTo(new_handle_ptr), size, slice_desc, slice_desc_size,
-            consistent));
+            c_ptrTo(new_handle_ptr), size, slice_desc:c_void_ptr,
+            slice_desc_size, consistent));
 
+      /*writeln(here, " initialized data");*/
       on Locales[srcLocaleId] {
         // write data to destLocales handle's data
         const size_local = size;
+        var slice_desc_local = c_malloc(uint(8),
+            slice_desc_size):c_ptr(int);
+        __primitive("chpl_comm_array_get", slice_desc_local[0],
+            destLocaleId, (slice_desc:c_ptr(uint(8)))[0], slice_desc_size);
 
         //NOTE for now we are serializing the data ad hoc. previously,
         //when we relied on AM's data serialization used to start right
         //after responding to size query. This is a TODO for now
         var local_buffer = c_malloc(uint(8), size_local):c_ptr(uint(8));
 
-        __serialize_wrapper(srcObj, local_buffer, size_local, c_nil, 0);
+        __serialize_wrapper(srcObj, local_buffer, size_local,
+            slice_desc_local, slice_desc_size);
+        /*writeln(here, "sending serialized data");*/
         __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
             data[0], size_local);
+        /*writeln(here, "serialized data sent");*/
       }
 
 
@@ -301,11 +335,14 @@ module PrefetchHooks {
       const nodeId = localeIDs[localeIdx];
 
       if nodeId!=here.id {
-        /*writeln(here, " ", sliceDesc);*/
-        /*halt("REACHED END");*/
+        writeln(here, " prefetching ", sliceDesc);
         var (sliceDescPtr, sliceDescSize, dummyBool) =
           convertToSerialChunk(sliceDesc);
-        handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,
+        /*handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,*/
+            /*sliceDescPtr, sliceDescSize, consistent);*/
+        writeln(here, " prefetching ",
+            (sliceDescPtr:c_ptr(obj.idxType))[0]);
+        handles[localeIdx] = doPrefetch(here.id, nodeId, robjaddr,
             sliceDescPtr, sliceDescSize, consistent);
 
         if unpackAccess {
@@ -522,10 +559,12 @@ module PrefetchHooks {
     return obj.getByteIndex(data, idx);
   }
 
-  export proc __serialized_obj_size_wrapper(__obj: c_void_ptr,
-      slice_desc: c_void_ptr, slice_desc_size: size_t): size_t {
+  /*export*/ proc __serialized_obj_size_wrapper(__obj: c_void_ptr,
+      slice_desc, slice_desc_size: size_t): size_t {
     var obj = __obj:PrefetchHook;
     if slice_desc_size > 0 then {
+      writeln(here, " gonna report size for ",
+          (slice_desc:c_ptr(int))[0]);
       const ret = obj.dsiGetSerializedObjectSize(slice_desc);
       writeln(here, " reports size ", ret);
       return ret;
@@ -538,8 +577,8 @@ module PrefetchHooks {
 
   }
 
-  export proc __serialize_wrapper(__obj: c_void_ptr, __buf: c_void_ptr,
-      bufsize: size_t, slice_desc: c_void_ptr, slice_desc_size: size_t) {
+  /*export*/ proc __serialize_wrapper(__obj: c_void_ptr, __buf: c_void_ptr,
+      bufsize: size_t, slice_desc, slice_desc_size: size_t) {
 
     type bufferEltType = uint(8);
     var obj = __obj:PrefetchHook;

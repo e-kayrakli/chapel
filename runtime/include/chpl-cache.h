@@ -175,6 +175,7 @@ void *initialize_prefetch_handle(c_nodeid_t origin_node, void*
     robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size,
     bool consistent);
+void create_prefetch_handle(struct __prefetch_entry_t **entry);
 //void start_read(struct __prefetch_entry_t *entry);
 //void stop_read(struct __prefetch_entry_t *entry);
 #endif
