@@ -51,6 +51,9 @@ module PrefetchHooks {
       robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
       consistent): c_void_ptr;
 
+  extern proc update_prefetch_handle(owner_obj, origin_node,
+      robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
+      consistent): c_void_ptr;
   inline proc getData(handle) {
     return get_data_from_prefetch_entry(handle);
   }
@@ -126,6 +129,16 @@ module PrefetchHooks {
       return false;;
     }
 
+    proc doPrefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
+        slice_desc_size: size_t, consistent) {
+      halt("This shouldn't have been called");
+      var new_handle_ptr: prefetch_entry_t;
+      return new_handle_ptr;
+    }
+    proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
+        slice_desc_size: size_t, consistent) {
+      halt("This shouldn't have been called");
+    }
     /*inline proc getUnpackedData(localeIdx) {*/
       /*halt("This shouldn't have been called");*/
       /*var c: c_void_ptr;*/
@@ -221,6 +234,104 @@ module PrefetchHooks {
       return size;
     }
 
+    //prefetch-reprefetch helpers
+    inline proc __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
+        slice_desc, slice_desc_size) {
+      var size = 0: size_t;
+
+      on Locales[srcLocaleId] {
+        // write size to destLocales handle's size
+
+        var slice_desc_local: c_ptr(uint(8));
+
+        if slice_desc_size > 0 {
+          slice_desc_local =
+            c_malloc(uint(8), slice_desc_size);
+          __primitive("chpl_comm_array_get", slice_desc_local[0],
+              destLocaleId, (slice_desc:c_ptr(uint(8)))[0],
+              slice_desc_size);
+        }
+
+        size = __serialized_obj_size_wrapper(srcObj,
+            slice_desc_local, slice_desc_size);
+      }
+
+      return size;
+    }
+
+    proc __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+        slice_desc, slice_desc_size: size_t, data, size) {
+
+      on Locales[srcLocaleId] {
+        // write data to destLocales handle's data
+        const size_local = size;
+        var slice_desc_local: c_ptr(uint(8));
+
+        if slice_desc_size > 0 {
+          slice_desc_local = c_malloc(uint(8),
+              slice_desc_size);
+          __primitive("chpl_comm_array_get", slice_desc_local[0],
+              destLocaleId, (slice_desc:c_ptr(uint(8)))[0],
+              slice_desc_size);
+        }
+
+        //NOTE for now we are serializing the data ad hoc. previously,
+        //when we relied on AM's data serialization used to start right
+        //after responding to size query. This is a TODO for now
+        var local_buffer = c_malloc(uint(8), size_local):c_ptr(uint(8));
+
+        __serialize_wrapper(srcObj, local_buffer, size_local,
+            slice_desc_local, slice_desc_size);
+        __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
+            data[0], size_local);
+      }
+    }
+
+    inline proc handleFromLocaleID(id) {
+      for idx in localeDom {
+        if localeIDs[idx] == id then return handles[idx];
+      }
+
+      halt("This shouldn't have happened");
+      var dummy: prefetch_entry_t;
+      return dummy;
+    }
+
+    proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
+        slice_desc_size: size_t, consistent) {
+
+      if destLocaleId != here.id {
+        halt("doPrefetch can only be called from the prefetching \
+            locale");
+      }
+
+      /*writeln(here, " prereprefetch  : ",*/
+          /*(slice_desc:c_ptr(int))[0],*/
+          /*(slice_desc:c_ptr(int))[1],*/
+          /*(slice_desc:c_ptr(int))[2],*/
+          /*(slice_desc:c_ptr(int))[3]);*/
+
+      var data: _ddata(uint(8));
+      var handle = handleFromLocaleID(srcLocaleId);
+      var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
+          slice_desc, slice_desc_size);
+
+      data = __primitive("cast", _ddata(uint(8)),
+          update_prefetch_handle(this, srcLocaleId, srcObj,
+            c_ptrTo(handle), size, slice_desc:c_void_ptr,
+            slice_desc_size, consistent));
+
+
+      __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+          slice_desc, slice_desc_size, data, size);
+
+      /*writeln(here, " postreprefetch  : ",*/
+          /*(slice_desc:c_ptr(int))[0],*/
+          /*(slice_desc:c_ptr(int))[1],*/
+          /*(slice_desc:c_ptr(int))[2],*/
+          /*(slice_desc:c_ptr(int))[3]);*/
+    }
+
     //srcObj is the remote PrefetchHook
     proc doPrefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
         slice_desc_size: size_t, consistent) {
@@ -233,63 +344,24 @@ module PrefetchHooks {
       // here we could also use actual fields in the prefetch_entry_t
       var new_handle_ptr: prefetch_entry_t;
       var data: _ddata(uint(8));
-      var size_ptr: c_ptr(size_t);
-      var size = 0: size_t;
 
-      /*writeln("\t", here, " is going to prefetch ",*/
-          /*(slice_desc:c_ptr(int))[0]);*/
+      var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
+          slice_desc, slice_desc_size);
 
-      /*var slice_desc_start = (slice_desc:c_ptr(uint(8)))[0];*/
-
-      /*var slice_desc_ddata= __primitive("cast", _ddata(uint(8)),*/
-          /*slice_desc);*/
-
-      /*var slice_desc_start = slice_desc_ddata[0];*/
-
-      on Locales[srcLocaleId] {
-        // write size to destLocales handle's size
-
-        var slice_desc_local = c_malloc(uint(8),
-            slice_desc_size):c_ptr(int);
-        __primitive("chpl_comm_array_get", slice_desc_local[0],
-            destLocaleId, (slice_desc:c_ptr(uint(8)))[0], slice_desc_size);
-
-        size = __serialized_obj_size_wrapper(srcObj,
-            slice_desc_local, slice_desc_size);
-      }
-
-      //initialize the handle on the receiving end
-      /*var data_cptr = initialize_prefetch_handle(srcLocaleId, srcObj,*/
-          /*c_ptrTo(new_handle_ptr), size, slice_desc, slice_desc_size,*/
-          /*consistent);*/
-
+      //TODO rewrite for clarity
       data = __primitive("cast", _ddata(uint(8)),
           initialize_prefetch_handle(this, srcLocaleId, srcObj,
             c_ptrTo(new_handle_ptr), size, slice_desc:c_void_ptr,
             slice_desc_size, consistent));
 
-      /*writeln(here, " initialized data");*/
-      on Locales[srcLocaleId] {
-        // write data to destLocales handle's data
-        const size_local = size;
-        var slice_desc_local = c_malloc(uint(8),
-            slice_desc_size):c_ptr(int);
-        __primitive("chpl_comm_array_get", slice_desc_local[0],
-            destLocaleId, (slice_desc:c_ptr(uint(8)))[0], slice_desc_size);
+      /*writeln(here, " after size slice details : ",*/
+          /*(slice_desc:c_ptr(int))[0],*/
+          /*(slice_desc:c_ptr(int))[1],*/
+          /*(slice_desc:c_ptr(int))[2],*/
+          /*(slice_desc:c_ptr(int))[3]);*/
 
-        //NOTE for now we are serializing the data ad hoc. previously,
-        //when we relied on AM's data serialization used to start right
-        //after responding to size query. This is a TODO for now
-        var local_buffer = c_malloc(uint(8), size_local):c_ptr(uint(8));
-
-        __serialize_wrapper(srcObj, local_buffer, size_local,
-            slice_desc_local, slice_desc_size);
-        /*writeln(here, "sending serialized data");*/
-        __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
-            data[0], size_local);
-        /*writeln(here, "serialized data sent");*/
-      }
-
+      __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+          slice_desc, slice_desc_size, data, size);
 
       return new_handle_ptr;
     }
@@ -341,7 +413,8 @@ module PrefetchHooks {
         /*handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,*/
             /*sliceDescPtr, sliceDescSize, consistent);*/
         writeln(here, " prefetching ",
-            (sliceDescPtr:c_ptr(obj.idxType))[0]);
+            (sliceDescPtr:c_ptr(obj.idxType))[0], " size ",
+            sliceDescSize);
         handles[localeIdx] = doPrefetch(here.id, nodeId, robjaddr,
             sliceDescPtr, sliceDescSize, consistent);
 
@@ -484,26 +557,26 @@ module PrefetchHooks {
       /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
       if !unpackAccess {
         local{
-          if measureTime {
-            t.start();
-          }
+          /*if measureTime {*/
+            /*t.start();*/
+          /*}*/
           var localIdx = idx;
           const handle = handles[localeId];
           var isPrefetched: int;
           var thisaddr = __primitive("_wide_get_addr", this);
-          if measureTime {
-            t.stop();
-            accessPrepTime += t.elapsed();
-            t.clear();
-            t.start();
-          }
+          /*if measureTime {*/
+            /*t.stop();*/
+            /*accessPrepTime += t.elapsed();*/
+            /*t.clear();*/
+            /*t.start();*/
+          /*}*/
           var data = get_prefetched_data_addr(thisaddr, handle,
               getSize(1, obj.eltType), localIdx, isPrefetched);
-          if measureTime {
-            t.stop();
-            accessRealTime += t.elapsed();
-            t.clear();
-          }
+          /*if measureTime {*/
+            /*t.stop();*/
+            /*accessRealTime += t.elapsed();*/
+            /*t.clear();*/
+          /*}*/
 
           /*if isPrefetched == 0 {*/
           /*const cast_data = __data:c_ptr(int);*/
@@ -553,6 +626,16 @@ module PrefetchHooks {
     }
   }
 
+  export proc __reprefetch_wrapper(__obj: c_void_ptr, destLocaleId:
+      int(64), srcLocaleId: int(64), src_obj: c_void_ptr, slice_desc:
+      c_void_ptr, slice_desc_size: size_t, consistent: bool) {
+
+    var obj = __obj:PrefetchHook;
+
+    obj.reprefetch(destLocaleId, srcLocaleId, src_obj, slice_desc,
+        slice_desc_size, consistent);
+  }
+
   export proc __get_byte_idx_wrapper(__obj: c_void_ptr,
       data: c_void_ptr, idx: c_void_ptr) {
     var obj = __obj:PrefetchHook;
@@ -563,8 +646,8 @@ module PrefetchHooks {
       slice_desc, slice_desc_size: size_t): size_t {
     var obj = __obj:PrefetchHook;
     if slice_desc_size > 0 then {
-      writeln(here, " gonna report size for ",
-          (slice_desc:c_ptr(int))[0]);
+      /*writeln(here, " gonna report size for ",*/
+          /*(slice_desc:c_ptr(int))[0]);*/
       const ret = obj.dsiGetSerializedObjectSize(slice_desc);
       writeln(here, " reports size ", ret);
       return ret;

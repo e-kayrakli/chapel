@@ -3155,13 +3155,31 @@ void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
   *new_entry = add_to_prefetch_buffer(pbuf, origin_node, robjaddr,
       slice_desc, slice_desc_size, consistent);
 
+  printf("%d creating new handle %p\n", chpl_nodeID, *new_entry);
+
   (*new_entry)->size = prefetch_size;
   (*new_entry)->data = chpl_malloc(prefetch_size);
   (*new_entry)->owner_obj = owner_obj;
-
   return (*new_entry)->data;
 }
 
+void *update_prefetch_handle(void* owner_obj, c_nodeid_t
+    origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
+    size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
+    consistent) {
+
+  if(prefetch_size != (*new_entry)->size) {
+    printf("%d reallocating old handle\n", chpl_nodeID);
+    //reallocate space
+    /*chpl_free((*new_entry)->data);*/
+    (*new_entry)->size = prefetch_size;
+    (*new_entry)->data = chpl_malloc(prefetch_size);
+  }
+  else {
+    printf("%d reusing old handle\n", chpl_nodeID);
+  }
+  return (*new_entry)->data;
+}
 /*int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,*/
     /*size_t size, size_t serialized_idx, void* dest) {*/
   /*int64_t offset; //this can be negative in current logic*/
@@ -3409,13 +3427,30 @@ void chpl_comm_pbuf_acq() {
   }
 }
 
-void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
-  chpl_free(entry->data);
 
-  printf("%d Reprefetching from %d\n", chpl_nodeID, entry->origin_node);
-  chpl_comm_prefetch(&(entry->data), entry->origin_node,
-      entry->robjaddr, &(entry->size), entry->slice_desc,
-      entry->slice_desc_size, -1, -1, -1);
+extern void __reprefetch_wrapper(void* owner_obj, c_nodeid_t
+    dest_node_id, c_nodeid_t src_node_id, void* robjaddr, void*
+    slice_desc, size_t slice_desc_size, bool consistent);
+
+void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
+  /*chpl_free(entry->data);*/
+
+  printf("%d Reprefetching from %d %p\n", chpl_nodeID,
+      entry->origin_node, entry);
+
+  printf("\t\t Slice desc: %ld %ld %ld %ld\n",
+      ((int64_t *)entry->slice_desc)[0],
+      ((int64_t *)entry->slice_desc)[1],
+      ((int64_t *)entry->slice_desc)[2],
+      ((int64_t *)entry->slice_desc)[3]);
+
+  __reprefetch_wrapper(entry->owner_obj, chpl_nodeID,
+      entry->origin_node, entry->robjaddr, entry->slice_desc,
+      entry->slice_desc_size, entry->pf_type & PF_CONSISTENT);
+
+  /*chpl_comm_prefetch(&(entry->data), entry->origin_node,*/
+      /*entry->robjaddr, &(entry->size), entry->slice_desc,*/
+      /*entry->slice_desc_size, -1, -1, -1);*/
 }
 
 struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
