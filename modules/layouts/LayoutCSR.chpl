@@ -72,7 +72,7 @@ class CSRDom: BaseSparseDomImpl {
 
   const rowDom: domain(1, idxType);
 
-  var rowStart: [rowDom] idxType;      // would like index(nnzDom)
+  var __rowStart: [rowDom] idxType;      // would like index(nnzDom)
   var colIdx: [nnzDom] idxType;        // would like index(parentDom.dim(1))
 
   // perf hints
@@ -237,6 +237,18 @@ class CSRDom: BaseSparseDomImpl {
       // ensuring existence of a solution is caller responsibility.
     }
     return l;
+  }
+
+  // these two procs... I am not proud..
+  inline proc rowStart(row) {
+    if useCSRPerfHints && nnzPerRow > 0 then
+      return (row-rowRange.low)*nnzPerRow+rowRange.low+1;
+    else
+      return __rowStart[row];
+  }
+
+  inline proc rowStart(row) ref {
+    return __rowStart[row];
   }
 
   proc rowStop(row) {
@@ -450,7 +462,7 @@ class CSRDom: BaseSparseDomImpl {
 
   proc dsiClear() {
     nnz = 0;
-    rowStart = 1;
+    __rowStart = 1;
   }
 
   iter dimIter(param d, ind) {

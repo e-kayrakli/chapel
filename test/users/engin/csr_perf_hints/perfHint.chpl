@@ -12,7 +12,8 @@ for r in parentDom.dim(1) {
   }
 }
 
-sparseDom._instance.setBalancedRows();
+/*sparseDom._instance.setBalancedRows();*/
+sparseDom._instance.setFixedNNZPerRow();
 /*var sparseArr: [sparseDom] int = 1;*/
 
 /*for i in parentDom.dim(1) {*/
