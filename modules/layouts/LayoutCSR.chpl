@@ -18,6 +18,7 @@
  */
 
 config param debugCSR = false;
+config param useCSRPerfHints = false;
 use RangeChunk only ;
 
 // I have not seen us test a non-"sub" CSR domain
@@ -74,6 +75,9 @@ class CSRDom: BaseSparseDomImpl {
   var rowStart: [rowDom] idxType;      // would like index(nnzDom)
   var colIdx: [nnzDom] idxType;        // would like index(parentDom.dim(1))
 
+  // perf hints
+  var nnzPerRow = 0; // 0 means ignore this hint.
+
   proc CSRDom(param rank, type idxType, 
                                dist: CSR,
                                parentDom: domain(rank, idxType)) {
@@ -86,6 +90,14 @@ class CSRDom: BaseSparseDomImpl {
     rowDom = {rowRange.low..rowRange.high+1};
     nnzDom = {1..nnz};
     dsiClear();
+  }
+
+  proc setFixedNNZPerRow() {
+    this.nnzPerRow = computeNNZPerRow();
+  }
+
+  proc computeNNZPerRow() {
+    return rowStart[2] - rowStart[1];
   }
 
   proc dsiMyDist() return dist;
@@ -121,23 +133,35 @@ class CSRDom: BaseSparseDomImpl {
   }
 
   iter these(param tag: iterKind) where tag == iterKind.leader {
-    // same as DefaultSparseDom's leader
-    const numElems = nnz;
-    const numChunks = _computeNumChunks(numElems);
-    //writeln("leader- rowRange=", rowRange, " colRange=", colRange, "\n",
-    //        "        rowStart=", rowStart, " colIdx=", colIdx);
-    if debugCSR then
-      writeln("CSRDom leader: ", numChunks, " chunks, ", numElems, " elems");
+    if useCSRPerfHints && nnzPerRow > 0 {
+      const numRows = rowRange.size;
+      const numChunks = _computeNumChunks(numRows);
 
-    // split our numElems elements over numChunks tasks
-    if numChunks == 1 then
-      yield (this, 1, numElems);
-    else
-      coforall chunk in chunks(1..numElems, numChunks) do
-        yield (this, chunk.first, chunk.last);
-    // TODO: to handle large numElems and numChunks faster, it would be great
-    // to run the binary search in _private_findStartRow smarter, e.g.
-    // pass to the tasks created in 'coforall' smaller ranges to search over.
+      if numChunks == 1 then
+        yield (this, rowRange.low, rowRange.high);
+      else
+        coforall chunk in chunks(rowRange, numChunks) do
+          yield (this, chunk.first, chunk.last);
+    }
+    else {
+      // same as DefaultSparseDom's leader
+      const numElems = nnz;
+      const numChunks = _computeNumChunks(numElems);
+      //writeln("leader- rowRange=", rowRange, " colRange=", colRange, "\n",
+      //        "        rowStart=", rowStart, " colIdx=", colIdx);
+      if debugCSR then
+        writeln("CSRDom leader: ", numChunks, " chunks, ", numElems, " elems");
+
+      // split our numElems elements over numChunks tasks
+      if numChunks == 1 then
+        yield (this, 1, numElems);
+      else
+        coforall chunk in chunks(1..numElems, numChunks) do
+          yield (this, chunk.first, chunk.last);
+      // TODO: to handle large numElems and numChunks faster, it would be great
+      // to run the binary search in _private_findStartRow smarter, e.g.
+      // pass to the tasks created in 'coforall' smaller ranges to search over.
+    }
   }
 
   iter these(param tag: iterKind, followThis: (?,?,?)) where tag == iterKind.follower {
@@ -148,16 +172,25 @@ class CSRDom: BaseSparseDomImpl {
     if (followThisDom != this) then
       halt("Sparse domains can't be zippered with anything other than themselves and their arrays (CSR layout)");
 
-    // This loop is identical to the serial iterator, except for the iteration
-    // space and finding the initial 'cursorRow'.
-    var cursorRow = _private_findStartRow(startIx);
-    if debugCSR then
-      writeln("CSRDom follower: ", startIx, "..", endIx,
-              "  rowStart(", cursorRow, ")=", rowStart(cursorRow));
+    if useCSRPerfHints && nnzPerRow > 0 {
+      for r in startIx..endIx {
+        for c in rowStart[r]..rowStop[r] {
+          yield (r,colIdx[c]);
+        }
+      }
+    }
+    else {
+      // This loop is identical to the serial iterator, except for the iteration
+      // space and finding the initial 'cursorRow'.
+      var cursorRow = _private_findStartRow(startIx);
+      if debugCSR then
+        writeln("CSRDom follower: ", startIx, "..", endIx,
+            "  rowStart(", cursorRow, ")=", rowStart(cursorRow));
 
-    for i in startIx..endIx {
-      while (rowStart(cursorRow+1) <= i) do cursorRow += 1;
-      yield (cursorRow, colIdx(i));
+      for i in startIx..endIx {
+        while (rowStart(cursorRow+1) <= i) do cursorRow += 1;
+        yield (cursorRow, colIdx(i));
+      }
     }
   }
 
