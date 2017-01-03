@@ -141,7 +141,7 @@ class CSRDom: BaseSparseDomImpl {
 
   iter these(param tag: iterKind) where tag == iterKind.leader {
     if useCSRPerfHints && balancedRows {
-      writeln("Optimized iterator is called");
+      /*writeln("Optimized iterator is called");*/
       const numRows = rowRange.size;
       const numChunks = _computeNumChunks(numRows);
 
@@ -180,12 +180,20 @@ class CSRDom: BaseSparseDomImpl {
     if (followThisDom != this) then
       halt("Sparse domains can't be zippered with anything other than themselves and their arrays (CSR layout)");
 
-    if useCSRPerfHints && balancedRows {
-      for r in startIx..endIx {
-        for c in rowStart[r]..rowStop[r] {
-          yield (r,colIdx[c]);
-        }
+    if useCSRPerfHints && nnzPerRow > 0 {
+      /*writeln("Optimized dom follower");*/
+      const count = (endIx-startIx+1)*nnzPerRow;
+      /*for r in startIx..endIx {*/
+        /*for c in rowStart[r]..rowStop[r] {*/
+      /*writeln("Zip 1: ", 0..#count);*/
+      /*writeln("Zip 2: ", rowStart[startIx]..rowStop[endIx]);*/
+      var r = startIx;
+      for c in rowStart[startIx]..rowStop[endIx] {
+        /*if rowStart[r+1] <= c then r += 1;*/
+        yield (r,colIdx[c]);
       }
+        /*}*/
+      /*}*/
     }
     else {
       // This loop is identical to the serial iterator, except for the iteration
@@ -538,7 +546,15 @@ class CSRArr: BaseSparseArrImpl {
     if debugCSR then
       writeln("CSRArr follower: ", startIx, "..", endIx);
 
-    for i in startIx..endIx do yield data[i];
+    if useCSRPerfHints && dom.nnzPerRow > 0 {
+      /*for r in startIx..endIx {*/
+        for i in dom.rowStart[startIx]..dom.rowStop[endIx] do
+          yield data[i];
+      /*}*/
+    }
+    else {
+      for i in startIx..endIx do yield data[i];
+    }
   }
 
   iter these(param tag: iterKind, followThis) where tag == iterKind.follower {
