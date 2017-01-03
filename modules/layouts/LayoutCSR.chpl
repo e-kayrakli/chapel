@@ -182,14 +182,14 @@ class CSRDom: BaseSparseDomImpl {
 
     if useCSRPerfHints && nnzPerRow > 0 {
       /*writeln("Optimized dom follower");*/
-      const count = (endIx-startIx+1)*nnzPerRow;
+      /*const count = (endIx-startIx+1)*nnzPerRow;*/
       /*for r in startIx..endIx {*/
         /*for c in rowStart[r]..rowStop[r] {*/
       /*writeln("Zip 1: ", 0..#count);*/
       /*writeln("Zip 2: ", rowStart[startIx]..rowStop[endIx]);*/
       var r = startIx;
       for c in rowStart[startIx]..rowStop[endIx] {
-        /*if rowStart[r+1] <= c then r += 1;*/
+        if rowStart[r+1] <= c then r += 1;
         yield (r,colIdx[c]);
       }
         /*}*/
