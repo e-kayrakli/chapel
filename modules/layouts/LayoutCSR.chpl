@@ -77,6 +77,7 @@ class CSRDom: BaseSparseDomImpl {
 
   // perf hints
   var nnzPerRow = 0; // 0 means ignore this hint.
+  var balancedRows = false; // can iterators chunk up row range?
 
   proc CSRDom(param rank, type idxType, 
                                dist: CSR,
@@ -92,12 +93,18 @@ class CSRDom: BaseSparseDomImpl {
     dsiClear();
   }
 
+  // this implies balancedRows
   proc setFixedNNZPerRow() {
     this.nnzPerRow = computeNNZPerRow();
+    setBalancedRows();
   }
 
   proc computeNNZPerRow() {
     return rowStart[2] - rowStart[1];
+  }
+
+  proc setBalancedRows() {
+    balancedRows = true;
   }
 
   proc dsiMyDist() return dist;
@@ -133,7 +140,8 @@ class CSRDom: BaseSparseDomImpl {
   }
 
   iter these(param tag: iterKind) where tag == iterKind.leader {
-    if useCSRPerfHints && nnzPerRow > 0 {
+    if useCSRPerfHints && balancedRows {
+      writeln("Optimized iterator is called");
       const numRows = rowRange.size;
       const numChunks = _computeNumChunks(numRows);
 
@@ -172,7 +180,7 @@ class CSRDom: BaseSparseDomImpl {
     if (followThisDom != this) then
       halt("Sparse domains can't be zippered with anything other than themselves and their arrays (CSR layout)");
 
-    if useCSRPerfHints && nnzPerRow > 0 {
+    if useCSRPerfHints && balancedRows {
       for r in startIx..endIx {
         for c in rowStart[r]..rowStop[r] {
           yield (r,colIdx[c]);

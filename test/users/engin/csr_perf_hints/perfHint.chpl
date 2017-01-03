@@ -12,17 +12,17 @@ for r in parentDom.dim(1) {
   }
 }
 
-sparseDom._instance.setFixedNNZPerRow();
-var sparseArr: [sparseDom] int = 1;
+sparseDom._instance.setBalancedRows();
+/*var sparseArr: [sparseDom] int = 1;*/
 
-for i in parentDom.dim(1) {
-  for j in parentDom.dim(2) {
-    write(sparseArr[i,j], " ");
-  }
-  writeln();
-}
+/*for i in parentDom.dim(1) {*/
+  /*for j in parentDom.dim(2) {*/
+    /*write(sparseArr[i,j], " ");*/
+  /*}*/
+  /*writeln();*/
+/*}*/
 
-writeln("*********************");
+/*writeln("*********************");*/
 
 
 forall (i,j) in sparseDom do
