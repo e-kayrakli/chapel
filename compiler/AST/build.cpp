@@ -32,6 +32,7 @@
 #include "stringutil.h"
 #include "symbol.h"
 #include "type.h"
+#include "view.h"
 
 #include <map>
 #include <utility>
@@ -1388,6 +1389,83 @@ buildForallLoopStmt(Expr*      indices,
   BlockStmt* loopBodyForStandalone = (!zippered) ? loopBody->copy() : NULL;
 
   BlockStmt* resultBlock     = new BlockStmt();
+
+  if(strcmp(indices->astloc.filename, "../forallAnalysis.chpl") == 0){
+
+    char arrName[256];
+    print_view(indices);
+    print_view(iterExpr);
+
+    if(CallExpr *ce = toCallExpr(iterExpr)) {
+      // check if it is of the form X._dom
+      if(ce->isNamed(".")) {
+        if(SymExpr *se = toSymExpr(ce->get(2))) {
+          if(VarSymbol *var = toVarSymbol(se->symbol())) {
+            if (var->immediate->const_kind == CONST_KIND_STRING) {
+              if(strcmp(var->immediate->v_string, "_dom") == 0) {
+                //// we have it. now ce->get(1) is the array symbol to look for
+                //// in the loop body..
+
+                //// it has to be unresolved but check anyways
+                if(UnresolvedSymExpr *useArr = toUnresolvedSymExpr(ce->get(1))) {
+                  strcpy(arrName, useArr->unresolved);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    std::vector<CallExpr*> calls;
+    collectCallExprs(loopBody, calls);
+
+    std::cout << "Look for " << arrName << " in loop body" << std::endl;
+    std::cout << "Call exprs in loop body:" << std::endl;
+    for(std::vector<CallExpr*>::iterator i = calls.begin() ;
+        i != calls.end() ; i++) {
+      if((*i)->isNamed(arrName)) {
+        std::cout << "Found a candidate : " << std::endl;
+        print_view(*i);
+
+        if(UnresolvedSymExpr *usexpInd = toUnresolvedSymExpr(indices)) {
+          INT_ASSERT((*i)->argList.length == 1);
+          if(UnresolvedSymExpr *usexpArg = toUnresolvedSymExpr((*i)->get(1))) {
+            if(strcmp(usexpArg->unresolved, usexpInd->unresolved) == 0) {
+              std::cout << "Mark the candidate!\n";
+            }
+          }
+        }
+        else if(CallExpr *ceInd = toCallExpr(indices)) {
+          if(ceInd->isNamed("_build_tuple")) {
+            INT_ASSERT((*i)->argList.length == ceInd->argList.length);
+            int cnt;
+            for(cnt = 1; cnt <= ceInd->argList.length ; cnt++) {
+              if(UnresolvedSymExpr *usexpInd = toUnresolvedSymExpr(ceInd->get(cnt))) {
+                if(UnresolvedSymExpr *usexpArg = toUnresolvedSymExpr((*i)->get(cnt))) {
+                  if(strcmp(usexpArg->unresolved, usexpInd->unresolved) == 0) {
+                    // if they are equal keep checking
+                  }
+                  else {
+                    break;
+                  }
+                }
+                else {
+                  break;
+                }
+              }
+              else {
+                break;
+              }
+            }
+            if(cnt==ceInd->argList.length+1) {
+              // all must be equal
+              std::cout << "Mark the candidate!\n";
+            }
+          }
+        }
+      }
+    }
+  }
 
   VarSymbol* iterRec         = newTemp("chpl__iterLF"); // serial iter, LF case
 
