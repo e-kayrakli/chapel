@@ -327,56 +327,71 @@ void cullOverReferences() {
       }
 
     } else {
-      if(strcmp(move->astloc.filename, "../forallAnalysis.chpl") == 0){
+      if(refCall->fastAccessPtr){
         SET_LINENO(move);
 
         VarSymbol *zero = new_UIntSymbol(0, INT_SIZE_64);
+        //VarSymbol *falseSym = new_BoolSymbol(false, BOOL_SIZE_SYS);
+
+        // create the conditional variable
+        VarSymbol *condVar = new VarSymbol("fast_acc_cond", dtBool);
+        condVar->addFlag(FLAG_DONT_ALLOW_REF);
+
+        //int hoistCount;
+        Expr *mainForall = move;
+        do{
+          mainForall = mainForall->parentExpr;
+        } while(!isForLoop(mainForall));
+        //std::cout << refCall->fastAccessDepth;
+        //for(hoistCount=0 ; hoistCount<refCall->fastAccessDepth ; hoistCount++) {
+          //mainForall = mainForall->parentExpr;
+          //std::cout << "Hoisted\n";
+        //}
+        std::cout << "Main forall";
+        print_view(mainForall);
+        print_view(mainForall->parentExpr);
+        mainForall->parentExpr->insertBefore(new DefExpr(condVar));
+        mainForall->insertBefore(new CallExpr(PRIM_MOVE,
+              condVar, zero));
+
+        VarSymbol *condTmp = newTemp(dtBool);
 
         // create the actual pointer
         VarSymbol *fastAccPtr = new VarSymbol("fast_acc_ptr", refFn->retType);
         move->parentExpr->insertBefore(new DefExpr(fastAccPtr));
 
         VarSymbol *ptrOff = new VarSymbol("fast_acc_off", dtInt[INT_SIZE_64]);
+        //VarSymbol *ptrOff = new_UIntSymbol(1, INT_SIZE_64);
         move->parentExpr->insertBefore(new DefExpr(ptrOff));
-        //move->parentExpr->insertBefore(new CallExpr(PRIM_MOVE, ptrOff,
-              //new CallExpr(PRIM_SIZEOF, valueFn->retType)));
+        move->parentExpr->insertBefore(new CallExpr(PRIM_MOVE, ptrOff,
+              new_UIntSymbol(1, INT_SIZE_64)));
 
         // initialize it to NULL
         //move->parentExpr->insertBefore(new CallExpr(PRIM_MOVE,
               //fastAccPtr, zero));
 
-        // create the conditional variable
-        VarSymbol *condVar = newTemp("fast_acc_cond", dtBool);
-        move->parentExpr->insertBefore(new DefExpr(condVar));
 
         //Expr *condExpr = new CallExpr(PRIM_MOVE, condVar,
             //new CallExpr(PRIM_NOTEQUAL, fastAccPtr, zero));
 
         // fast access block
+        BlockStmt *elseBlock = new BlockStmt();
+        elseBlock->insertAtTail(new CallExpr(PRIM_MOVE, (fastAccPtr),
+            refCall));
+        elseBlock->insertAtTail(new CallExpr(PRIM_MOVE, condVar,
+              new_BoolSymbol(true, BOOL_SIZE_SYS)));
 
         BlockStmt *thenBlock = new BlockStmt();
-        thenBlock->insertAtTail(new CallExpr(PRIM_MOVE, (fastAccPtr),
-            refCall));
-        thenBlock->insertAtTail(new CallExpr(PRIM_MOVE, condVar,
-              new_BoolSymbol(false, BOOL_SIZE_SYS)));
-
-        //Expr *elseStmt = new CallExpr(PRIM_MOVE, (fastAccPtr),
-            //new CallExpr(PRIM_ADD, (fastAccPtr), ptrOff));
-
-        //fastAccPtr->qual = QUAL_VAL;
-        Expr *elseStmt = new CallExpr(PRIM_SHIFT_REF,
-            fastAccPtr, fastAccPtr, ptrOff);
+        thenBlock->insertAtTail(new CallExpr(PRIM_SHIFT_REF,
+            fastAccPtr, fastAccPtr, ptrOff));
         //fastAccPtr->qual = QUAL_CONST_REF;
 
-        CondStmt *condAccess = new CondStmt(new SymExpr(condVar),
-              thenBlock, elseStmt);
+        CondStmt *condAccess = new CondStmt(new SymExpr(condTmp),
+              thenBlock, elseBlock);
 
-        //move->insertBefore(condExpr);
+        move->insertBefore(new DefExpr(condTmp));
+        move->insertBefore(new CallExpr(PRIM_MOVE, condTmp, condVar));
         move->insertBefore(condAccess);
-        //normalize(condAccess->parentExpr->parentExpr);
-
-        // TODO ENGIN I'll replace with fast access ptr
-        // to make sure checks don't fail
         cc->replace(new SymExpr(fastAccPtr));
       }
       else {

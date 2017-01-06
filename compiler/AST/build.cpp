@@ -1375,7 +1375,7 @@ buildForallLoopStmt(Expr*      indices,
 
   checkIndices(indices);
 
-  if(strcmp(indices->astloc.filename, "../forallAnalysis.chpl") == 0){
+  //if(strcmp(indices->astloc.filename, "../forallAnalysis.chpl") == 0){
 
     char arrName[256];
     print_view(indices);
@@ -1418,6 +1418,7 @@ buildForallLoopStmt(Expr*      indices,
             if(strcmp(usexpArg->unresolved, usexpInd->unresolved) == 0) {
               std::cout << "Mark the candidate!\n";
               (*i)->fastAccessPtr = true;
+              (*i)->fastAccessDepth = 1;
               std::cout << "marked id " << (*i)->id << std::endl;
             }
           }
@@ -1448,13 +1449,14 @@ buildForallLoopStmt(Expr*      indices,
               // all must be equal
               std::cout << "Mark the candidate!\n";
               (*i)->fastAccessPtr = true;
+              (*i)->fastAccessDepth = cnt-1;
               std::cout << "marked id " << (*i)->id << std::endl;
             }
           }
         }
       }
     }
-  }
+  //}
 
   INT_ASSERT(!loopBody->forallIntents);
   if (!forall_intents) forall_intents = new ForallIntents();

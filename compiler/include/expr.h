@@ -194,6 +194,7 @@ public:
   bool         methodTag;        // Set to true if the call is a method call.
   bool         square;           // true if call made with square brackets
   bool         fastAccessPtr;    // true if call can be replaced by ptr arithmetic
+  int          fastAccessDepth;
 
   CallExpr(BaseAST*     base,
            BaseAST*     arg1 = NULL,

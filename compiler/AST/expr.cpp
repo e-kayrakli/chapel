@@ -1051,6 +1051,7 @@ CallExpr* CallExpr::copyInner(SymbolMap* map) {
   _this->methodTag  = methodTag;
   _this->square     = square;
   _this->fastAccessPtr = fastAccessPtr;
+  _this->fastAccessDepth = fastAccessDepth;
 
   return _this;
 }

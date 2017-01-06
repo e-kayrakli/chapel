@@ -119,6 +119,10 @@ passableByVal(Type* type) {
 // Otherwise passing by value is more efficient.
 static bool
 passByRef(Symbol* sym) {
+
+  if(sym->hasFlag(FLAG_DONT_ALLOW_REF)) {
+    return false;
+  }
   //
   // If it's constant (in the sense that the value will not change),
   // there's no need to pass it by reference
