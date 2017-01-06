@@ -1376,21 +1376,25 @@ buildForallLoopStmt(Expr*      indices,
   checkIndices(indices);
 
   // find fast access pointer candidates
+  bool goodIterExpr = false;
   char arrName[256];
 
+  // first phase: check if the iterable expression of the forall
+  // statement is something we can use for optimization
   if(CallExpr *ce = toCallExpr(iterExpr)) {
-    // check if it is of the form X._dom
+    // check if iterExpr is of the form X._dom
     if(ce->isNamed(".")) {
       if(SymExpr *se = toSymExpr(ce->get(2))) {
         if(VarSymbol *var = toVarSymbol(se->symbol())) {
           if (var->immediate->const_kind == CONST_KIND_STRING) {
             if(strcmp(var->immediate->v_string, "_dom") == 0) {
-              //// we have it. now ce->get(1) is the array symbol to look for
-              //// in the loop body..
+              // we have it. now ce->get(1) is the array symbol to
+              //look for in the loop body..
 
-              //// it has to be unresolved but check anyways
+              // it has to be unresolved but check anyways
               if(UnresolvedSymExpr *useArr = toUnresolvedSymExpr(ce->get(1))) {
                 strcpy(arrName, useArr->unresolved);
+                goodIterExpr = true;
               }
             }
           }
@@ -1399,30 +1403,45 @@ buildForallLoopStmt(Expr*      indices,
     }
   }
 
-  std::vector<CallExpr*> calls;
-  collectCallExprs(loopBody, calls);
+  // second phase: if we have a good iterExpr, check if there are good
+  // array accesses within the loop body
+  if(goodIterExpr) {
+    std::vector<CallExpr*> calls;
+    collectCallExprs(loopBody, calls);
 
-  for(std::vector<CallExpr*>::iterator i = calls.begin() ;
-      i != calls.end() ; i++) {
-    if((*i)->isNamed(arrName)) {
+    for(std::vector<CallExpr*>::iterator i = calls.begin() ;
+        i != calls.end() ; i++) {
+      if((*i)->isNamed(arrName)) {
+        // now we have an access to an array X and iterExpr was X.domain
 
-      if(UnresolvedSymExpr *usexpInd = toUnresolvedSymExpr(indices)) {
-        INT_ASSERT((*i)->argList.length == 1);
-        if(UnresolvedSymExpr *usexpArg = toUnresolvedSymExpr((*i)->get(1))) {
-          if(strcmp(usexpArg->unresolved, usexpInd->unresolved) == 0) {
-            (*i)->fastAccessPtr = true;
+        // if we had something like
+        //    forall i in X.domain
+        // `i` is an UnresolvedSymExpr at this point
+        //
+        // else what we have must be something like
+        //    forall (i,j) in X.domain
+        // in which case `(i,j)` is a (call _build_tuple i j)
+        if(UnresolvedSymExpr *usexpInd = toUnresolvedSymExpr(indices)) {
+          INT_ASSERT((*i)->argList.length == 1);
+          if(UnresolvedSymExpr *usexpArg = toUnresolvedSymExpr((*i)->get(1))) {
+            if(strcmp(usexpArg->unresolved, usexpInd->unresolved) == 0) {
+              (*i)->fastAccessPtr = true;
+            }
           }
         }
-      }
-      else if(CallExpr *ceInd = toCallExpr(indices)) {
-        if(ceInd->isNamed("_build_tuple")) {
-          INT_ASSERT((*i)->argList.length == ceInd->argList.length);
-          int cnt;
-          for(cnt = 1; cnt <= ceInd->argList.length ; cnt++) {
-            if(UnresolvedSymExpr *usexpInd = toUnresolvedSymExpr(ceInd->get(cnt))) {
-              if(UnresolvedSymExpr *usexpArg = toUnresolvedSymExpr((*i)->get(cnt))) {
-                if(strcmp(usexpArg->unresolved, usexpInd->unresolved) == 0) {
-                  // if they are equal keep checking
+        else if(CallExpr *ceInd = toCallExpr(indices)) {
+          if(ceInd->isNamed("_build_tuple")) {
+            INT_ASSERT((*i)->argList.length == ceInd->argList.length);
+            int cnt;
+            for(cnt = 1; cnt <= ceInd->argList.length ; cnt++) {
+              if(UnresolvedSymExpr *usexpInd = toUnresolvedSymExpr(ceInd->get(cnt))) {
+                if(UnresolvedSymExpr *usexpArg = toUnresolvedSymExpr((*i)->get(cnt))) {
+                  if(strcmp(usexpArg->unresolved, usexpInd->unresolved) == 0) {
+                    // if they are equal keep checking
+                  }
+                  else {
+                    break;
+                  }
                 }
                 else {
                   break;
@@ -1432,13 +1451,10 @@ buildForallLoopStmt(Expr*      indices,
                 break;
               }
             }
-            else {
-              break;
+            if(cnt==ceInd->argList.length+1) {
+              // all must be equal
+              (*i)->fastAccessPtr = true;
             }
-          }
-          if(cnt==ceInd->argList.length+1) {
-            // all must be equal
-            (*i)->fastAccessPtr = true;
           }
         }
       }

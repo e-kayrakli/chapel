@@ -325,67 +325,72 @@ void cullOverReferences() {
 
     } else {
       if(refCall->fastAccessPtr){
+        // we are using the ref version and the access can be optimized
+        // through C pointer manipulations
         SET_LINENO(move);
 
-        VarSymbol *zero = new_UIntSymbol(0, INT_SIZE_64);
-        //VarSymbol *falseSym = new_BoolSymbol(false, BOOL_SIZE_SYS);
-
-        // create the conditional variable
-        VarSymbol *condVar = new VarSymbol("fast_acc_cond", dtBool);
-        condVar->addFlag(FLAG_DONT_ALLOW_REF);
-
-        //int hoistCount;
+        // I'd like to put some of the variables outside the
+        // "conceptual" forall loop in the generated code. Currently, I
+        // haven't contemplated on how to do it too much but ideally it
+        // should be something like a do-while loop hoisting invariant
+        // data outside blocks until it is finally outside that
+        // "conceptual" forall loop
         Expr *mainForall = move;
         do{
           mainForall = mainForall->parentExpr;
         } while(!isForLoop(mainForall));
-        //std::cout << refCall->fastAccessDepth;
-        //for(hoistCount=0 ; hoistCount<refCall->fastAccessDepth ; hoistCount++) {
-          //mainForall = mainForall->parentExpr;
-          //std::cout << "Hoisted\n";
-        //}
+
+        // create the conditional variable that determines if we should
+        // use fast access ptr for that particular access
+        VarSymbol *condVar = new VarSymbol("fast_acc_cond", dtBool);
+
+        // remove this and you have a race condition
+        condVar->addFlag(FLAG_DONT_ALLOW_REF);
+
+        // condition variable has to be defined outside that
+        // loop.
+        //
+        // Sadly, in my first iteration I was not able to create a
+        // variable inside the coforall_fn. So, what we end up with this
+        // is that this variable will be defined in the function that
+        // initiates the coforall and passed by value to the coforall
+        // task. And inside the actual loop we are actually manipulating
+        // an actual and not local. This is a TODO for now.
         mainForall->parentExpr->insertBefore(new DefExpr(condVar));
         mainForall->insertBefore(new CallExpr(PRIM_MOVE,
-              condVar, zero));
-
-        VarSymbol *condTmp = newTemp(dtBool);
+              condVar, new_BoolSymbol(false, BOOL_SIZE_SYS)));
 
         // create the actual pointer
+        // This seems to be replaced by a temp during ref propagation
         VarSymbol *fastAccPtr = new VarSymbol("fast_acc_ptr", refFn->retType);
         move->parentExpr->insertBefore(new DefExpr(fastAccPtr));
 
+        // technically I could've just incremented the pointer by an
+        // immediate, but in the future if we are going to optimize
+        // strided access, we may need something like this.
+        // Also, in the next passes, this variable gets optimized out
+        // with an immediate. So no overhead for now.
         VarSymbol *ptrOff = new VarSymbol("fast_acc_off", dtInt[INT_SIZE_64]);
-        //VarSymbol *ptrOff = new_UIntSymbol(1, INT_SIZE_64);
         move->parentExpr->insertBefore(new DefExpr(ptrOff));
         move->parentExpr->insertBefore(new CallExpr(PRIM_MOVE, ptrOff,
               new_UIntSymbol(1, INT_SIZE_64)));
 
-        // initialize it to NULL
-        //move->parentExpr->insertBefore(new CallExpr(PRIM_MOVE,
-              //fastAccPtr, zero));
-
-
-        //Expr *condExpr = new CallExpr(PRIM_MOVE, condVar,
-            //new CallExpr(PRIM_NOTEQUAL, fastAccPtr, zero));
-
         // fast access block
-        BlockStmt *elseBlock = new BlockStmt();
-        elseBlock->insertAtTail(new CallExpr(PRIM_MOVE, (fastAccPtr),
-            refCall));
-        elseBlock->insertAtTail(new CallExpr(PRIM_MOVE, condVar,
-              new_BoolSymbol(true, BOOL_SIZE_SYS)));
-
         BlockStmt *thenBlock = new BlockStmt();
         thenBlock->insertAtTail(new CallExpr(PRIM_SHIFT_REF,
             fastAccPtr, fastAccPtr, ptrOff));
-        //fastAccPtr->qual = QUAL_CONST_REF;
 
-        CondStmt *condAccess = new CondStmt(new SymExpr(condTmp),
-              thenBlock, elseBlock);
+        // regular access block
+        BlockStmt *elseBlock = new BlockStmt();
+        elseBlock->insertAtTail(new CallExpr(PRIM_MOVE,
+              fastAccPtr, refCall));
+        elseBlock->insertAtTail(new CallExpr(PRIM_MOVE,
+              condVar, new_BoolSymbol(true, BOOL_SIZE_SYS)));
 
-        move->insertBefore(new DefExpr(condTmp));
-        move->insertBefore(new CallExpr(PRIM_MOVE, condTmp, condVar));
-        move->insertBefore(condAccess);
+        move->insertBefore(new CondStmt(new SymExpr(condVar),
+              thenBlock, elseBlock));
+
+        // replace context call with the pointer directly
         cc->replace(new SymExpr(fastAccPtr));
       }
       else {
