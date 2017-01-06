@@ -24,7 +24,6 @@
 #include "resolution.h"
 #include "stmt.h"
 #include "symbol.h"
-#include "view.h"
 
 static bool
 refNecessary(SymExpr*                      se,
@@ -250,8 +249,6 @@ void cullOverReferences() {
 
       // Should we switch to the by-value form?
       if(refCall->fastAccessPtr) {
-        //std::cout << "Using ref call for fast access" << std::endl;
-        //print_view(refCall);
         useValueCall = false;
       }
       else {
@@ -347,9 +344,6 @@ void cullOverReferences() {
           //mainForall = mainForall->parentExpr;
           //std::cout << "Hoisted\n";
         //}
-        std::cout << "Main forall";
-        print_view(mainForall);
-        print_view(mainForall->parentExpr);
         mainForall->parentExpr->insertBefore(new DefExpr(condVar));
         mainForall->insertBefore(new CallExpr(PRIM_MOVE,
               condVar, zero));
