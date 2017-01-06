@@ -570,6 +570,7 @@ initPrimitive() {
 
   prim_def(PRIM_OPTIMIZE_ARRAY_BLK_MULT, "optimize_array_blk_mult", returnInfoBool);
   prim_def(PRIM_ARRAY_SHIFT_BASE_POINTER, "shift_base_pointer", returnInfoVoid, true, true);
+  prim_def(PRIM_SHIFT_REF, "shift_ref", returnInfoVoid, true, true);
   prim_def(PRIM_ARRAY_ALLOC, "array_alloc", returnInfoVoid, true, true);
   prim_def(PRIM_ARRAY_FREE, "array_free", returnInfoVoid, true, true);
   prim_def(PRIM_ARRAY_FREE_ELTS, "array_free_elts", returnInfoVoid, true);

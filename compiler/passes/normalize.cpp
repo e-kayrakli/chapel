@@ -33,6 +33,7 @@
 #include "stringutil.h"
 #include "symbol.h"
 #include "TransformLogicalShortCircuit.h"
+#include "view.h"
 
 #include <cctype>
 #include <set>
@@ -1025,6 +1026,12 @@ static void insert_call_temps(CallExpr* call)
 
   call->replace(new SymExpr(tmp));
 
+  if(strcmp(call->astloc.filename, "../forallAnalysis.chpl") == 0) {
+    std::cout << "Normalize call" << std::endl;
+    print_view(call);
+    std::cout << call->fastAccessPtr << std::endl;
+
+  }
   stmt->insertBefore(new DefExpr(tmp));
   stmt->insertBefore(new CallExpr(PRIM_MOVE, tmp, call));
 }

@@ -24,7 +24,7 @@
 #include "stlUtil.h"
 #include "expr.h"
 #include "stmt.h"
-
+#include "view.h"
 //#define DEBUG_SYNC_ACCESS_FUNCTION_SET
 
 static void updateLoopBodyClasses(Map<Symbol*, Vec<SymExpr*>*>& defMap,
@@ -742,6 +742,10 @@ static bool computeDotLocale(Symbol* sym) {
     info->todo.pop_back();
 
     CallExpr* call = toCallExpr(use->parentExpr);
+    if(!call) {
+      print_view(use);
+      print_view(use->parentExpr);
+    }
     INT_ASSERT(call);
     CallExpr* parent = toCallExpr(call->parentExpr);
 

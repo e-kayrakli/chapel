@@ -255,6 +255,7 @@ void checkPrimitives()
      case PRIM_ARRAY_GET:
      case PRIM_ARRAY_GET_VALUE:
      case PRIM_ARRAY_SHIFT_BASE_POINTER:
+     case PRIM_SHIFT_REF:
      case PRIM_ARRAY_SET:
      case PRIM_ARRAY_SET_FIRST:
      case PRIM_WHEN:

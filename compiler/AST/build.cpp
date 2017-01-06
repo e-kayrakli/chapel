@@ -1375,21 +1375,6 @@ buildForallLoopStmt(Expr*      indices,
 
   checkIndices(indices);
 
-  INT_ASSERT(!loopBody->forallIntents);
-  if (!forall_intents) forall_intents = new ForallIntents();
-  loopBody->forallIntents = forall_intents;
-  // forallIntents will be processed during implementForallIntents1().
-
-  // ensure it's normal; prevent flatten_scopeless_block() in cleanup.cpp
-  loopBody->blockTag = BLOCK_NORMAL;
-
-  // NB these copies do not get blockIntent updates below.
-  BlockStmt* loopBodyForFast =
-                     (fNoFastFollowers == false) ? loopBody->copy() : NULL;
-  BlockStmt* loopBodyForStandalone = (!zippered) ? loopBody->copy() : NULL;
-
-  BlockStmt* resultBlock     = new BlockStmt();
-
   if(strcmp(indices->astloc.filename, "../forallAnalysis.chpl") == 0){
 
     char arrName[256];
@@ -1432,6 +1417,8 @@ buildForallLoopStmt(Expr*      indices,
           if(UnresolvedSymExpr *usexpArg = toUnresolvedSymExpr((*i)->get(1))) {
             if(strcmp(usexpArg->unresolved, usexpInd->unresolved) == 0) {
               std::cout << "Mark the candidate!\n";
+              (*i)->fastAccessPtr = true;
+              std::cout << "marked id " << (*i)->id << std::endl;
             }
           }
         }
@@ -1460,12 +1447,29 @@ buildForallLoopStmt(Expr*      indices,
             if(cnt==ceInd->argList.length+1) {
               // all must be equal
               std::cout << "Mark the candidate!\n";
+              (*i)->fastAccessPtr = true;
+              std::cout << "marked id " << (*i)->id << std::endl;
             }
           }
         }
       }
     }
   }
+
+  INT_ASSERT(!loopBody->forallIntents);
+  if (!forall_intents) forall_intents = new ForallIntents();
+  loopBody->forallIntents = forall_intents;
+  // forallIntents will be processed during implementForallIntents1().
+
+  // ensure it's normal; prevent flatten_scopeless_block() in cleanup.cpp
+  loopBody->blockTag = BLOCK_NORMAL;
+
+  // NB these copies do not get blockIntent updates below.
+  BlockStmt* loopBodyForFast =
+                     (fNoFastFollowers == false) ? loopBody->copy() : NULL;
+  BlockStmt* loopBodyForStandalone = (!zippered) ? loopBody->copy() : NULL;
+
+  BlockStmt* resultBlock     = new BlockStmt();
 
   VarSymbol* iterRec         = newTemp("chpl__iterLF"); // serial iter, LF case
 

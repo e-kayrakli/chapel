@@ -24,6 +24,7 @@
 #include "resolution.h"
 #include "stmt.h"
 #include "symbol.h"
+#include "view.h"
 
 static bool
 refNecessary(SymExpr*                      se,
@@ -248,7 +249,14 @@ void cullOverReferences() {
       INT_ASSERT(lhs);
 
       // Should we switch to the by-value form?
-      useValueCall = shouldUseByValueFunction(refFn, lhs, defMap, useMap);
+      if(refCall->fastAccessPtr) {
+        //std::cout << "Using ref call for fast access" << std::endl;
+        //print_view(refCall);
+        useValueCall = false;
+      }
+      else {
+        useValueCall = shouldUseByValueFunction(refFn, lhs, defMap, useMap);
+      }
     } else {
       // e.g. array access in own statement like this:
       //   A(i)
@@ -319,8 +327,62 @@ void cullOverReferences() {
       }
 
     } else {
-      // Replace the ContextCallExpr with the ref call
-      cc->replace(refCall);
+      if(strcmp(move->astloc.filename, "../forallAnalysis.chpl") == 0){
+        SET_LINENO(move);
+
+        VarSymbol *zero = new_UIntSymbol(0, INT_SIZE_64);
+
+        // create the actual pointer
+        VarSymbol *fastAccPtr = new VarSymbol("fast_acc_ptr", refFn->retType);
+        move->parentExpr->insertBefore(new DefExpr(fastAccPtr));
+
+        VarSymbol *ptrOff = new VarSymbol("fast_acc_off", dtInt[INT_SIZE_64]);
+        move->parentExpr->insertBefore(new DefExpr(ptrOff));
+        //move->parentExpr->insertBefore(new CallExpr(PRIM_MOVE, ptrOff,
+              //new CallExpr(PRIM_SIZEOF, valueFn->retType)));
+
+        // initialize it to NULL
+        //move->parentExpr->insertBefore(new CallExpr(PRIM_MOVE,
+              //fastAccPtr, zero));
+
+        // create the conditional variable
+        VarSymbol *condVar = newTemp("fast_acc_cond", dtBool);
+        move->parentExpr->insertBefore(new DefExpr(condVar));
+
+        //Expr *condExpr = new CallExpr(PRIM_MOVE, condVar,
+            //new CallExpr(PRIM_NOTEQUAL, fastAccPtr, zero));
+
+        // fast access block
+
+        BlockStmt *thenBlock = new BlockStmt();
+        thenBlock->insertAtTail(new CallExpr(PRIM_MOVE, (fastAccPtr),
+            refCall));
+        thenBlock->insertAtTail(new CallExpr(PRIM_MOVE, condVar,
+              new_BoolSymbol(false, BOOL_SIZE_SYS)));
+
+        //Expr *elseStmt = new CallExpr(PRIM_MOVE, (fastAccPtr),
+            //new CallExpr(PRIM_ADD, (fastAccPtr), ptrOff));
+
+        //fastAccPtr->qual = QUAL_VAL;
+        Expr *elseStmt = new CallExpr(PRIM_SHIFT_REF,
+            fastAccPtr, fastAccPtr, ptrOff);
+        //fastAccPtr->qual = QUAL_CONST_REF;
+
+        CondStmt *condAccess = new CondStmt(new SymExpr(condVar),
+              thenBlock, elseStmt);
+
+        //move->insertBefore(condExpr);
+        move->insertBefore(condAccess);
+        //normalize(condAccess->parentExpr->parentExpr);
+
+        // TODO ENGIN I'll replace with fast access ptr
+        // to make sure checks don't fail
+        cc->replace(new SymExpr(fastAccPtr));
+      }
+      else {
+        // Replace the ContextCallExpr with the ref call
+        cc->replace(refCall);
+      }
     }
   }
 

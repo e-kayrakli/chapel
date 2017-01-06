@@ -23,6 +23,7 @@
 #include "expr.h"
 #include "stmt.h"
 #include "stlUtil.h"
+#include "view.h"
 
 //
 // This file implements the function 'inferConstRefs', which attempts to
@@ -364,6 +365,10 @@ static bool inferConstRef(Symbol* sym) {
     SymExpr* use = info->next();
 
     CallExpr* call = toCallExpr(use->parentExpr);
+    if(!call) {
+      print_view(use);
+      print_view(use->parentExpr);
+    }
     INT_ASSERT(call);
 
     CallExpr* parent = toCallExpr(call->parentExpr);

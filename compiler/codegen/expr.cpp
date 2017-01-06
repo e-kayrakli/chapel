@@ -1020,7 +1020,7 @@ GenRet codegenFieldUidPtr(GenRet base) {
 //  currently only used for the PRIM_ARRAY_SHIFT_BASE_POINTER case.
 //
 static
-GenRet codegenElementPtr(GenRet base, GenRet index, bool ddataPtr=false) {
+GenRet codegenElementPtr(GenRet base, GenRet index, bool ddataPtr=false, bool cPtr=false) {
   GenRet ret;
   GenInfo* info = gGenInfo;
   Type* baseType = NULL;
@@ -1032,7 +1032,7 @@ GenRet codegenElementPtr(GenRet base, GenRet index, bool ddataPtr=false) {
 
   // Handle references to arrays or star tuples
   // by converting them to isLVPtr != GEN_VAL
-  if( base.chplType->symbol->hasEitherFlag(FLAG_REF,FLAG_WIDE_REF) ) {
+  if( !cPtr && base.chplType->symbol->hasEitherFlag(FLAG_REF,FLAG_WIDE_REF) ) {
     base = codegenDeref(base);
   }
 
@@ -3273,6 +3273,24 @@ GenRet CallExpr::codegenPrimitive() {
     }
 
     break;
+  }
+
+  case PRIM_SHIFT_REF: {
+    // get(1): local return value
+    // get(2): _ddata instance
+    // get(3): integral amount to shift by
+    GenRet ret     = get(1);
+    GenRet addr    = get(2);
+    GenRet shifted = codegenElementPtr(addr, get(3), false, true);
+
+    if (ret.isLVPtr != GEN_WIDE_PTR) {
+      codegenAssign(ret, codegenAddrOf(shifted));
+    } else {
+      codegenWideAddrWithAddr(ret, shifted, ret.chplType);
+    }
+
+    break;
+
   }
 
   case PRIM_ARRAY_ALLOC: {
