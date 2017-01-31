@@ -265,56 +265,60 @@ module DefaultSparse {
           return indIdx-1;
         }
       }
+      else {
 
-      const (actualInsertPts, actualAddCnt) =
-        __getActualInsertPts(this, inds, isUnique);
+        const (actualInsertPts, actualAddCnt) =
+          __getActualInsertPts(this, inds, isUnique);
 
-      const oldnnz = nnz;
-      nnz += actualAddCnt;
+        const oldnnz = nnz;
+        nnz += actualAddCnt;
 
-      //grow nnzDom if necessary
-      _bulkGrow(nnz);
+        //grow nnzDom if necessary
+        _bulkGrow(nnz);
 
-      //linearly fill the new colIdx from backwards
-      var newIndIdx = indsDom.high; //index into new indices
-      var oldIndIdx = oldnnz; //index into old indices
-      var newLoc = actualInsertPts[newIndIdx]; //its position-to-be in new dom
-      while newLoc == -1 {
-        newIndIdx -= 1;
-        if newIndIdx == indsDom.low-1 then break; //there were duplicates -- now done
-        newLoc = actualInsertPts[newIndIdx];
-      }
-
-      var arrShiftMap: [{1..oldnnz}] int; //to map where data goes
-
-      for i in 1..nnz by -1 {
-        if oldIndIdx >= 1 && i > newLoc {
-          //shift from old values
-          indices[i] = indices[oldIndIdx];
-          arrShiftMap[oldIndIdx] = i;
-          oldIndIdx -= 1;
-        }
-        else if newIndIdx >= indsDom.low && i == newLoc {
-          //put the new guy in
-          indices[i] = inds[newIndIdx];
+        //linearly fill the new colIdx from backwards
+        var newIndIdx = indsDom.high; //index into new indices
+        var oldIndIdx = oldnnz; //index into old indices
+        var newLoc = actualInsertPts[newIndIdx]; //its position-to-be in new dom
+        while newLoc == -1 {
           newIndIdx -= 1;
-          if newIndIdx >= indsDom.low then 
-            newLoc = actualInsertPts[newIndIdx];
-          else
-            newLoc = -2; //finished new set
-          while newLoc == -1 {
-            newIndIdx -= 1;
-            if newIndIdx == indsDom.low-1 then break; //there were duplicates -- now done
-            newLoc = actualInsertPts[newIndIdx];
-          }
+          if newIndIdx == indsDom.low-1 then
+            break; //there were duplicates -- now done
+          newLoc = actualInsertPts[newIndIdx];
         }
-        else halt("Something went wrong");
+
+        var arrShiftMap: [{1..oldnnz}] int; //to map where data goes
+
+        for i in 1..nnz by -1 {
+          if oldIndIdx >= 1 && i > newLoc {
+            //shift from old values
+            indices[i] = indices[oldIndIdx];
+            arrShiftMap[oldIndIdx] = i;
+            oldIndIdx -= 1;
+          }
+          else if newIndIdx >= indsDom.low && i == newLoc {
+            //put the new guy in
+            indices[i] = inds[newIndIdx];
+            newIndIdx -= 1;
+            if newIndIdx >= indsDom.low then 
+              newLoc = actualInsertPts[newIndIdx];
+            else
+              newLoc = -2; //finished new set
+            while newLoc == -1 {
+              newIndIdx -= 1;
+              if newIndIdx == indsDom.low-1 then
+                break; //there were duplicates -- now done
+              newLoc = actualInsertPts[newIndIdx];
+            }
+          }
+          else halt("Something went wrong");
+        }
+
+        for a in _arrs do 
+          a.sparseBulkShiftArray(arrShiftMap, oldnnz);
+
+        return actualAddCnt;
       }
-
-      for a in _arrs do 
-        a.sparseBulkShiftArray(arrShiftMap, oldnnz);
-
-      return actualAddCnt;
     }
 
     proc dsiMyDist() : BaseDist {
