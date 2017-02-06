@@ -680,6 +680,14 @@ module ChapelDistribution {
     proc isDefaultRectangular() param return false;
     proc dsiSupportsBulkTransferInterface() param return false;
     proc doiCanBulkTransferStride() param return false;
+    
+    proc setData(data: _ddata) {
+      halt("This array does not support setData");
+    }
+
+    proc setData(data: c_ptr) {
+      halt("This array does not support setData");
+    }
   }
 
   /*

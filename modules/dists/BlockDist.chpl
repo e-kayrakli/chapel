@@ -423,7 +423,7 @@ class LocBlockArr {
 
   proc setup(targetLocales) {
     prefetchHook = if allowPrefetchUnpacking then
-      getNewPrefetchHook(this, myElems._instance.type, targetLocales)
+      getNewPrefetchHook(this, myElems.type, targetLocales)
       else getNewPrefetchHook(this, targetLocales);
 
   }
@@ -433,7 +433,7 @@ class LocBlockArr {
 inline proc LocBlockArr.getPrefetchHook(){
   if allowPrefetchUnpacking then 
     return prefetchHook:GenericPrefetchHook(this.type,
-        myElems._value.type, true);
+        myElems.type, true);
   else
     return prefetchHook:GenericPrefetchHook(this.type, int, false);
 }
@@ -1201,17 +1201,12 @@ inline proc BlockArr.dsiAccess(idx: rank*idxType) ref {
         /*myLocArr.getPrefetchHook().t.elapsed();*/
       /*myLocArr.getPrefetchHook().t.clear();*/
     /*}*/
-    
+
     if allowPrefetchUnpacking {
       const hook = myLocArr.getPrefetchHook();
-      const unpackData = hook.getUnpackedData(locIdx);
-      if unpackData != nil {
-        if unpackData.dom.dsiMember(i) then
-          return unpackData.dsiAccess(i);
-        else
-          halt("boom");
-      }
-
+      const ref unpackData = hook.getUnpackedData(locIdx);
+      if unpackData.domain.member(i) then
+        return unpackData[i];
     }
     else {
       const hook =
@@ -2135,25 +2130,8 @@ inline proc LocBlockArr.getUnpackContainerDirect(data: c_void_ptr) {
     origin += metadata[i-1];
   }
 
-  /*var container: [(...ranges)] eltType;*/
   var dom = {(...ranges)};
-  /*writeln(here, " unpacking the data with domain ", dom);*/
-
-  /*var debugDataArr = getElementArrayAtOffset(data, 8*rank*2, uint(8));*/
-  /*for i in ranges[2] {*/
-    /*write(debugDataArr[i], " ");*/
-  /*}*/
-  /*writeln();*/
-
-  var ret =  new DefaultRectangularArr(eltType=eltType,rank=rank,
-      idxType=idxType, stridable=dom._instance.stridable,
-      dom=dom._instance);
-  /*writeln("Pre initialize ", ret.origin , " ", ret.factoredOffs,  " ",*/
-      /*ret.blk, " ", ret.off);*/
-  /*ret.origin = origin;*/
-  /*ret.initialize();*/
-  /*writeln("Post initialize ", ret.origin, " ", ret.factoredOffs, " ",*/
-      /*ret.blk, " ", ret.off);*/
+  var ret: [dom] eltType;
   return ret;
 
 }

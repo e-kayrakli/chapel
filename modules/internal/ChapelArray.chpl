@@ -2099,6 +2099,10 @@ module ChapelArray {
       return ret;
     }
 
+    proc setData(data) {
+      _value.setData(data);
+    }
+
     //
     // This routine determines whether an actual array argument
     // ('this')'s domain is appropriate for a formal array argument

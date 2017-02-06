@@ -841,11 +841,24 @@ module DefaultRectangular {
         blk(dim) = blk(dim+1) * dom.dsiDim(dim+1).length;
       computeFactoredOffs();
       var size = blk(1) * dom.dsiDim(1).length;
-      data = _ddata_allocate(eltType, size);
-      initShiftedData();
+      setData(_ddata_allocate(eltType, size));
       if rank == 1 && !stridable then
         dataAllocRange = dom.dsiDim(1);
 
+    }
+
+    proc setData(data: _ddata) {
+      if _cond_test(data) then
+        _ddata_free(this.data);
+      this.data = data;
+      initShiftedData();
+    }
+
+    proc setData(data: c_ptr) {
+      if _cond_test(data) then
+        _ddata_free(this.data);
+      this.data = __primitive("cast", _ddata(eltType), data);
+      initShiftedData();
     }
 
     inline proc getDataIndex(ind: idxType ...1) where rank == 1
