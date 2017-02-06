@@ -383,17 +383,13 @@ module PrefetchHooks {
 
         if unpackAccess {
           var dataReceived = getData(handles[localeIdx]);
-          unpackedData[localeIdx] =
-            obj.getUnpackContainerDirect(dataReceived);
+          assignUnpackContainer(localeIdx,
+              obj.getUnpackContainerDirect(dataReceived));
 
-          // here comes the DefaultRectangular assumption
-          unpackedData[localeIdx].data = 
-            __primitive("cast", _ddata(obj.eltType),
+          unpackedData[localeIdx].setData(
                 getElementArrayAtOffset(dataReceived,
                   obj.getDataStartByteIndex(dataReceived),
                   obj.eltType));
-
-          unpackedData[localeIdx].initShiftedData();
         }
         hasData[localeIdx] = true;
       }
