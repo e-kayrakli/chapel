@@ -1221,10 +1221,10 @@ inline proc BlockArr.dsiAccess(idx: rank*idxType) ref {
     /*}*/
 
     if allowPrefetchUnpacking {
-      const hook = myLocArr.getPrefetchHook();
-      const ref unpackData = hook.getUnpackedData(locIdx);
-      if unpackData.domain.member(i) then
-        return unpackData[i];
+      const ref unpackedData =
+        myLocArr.getPrefetchHook().getUnpackedData(locIdx);
+      if unpackedData.domain.member(i) then
+        return unpackedData[i];
     }
     else {
       const hook =
@@ -2201,52 +2201,13 @@ inline proc LocBlockArr.getUnpackContainerDirect(data: c_void_ptr) {
   var metadata = getElementArrayAtOffset(data, 0, idxType);
   var ranges: rank*range;
 
-  var origin = 0;
-  for param i in 1..rank {
+  for param i in 1..rank do
     ranges[i] = metadata[i-1]..#metadata[i+rank-1];
-    origin += metadata[i-1];
-  }
 
-  var dom = {(...ranges)};
+  const dom = {(...ranges)};
   var ret: [dom] eltType;
   return ret;
-
 }
-inline proc LocBlockArr.getUnpackContainerSafe(data: c_void_ptr) {
-  var metadata = getElementArrayAtOffset(data, 0, idxType);
-  var ranges: rank*range;
-
-  for param i in 1..rank {
-    ranges[i] = metadata[i-1]..#metadata[i+rank-1];
-  }
-
-  var container: [(...ranges)] eltType;
-  var containerV = container._value;
-
-  var ptr = c_calloc(container._value.type, 1);
-  c_memcpy(ptr, c_ptrTo(containerV), getSize(1,
-        container._value.type));
-  return ptr;
-
-}
-
-inline proc LocBlockArr.getUnpackContainerDesc(data:c_void_ptr) {
-  var metadata = getElementArrayAtOffset(data, 0, idxType);
-  var ranges: rank*range;
-
-  for param i in 1..rank {
-    ranges[i] = metadata[i-1]..#metadata[i+rank-1];
-  }
-  /*var container: [(...ranges)] eltType;*/
-  /*[>writeln(ranges);<]*/
-  /*[>writeln(container);<]*/
-  /*[>halt("asd");<]*/
-  /*return container;*/
-
-  return ranges;
-
-}
-
 
 inline proc LocBlockArr.getDataStartByteIndex(data: c_void_ptr) {
   return getSize(rank*2, idxType);

@@ -437,7 +437,7 @@ module PrefetchHooks {
 
     inline proc assignUnpackContainer(localeIdx, container) {
       pragma "no auto destroy"
-      var localCopy = container;
+      var localCopy: container.type;
 
       __primitive("=", unpackedData[localeIdx], localCopy);
     }
