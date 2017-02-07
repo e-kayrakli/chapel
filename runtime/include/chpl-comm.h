@@ -314,12 +314,6 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
                     size_t size, int32_t typeIndex,
                     int ln, int32_t fn);
 
-// TODO write doc
-void  chpl_comm_prefetch(void** addr, c_nodeid_t node, void* robjaddr,
-    size_t *size, void *slice_desc, size_t slice_desc_size,
-    int32_t typeIndex, int ln, int32_t fn);
-
-//
 //
 // get 'size' bytes of remote data at 'raddr' on locale 'locale' to
 // local data at 'addr'

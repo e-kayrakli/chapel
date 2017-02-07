@@ -3453,30 +3453,30 @@ void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
       /*entry->slice_desc_size, -1, -1, -1);*/
 }
 
-struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
-    void* robjaddr, void *slice_desc, size_t slice_desc_size,
-    bool consistent) {
+/*struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,*/
+    /*void* robjaddr, void *slice_desc, size_t slice_desc_size,*/
+    /*bool consistent) {*/
 
-  /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
-  struct __prefetch_entry_t* new_data;
-  TRACE_PRINT(("%d: in chpl_comm_requestprefetch\n", chpl_nodeID));
-  if (chpl_verbose_comm)
-    printf("%d: remote prefetch request from %d\n", chpl_nodeID, node);
+  /*[>struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();<]*/
+  /*struct __prefetch_entry_t* new_data;*/
+  /*TRACE_PRINT(("%d: in chpl_comm_requestprefetch\n", chpl_nodeID));*/
+  /*if (chpl_verbose_comm)*/
+    /*printf("%d: remote prefetch request from %d\n", chpl_nodeID, node);*/
 
-  // add the data to the prefetch buffer
-  new_data = add_to_prefetch_buffer(pbuf, node, robjaddr,
-      slice_desc, slice_desc_size,
-      consistent);
+  /*// add the data to the prefetch buffer*/
+  /*new_data = add_to_prefetch_buffer(pbuf, node, robjaddr,*/
+      /*slice_desc, slice_desc_size,*/
+      /*consistent);*/
 
-  chpl_comm_prefetch(&(new_data->data), node, robjaddr,
-      &(new_data->size), slice_desc, slice_desc_size, -1, -1, -1);
-#if CHECK_PFENTRY_INTEGRITY
-  new_data->base_data = chpl_malloc(new_data->size);
-  chpl_memcpy(new_data->base_data, new_data->data, new_data->size);
-#endif
+  /*chpl_comm_prefetch(&(new_data->data), node, robjaddr,*/
+      /*&(new_data->size), slice_desc, slice_desc_size, -1, -1, -1);*/
+/*#if CHECK_PFENTRY_INTEGRITY*/
+  /*new_data->base_data = chpl_malloc(new_data->size);*/
+  /*chpl_memcpy(new_data->base_data, new_data->data, new_data->size);*/
+/*#endif*/
 
-  return new_data;
-}
+  /*return new_data;*/
+/*}*/
 
 /*void get_prefetched_data(struct __prefetch_entry_t *entry,*/
     /*int offset, size_t size, void *dest) {*/

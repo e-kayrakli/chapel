@@ -145,9 +145,9 @@ void chpl_cache_assert_released(void);
 
 //struct __prefetch_entry_t *chpl_comm_prefetch(c_nodeid_t node, 
     //void* raddr, size_t size, size_t serialized_base_idx);
-struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
-    void* robjaddr, void* slice_desc, size_t slice_desc_size,
-    bool consistent);
+//struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,
+    //void* robjaddr, void* slice_desc, size_t slice_desc_size,
+    //bool consistent);
 void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
