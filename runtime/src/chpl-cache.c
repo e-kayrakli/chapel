@@ -3052,7 +3052,7 @@ void start_update(struct __prefetch_entry_t *entry) {
       entry->state_counter = -1;
       done = true;
       //the lock should be unlocked by stop_update
-      printf("%d Started update\n", chpl_nodeID);
+      /*printf("%d Started update\n", chpl_nodeID);*/
     }
     else {
       // we only unlock if we weren't able to start the update
@@ -3068,9 +3068,9 @@ void stop_update(struct __prefetch_entry_t *entry) {
   // definitely no readers in the entry
   assert(entry->state_counter == -1);
   entry->state_counter = 0;
-  printf("%d Trying to stop update\n", chpl_nodeID);
+  /*printf("%d Trying to stop update\n", chpl_nodeID);*/
   chpl_sync_unlock(&(entry->state_lock));
-  printf("%d Stopped update\n", chpl_nodeID);
+  /*printf("%d Stopped update\n", chpl_nodeID);*/
 }
 
 
@@ -3155,7 +3155,7 @@ void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
   *new_entry = add_to_prefetch_buffer(pbuf, origin_node, robjaddr,
       slice_desc, slice_desc_size, consistent);
 
-  printf("%d creating new handle %p\n", chpl_nodeID, *new_entry);
+  /*printf("%d creating new handle %p\n", chpl_nodeID, *new_entry);*/
 
   (*new_entry)->size = prefetch_size;
   (*new_entry)->data = chpl_malloc(prefetch_size);
@@ -3169,14 +3169,14 @@ void *update_prefetch_handle(void* owner_obj, c_nodeid_t
     consistent) {
 
   if(prefetch_size != (*new_entry)->size) {
-    printf("%d reallocating old handle\n", chpl_nodeID);
+    /*printf("%d reallocating old handle\n", chpl_nodeID);*/
     //reallocate space
     /*chpl_free((*new_entry)->data);*/
     (*new_entry)->size = prefetch_size;
     (*new_entry)->data = chpl_malloc(prefetch_size);
   }
   else {
-    printf("%d reusing old handle\n", chpl_nodeID);
+    /*printf("%d reusing old handle\n", chpl_nodeID);*/
   }
   return (*new_entry)->data;
 }
@@ -3435,14 +3435,14 @@ extern void __reprefetch_wrapper(void* owner_obj, c_nodeid_t
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
   /*chpl_free(entry->data);*/
 
-  printf("%d Reprefetching from %d %p\n", chpl_nodeID,
-      entry->origin_node, entry);
+  /*printf("%d Reprefetching from %d %p\n", chpl_nodeID,*/
+      /*entry->origin_node, entry);*/
 
-  printf("\t\t Slice desc: %ld %ld %ld %ld\n",
-      ((int64_t *)entry->slice_desc)[0],
-      ((int64_t *)entry->slice_desc)[1],
-      ((int64_t *)entry->slice_desc)[2],
-      ((int64_t *)entry->slice_desc)[3]);
+  /*printf("\t\t Slice desc: %ld %ld %ld %ld\n",*/
+      /*((int64_t *)entry->slice_desc)[0],*/
+      /*((int64_t *)entry->slice_desc)[1],*/
+      /*((int64_t *)entry->slice_desc)[2],*/
+      /*((int64_t *)entry->slice_desc)[3]);*/
 
   __reprefetch_wrapper(entry->owner_obj, chpl_nodeID,
       entry->origin_node, entry->robjaddr, entry->slice_desc,

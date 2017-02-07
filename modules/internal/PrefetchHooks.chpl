@@ -5,6 +5,7 @@ module PrefetchHooks {
   config param initSerializeBufSize = 1024;
   config param serializeBufferGrowthFactor = 1.5;
   config param measureTime = false;
+  config param debugPrefetch = false;
 
   extern type c_nodeid_t;
   /*extern class prefetch_entry_t {*/
@@ -56,6 +57,11 @@ module PrefetchHooks {
       consistent): c_void_ptr;
   inline proc getData(handle) {
     return get_data_from_prefetch_entry(handle);
+  }
+
+  private inline proc debug_writeln(args...) {
+    if debugPrefetch then
+      writeln((...args));
   }
 
   class PrefetchHook {
@@ -226,7 +232,7 @@ module PrefetchHooks {
       for val in obj.dsiSerialize() do yield val;
     }
     proc dsiGetSerializedObjectSize(): size_t {
-      writeln("getting size on ", here);
+      debug_writeln("getting size on ", here);
       var size = 0: size_t;
       for v in obj.dsiGetSerializedObjectSize() {
         size += v;
@@ -403,12 +409,12 @@ module PrefetchHooks {
       const nodeId = localeIDs[localeIdx];
 
       if nodeId!=here.id {
-        writeln(here, " prefetching ", sliceDesc);
+        debug_writeln(here, " prefetching ", sliceDesc);
         var (sliceDescPtr, sliceDescSize, dummyBool) =
           convertToSerialChunk(sliceDesc);
         /*handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,*/
             /*sliceDescPtr, sliceDescSize, consistent);*/
-        writeln(here, " prefetching ",
+        debug_writeln(here, " prefetching ",
             (sliceDescPtr:c_ptr(obj.idxType))[0], " size ",
             sliceDescSize);
         handles[localeIdx] = doPrefetch(here.id, nodeId, robjaddr,
@@ -524,12 +530,12 @@ module PrefetchHooks {
         get_prefetched_data(thisaddr, handle, getSize(1,obj.eltType),
             localIdx, isPrefetched, data);
 
-        writeln("accessing packed data");
+        debug_writeln("accessing packed data");
         return (isPrefetched!=0, data);
       }
       else {
         /*return (true, data);*/
-        writeln("accessing unpacked data");
+        debug_writeln("accessing unpacked data");
         return (true, unpackData[localeId].dsiAccess(idx));
       }
     }
@@ -649,12 +655,12 @@ module PrefetchHooks {
       /*writeln(here, " gonna report size for ",*/
           /*(slice_desc:c_ptr(int))[0]);*/
       const ret = obj.dsiGetSerializedObjectSize(slice_desc);
-      writeln(here, " reports size ", ret);
+      debug_writeln(here, " reports size ", ret);
       return ret;
     }
     else {
       const ret = obj.dsiGetSerializedObjectSize();
-      writeln(here, " reports size ", ret);
+      debug_writeln(here, " reports size ", ret);
       return ret;
     }
 
