@@ -241,6 +241,7 @@ module PrefetchHooks {
     }
 
     //prefetch-reprefetch helpers
+    pragma "no remote memory fence"
     inline proc __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
         slice_desc, slice_desc_size) {
       var size = 0: size_t;
@@ -265,7 +266,8 @@ module PrefetchHooks {
       return size;
     }
 
-    proc __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+    pragma "no remote memory fence"
+    inline proc __getSerializedData(destLocaleId, srcLocaleId, srcObj,
         slice_desc, slice_desc_size: size_t, data, size) {
 
       on Locales[srcLocaleId] {
@@ -303,6 +305,7 @@ module PrefetchHooks {
       return dummy;
     }
 
+    pragma "no remote memory fence"
     proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
         slice_desc_size: size_t, consistent) {
 

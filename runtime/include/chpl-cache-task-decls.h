@@ -25,5 +25,9 @@ typedef struct {
   int64_t last_acquire; // cache acquire barrier sets this
 } chpl_cache_taskPrvData_t;
 
+// This is the type of the task private data used by the prefetch buffer
+typedef struct {
+  int64_t last_acquire; // cache acquire barrier sets this
+} chpl_prefetch_taskPrvData_t;
 #endif
 

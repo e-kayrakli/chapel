@@ -2724,7 +2724,13 @@ void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
   if(entry) {
     /*printf("%p has new sn = %ld\n", entry,*/
         /*pbuf->prefetch_sequence_number);*/
-    entry->sn = pbuf->prefetch_sequence_number + offset;
+    cache_seqn_t sn = pbuf->prefetch_sequence_number;
+    pbuf->prefetch_sequence_number++;
+    printf("Locale %d Task %d will set. (entry->sn: %d sn: %d)\n",
+        chpl_nodeID, chpl_task_getId(), entry->sn, sn);
+    entry->sn = seqn_max(entry->sn, sn);
+    printf("Locale %d Task %d setting sn. (entry->sn: %d)\n",
+        chpl_nodeID, chpl_task_getId(), entry->sn);
     entry->sn_updated = true;
   }
 }
@@ -2778,6 +2784,13 @@ chpl_cache_taskPrvData_t* task_private_cache_data(void)
   return &task_local->comm_data.cache_data;
 }
 
+static
+chpl_prefetch_taskPrvData_t* task_private_prefetch_data(void)
+{
+  chpl_task_prvData_t* task_local = chpl_task_getPrvData();
+  return &task_local->comm_data.prefetch_data;
+
+}
 static
 void destroy_pthread_local_cache(void* arg)
 {
@@ -2891,7 +2904,8 @@ void chpl_cache_fence(int acquire, int release, int ln, int32_t fn)
   if( acquire == 0 && release == 0 ) return;
   if( chpl_cache_enabled() ) {
     struct rdcache_s* cache = tls_cache_remote_data();
-    chpl_cache_taskPrvData_t* task_local = task_private_cache_data();
+    chpl_cache_taskPrvData_t* task_local_cache = task_private_cache_data();
+    chpl_prefetch_taskPrvData_t* task_local_prefetch = task_private_prefetch_data();
 
     INFO_PRINT(("%i fence acquire %i release %i %s:%i\n", chpl_nodeID, acquire, release, fn, ln));
 
@@ -2906,18 +2920,16 @@ void chpl_cache_fence(int acquire, int release, int ln, int32_t fn)
 #endif
 
     if( acquire ) {
-      task_local->last_acquire = cache->next_request_number;
+      task_local_cache->last_acquire = cache->next_request_number;
       cache->next_request_number++;
 
-      // consistency TODO here we will need to increment pbuf's
-      // minimum task sn
-
+      task_local_prefetch->last_acquire = pbuf->prefetch_sequence_number;
       pbuf->prefetch_sequence_number++;
     }
 
     if( release ) {
       /*full_memory_barrier();*/
-      prefetch_update();
+      /*prefetch_update();*/
       cache_clean_dirty(cache);
       wait_all(cache);
     }
@@ -3107,7 +3119,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   /*new_entry->should_lock = true;*/
   // currently everything has canread and nothing can have canwrite
   new_entry->pf_type |= PF_CANREAD;
-  new_entry->sn = -1;
+  new_entry->sn = NO_SEQUENCE_NUMBER;
   
   // runtime assumes that prefetching happens with one task per
   // locale
@@ -3283,15 +3295,21 @@ void *get_prefetched_data_addr(void *accessor,
   int64_t offset; //this can be negative in current logic
   void *retaddr=NULL;
 
+  chpl_prefetch_taskPrvData_t* task_local = task_private_prefetch_data();
 
   // shuold_lock also implies the data is consistetn
   if(prefetch_entry->should_lock &&
-      prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
+      task_local->last_acquire > prefetch_entry->sn) {
+      /*prefetch_entry->sn < pbuf->prefetch_sequence_number) {*/
 
     start_update(prefetch_entry);
     // someone might have already updated the entry, so check again if
     // it's still stale
-    if(prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
+    /*if(prefetch_entry->sn < pbuf->prefetch_sequence_number) {*/
+    if(task_local->last_acquire > prefetch_entry->sn) {
+      printf("Locale %d Task %d reprefetching. (entry: %p, entry->sn: %d, buf->sn: %d)\n",
+          chpl_nodeID, chpl_task_getId(), prefetch_entry, prefetch_entry->sn,
+          pbuf->prefetch_sequence_number);
       reprefetch_single_entry(prefetch_entry);
     }
     stop_update(prefetch_entry);
@@ -3328,6 +3346,9 @@ void *get_prefetched_data_addr(void *accessor,
 
 
   stop_read(prefetch_entry);
+  printf("\tLocale %d Task %d post-read. (entry: %p, entry->sn: %d, buf->sn: %d)\n",
+      chpl_nodeID, chpl_task_getId(), prefetch_entry, prefetch_entry->sn,
+      pbuf->prefetch_sequence_number);
   return retaddr;
 }
 

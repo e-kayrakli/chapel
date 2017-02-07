@@ -30,6 +30,7 @@ typedef void* chpl_comm_nb_handle_t;
 
 typedef struct {
     chpl_cache_taskPrvData_t cache_data;
+    chpl_prefetch_taskPrvData_t prefetch_data;
 } chpl_comm_taskPrvData_t;
 
 //
