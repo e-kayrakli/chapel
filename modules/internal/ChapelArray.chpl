@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -1078,6 +1078,29 @@ module ChapelArray {
       for i in _value.dimIter(d, ind) do yield i;
     }
 
+   /* Returns a tuple of integers describing the size of each dimension.
+      For a sparse domain, returns the shape of the parent domain.*/
+    proc shape where isRectangularDom(this) || isSparseDom(this) {
+      var s: rank*(int);
+      for (i, r) in zip(1..s.size, dims()) do
+        s(i) = r.size;
+      return s;
+    }
+
+    pragma "no doc"
+    /* Associative and Opaque domains assumed to be 1-D. */
+    proc shape where isAssociativeDom(this) || isOpaqueDom(this) {
+      var s: (int,);
+      s[1] = size;
+      return s;
+    }
+
+    pragma "no doc"
+    /* Unsupported case */
+    proc shape {
+      compilerError(".shape not supported on this domain");
+    }
+
     pragma "no doc"
     proc buildArray(type eltType) {
       var x = _value.dsiBuildArray(eltType);
@@ -1984,6 +2007,7 @@ module ChapelArray {
     //
     pragma "no doc"
     pragma "reference to const when const this"
+    pragma "fn returns aliasing array"
     proc this(d: domain) {
       if d.rank == rank then
         return this((...d.getIndices()));
@@ -2001,6 +2025,7 @@ module ChapelArray {
     // array slicing by a tuple of ranges
     pragma "no doc"
     pragma "reference to const when const this"
+    pragma "fn returns aliasing array"
     proc this(ranges: range(?) ...rank) {
       if boundsChecking then
         checkSlice((... ranges));
@@ -2017,6 +2042,7 @@ module ChapelArray {
     // array rank change
     pragma "no doc"
     pragma "reference to const when const this"
+    pragma "fn returns aliasing array"
     proc this(args ...rank) where _validRankChangeArgs(args, _value.dom.idxType) {
       if boundsChecking then
         checkRankChange(args);
@@ -2042,6 +2068,7 @@ module ChapelArray {
     // we can't take an alias of the ddata class within that class
     pragma "no doc"
     pragma "reference to const when const this"
+    pragma "fn returns aliasing array"
     proc localSlice(r: range(?)... rank) where _value.type: DefaultRectangularArr {
       if boundsChecking then
         checkSlice((...r));
@@ -2051,6 +2078,7 @@ module ChapelArray {
 
     pragma "no doc"
     pragma "reference to const when const this"
+    pragma "fn returns aliasing array"
     proc localSlice(d: domain) where _value.type: DefaultRectangularArr {
       if boundsChecking then
         checkSlice((...d.getIndices()));
@@ -2066,6 +2094,7 @@ module ChapelArray {
     }
     pragma "no doc"
     pragma "reference to const when const this"
+    pragma "fn returns aliasing array"
     proc localSlice(r: range(?)... rank) {
       if boundsChecking then
         checkSlice((...r));
@@ -2074,6 +2103,7 @@ module ChapelArray {
 
     pragma "no doc"
     pragma "reference to const when const this"
+    pragma "fn returns aliasing array"
     proc localSlice(d: domain) {
       return localSlice((...d.getIndices()));
     }
@@ -2092,6 +2122,7 @@ module ChapelArray {
     pragma "no doc"
     pragma "reference to const when const this"
     pragma "new alias fn"
+    pragma "fn returns aliasing array"
     proc newAlias() {
       var x = _value;
       pragma "no copy"
@@ -2163,6 +2194,7 @@ module ChapelArray {
     }
 
     pragma "no doc"
+    pragma "fn returns aliasing array"
     proc reindex(d: domain)
       where isRectangularDom(this.domain) && isRectangularDom(d)
     {
@@ -2199,6 +2231,7 @@ module ChapelArray {
     // reindex for all non-rectangular domain types.
     // See above for the rectangular version.
     pragma "no doc"
+    pragma "fn returns aliasing array"
     proc reindex(d:domain) {
       if this.domain != d then
         halt("Reindexing of non-rectangular arrays is undefined.");
@@ -2346,7 +2379,7 @@ module ChapelArray {
           if newRange.low > r2.low {
             // not able to take enough spaces off the low end.  Take them
             // off the high end instead.
-            const spaceNeeded = r2.low - newRange.low;
+            const spaceNeeded = newRange.low - r2.low;
             newRange = r2.low..(newRange.high-spaceNeeded);
           }
           return newRange;
@@ -2372,16 +2405,17 @@ module ChapelArray {
           if this._value.dataAllocRange.length < this.domain.numIndices {
             /* if dataAllocRange has fewer indices than this.domain it must not
                be set correctly.  Set it to match this.domain to start.
-             */ 
+             */
             this._value.dataAllocRange = this.domain.low..this.domain.high;
           }
           const oldRng = this._value.dataAllocRange;
-          this._value.dataAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange);
+          const nextAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange);
           if debugArrayAsVec then
             writeln("push_back reallocate: ",
-                    oldRng, " => ", this._value.dataAllocRange,
+                    oldRng, " => ", nextAllocRange,
                     " (", newRange, ")");
-          this._value.dsiReallocate({this._value.dataAllocRange});
+          this._value.dsiReallocate({nextAllocRange});
+          // note: dsiReallocate sets _value.dataAllocRange = nextAllocRange
         }
         this.domain.setIndices((newRange,));
         this._value.dsiPostReallocate();
@@ -2410,12 +2444,13 @@ module ChapelArray {
         }
         if newRange.length < (this._value.dataAllocRange.length / (arrayAsVecGrowthFactor*arrayAsVecGrowthFactor)):int {
           const oldRng = this._value.dataAllocRange;
-          this._value.dataAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, grow=-1);
+          const nextAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, grow=-1);
           if debugArrayAsVec then
             writeln("pop_back reallocate: ",
-                    oldRng, " => ", this._value.dataAllocRange,
+                    oldRng, " => ", nextAllocRange,
                     " (", newRange, ")");
-          this._value.dsiReallocate({this._value.dataAllocRange});
+          this._value.dsiReallocate({nextAllocRange});
+          // note: dsiReallocate sets _value.dataAllocRange = nextAllocRange
         }
         this.domain.setIndices((newRange,));
         this._value.dsiPostReallocate();
@@ -2439,12 +2474,13 @@ module ChapelArray {
             this._value.dataAllocRange = this.domain.low..this.domain.high;
           }
           const oldRng = this._value.dataAllocRange;
-          this._value.dataAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, direction=-1);
+          const nextAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, direction=-1);
           if debugArrayAsVec then
             writeln("push_front reallocate: ",
-                    oldRng, " => ", this._value.dataAllocRange,
+                    oldRng, " => ", nextAllocRange,
                     " (", newRange, ")");
-          this._value.dsiReallocate({this._value.dataAllocRange});
+          this._value.dsiReallocate({nextAllocRange});
+          // note: dsiReallocate sets _value.dataAllocRange = nextAllocRange
         }
         this.domain.setIndices((newRange,));
         this._value.dsiPostReallocate();
@@ -2473,12 +2509,13 @@ module ChapelArray {
         }
         if newRange.length < (this._value.dataAllocRange.length / (arrayAsVecGrowthFactor*arrayAsVecGrowthFactor)):int {
           const oldRng = this._value.dataAllocRange;
-          this._value.dataAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, direction=-1, grow=-1);
+          const nextAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, direction=-1, grow=-1);
           if debugArrayAsVec then
             writeln("pop_front reallocate: ",
-                    oldRng, " => ", this._value.dataAllocRange,
+                    oldRng, " => ", nextAllocRange,
                     " (", newRange, ")");
-          this._value.dsiReallocate({this._value.dataAllocRange});
+          this._value.dsiReallocate({nextAllocRange});
+          // note: dsiReallocate sets _value.dataAllocRange = nextAllocRange
         }
         this.domain.setIndices((newRange,));
         this._value.dsiPostReallocate();
@@ -2506,8 +2543,9 @@ module ChapelArray {
           if this._value.dataAllocRange.length < this.domain.numIndices {
             this._value.dataAllocRange = this.domain.low..this.domain.high;
           }
-          this._value.dataAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange);
-          this._value.dsiReallocate({this._value.dataAllocRange});
+          const nextAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange);
+          this._value.dsiReallocate({nextAllocRange});
+          // note: dsiReallocate sets _value.dataAllocRange = nextAllocRange
         }
         this.domain.setIndices((newRange,));
         this._value.dsiPostReallocate();
@@ -2540,8 +2578,9 @@ module ChapelArray {
           this._value.dataAllocRange = this.domain.low..this.domain.high;
         }
         if newRange.length < (this._value.dataAllocRange.length / (arrayAsVecGrowthFactor*arrayAsVecGrowthFactor)):int {
-          this._value.dataAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, grow=-1);
-          this._value.dsiReallocate({this._value.dataAllocRange});
+          const nextAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, grow=-1);
+          this._value.dsiReallocate({nextAllocRange});
+          // note: dsiReallocate sets _value.dataAllocRange = nextAllocRange
         }
         this.domain.setIndices((newRange,));
         this._value.dsiPostReallocate();
@@ -2572,8 +2611,9 @@ module ChapelArray {
           this._value.dataAllocRange = this.domain.low..this.domain.high;
         }
         if newRange.length < (this._value.dataAllocRange.length / (arrayAsVecGrowthFactor*arrayAsVecGrowthFactor)):int {
-          this._value.dataAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, grow=-1);
-          this._value.dsiReallocate({this._value.dataAllocRange});
+          const nextAllocRange = resizeAllocRange(this._value.dataAllocRange, newRange, grow=-1);
+          this._value.dsiReallocate({nextAllocRange});
+          // note: dsiReallocate sets _value.dataAllocRange = nextAllocRange
         }
         this.domain.setIndices((newRange,));
         this._value.dsiPostReallocate();
@@ -2640,6 +2680,13 @@ module ChapelArray {
       for i in this do if i == val then total += 1;
       return total;
     }
+
+   /* Returns a tuple of integers describing the size of each dimension.
+      For a sparse array, returns the shape of the parent domain.*/
+    proc shape {
+      return this.domain.shape;
+    }
+
   }  // record _array
 
   //
@@ -2740,44 +2787,47 @@ module ChapelArray {
   }
 
   proc |(a :_array, b: _array) where (a._value.type == b._value.type) && isAssociativeArr(a) {
-    var newDom : a.domain.type;
+    var newDom = a.domain | b.domain;
     var ret : [newDom] a.eltType;
     serial !newDom._value.parSafe {
       forall (k,v) in zip(a.domain, a) do ret[k] = v;
-      ret |= b;
+      forall (k,v) in zip(b.domain, b) do ret[k] = v;
     }
     return ret;
   }
 
   proc |=(ref a :_array, b: _array) where (a._value.type == b._value.type) && isAssociativeArr(a) {
     a.chpl__assertSingleArrayDomain("|=");
-    serial !a.domain._value.parSafe do forall (k,v) in zip(b.domain, b) do a[k] = v;
+    serial !a.domain._value.parSafe {
+      forall i in b.domain do a.domain.add(i);
+      forall (k,v) in zip(b.domain, b) do a[k] = v;
+    }
   }
 
   proc &(a :_array, b: _array) where (a._value.type == b._value.type) && isAssociativeArr(a) {
-    var newDom : a.domain.type;
+    var newDom = a.domain & b.domain;
     var ret : [newDom] a.eltType;
 
     serial !newDom._value.parSafe do
-      forall k in a.domain do
-        if b.domain.member(k) then ret[k] = a[k];
+      forall k in newDom do ret[k] = a[k];
     return ret;
   }
 
   proc &=(ref a :_array, b: _array) where (a._value.type == b._value.type) && isAssociativeArr(a) {
     a.chpl__assertSingleArrayDomain("&=");
-    serial !a.domain._value.parSafe do
-      forall k in a.domain do
+    serial !a.domain._value.parSafe {
+      forall k in a.domain {
         if !b.domain.member(k) then a.domain.remove(k);
+      }
+    }
   }
 
   proc -(a :_array, b: _array) where (a._value.type == b._value.type) && isAssociativeArr(a) {
-    var newDom : a.domain.type;
+    var newDom = a.domain - b.domain;
     var ret : [newDom] a.eltType;
 
     serial !newDom._value.parSafe do
-      forall k in a.domain do
-        if !b.domain.member(k) then ret[k] = a[k];
+      forall k in newDom do ret[k] = a[k];
 
     return ret;
   }
@@ -2791,7 +2841,7 @@ module ChapelArray {
 
 
   proc ^(a :_array, b: _array) where (a._value.type == b._value.type) && isAssociativeArr(a) {
-    var newDom : a.domain.type;
+    var newDom = a.domain ^ b.domain;
     var ret : [newDom] a.eltType;
 
     serial !newDom._value.parSafe {
@@ -2806,10 +2856,15 @@ module ChapelArray {
 
   proc ^=(ref a :_array, b: _array) where (a._value.type == b._value.type) && isAssociativeArr(a) {
     a.chpl__assertSingleArrayDomain("^=");
-    serial !a.domain._value.parSafe do
-      forall k in b.domain do
+    serial !a.domain._value.parSafe {
+      forall k in b.domain {
         if a.domain.member(k) then a.domain.remove(k);
-        else a[k] = b[k];
+        else a.domain.add(k);
+      }
+      forall k in b.domain {
+        if a.domain.member(k) then a[k] = b[k];
+      }
+    }
   }
 
   proc -(a :domain, b :domain) where (a.type == b.type) && isAssociativeDom(a) {
@@ -3009,11 +3064,11 @@ module ChapelArray {
         compilerError("cannot assign from a stridable domain to an unstridable domain without an explicit cast");
 
     if !isIrregularDom(a) && !isIrregularDom(b) {
-      for e in a._value._arrs do {
+      for e in a._instance._arrs do {
         on e do e.dsiReallocate(b);
       }
       a.setIndices(b.getIndices());
-      for e in a._value._arrs do {
+      for e in a._instance._arrs do {
         on e do e.dsiPostReallocate();
       }
     } else {
@@ -3167,6 +3222,7 @@ module ChapelArray {
     // constraints specific to a particular domain map array type
     if !a._value.doiCanBulkTransfer() then return false;
     if !b._value.doiCanBulkTransfer() then return false;
+    if !a._value.doiUseBulkTransfer(b) then return false;
 
     return true;
   }
@@ -3180,6 +3236,7 @@ module ChapelArray {
     // constraints specific to a particular domain map array type
     if !a._value.doiCanBulkTransferStride() then return false;
     if !b._value.doiCanBulkTransferStride() then return false;
+    if !a._value.doiUseBulkTransferStride(b) then return false;
 
     return true;
   }

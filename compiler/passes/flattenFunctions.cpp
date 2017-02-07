@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -81,7 +81,7 @@ findOuterVars(FnSymbol* fn, SymbolMap* uses) {
 
   for_vector(BaseAST, ast, asts) {
     if (SymExpr* symExpr = toSymExpr(ast)) {
-      Symbol* sym = symExpr->var;
+      Symbol* sym = symExpr->symbol();
 
       if (isLcnSymbol(sym) && isOuterVar(sym, fn)) {
         uses->put(sym,gNil);
@@ -126,6 +126,8 @@ passByRef(Symbol* sym) {
   if (sym->isConstValWillNotChange()) {
     return false;
   }
+
+  if (sym->isRef()) return true;
 
   Type* type = sym->type;
 
@@ -201,7 +203,7 @@ addVarsToFormals(FnSymbol* fn, SymbolMap* vars) {
           temp = INTENT_CONST_REF;
         }
         intent = concreteIntent(temp, type);
-        type = type->refType;
+        type = type->getValType()->refType;
       } else {
         IntentTag temp = INTENT_BLANK;
         if (sym->hasFlag(FLAG_CONST) && sym->isRef()) {
@@ -247,9 +249,9 @@ replaceVarUsesWithFormals(FnSymbol* fn, SymbolMap* vars) {
       ArgSymbol* arg = toArgSymbol(e->value);
       Type* type = arg->type;
       for_vector(SymExpr, se, symExprs) {
-          if (se->var == sym) {
+          if (se->symbol() == sym) {
             if (type == sym->type) {
-              se->var = arg;
+              se->setSymbol(arg);
             } else {
               CallExpr* call = toCallExpr(se->parentExpr);
               INT_ASSERT(call);
@@ -259,6 +261,9 @@ replaceVarUsesWithFormals(FnSymbol* fn, SymbolMap* vars) {
                 ArgSymbol* form = actual_to_formal(se);
                 if (arg->isRef() && form->isRef() &&
                     arg->getValType() == form->getValType() &&
+                    // BHARSH TODO: Can we remove that now that removeWrapRecords is gone?
+                    // I observed some increase comm-counts with stream, but
+                    // maybe we shouldn't have deref'd before
                     !isRecordWrappedType(form->getValType())) {
                   // removeWrapRecords can modify the formal to have the
                   // 'const in' intent. For now it's easier to insert the
@@ -277,7 +282,7 @@ replaceVarUsesWithFormals(FnSymbol* fn, SymbolMap* vars) {
                   (call->isPrimitive(PRIM_WIDE_GET_LOCALE)) ||
                   (call->isPrimitive(PRIM_WIDE_GET_NODE)) ||
                   canPassToFn) {
-                se->var = arg; // do not dereference argument in these cases
+                se->setSymbol(arg); // do not dereference argument in these cases
               } else if (call->isPrimitive(PRIM_ADDR_OF)) {
                 SET_LINENO(se);
                 call->replace(new SymExpr(arg));
@@ -286,7 +291,7 @@ replaceVarUsesWithFormals(FnSymbol* fn, SymbolMap* vars) {
                 VarSymbol* tmp = newTemp(sym->type);
                 se->getStmtExpr()->insertBefore(new DefExpr(tmp));
                 se->getStmtExpr()->insertBefore(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_DEREF, arg)));
-                se->var = tmp;
+                se->setSymbol(tmp);
               }
             }
           }
@@ -305,7 +310,7 @@ addVarsToActuals(CallExpr* call, SymbolMap* vars, bool outerCall) {
         // This is only a performance issue.
         INT_ASSERT(!sym->hasFlag(FLAG_SHOULD_NOT_PASS_BY_REF));
         /* NOTE: See note above in addVarsToFormals() */
-        VarSymbol* tmp = newTemp(sym->type->refType);
+        VarSymbol* tmp = newTemp(sym->type->getValType()->refType);
         call->getStmtExpr()->insertBefore(new DefExpr(tmp));
         call->getStmtExpr()->insertBefore(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_ADDR_OF, sym)));
         call->insertAtTail(tmp);

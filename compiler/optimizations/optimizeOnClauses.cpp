@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -127,6 +127,8 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_GET_USER_LINE:
   case PRIM_GET_USER_FILE:
   case PRIM_LOOKUP_FILENAME:
+
+  case PRIM_STACK_ALLOCATE_CLASS:
     return FAST_AND_LOCAL;
 
   case PRIM_MOVE:
@@ -287,7 +289,6 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_FIELD_NAME_TO_NUM:
   case PRIM_FIELD_BY_NUM:
 
-  case PRIM_FORALL_LOOP:
   case PRIM_TO_STANDALONE:
   case PRIM_IS_REF_ITER_TYPE:
   case PRIM_COERCE:
@@ -298,6 +299,7 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_REQUIRE:
   case NUM_KNOWN_PRIMS:
   case PRIM_ITERATOR_RECORD_FIELD_VALUE_BY_FORMAL:
+  case PRIM_THROW:
     INT_FATAL("This primitive should have been removed from the tree by now.");
     break;
 
@@ -307,7 +309,7 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_BLOCK_FOR_LOOP:
   case PRIM_BLOCK_C_FOR_LOOP:
     return FAST_AND_LOCAL;
- 
+
     // These don't block in the Chapel sense, but they may require a system
     // call so we don't consider them fast-eligible.
     // However, they are communication free.

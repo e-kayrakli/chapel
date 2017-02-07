@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -367,7 +367,11 @@ module ChapelDistribution {
       }
     }
 
-    inline proc _bulkGrow(size: int) {
+    // This method assumes nnz is updated according to the size
+    // requested. So, a bulk addition into a sparse domain should: (1)
+    // calculate new nnz and update it, (2) call this method, (3) add
+    // indices
+    inline proc _bulkGrow() {
       if (nnz > nnzDom.size) {
         const _newNNZDomSize = (exp2(log2(nnz)+1.0)):int;
 

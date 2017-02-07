@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -95,7 +95,7 @@ checkControlFlow(Expr* expr, const char* context) {
     } else if (GotoStmt* gs = toGotoStmt(ast1)) {
       if (labelSet.set_in(gs->getName()))
         continue; // break or continue target is in scope
-      if (toSymExpr(gs->label) && toSymExpr(gs->label)->var == gNil && loopSet.set_in(gs))
+      if (toSymExpr(gs->label) && toSymExpr(gs->label)->symbol() == gNil && loopSet.set_in(gs))
         continue; // break or continue loop is in scope
       if (!strcmp(context, "on statement")) {
         USR_PRINT(gs, "the following error is a current limitation");
@@ -172,7 +172,7 @@ BlockStmt* buildPragmaStmt(Vec<const char*>* pragmas,
 //
 static const char* toImmediateString(Expr* expr) {
   if (SymExpr* se = toSymExpr(expr)) {
-    if (VarSymbol* var = toVarSymbol(se->var)) {
+    if (VarSymbol* var = toVarSymbol(se->symbol())) {
       if (var->isImmediate()) {
         Immediate* imm = var->immediate;
         if (imm->const_kind == CONST_KIND_STRING) {
@@ -516,7 +516,7 @@ BlockStmt* buildUseStmt(CallExpr* args) {
   if (list == NULL) {
     list = buildChapelStmt(new CallExpr(PRIM_NOOP));
   }
-  
+
   return list;
 }
 
@@ -559,7 +559,7 @@ BlockStmt* buildRequireStmt(CallExpr* args) {
   if (list == NULL) {
     list = buildChapelStmt(new CallExpr(PRIM_NOOP));
   }
-  
+
   return list;
 }
 
@@ -812,11 +812,11 @@ destructureIndices(BlockStmt* block,
   } else if (SymExpr* sym = toSymExpr(indices)) {
     // BHARSH TODO: I think this should be a PRIM_ASSIGN. I've seen a case
     // where 'sym' becomes a reference.
-    block->insertAtHead(new CallExpr(PRIM_MOVE, sym->var, init));
-    sym->var->addFlag(FLAG_INDEX_VAR);
+    block->insertAtHead(new CallExpr(PRIM_MOVE, sym->symbol(), init));
+    sym->symbol()->addFlag(FLAG_INDEX_VAR);
     if (coforall)
-      sym->var->addFlag(FLAG_COFORALL_INDEX_VAR);
-    sym->var->addFlag(FLAG_INSERT_AUTO_DESTROY);
+      sym->symbol()->addFlag(FLAG_COFORALL_INDEX_VAR);
+    sym->symbol()->addFlag(FLAG_INSERT_AUTO_DESTROY);
   } else {
     INT_FATAL("Unexpected");
   }
@@ -1198,9 +1198,12 @@ buildFollowLoop(VarSymbol* iter,
 // Do whatever is needed for a reduce intent.
 // Return the globalOp symbol.
 static void setupOneReduceIntent(VarSymbol* iterRec, BlockStmt* parLoop,
-                                 Expr* reduceOp, Expr* reduceVar,
-                                 Expr* otherROp, VarSymbol* useThisGlobalOp)
+                                Expr*& reduceOpRef, Expr* reduceVar,
+                                Expr*& otherROpRef, VarSymbol* useThisGlobalOp)
 {
+  Expr* reduceOp = reduceOpRef;  // save away these
+  Expr* otherROp = otherROpRef;
+
   if (UnresolvedSymExpr* sym = toUnresolvedSymExpr(reduceOp)) {
     if (!strcmp(sym->unresolved, "max"))
       sym->unresolved = astr("MaxReduceScanOp");
@@ -1215,9 +1218,14 @@ static void setupOneReduceIntent(VarSymbol* iterRec, BlockStmt* parLoop,
     globalOp = newTemp("chpl__reduceGlob");
     iterRec->defPoint->insertBefore(new DefExpr(globalOp));
   }
-  reduceOp->replace(new SymExpr(globalOp));
-  if (otherROp)
-    otherROp->replace(new SymExpr(globalOp));
+  // Because of this, can't just do reduceOp->replace(...).
+  // If this fails, need to do something more like replace().
+  INT_ASSERT(!reduceOp->parentExpr);
+  reduceOpRef = new SymExpr(globalOp);
+  if (otherROp) {
+    INT_ASSERT(!otherROp->parentExpr);
+    otherROpRef = new SymExpr(globalOp);
+  }
 
   Expr* eltType = NULL;
   if (isUnresolvedSymExpr(reduceOp)) {
@@ -1248,56 +1256,33 @@ static void setupOneReduceIntent(VarSymbol* iterRec, BlockStmt* parLoop,
 }
 
 // Setup for forall intents
-static void setupForallIntents(CallExpr* withClause,
-                               CallExpr* otherWith,
+static void setupForallIntents(ForallIntents* forallIntents,
+                               ForallIntents* otherFI,
                                VarSymbol* iterRec,
                                VarSymbol* leadIdx,
                                VarSymbol* leadIdxCopy,
                                BlockStmt* parLoop,
                                VarSymbol* useThisGlobalOp)
 {
-  // To iterate over two withClause in parallel.
-  Expr* otherActual = otherWith ? otherWith->argList.head : NULL;
-  Expr* otherNext   = otherActual ? otherActual->next : NULL;
+  int nv = forallIntents->numVars();
+  for (int i = 0; i < nv; i++) {
+    bool isReduce = forallIntents->isReduce(i);
+    INT_ASSERT(!otherFI || otherFI->isReduce(i) == isReduce);
+    if (isReduce) {
+      Expr* otherDum = NULL;
+      INT_ASSERT(!otherFI || otherFI->isReduce(i));
 
-  // Handle reduce intents, if any.
-  // Keep in sync with markOuterVarsWithIntents().
-  bool markerTurn = true;
-  Expr* reduceOp = NULL;
-  Expr* otherROp = NULL;
-  for_actuals(actual, withClause) {
-    if (markerTurn) {
-      markerTurn = false;
-      if (SymExpr* se = toSymExpr(actual)) {
-        ArgSymbol* tiMarker =  toArgSymbol(se->var);
-        INT_ASSERT(tiMarker); // confirm my thinking
-      } else {
-        reduceOp = actual;
-        if (otherActual) otherROp = otherActual;
-      }
-    } else {
-      markerTurn = true;
-      if (reduceOp) {
-        setupOneReduceIntent(iterRec, parLoop, reduceOp, actual, otherROp,
-                             useThisGlobalOp);
-        reduceOp = NULL;
-        otherROp = NULL;
-      }
+      setupOneReduceIntent(iterRec, parLoop,
+                           forallIntents->riSpecs[i], forallIntents->fiVars[i],
+                           otherFI ? otherFI->riSpecs[i] : otherDum,
+                           useThisGlobalOp);
     }
-    // Advance the iteration over otherWith.
-    otherActual = otherNext;
-    otherNext = otherNext ? otherNext->next: NULL;
   }
-  INT_ASSERT(markerTurn);
-  INT_ASSERT(!reduceOp);
-  INT_ASSERT(!otherROp);
-  INT_ASSERT(!otherActual);
 
   // ForallLeaderArgs: stash references so we know where things are.
-  INT_ASSERT(withClause->isPrimitive(PRIM_FORALL_LOOP));
-  withClause->insertAtHead(leadIdxCopy); // 3rd arg
-  withClause->insertAtHead(leadIdx);     // 2nd arg
-  withClause->insertAtHead(iterRec);     // 1st arg
+  forallIntents->iterRec     = new SymExpr(iterRec);
+  forallIntents->leadIdx     = new SymExpr(leadIdx);
+  forallIntents->leadIdxCopy = new SymExpr(leadIdxCopy);
 }
 
 /*
@@ -1343,7 +1328,7 @@ buildStandaloneForallLoopStmt(Expr* indices,
   SABody->insertAtTail(loopBody);
   SABlock->insertAtTail(SABody);
   SABlock->insertAtTail("_freeIterator(%S)", saIter);
-  setupForallIntents(loopBody->byrefVars, NULL,
+  setupForallIntents(loopBody->forallIntents, NULL,
                      iterRec, saIdx, saIdxCopy, SABody, useThisGlobalOp);
   return SABlock;
 }
@@ -1373,7 +1358,7 @@ buildStandaloneForallLoopStmt(Expr* indices,
 BlockStmt*
 buildForallLoopStmt(Expr*      indices,
                     Expr*      iterExpr,
-                    CallExpr*  byref_vars,
+                    ForallIntents* forall_intents,
                     BlockStmt* loopBody,
                     bool       zippered,
                     VarSymbol* useThisGlobalOp)
@@ -1389,24 +1374,15 @@ buildForallLoopStmt(Expr*      indices,
 
   checkIndices(indices);
 
-  //
-  // 'byrefVars' will contain a PRIM_FORALL_LOOP, whose "arguments"
-  // are variables listed in the forall's with(ref...) clause.
-  // This list is processed during implementForallIntents1().
-  //
-  INT_ASSERT(!loopBody->byrefVars);
-  if (byref_vars) {
-    INT_ASSERT(byref_vars->isPrimitive(PRIM_ACTUALS_LIST));
-    byref_vars->primitive = primitives[PRIM_FORALL_LOOP];
-  } else {
-    byref_vars = new CallExpr(PRIM_FORALL_LOOP);
-  }
-  loopBody->byrefVars = byref_vars;
+  INT_ASSERT(!loopBody->forallIntents);
+  if (!forall_intents) forall_intents = new ForallIntents();
+  loopBody->forallIntents = forall_intents;
+  // forallIntents will be processed during implementForallIntents1().
 
   // ensure it's normal; prevent flatten_scopeless_block() in cleanup.cpp
   loopBody->blockTag = BLOCK_NORMAL;
 
-  // NB these copies do not get byref_vars updates below.
+  // NB these copies do not get blockIntent updates below.
   BlockStmt* loopBodyForFast =
                      (fNoFastFollowers == false) ? loopBody->copy() : NULL;
   BlockStmt* loopBodyForStandalone = (!zippered) ? loopBody->copy() : NULL;
@@ -1502,8 +1478,8 @@ buildForallLoopStmt(Expr*      indices,
 
   resultBlock->insertAtTail(leadForLoop);
   resultBlock->insertAtTail("_freeIterator(%S)", leadIter);
-  setupForallIntents(byref_vars,
-                     loopBodyForFast ? loopBodyForFast->byrefVars : NULL,
+  setupForallIntents(loopBody->forallIntents,
+                     loopBodyForFast ? loopBodyForFast->forallIntents : NULL,
                      iterRec, leadIdx, leadIdxCopy, leadForLoop,
                      useThisGlobalOp);
 
@@ -1518,6 +1494,24 @@ buildForallLoopStmt(Expr*      indices,
   }
 
   return resultBlock;
+}
+
+// Todo: replace with ForallIntents or similar.
+void addTaskIntent(CallExpr* ti, Expr* var, IntentTag intent, Expr* ri) {
+  if (ri) {
+    // This is a reduce intent. NB 'intent' is undefined.
+    ti->insertAtTail(ri);
+    ti->insertAtTail(var);
+  } else {
+    ArgSymbol* tiMark = tiMarkForIntent(intent);
+    if (!tiMark) {
+      USR_FATAL_CONT(var, "%s is not supported in a 'with' clause",
+                           intentDescrString(intent));
+      tiMark = tiMarkForIntent(INTENT_IN); //dummy, so parser can continue
+    }
+    ti->insertAtTail(tiMark);
+    ti->insertAtTail(var);
+  }
 }
 
 static void
@@ -1587,19 +1581,63 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
     onBlock->insertAtTail(new CallExpr("_downEndCount", coforallCount));
     return block;
   } else {
-    VarSymbol* coforallCount = newTemp("_coforallCount");
-    BlockStmt* beginBlk = new BlockStmt();
-    beginBlk->blockInfoSet(new CallExpr(PRIM_BLOCK_COFORALL));
-    addByrefVars(beginBlk, byref_vars);
-    beginBlk->insertAtHead(body);
-    beginBlk->insertAtTail(new CallExpr("_downEndCount", coforallCount));
-    BlockStmt* block = ForLoop::buildForLoop(indices, iterator, beginBlk, true, zippered);
-    block->insertAtHead(new CallExpr(PRIM_MOVE, coforallCount, new CallExpr("_endCountAlloc", /* forceLocalTypes= */gTrue)));
-    block->insertAtHead(new DefExpr(coforallCount));
-    beginBlk->insertBefore(new CallExpr("_upEndCount", coforallCount));
-    block->insertAtTail(new CallExpr("_waitEndCount", coforallCount));
-    block->insertAtTail(new CallExpr("_endCountFree", coforallCount));
-    return block;
+
+    BlockStmt* coforallBlk = new BlockStmt();
+
+    BlockStmt* vectorCoforallBlk = new BlockStmt();
+    BlockStmt* nonVectorCoforallBlk = new BlockStmt();
+
+    VarSymbol* tmpIter = newTemp("tmpIter");
+    coforallBlk->insertAtTail(new DefExpr(tmpIter));
+    coforallBlk->insertAtTail(new CallExpr(PRIM_MOVE, tmpIter, iterator));
+    {
+      VarSymbol* coforallCount = newTemp("_coforallCount");
+      BlockStmt* beginBlk = new BlockStmt();
+      beginBlk->blockInfoSet(new CallExpr(PRIM_BLOCK_COFORALL));
+      addByrefVars(beginBlk, byref_vars);
+      beginBlk->insertAtHead(body);
+      beginBlk->insertAtTail(new CallExpr("_downEndCount", coforallCount));
+      BlockStmt* block = ForLoop::buildForLoop(indices, new SymExpr(tmpIter), beginBlk, true, zippered);
+      block->insertAtHead(new CallExpr(PRIM_MOVE, coforallCount, new CallExpr("_endCountAlloc", /*forceLocalTypes=*/gTrue)));
+      block->insertAtHead(new DefExpr(coforallCount));
+      beginBlk->insertBefore(new CallExpr("_upEndCount", coforallCount));
+      block->insertAtTail(new CallExpr("_waitEndCount", coforallCount));
+      block->insertAtTail(new CallExpr("_endCountFree", coforallCount));
+      nonVectorCoforallBlk->insertAtTail(block);
+    }
+    {
+      VarSymbol* coforallCount = newTemp("_coforallCount");
+      BlockStmt* beginBlk = new BlockStmt();
+      beginBlk->blockInfoSet(new CallExpr(PRIM_BLOCK_COFORALL));
+      addByrefVars(beginBlk, byref_vars);
+      beginBlk->insertAtHead(body->copy());
+      beginBlk->insertAtTail(new CallExpr("_downEndCount", coforallCount));
+      VarSymbol* numTasks = newTemp("numTasks");
+      vectorCoforallBlk->insertAtTail(new DefExpr(numTasks));
+      vectorCoforallBlk->insertAtTail(new CallExpr(PRIM_MOVE, numTasks, new CallExpr(".", tmpIter,  new_CStringSymbol("size"))));
+      vectorCoforallBlk->insertAtTail(new CallExpr("_upEndCount", coforallCount, /*countRunningTasks=*/gTrue, numTasks));
+      BlockStmt* block = ForLoop::buildForLoop(indices, new SymExpr(tmpIter), beginBlk, true, zippered);
+      vectorCoforallBlk->insertAtHead(new CallExpr(PRIM_MOVE, coforallCount, new CallExpr("_endCountAlloc", /*forceLocalTypes=*/gTrue)));
+      vectorCoforallBlk->insertAtHead(new DefExpr(coforallCount));
+      block->insertAtTail(new CallExpr("_waitEndCount", coforallCount, /*countRunningTasks=*/gTrue, numTasks));
+      block->insertAtTail(new CallExpr("_endCountFree", coforallCount));
+      vectorCoforallBlk->insertAtTail(block);
+    }
+
+    VarSymbol* isRngDomArr  = newTemp("isRngDomArr");
+    isRngDomArr->addFlag(FLAG_MAYBE_PARAM);
+    coforallBlk->insertAtTail(new DefExpr(isRngDomArr));
+
+    coforallBlk->insertAtTail(new CallExpr(PRIM_MOVE, isRngDomArr,
+                              new CallExpr("||", new CallExpr("isBoundedRange", tmpIter),
+                              new CallExpr("||", new CallExpr("isDomain", tmpIter), new CallExpr("isArray", tmpIter)))));
+
+
+    coforallBlk->insertAtTail(new CondStmt(new SymExpr(isRngDomArr),
+                                           vectorCoforallBlk->copy(),
+                                           nonVectorCoforallBlk->copy()));
+
+    return coforallBlk;
   }
 }
 
@@ -1719,7 +1757,7 @@ static void adjustEltTypeFE(FnSymbol* fn, Symbol* eltType, ForallExpr* fe)
   CallExpr* moveToET = toCallExpr(typeBlock->body.head);
   INT_ASSERT(moveToET && moveToET->isPrimitive(PRIM_MOVE));
   SymExpr* moveDest = toSymExpr(moveToET->get(1));
-  INT_ASSERT(moveDest && moveDest->var == eltType);
+  INT_ASSERT(moveDest && moveDest->symbol() == eltType);
   CallExpr* moveSrc = toCallExpr(moveToET->get(2));
   INT_ASSERT(moveSrc && moveSrc->isPrimitive(PRIM_TYPEOF));
 
@@ -1823,7 +1861,7 @@ buildReduceViaForall(FnSymbol* fn, Expr* opExpr, Expr* dataExpr,
       // or with a filtering predicate is not handled.
       return NULL;
   }
-    
+
   if (CallExpr* dataCall = toCallExpr(dataExpr)) {
     if (DefExpr* calleeDef = toDefExpr(dataCall->baseExpr))
       {
@@ -1908,6 +1946,9 @@ buildReduceViaForall(FnSymbol* fn, Expr* opExpr, Expr* dataExpr,
   loopBody->insertAtTail(new CallExpr("=", result,
                            new CallExpr(opFun, result, elementToReduce)));
 
+  ForallIntents* fi = new ForallIntents();
+  addForallIntent(fi, new SymExpr(result), INTENT_BLANK /*dummy*/, opUnr);
+
   // useThisGlobalOp argument lets us handle the case where the result type
   // differs from eltType, e.g. + reduce over booleans
   // as in test/trivial/deitz/monte.chpl
@@ -1915,7 +1956,7 @@ buildReduceViaForall(FnSymbol* fn, Expr* opExpr, Expr* dataExpr,
   BlockStmt* forall = buildForallLoopStmt(
     index->copy(),      // indices
     new SymExpr(data),  // iterExpr
-    new CallExpr(PRIM_ACTUALS_LIST, opUnr, result), // byref_vars
+    fi,       // forall_intents
     loopBody, // loopBody
     zippered, // zippered
     globalOp  // useThisGlobalOp
@@ -2177,13 +2218,13 @@ BlockStmt* buildVarDecls(BlockStmt* stmts, std::set<Flag> flags, const char* doc
     INT_ASSERT(stmts->blockInfoGet()->isNamed("_check_tuple_var_decl"));
     SymExpr* tuple = toSymExpr(stmts->blockInfoGet()->get(1));
     Expr* varCount = stmts->blockInfoGet()->get(2);
-    tuple->var->defPoint->insertAfter(
+    tuple->symbol()->defPoint->insertAfter(
       buildIfStmt(new CallExpr("!=", new CallExpr(".", tuple->remove(),
                                                   new_CStringSymbol("size")),
                                varCount->remove()),
                   new CallExpr("compilerError", new_StringSymbol("tuple size must match the number of grouped variables"), new_IntSymbol(0))));
 
-    tuple->var->defPoint->insertAfter(
+    tuple->symbol()->defPoint->insertAfter(
       buildIfStmt(new CallExpr("!", new CallExpr("isTuple", tuple->copy())),
                   new CallExpr("compilerError", new_StringSymbol("illegal tuple variable declaration with non-tuple initializer"), new_IntSymbol(0))));
     stmts->blockInfoSet(NULL);
@@ -2323,18 +2364,18 @@ FnSymbol* buildLambda(FnSymbol *fn) {
    * where an unsigned integer can represent numbers larger than 10^86, but it
    * is better to guard against this behavior then leaving someone wondering
    * why we didn't.
-   */ 
+   */
   if (snprintf(buffer, 100, "_chpl_lambda_%i", nextId++) >= 100) {
     INT_FATAL("Too many lambdas.");
   }
-  
+
   if (!fn) {
     fn = new FnSymbol(astr(buffer));
   } else {
     fn->name = astr(buffer);
     fn->cname = fn->name;
   }
-  
+
   fn->addFlag(FLAG_COMPILER_NESTED_FUNCTION);
   return fn;
 }
@@ -2342,24 +2383,27 @@ FnSymbol* buildLambda(FnSymbol *fn) {
 
 // Replaces the dummy function name "_" with the real name, sets the 'this'
 // intent tag. For methods, it also adds a method tag and "this" declaration.
+// receiver is typically an UnresolvedSymExpr("class_name") in order
+// to declare a method outside of a record/class.
 FnSymbol*
 buildFunctionSymbol(FnSymbol*   fn,
                     const char* name,
                     IntentTag   thisTag,
-                    const char* class_name)
+                    Expr*       receiver)
 {
   fn->cname   = fn->name = astr(name);
   fn->thisTag = thisTag;
 
-  if (fn->name[0] == '~' && fn->name[1] != '\0')
+  if ((fn->name[0] == '~' && fn->name[1] != '\0') ||
+      (strcmp(fn->name, "deinit") == 0))
     fn->addFlag(FLAG_DESTRUCTOR);
 
-  if (class_name)
+  if (receiver)
   {
     ArgSymbol* arg = new ArgSymbol(thisTag,
                                    "this",
                                    dtUnknown,
-                                   new UnresolvedSymExpr(class_name));
+                                   receiver);
     fn->_this = arg;
     if (thisTag == INTENT_TYPE) {
       setupTypeIntentArg(arg);
@@ -2378,11 +2422,12 @@ buildFunctionSymbol(FnSymbol*   fn,
 }
 
 // Called like:
-// buildFunctionDecl($4, $6, $7, $8, $9, @$.comment);
+// buildFunctionDecl($4, $6, $7, $8, $9, $10, @$.comment);
 BlockStmt*
 buildFunctionDecl(FnSymbol*   fn,
                   RetTag      optRetTag,
                   Expr*       optRetType,
+                  bool        optThrowsError,
                   Expr*       optWhere,
                   BlockStmt*  optFnBody,
                   const char* docs)
@@ -2399,6 +2444,14 @@ buildFunctionDecl(FnSymbol*   fn,
     fn->retExprType = new BlockStmt(optRetType, BLOCK_SCOPELESS);
   else if (fn->hasFlag(FLAG_EXTERN))
     fn->retType     = dtVoid;
+
+  if (optThrowsError)
+  {
+    if (fn->hasFlag(FLAG_EXTERN))
+      USR_FATAL_CONT(fn, "Extern functions cannot throw errors.");
+
+    fn->throwsErrorInit();
+  }
 
   if (optWhere)
   {
@@ -2506,7 +2559,7 @@ BlockStmt* buildLocalStmt(Expr* stmt) {
 
     CallExpr* call = toCallExpr(onBlock->blockInfoGet());
     SymExpr* head = toSymExpr(call->argList.head);
-    if (head->var == gTrue) {
+    if (head->symbol() == gTrue) {
       // avoiding 'local local on'
       onBlock = NULL;
     }

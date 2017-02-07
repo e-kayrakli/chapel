@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -27,16 +27,16 @@
 #include "caches.h"
 #include "chpl.h"
 #include "expr.h"
+#include "passes.h"
+#include "resolveIntents.h"
 #include "stmt.h"
 #include "stringutil.h"
 #include "symbol.h"
 
-#include "resolveIntents.h"
-
 #include <cstdlib>
 #include <inttypes.h>
-#include <vector>
 #include <map>
+#include <vector>
 
 struct TupleInfo {
   TypeSymbol* typeSymbol;
@@ -271,7 +271,7 @@ FnSymbol* makeDestructTuple(TypeSymbol* newTypeSymbol,
 {
   Type *newType = newTypeSymbol->type;
 
-  FnSymbol *dtor = new FnSymbol("~chpl_destroy");
+  FnSymbol *dtor = new FnSymbol("deinit");
 
   dtor->cname = astr("chpl__auto_destroy_", newType->symbol->cname);
 
@@ -476,18 +476,14 @@ instantiate_tuple_hash( FnSymbol* fn) {
       call =  new CallExpr( "chpl__defaultHash", field_access);
       first = false;
     } else {
-      call = new CallExpr( "^",
-                           new CallExpr( "chpl__defaultHash",
-                                         field_access),
-                           new CallExpr( "<<",
-                                         call,
-                                         new_IntSymbol(17)));
+      call = new CallExpr( "chpl__defaultHashCombine",
+                           new CallExpr( "chpl__defaultHash", field_access),
+                           call,
+                           new_IntSymbol(i) );
     }
   }
 
-  // YAH, make sure that we do not return a negative hash value for now
-  call = new CallExpr( "&", new_IntSymbol( 0x7fffffffffffffffLL, INT_SIZE_64), call);
-  CallExpr* ret = new CallExpr(PRIM_RETURN, new CallExpr("_cast", dtInt[INT_SIZE_64]->symbol, call));
+  CallExpr* ret = new CallExpr(PRIM_RETURN, call);
 
   fn->body->replace( new BlockStmt( ret));
   normalize(fn);
@@ -831,38 +827,46 @@ AggregateType* computeNonRefTuple(Type* t)
 }
 
 
-void
+bool
 fixupTupleFunctions(FnSymbol* fn, FnSymbol* newFn, CallExpr* instantiatedForCall)
 {
   // Note: scopeResolve sets FLAG_TUPLE for the type constructor
   // and the constructor for the tuple record.
 
   if (!strcmp(fn->name, "_defaultOf") &&
-      fn->getFormal(1)->type->symbol->hasFlag(FLAG_TUPLE))
+      fn->getFormal(1)->type->symbol->hasFlag(FLAG_TUPLE)) {
     instantiate_tuple_init(newFn);
+    return true;
+  }
 
   if (!strcmp(fn->name, "chpl__defaultHash") && fn->getFormal(1)->type->symbol->hasFlag(FLAG_TUPLE)) {
     instantiate_tuple_hash(newFn);
+    return true;
   }
 
   if (fn->hasFlag(FLAG_TUPLE_CAST_FN) &&
       newFn->getFormal(1)->getValType()->symbol->hasFlag(FLAG_TUPLE) &&
       fn->getFormal(2)->getValType()->symbol->hasFlag(FLAG_TUPLE) ) {
     instantiate_tuple_cast(newFn);
+    return true;
   }
 
   if (fn->hasFlag(FLAG_INIT_COPY_FN) && fn->getFormal(1)->type->symbol->hasFlag(FLAG_TUPLE)) {
     instantiate_tuple_initCopy(newFn);
+    return true;
   }
 
   if (fn->hasFlag(FLAG_AUTO_COPY_FN) && fn->getFormal(1)->type->symbol->hasFlag(FLAG_TUPLE)) {
     instantiate_tuple_autoCopy(newFn);
+    return true;
   }
 
   if (fn->hasFlag(FLAG_UNREF_FN) && fn->getFormal(1)->type->symbol->hasFlag(FLAG_TUPLE)) {
     instantiate_tuple_unref(newFn);
+    return true;
   }
 
+  return false;
 }
 
 FnSymbol*
@@ -888,7 +892,7 @@ createTupleSignature(FnSymbol* fn, SymbolMap& subs, CallExpr* call)
       if (i == 0 && firstArgIsSize) {
         // First argument is the tuple size
         SymExpr* se = toSymExpr(actual);
-        VarSymbol* v = toVarSymbol(se->var);
+        VarSymbol* v = toVarSymbol(se->symbol());
         if (v == NULL || v->immediate == NULL) {
           // leads to an error later in resolution.
           return NULL;
@@ -903,7 +907,7 @@ createTupleSignature(FnSymbol* fn, SymbolMap& subs, CallExpr* call)
         // should be captured as ref, but not in the type function.
         if (shouldChangeTupleType(t->getValType()) && !noChangeTypes) {
           if (SymExpr* se = toSymExpr(actual)) {
-            if (ArgSymbol* arg = toArgSymbol(se->var)) {
+            if (ArgSymbol* arg = toArgSymbol(se->symbol())) {
               IntentTag intent = concreteIntentForArg(arg);
               if ( (intent & INTENT_FLAG_REF) )
                 t = t->getRefType();

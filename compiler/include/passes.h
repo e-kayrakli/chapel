@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -54,6 +54,7 @@ void insertLineNumbers();
 void insertWideReferences();
 void localizeGlobals();
 void loopInvariantCodeMotion();
+void lowerErrorHandling();
 void lowerIterators();
 void makeBinary();
 void normalize();
@@ -98,7 +99,6 @@ void buildDefaultDestructor(AggregateType* ct);
 // createTaskFunctions.cpp -> implementForallIntents.cpp
 extern Symbol* markPruned;
 extern Symbol* markUnspecified;
-void markOuterVarsWithIntents(CallExpr* byrefVars, SymbolMap& uses);
 void replaceVarUses(Expr* topAst, SymbolMap& vars);
 void pruneThisArg(Symbol* parent, SymbolMap& uses);
 
@@ -110,6 +110,9 @@ void flattenNestedFunction(FnSymbol* nestedFunction);
 
 // callDestructors.cpp
 void insertReferenceTemps(CallExpr* call);
+
+// normalize.cpp
+void normalize(FnSymbol* fn);
 
 // parallel.cpp
 Type* getOrMakeRefTypeDuringCodegen(Type* type);

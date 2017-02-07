@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -44,25 +44,30 @@
 #include "chpl.h"
 #include "expr.h"
 #include "ForLoop.h"
+#include "passes.h"
+#include "resolveIntents.h"
+#include "stlUtil.h"
 #include "stmt.h"
 #include "stringutil.h"
 #include "symbol.h"
-#include "resolveIntents.h"
-#include "stlUtil.h"
 
 //########################################################################
 //# Static Function Forward Declarations
 //########################################################################
 static FnSymbol*
 buildEmptyWrapper(FnSymbol* fn, CallInfo* info);
+
 static ArgSymbol* copyFormalForWrapper(ArgSymbol* formal);
+
 static void
 insertWrappedCall(FnSymbol* fn, FnSymbol* wrapper, CallExpr* call);
+
 static FnSymbol*
 buildDefaultWrapper(FnSymbol* fn,
                     Vec<Symbol*>* defaults,
                     SymbolMap* paramMap,
                     CallInfo* info);
+
 static FnSymbol*
 buildPromotionWrapper(FnSymbol* fn,
                       SymbolMap* promotion_subs,
@@ -192,7 +197,7 @@ buildDefaultWrapper(FnSymbol* fn,
       if (!isRecord(fn->_this->type) && !isUnion(fn->_this->type)) {
         wrapper->insertAtTail(new CallExpr(PRIM_MOVE,
                                            wrapper->_this,
-                                           callChplHereAlloc((wrapper->_this->typeInfo())->symbol)));
+                                           callChplHereAlloc(wrapper->_this->typeInfo())));
 
         wrapper->insertAtTail(new CallExpr(PRIM_SETCID, wrapper->_this));
       }
@@ -361,7 +366,7 @@ buildDefaultWrapper(FnSymbol* fn,
           !formal->defaultExpr ||
           (formal->defaultExpr->body.length == 1 &&
            isSymExpr(formal->defaultExpr->body.tail) &&
-           toSymExpr(formal->defaultExpr->body.tail)->var == gTypeDefaultToken)) {
+           toSymExpr(formal->defaultExpr->body.tail)->symbol() == gTypeDefaultToken)) {
         // use default value for type as default value for formal argument
         if (formal->typeExpr) {
           BlockStmt* typeExpr = formal->typeExpr->copy();
@@ -677,10 +682,10 @@ static void addArgCoercion(FnSymbol*  fn,
     castCall   = new CallExpr(PRIM_DEREF, prevActual);
 
     if (SymExpr* prevSE = toSymExpr(prevActual))
-      if (prevSE->var->hasFlag(FLAG_REF_TO_CONST)) {
+      if (prevSE->symbol()->hasFlag(FLAG_REF_TO_CONST)) {
         castTemp->addFlag(FLAG_CONST);
 
-        if (prevSE->var->hasFlag(FLAG_REF_FOR_CONST_FIELD_OF_THIS))
+        if (prevSE->symbol()->hasFlag(FLAG_REF_FOR_CONST_FIELD_OF_THIS))
           castTemp->addFlag(FLAG_REF_FOR_CONST_FIELD_OF_THIS);
       }
 

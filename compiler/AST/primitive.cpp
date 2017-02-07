@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -173,26 +173,13 @@ returnInfoCast(CallExpr* call) {
 static QualifiedType
 returnInfoVal(CallExpr* call) {
   AggregateType* ct = toAggregateType(call->get(1)->typeInfo());
-  if (ct) {
-    if (call->get(1)->isRef()) {
-      if(ct->symbol->hasFlag(FLAG_REF)) {
-        return QualifiedType(ct->getField(1)->type, QUAL_VAL);
-      } else {
-        return QualifiedType(ct, QUAL_VAL);
-      }
-    } else if (call->get(1)->isWideRef()) {
-      if(ct->symbol->hasFlag(FLAG_WIDE_REF)) {
-        return QualifiedType(ct->getField(2)->type, QUAL_VAL);
-      } else {
-        return QualifiedType(ct, QUAL_VAL);
-      }
-    } else if (ct->symbol->hasFlag(FLAG_WIDE_CLASS)) {
-      // insertWideReferences will sometimes insert a PRIM_DEREF to a
-      // wide class. There should probably be a better way of expressing the
-      // desired pattern...
-      return QualifiedType(ct, QUAL_VAL);
-    }
+
+  if (call->get(1)->isRefOrWideRef()) {
+    return QualifiedType(call->get(1)->getValType(), QUAL_VAL);
+  } else if (ct && ct->symbol->hasFlag(FLAG_WIDE_CLASS)) {
+    return QualifiedType(ct, QUAL_VAL);
   }
+
   INT_FATAL(call, "attempt to get value type of non-reference type");
   return QualifiedType(NULL);
 }
@@ -225,8 +212,8 @@ returnInfoAsRef(CallExpr* call) {
 // NEEDS TO BE FINISHED WHEN PRIMITIVES ARE REDONE
 static QualifiedType
 returnInfoNumericUp(CallExpr* call) {
-  Type* t1 = call->get(1)->typeInfo();
-  Type* t2 = call->get(2)->typeInfo();
+  Type* t1 = call->get(1)->typeInfo()->getValType();
+  Type* t2 = call->get(2)->typeInfo()->getValType();
   if (is_int_type(t1) && is_real_type(t2))
     return QualifiedType(t2, QUAL_VAL);
   if (is_real_type(t1) && is_int_type(t2))
@@ -270,7 +257,7 @@ returnInfoGetMember(CallExpr* call) {
   SymExpr* sym = toSymExpr(call->get(2));
   if (!sym)
     INT_FATAL(call, "bad member primitive");
-  VarSymbol* var = toVarSymbol(sym->var);
+  VarSymbol* var = toVarSymbol(sym->symbol());
   if (!var)
     INT_FATAL(call, "bad member primitive");
   if (var->immediate) {
@@ -313,7 +300,7 @@ returnInfoGetMemberRef(CallExpr* call) {
   INT_ASSERT(ct);
   SymExpr* se = toSymExpr(call->get(2));
   INT_ASSERT(se);
-  VarSymbol* var = toVarSymbol(se->var);
+  VarSymbol* var = toVarSymbol(se->symbol());
   INT_ASSERT(var);
   Type* retType = NULL;
   if (Immediate* imm = var->immediate)
@@ -364,7 +351,7 @@ static QualifiedType
 returnInfoVirtualMethodCall(CallExpr* call) {
   SymExpr* se = toSymExpr(call->get(1));
   INT_ASSERT(se);
-  FnSymbol* fn = toFnSymbol(se->var);
+  FnSymbol* fn = toFnSymbol(se->symbol());
   INT_ASSERT(fn);
   return fn->getReturnQualType();
 }
@@ -437,12 +424,12 @@ prim_def(const char* name, QualifiedType (*returnInfo)(CallExpr*),
   prim->isEssential = isEssential;
   prim->passLineno = passLineno;
 }
- 
+
 
 /*
  * The routine below, using the routines just above, define primitives
  * for use by the compiler.  Each primitive definition takes:
- * 
+ *
  * - (optionally) the primitive's enum
  * - its string name
  * - a function pointer indicating the type it returns/evaluates to
@@ -471,6 +458,7 @@ initPrimitive() {
   prim_def(PRIM_TYPE_INIT, "type init", returnInfoFirstDeref);
   prim_def(PRIM_REF_TO_STRING, "ref to string", returnInfoStringC);
   prim_def(PRIM_RETURN, "return", returnInfoFirst, true);
+  prim_def(PRIM_THROW, "throw", returnInfoFirst, true, true);
   prim_def(PRIM_YIELD, "yield", returnInfoFirst, true);
   prim_def(PRIM_UNARY_MINUS, "u-", returnInfoFirstDeref);
   prim_def(PRIM_UNARY_PLUS, "u+", returnInfoFirstDeref);
@@ -600,7 +588,6 @@ initPrimitive() {
   prim_def(PRIM_BLOCK_LOCAL, "local block", returnInfoVoid);
   prim_def(PRIM_BLOCK_UNLOCAL, "unlocal block", returnInfoVoid);
 
-  prim_def(PRIM_FORALL_LOOP, "forall loop", returnInfoVoid);
   prim_def(PRIM_TO_LEADER, "to leader", returnInfoVoid);
   prim_def(PRIM_TO_FOLLOWER, "to follower", returnInfoVoid);
   prim_def(PRIM_TO_STANDALONE, "to standalone", returnInfoVoid);
@@ -696,20 +683,33 @@ initPrimitive() {
 
   prim_def(PRIM_GET_COMPILER_VAR, "get compiler variable", returnInfoString);
 
+  // Allocate a class instance on the stack (where normally it
+  // would be allocated on the heap). The only argument is the class type.
+  prim_def(PRIM_STACK_ALLOCATE_CLASS, "stack allocate class", returnInfoFirst);
   prim_def(PRIM_ZIP, "zip", returnInfoVoid, false, false);
   prim_def(PRIM_REQUIRE, "require", returnInfoVoid, false, false);
 }
 
-Map<const char*, VarSymbol*> memDescsMap;
+static Map<const char*, VarSymbol*> memDescsMap;
+static Map<int, VarSymbol*> memDescsNodeMap;  // key is the Type node's ID
 Vec<const char*> memDescsVec;
+static int64_t memDescInt = 0;
 
 VarSymbol* newMemDesc(const char* str) {
-  static int64_t memDescInt = 0;
   const char* s = astr(str);
   if (VarSymbol* v = memDescsMap.get(s))
     return v;
   VarSymbol* memDescVar = new_IntSymbol(memDescInt++, INT_SIZE_16);
   memDescsMap.put(s, memDescVar);
   memDescsVec.add(s);
+  return memDescVar;
+}
+
+VarSymbol* newMemDesc(Type* type) {
+  if (VarSymbol* v = memDescsNodeMap.get(type->id))
+    return v;
+  VarSymbol* memDescVar = new_IntSymbol(memDescInt++, INT_SIZE_16);
+  memDescsNodeMap.put(type->id, memDescVar);
+  memDescsVec.add(type->symbol->name);
   return memDescVar;
 }

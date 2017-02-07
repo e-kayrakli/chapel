@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -97,6 +97,8 @@ symbolFlag( FLAG_DOMAIN , ypr, "domain" , ncm )
 symbolFlag( FLAG_DONOR_FN, ypr, "donor fn" , "function donates ownership of the returned object to the calling function" )
 symbolFlag( FLAG_DONT_DISABLE_REMOTE_VALUE_FORWARDING , ypr, "dont disable remote value forwarding" , ncm )
 symbolFlag( FLAG_END_COUNT , ypr, "end count" , ncm )
+symbolFlag( FLAG_ERRONEOUS_INITCOPY, npr, "erroneous initcopy", ncm)
+symbolFlag( FLAG_EPILOGUE_LABEL , npr, "epilogue label" , "distinguishes the epilogue label from other labels" )
 symbolFlag( FLAG_EXPANDED_VARARGS, npr, "expanded varargs", ncm)
 symbolFlag( FLAG_EXPAND_TUPLES_WITH_VALUES , ypr, "expand tuples with values" , ncm )
 symbolFlag( FLAG_EXPORT , npr, "export" , ncm )
@@ -188,7 +190,6 @@ symbolFlag( FLAG_NO_REMOTE_MEMORY_FENCE , ypr, "no remote memory fence" , ncm)
 symbolFlag( FLAG_NOT_POD , ypr, "not plain old data" , "bit copy overridden")
 
 symbolFlag( FLAG_OBJECT_CLASS , npr, "object class" , ncm )
-symbolFlag( FLAG_OMIT_FROM_CONSTRUCTOR , ypr, "omit from constructor" , ncm )
 
 // FLAG_ON and FLAG_ON_BLOCK mark task functions and their wrappers,
 // respectively, that perform remote operations, i.e. corresponding to
@@ -247,6 +248,7 @@ symbolFlag( FLAG_REMOVABLE_AUTO_COPY , ypr, "removable auto copy" , ncm )
 symbolFlag( FLAG_REMOVABLE_AUTO_DESTROY , ypr, "removable auto destroy" , ncm )
 symbolFlag( FLAG_RESOLVED , npr, "resolved" , "this function has been resolved" )
 symbolFlag( FLAG_RETARG, npr, "symbol is a _retArg", ncm )
+symbolFlag( FLAG_RETURNS_ALIASING_ARRAY, ypr, "fn returns aliasing array", "array alias/slice/reindex/rank change function" )
 // See buildRuntimeTypeToValueFns() in functionResolution.cpp for more info on FLAG_RUNTIME_TYPE_INIT_FN
 symbolFlag( FLAG_RUNTIME_TYPE_INIT_FN , ypr, "runtime type init fn" , "function for initializing runtime time types" )
 symbolFlag( FLAG_RUNTIME_TYPE_VALUE , npr, "runtime type value" , "associated runtime type (value)" )
@@ -254,7 +256,6 @@ symbolFlag( FLAG_SHOULD_NOT_PASS_BY_REF, npr, "should not pass by ref", "this sy
 symbolFlag( FLAG_SINGLE , ypr, "single" , ncm )
 // Based on how this is used, I suggest renaming it to return_value_has_initializer
 // or something similar <hilde>.
-symbolFlag( FLAG_SPECIFIED_RETURN_TYPE , npr, "specified return type" , ncm )
 symbolFlag( FLAG_STAR_TUPLE , ypr, "star tuple" , "mark tuple types as star tuple types" )
 symbolFlag( FLAG_STAR_TUPLE_ACCESSOR , ypr, "star tuple accessor" , "this function for star tuple types" )
 symbolFlag( FLAG_SUPER_CLASS , npr, "super class" , ncm )
