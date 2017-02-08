@@ -2726,11 +2726,9 @@ void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
         /*pbuf->prefetch_sequence_number);*/
     cache_seqn_t sn = pbuf->prefetch_sequence_number;
     pbuf->prefetch_sequence_number++;
-    printf("Locale %d Task %d will set. (entry->sn: %d sn: %d)\n",
-        chpl_nodeID, chpl_task_getId(), entry->sn, sn);
     entry->sn = seqn_max(entry->sn, sn);
-    printf("Locale %d Task %d setting sn. (entry->sn: %d)\n",
-        chpl_nodeID, chpl_task_getId(), entry->sn);
+    TRACE_PRINT(("Locale %d Task %d has set sn. (entry->sn: %d)\n",
+        chpl_nodeID, chpl_task_getId(), entry->sn));
     entry->sn_updated = true;
   }
 }
@@ -3311,9 +3309,10 @@ void *get_prefetched_data_addr(void *accessor,
     // it's still stale
     /*if(prefetch_entry->sn < pbuf->prefetch_sequence_number) {*/
     if(task_local->last_acquire > prefetch_entry->sn) {
-      printf("Locale %d Task %d reprefetching. (entry: %p, entry->sn: %d, buf->sn: %d)\n",
-          chpl_nodeID, chpl_task_getId(), prefetch_entry, prefetch_entry->sn,
-          pbuf->prefetch_sequence_number);
+      TRACE_PRINT(("Locale %d Task %d reprefetching. (entry: %p, \
+        entry->sn: %d, buf->sn: %d)\n", chpl_nodeID, chpl_task_getId(),
+          prefetch_entry, prefetch_entry->sn,
+          pbuf->prefetch_sequence_number));
       reprefetch_single_entry(prefetch_entry);
     }
     stop_update(prefetch_entry);
@@ -3327,21 +3326,23 @@ void *get_prefetched_data_addr(void *accessor,
   // NULL check for prefetch entry has been handled by PrefethcHooks
   if(offset < 0 ||
       (intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
-    printf("\t offset=%ld, size=%zd, origin=%d, entry_size=%zd\n",
+    DEBUG_PRINT(("\t offset=%ld, size=%zd, origin=%d, entry_size=%zd\n",
         offset, size, prefetch_entry->origin_node,
-        prefetch_entry->size); 
+        prefetch_entry->size));
     *found = 0;
   }
   else {
     *found = 1;
-#if LOG_IDX
-    printf("%ld %ld %ld FOUND > offset=%ld, entry_size=%zd, metadata=%ld %ld %ld %ld %ld %ld\n",
+    DEBUG_PRINT(("%ld %ld %ld FOUND > offset=%ld, entry_size=%zd, \
+        metadata=%ld %ld %ld %ld %ld %ld\n",
         ((int64_t*)idx)[0],((int64_t*)idx)[1],((int64_t*)idx)[2],
         offset, prefetch_entry->size,
-        ((int64_t*)prefetch_entry->data)[0],((int64_t*)prefetch_entry->data)[1],
-        ((int64_t*)prefetch_entry->data)[2],((int64_t*)prefetch_entry->data)[3],
-        ((int64_t*)prefetch_entry->data)[4],((int64_t*)prefetch_entry->data)[5]);
-#endif
+        ((int64_t*)prefetch_entry->data)[0],
+        ((int64_t*)prefetch_entry->data)[1],
+        ((int64_t*)prefetch_entry->data)[2],
+        ((int64_t*)prefetch_entry->data)[3],
+        ((int64_t*)prefetch_entry->data)[4],
+        ((int64_t*)prefetch_entry->data)[5]));
     retaddr = (void *)((uintptr_t)prefetch_entry->data+offset);
   }
 
@@ -3350,9 +3351,6 @@ void *get_prefetched_data_addr(void *accessor,
 
 
   stop_read(prefetch_entry);
-  printf("\tLocale %d Task %d post-read. (entry: %p, entry->sn: %d, buf->sn: %d)\n",
-      chpl_nodeID, chpl_task_getId(), prefetch_entry, prefetch_entry->sn,
-      pbuf->prefetch_sequence_number);
   return retaddr;
 }
 
