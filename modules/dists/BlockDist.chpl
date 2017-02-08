@@ -1233,7 +1233,8 @@ inline proc BlockArr.dsiAccess(idx: rank*idxType) ref {
       /*const hook = myLocArr.prefetchHook;*/
       if hook.hasPrefetchedFrom(locIdx) {
         var data = hook.accessPrefetchedDataRef(locIdx, i);
-        return data.deref();
+        if !is_c_nil(data) then
+          return data.deref();
       }
     }
   }
