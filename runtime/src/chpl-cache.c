@@ -3120,6 +3120,10 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   // currently everything has canread and nothing can have canwrite
   new_entry->pf_type |= PF_CANREAD;
   new_entry->sn = NO_SEQUENCE_NUMBER;
+
+  if(consistent) {
+    prefetch_entry_init_seqn_n(new_entry, 0);
+  }
   
   // runtime assumes that prefetching happens with one task per
   // locale

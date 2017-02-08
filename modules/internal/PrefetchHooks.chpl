@@ -331,8 +331,9 @@ module PrefetchHooks {
             slice_desc_size, consistent));
 
 
-      __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-          slice_desc, slice_desc_size, data, size);
+      if !consistent then
+        __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+            slice_desc, slice_desc_size, data, size);
 
       /*writeln(here, " postreprefetch  : ",*/
           /*(slice_desc:c_ptr(int))[0],*/
@@ -620,7 +621,7 @@ module PrefetchHooks {
       for h in handles {
         // 2 acquires are added by the current finalization logic
         // this may not be necessary
-        prefetch_entry_init_seqn_n(h, 0);
+        /*prefetch_entry_init_seqn_n(h, 0);*/
       }
     }
 
