@@ -3026,7 +3026,7 @@ void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
 }
 
 //these locks are managed from PrefetchHooks
-static inline
+inline
 void start_read(struct __prefetch_entry_t *entry) {
   //assert entry?
   if(entry->should_lock) {
@@ -3040,7 +3040,7 @@ void start_read(struct __prefetch_entry_t *entry) {
   }
 }
 
-static inline
+inline
 void stop_read(struct __prefetch_entry_t *entry) {
   //assert entry?
   if(entry->should_lock) {

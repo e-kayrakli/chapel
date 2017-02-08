@@ -608,6 +608,24 @@ module PrefetchHooks {
       }
     }
 
+    proc hasPrefetchedFrom(locIdx, i) {
+      if unpackAccess {
+        return unpackedData[locIdx].domain.member(i);
+      }
+      halt("Not ready for this yet");
+      return false;
+    }
+
+    proc accessUnpackedData(locIdx, i) ref {
+      // start_read
+      start_read(handles(locIdx));
+      ref data = unpackedData[locIdx][i];
+      stop_read(handles(locIdx));
+      return data;
+      /*return unpackedData[locIdx][i];*/
+      // stop_read
+    }
+
     inline proc getUnpackedData(localeIdx) {
       return unpackedData[localeIdx];
     }

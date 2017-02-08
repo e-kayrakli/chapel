@@ -1221,10 +1221,13 @@ inline proc BlockArr.dsiAccess(idx: rank*idxType) ref {
     /*}*/
 
     if allowPrefetchUnpacking {
-      const ref unpackedData =
-        myLocArr.getPrefetchHook().getUnpackedData(locIdx);
-      if unpackedData.domain.member(i) then
-        return unpackedData[i];
+      /*const ref unpackedData =*/
+        /*myLocArr.getPrefetchHook().getUnpackedData(locIdx);*/
+      /*if unpackedData.domain.member(i) then*/
+        /*return unpackedData[i];*/
+      const hook = myLocArr.getPrefetchHook();
+      if hook.hasPrefetchedFrom(locIdx, i) then
+        return hook.accessUnpackedData(locIdx, i);
     }
     else {
       const hook =

@@ -181,8 +181,8 @@ void *update_prefetch_handle(void* owner_obj, c_nodeid_t
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
     consistent);
 void create_prefetch_handle(struct __prefetch_entry_t **entry);
-//void start_read(struct __prefetch_entry_t *entry);
-//void stop_read(struct __prefetch_entry_t *entry);
+void start_read(struct __prefetch_entry_t *entry);
+void stop_read(struct __prefetch_entry_t *entry);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 
