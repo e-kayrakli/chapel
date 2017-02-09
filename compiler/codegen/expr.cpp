@@ -3362,6 +3362,7 @@ GenRet CallExpr::codegenPrimitive() {
   case PRIM_ON_LOCALE_NUM:
   case PRIM_GET_REAL:
   case PRIM_GET_IMAG:
+  case PRIM_GEN_PREFETCH_PTR:
     codegenIsSpecialPrimitive(NULL, this, ret);
     break;
 
@@ -5171,6 +5172,30 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
 
       ret = call->get(1);
 
+      retval = true;
+      break;
+    }
+
+    case PRIM_GEN_PREFETCH_PTR: {
+      INT_ASSERT(target); // this got to be in a PRIM_MOVE for now
+
+      GenRet localAddr;
+      if (call->get(1)->isWideRef() ||
+          call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_CLASS)) {
+        localAddr = codegenRaddr(call->get(1));
+      }
+      else if (call->get(1)->isRef()) {
+        // TODO Implementing this is trivial, but I am not sure if it's
+        // necessary
+        INT_FATAL("Trying to create prefetch pointer from narrow ref");
+      }
+      else {
+        INT_FATAL("Invalid argument for PRIM_GET_PREFETCH_PTR");
+      }
+      ret = codegenWideAddr(codegenLocaleForNode(-1),
+          codegenRaddr(call->get(1)));
+      ret.isLVPtr = GEN_VAL;
+      ret.chplType = call->get(1)->typeInfo();
       retval = true;
       break;
     }

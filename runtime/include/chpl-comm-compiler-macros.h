@@ -48,6 +48,8 @@ void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
 {
   if (chpl_nodeID == node) {
     chpl_memcpy(addr, raddr, size);
+  } else if (node == -1) { // prefetch pointer special case
+    chpl_memcpy(addr, raddr, size);
 #ifdef HAS_DIRECT_PREFETCH
   } else if(is_prefetched(node, raddr, size) == 1) {
     chpl_prefetch_comm_get_fast(addr, node, raddr, size, typeIndex, ln, fn);
@@ -106,6 +108,8 @@ void chpl_gen_comm_put(void* addr, c_nodeid_t node, void* raddr,
 {
   if (chpl_nodeID == node) {
     chpl_memcpy(raddr, addr, size);
+  } else if(node == -1) { // prefetch pointer special case
+    chpl_error("Cannot write to prefetched data", ln, fn);
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
     chpl_cache_comm_put(addr, node, raddr, size, typeIndex, ln, fn);

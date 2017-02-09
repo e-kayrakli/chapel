@@ -209,6 +209,16 @@ returnInfoAsRef(CallExpr* call) {
   }
 }
 
+static QualifiedType
+returnInfoWideRef(CallExpr* call) {
+  Type* t = call->get(1)->getValType();
+  if (!t->refType)
+    INT_FATAL(call, "invalid attempt to get reference type");
+  std::cout << "returning wide ref type" << std::endl;
+  return QualifiedType(t->refType, QUAL_WIDE_REF);
+}
+
+
 // NEEDS TO BE FINISHED WHEN PRIMITIVES ARE REDONE
 static QualifiedType
 returnInfoNumericUp(CallExpr* call) {
@@ -598,6 +608,7 @@ initPrimitive() {
 
   prim_def(PRIM_LOGICAL_FOLDER, "_paramFoldLogical", returnInfoBool);
 
+  prim_def(PRIM_GEN_PREFETCH_PTR, "gen prefetch ptr", returnInfoWideRef, false, true);
   prim_def(PRIM_WIDE_GET_LOCALE, "_wide_get_locale", returnInfoLocaleID, false, true);
   // MPF - 10/9/2015 - neither _wide_get_node nor _wide_get_addr
   // is used in the module or test code. insertWideReferences uses
