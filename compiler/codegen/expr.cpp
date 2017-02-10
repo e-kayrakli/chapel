@@ -5182,12 +5182,21 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
 
       GenRet localAddr;
 
-      // argument is wide ref
-      if (call->get(1)->isWideRef() ||
-          call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_CLASS)) {
+      // I would have like to define arg as SymExpr, but in my tests
+      // sometimes it changed to CallExpr possibly due to ref
+      // propagation
+      Expr *arg = call->get(1);
+      INT_ASSERT(arg);
 
-        localAddr = codegenRaddr(call->get(1));
-        ret.chplType = call->get(1)->typeInfo();
+      Type * argType = arg->typeInfo();
+      TypeSymbol *argTypeSymbol = argType->symbol;
+
+      // argument is wide ref
+      if (arg->isWideRef() ||
+          argTypeSymbol->hasFlag(FLAG_WIDE_CLASS)) {
+
+        localAddr = codegenRaddr(arg);
+        ret.chplType = argType;
         ret = codegenWideAddr(codegenLocaleForNode(-1),
             localAddr);
         ret.isLVPtr = GEN_VAL;
@@ -5202,14 +5211,13 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
       }
 
       //argument is C pointer
-      else if (call->get(1)->typeInfo()->symbol->hasFlag(FLAG_C_PTR_CLASS)) {
+      else if (argTypeSymbol->hasFlag(FLAG_C_PTR_CLASS)) {
 
-        Type *eltType =
-          getDataClassType(call->get(1)->typeInfo()->symbol)->typeInfo();
+        Type *eltType = getDataClassType(argTypeSymbol)->typeInfo();
 
-        print_view(eltType->symbol);
+        // remove & since it's already an address
+        localAddr = codegenValue(arg);
 
-        localAddr = codegenValue(call->get(1));
         ret.chplType = eltType->getRefType();
         ret = codegenWideAddr(codegenLocaleForNode(-1),
             localAddr, getOrMakeWideTypeDuringCodegen(eltType->getRefType()));
