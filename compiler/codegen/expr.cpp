@@ -5192,22 +5192,28 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
       TypeSymbol *argTypeSymbol = argType->symbol;
 
       // argument is wide ref
-      if (arg->isWideRef() ||
-          argTypeSymbol->hasFlag(FLAG_WIDE_CLASS)) {
-
+      if (arg->isWideRef() || argTypeSymbol->hasFlag(FLAG_WIDE_CLASS)) {
         localAddr = codegenRaddr(arg);
+        ret = codegenWideAddr(codegenLocaleForNode(-1), localAddr);
         ret.chplType = argType;
-        ret = codegenWideAddr(codegenLocaleForNode(-1),
-            localAddr);
         ret.isLVPtr = GEN_VAL;
         retval = true;
       }
 
       // argument is narrow ref
       else if (call->get(1)->isRef()) {
-        // TODO Implementing this is trivial, but I am not sure if it's
-        // necessary
         INT_FATAL("Trying to create prefetch pointer from narrow ref");
+
+        // I couldn't hit this case with anything realistic.
+        // Therefore I am triggering an assertion. I expect an
+        // implemention would look something like this:
+        /*
+        localAddr = arg;
+        ret = codegenWideAddr(codegenLocaleForNode(-1), localAddr);
+        ret.chplType = argType;
+        ret.isLVPtr = GEN_VAL;
+        retval = true;
+        */
       }
 
       //argument is C pointer
@@ -5215,12 +5221,10 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
 
         Type *eltType = getDataClassType(argTypeSymbol)->typeInfo();
 
-        // remove & since it's already an address
-        localAddr = codegenValue(arg);
-
+        localAddr = codegenValue(arg); // remove &
+        ret = codegenWideAddr(codegenLocaleForNode(-1), localAddr,
+            getOrMakeWideTypeDuringCodegen(eltType->getRefType()));
         ret.chplType = eltType->getRefType();
-        ret = codegenWideAddr(codegenLocaleForNode(-1),
-            localAddr, getOrMakeWideTypeDuringCodegen(eltType->getRefType()));
         ret.isLVPtr = GEN_VAL;
         retval = true;
       }
