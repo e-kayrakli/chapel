@@ -154,6 +154,12 @@ module PrefetchHooks {
     proc test() {
       writeln("Superclass", x);
     }
+
+    proc unifiedAccessPrefetchedData(locIdx, i) {
+      halt("This shouldn't have been called");
+      var dummy: c_void_ptr;
+      return (false, dummy);
+    }
   }
 
   inline proc getNewPrefetchHook(obj, type unpackType, localeContainer) {
@@ -213,6 +219,30 @@ module PrefetchHooks {
       for h in handles do create_prefetch_handle(h);
     }
 
+    proc unifiedAccessPrefetchedData(locIdx, i,
+        out prefetched: bool) ref {
+
+      if hasPrefetchedFrom(locIdx) {
+        if unpackAccess {
+          ref unpackedDataTmp = unpackedData[locIdx];
+          if unpackedDataTmp.domain.member(i) {
+            ref retTmp = unpackedDataTmp[i];
+            prefetched = true;
+            return __primitive("gen prefetch ptr", retTmp);
+          }
+        }
+        else {
+          var data = accessPrefetchedDataRef(locIdx, i);
+          if !is_c_nil(data) {
+            prefetched = true;
+            return __primitive("gen prefetch ptr", data);
+          }
+        }
+      }
+      prefetched = false;
+      var dummyPtr: c_ptr(obj.eltType);
+      return __primitive("gen prefetch ptr", dummyPtr);
+    }
 
     iter dsiSerialize(slice_desc) {
       for val in obj.dsiSerialize(slice_desc:c_ptr(obj.idxType)) do

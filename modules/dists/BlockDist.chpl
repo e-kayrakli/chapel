@@ -64,6 +64,7 @@ config const disableAliasedBulkTransfer = true;
 
 config param sanityCheckDistribution = false;
 config param allowPrefetchUnpacking = false;
+config param unifiedAccess = true;
 
 //
 // If the testFastFollowerOptimization flag is set to true, the
@@ -1220,24 +1221,33 @@ inline proc BlockArr.dsiAccess(idx: rank*idxType) ref {
       /*myLocArr.getPrefetchHook().t.clear();*/
     /*}*/
 
-    if allowPrefetchUnpacking {
-      /*const ref unpackedData =*/
-        /*myLocArr.getPrefetchHook().getUnpackedData(locIdx);*/
-      /*if unpackedData.domain.member(i) then*/
-        /*return unpackedData[i];*/
-      const hook = myLocArr.getPrefetchHook();
-      if hook.hasPrefetchedFrom(locIdx, i) then
-        return hook.accessUnpackedData(locIdx, i);
+    if unifiedAccess {
+      var hasPrefetched: bool;
+      ref prefetchData =
+        myLocArr.getPrefetchHook().unifiedAccessPrefetchedData(locIdx,
+            i, hasPrefetched);
+      if hasPrefetched then return prefetchData;
     }
     else {
-      const hook =
-        /*myLocArr.getPrefetchHook(dom.dist.targetLocales.type);*/
-        myLocArr.getPrefetchHook();
-      /*const hook = myLocArr.prefetchHook;*/
-      if hook.hasPrefetchedFrom(locIdx) {
-        var data = hook.accessPrefetchedDataRef(locIdx, i);
-        if !is_c_nil(data) then
-          return data.deref();
+      if allowPrefetchUnpacking {
+        /*const ref unpackedData =*/
+        /*myLocArr.getPrefetchHook().getUnpackedData(locIdx);*/
+        /*if unpackedData.domain.member(i) then*/
+        /*return unpackedData[i];*/
+        const hook = myLocArr.getPrefetchHook();
+        if hook.hasPrefetchedFrom(locIdx, i) then
+          return hook.accessUnpackedData(locIdx, i);
+      }
+      else {
+        const hook =
+          /*myLocArr.getPrefetchHook(dom.dist.targetLocales.type);*/
+          myLocArr.getPrefetchHook();
+        /*const hook = myLocArr.prefetchHook;*/
+        if hook.hasPrefetchedFrom(locIdx) {
+          var data = hook.accessPrefetchedDataRef(locIdx, i);
+          if !is_c_nil(data) then
+            return data.deref();
+        }
       }
     }
   }
