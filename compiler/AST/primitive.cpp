@@ -24,6 +24,7 @@
 #include "stringutil.h"
 #include "type.h"
 #include "resolution.h"
+#include "view.h"
 
 static QualifiedType
 returnInfoUnknown(CallExpr* call) {
@@ -212,9 +213,19 @@ returnInfoAsRef(CallExpr* call) {
 static QualifiedType
 returnInfoWideRef(CallExpr* call) {
   Type* t = call->get(1)->getValType();
-  if (!t->refType)
-    INT_FATAL(call, "invalid attempt to get reference type");
-  std::cout << "returning wide ref type" << std::endl;
+  //if (!t->refType)
+    //INT_FATAL(call, "invalid attempt to get reference type");
+  //std::cout << "returning wide ref type" << std::endl;
+  if (call->get(1)->typeInfo()->symbol->hasFlag(FLAG_C_PTR_CLASS)) {
+    Type *eltType =
+      getDataClassType(call->get(1)->typeInfo()->symbol)->typeInfo();
+
+    std::cout << "Ref type\n";
+    print_view(eltType->getRefType());
+
+    return QualifiedType(eltType->getRefType(), QUAL_WIDE_REF);
+
+  }
   return QualifiedType(t->refType, QUAL_WIDE_REF);
 }
 

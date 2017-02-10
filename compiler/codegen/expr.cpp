@@ -36,6 +36,7 @@
 #include "stringutil.h"
 #include "type.h"
 #include "WhileStmt.h"
+#include "view.h"
 
 
 #include <cstdio>
@@ -5180,23 +5181,45 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
       INT_ASSERT(target); // this got to be in a PRIM_MOVE for now
 
       GenRet localAddr;
+
+      // argument is wide ref
       if (call->get(1)->isWideRef() ||
           call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_CLASS)) {
+
         localAddr = codegenRaddr(call->get(1));
+        ret.chplType = call->get(1)->typeInfo();
+        ret = codegenWideAddr(codegenLocaleForNode(-1),
+            localAddr);
+        ret.isLVPtr = GEN_VAL;
+        retval = true;
       }
+
+      // argument is narrow ref
       else if (call->get(1)->isRef()) {
         // TODO Implementing this is trivial, but I am not sure if it's
         // necessary
         INT_FATAL("Trying to create prefetch pointer from narrow ref");
       }
+
+      //argument is C pointer
+      else if (call->get(1)->typeInfo()->symbol->hasFlag(FLAG_C_PTR_CLASS)) {
+
+        Type *eltType =
+          getDataClassType(call->get(1)->typeInfo()->symbol)->typeInfo();
+
+        print_view(eltType->symbol);
+
+        localAddr = codegenValue(call->get(1));
+        ret.chplType = eltType->getRefType();
+        ret = codegenWideAddr(codegenLocaleForNode(-1),
+            localAddr, getOrMakeWideTypeDuringCodegen(eltType->getRefType()));
+        ret.isLVPtr = GEN_VAL;
+        retval = true;
+      }
       else {
         INT_FATAL("Invalid argument for PRIM_GET_PREFETCH_PTR");
       }
-      ret = codegenWideAddr(codegenLocaleForNode(-1),
-          codegenRaddr(call->get(1)));
-      ret.isLVPtr = GEN_VAL;
-      ret.chplType = call->get(1)->typeInfo();
-      retval = true;
+
       break;
     }
 

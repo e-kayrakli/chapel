@@ -1264,10 +1264,15 @@ static void addKnownWides() {
             }
           }
         }
+        else if (rhs->isPrimitive(PRIM_GEN_PREFETCH_PTR)) {
+          //rhs of a move is a PRIM_GEN_PREFETCH_PTR -> lhs must be wide
+          setWide(rhs, lhs);
+        }
       }
     }
     else if (call->isPrimitive(PRIM_HEAP_REGISTER_GLOBAL_VAR) ||
              call->isPrimitive(PRIM_CHPL_COMM_ARRAY_GET) ||
+             //call->isPrimitive(PRIM_GEN_PREFETCH_PTR) ||
              call->isPrimitive(PRIM_CHPL_COMM_GET)) { // TODO: Is this necessary?
       for_actuals(actual, call) {
         if (SymExpr* se = toSymExpr(actual)) {
