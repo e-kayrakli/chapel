@@ -233,10 +233,8 @@ module PrefetchHooks {
         }
         else {
           var data = accessPrefetchedDataRef(locIdx, i);
-          if !is_c_nil(data) {
-            prefetched = true;
-            return __primitive("gen prefetch ptr", data);
-          }
+          prefetched = !is_c_nil(data);
+          return __primitive("gen prefetch ptr", data);
         }
       }
       prefetched = false;

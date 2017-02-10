@@ -1221,6 +1221,10 @@ inline proc BlockArr.dsiAccess(idx: rank*idxType) ref {
       /*myLocArr.getPrefetchHook().t.clear();*/
     /*}*/
 
+    //TODO unifiedAccess flag is there for performance testing only.
+    //Should be removed once I am confident we are not losing too muhc
+    //performance. Note that there might be some loss due to creating
+    //fake wide pointers and accessing them through runtime functions
     if unifiedAccess {
       var hasPrefetched: bool;
       ref prefetchData =
