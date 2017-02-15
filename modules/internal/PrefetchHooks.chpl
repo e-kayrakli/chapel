@@ -155,6 +155,7 @@ module PrefetchHooks {
       writeln("Superclass", x);
     }
 
+    pragma "no local return"
     proc unifiedAccessPrefetchedData(locIdx, i) {
       halt("This shouldn't have been called");
       var dummy: c_void_ptr;
@@ -219,6 +220,7 @@ module PrefetchHooks {
       for h in handles do create_prefetch_handle(h);
     }
 
+    pragma "no local return"
     proc unifiedAccessPrefetchedData(locIdx, i,
         out prefetched: bool) ref {
 

@@ -2099,7 +2099,8 @@ static void handleLocalBlocks() {
             queue.add(local->body);
             cache.put(fn, local);
             cache.put(local, local); // to handle recursion
-            if (local->retType->symbol->hasFlag(FLAG_WIDE_REF)) {
+            if (local->retType->symbol->hasFlag(FLAG_WIDE_REF) &&
+                !local->hasFlag(FLAG_NO_LOCAL_RETURN)) {
               CallExpr* ret = toCallExpr(local->body->body.tail);
               INT_ASSERT(ret && ret->isPrimitive(PRIM_RETURN));
               // Capture the return expression in a local temp.
