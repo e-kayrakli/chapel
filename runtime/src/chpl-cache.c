@@ -3034,9 +3034,9 @@ void start_read(struct __prefetch_entry_t *entry) {
     //we are assuming that the user will call updatePrefetch only from a
     //sequential context from one locale, similar to our assumption that
     //data will be prefetch only from single task from one locale
-    chpl_sync_lock(&(entry->state_lock));
+    chpl_sync_lock(entry->state_lock);
     entry->state_counter++;
-    chpl_sync_unlock(&(entry->state_lock));
+    chpl_sync_unlock(entry->state_lock);
   }
 }
 
@@ -3044,9 +3044,9 @@ inline
 void stop_read(struct __prefetch_entry_t *entry) {
   //assert entry?
   if(entry->should_lock) {
-    chpl_sync_lock(&(entry->state_lock));
+    chpl_sync_lock(entry->state_lock);
     entry->state_counter--;
-    chpl_sync_unlock(&(entry->state_lock));
+    chpl_sync_unlock(entry->state_lock);
   }
 }
 
@@ -3057,7 +3057,7 @@ void start_update(struct __prefetch_entry_t *entry) {
   //entry is marked consistent, so I am not repeating that check here
   bool done = false;
   do {
-    chpl_sync_lock(&(entry->state_lock));
+    chpl_sync_lock(entry->state_lock);
     if(entry->state_counter == 0){
       entry->state_counter = -1;
       done = true;
@@ -3066,7 +3066,7 @@ void start_update(struct __prefetch_entry_t *entry) {
     }
     else {
       // we only unlock if we weren't able to start the update
-      chpl_sync_unlock(&(entry->state_lock));
+      chpl_sync_unlock(entry->state_lock);
       chpl_task_yield();
     }
   } while(!done);
@@ -3079,7 +3079,7 @@ void stop_update(struct __prefetch_entry_t *entry) {
   assert(entry->state_counter == -1);
   entry->state_counter = 0;
   /*printf("%d Trying to stop update\n", chpl_nodeID);*/
-  chpl_sync_unlock(&(entry->state_lock));
+  chpl_sync_unlock(entry->state_lock);
   /*printf("%d Stopped update\n", chpl_nodeID);*/
 }
 
@@ -3087,8 +3087,8 @@ void stop_update(struct __prefetch_entry_t *entry) {
 static
 struct __prefetch_entry_t *add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
-    void* robjaddr, void *slice_desc, size_t slice_desc_size,
-    bool consistent){
+    void* robjaddr, size_t prefetch_size, void *slice_desc,
+    size_t slice_desc_size, bool consistent){
 
   struct __prefetch_entry_t *head;
   struct __prefetch_entry_t *new_entry;
@@ -3106,6 +3106,12 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   chpl_memcpy(new_entry->slice_desc, slice_desc, slice_desc_size);
   new_entry->slice_desc_size = slice_desc_size;
   new_entry->pf_type = PF_INIT;
+
+  void* lock_data_bundle = chpl_malloc(prefetch_size +
+      sizeof(chpl_sync_aux_t));
+
+  new_entry->state_lock = lock_data_bundle;
+  new_entry->data = lock_data_bundle + sizeof(chpl_sync_aux_t);
 
   if(consistent) {
     new_entry->pf_type |= (PF_CONSISTENT|PF_PERSISTENT);
@@ -3126,7 +3132,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   // runtime assumes that prefetching happens with one task per
   // locale
   new_entry->state_counter = 0;
-  chpl_sync_initAux(&(new_entry->state_lock));
+  chpl_sync_initAux(new_entry->state_lock);
 
   // make sure that thype of prefetch is somethin reasonable
   // at least one of these must be set
@@ -3160,20 +3166,19 @@ void create_prefetch_handle(struct __prefetch_entry_t **entry) {
 // this is intended to be a thin wrapper around add_to_prefetch_buffer
 // that should only be used from PrefetchHook code
 //
-// TODO revise this function and add_to_prefetch_buffer
+// TODO revise this function and add_to_prefetch_buffer TODO
 void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
     consistent) {
 
   *new_entry = add_to_prefetch_buffer(pbuf, origin_node, robjaddr,
-      slice_desc, slice_desc_size, consistent);
+      prefetch_size, slice_desc, slice_desc_size, consistent);
 
   /*printf("%d creating new handle %p\n", chpl_nodeID, *new_entry);*/
-
-  (*new_entry)->size = prefetch_size;
-  (*new_entry)->data = chpl_malloc(prefetch_size);
   (*new_entry)->owner_obj = owner_obj;
+  (*new_entry)->size = prefetch_size;
+
   return (*new_entry)->data;
 }
 

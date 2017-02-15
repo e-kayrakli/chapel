@@ -67,7 +67,7 @@ typedef struct __prefetch_entry_t{
   //consistent I couldn't figure out a way to do that with an atomic
   //variable/c intrinsics. So I am relying on locks
   int16_t state_counter;
-  chpl_sync_aux_t state_lock;
+  chpl_sync_aux_t *state_lock;
   bool should_lock;
 
   // prefetch type controls consistency protocol on a sync event
