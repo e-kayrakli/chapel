@@ -183,6 +183,7 @@ void *update_prefetch_handle(void* owner_obj, c_nodeid_t
 void create_prefetch_handle(struct __prefetch_entry_t **entry);
 void start_read(struct __prefetch_entry_t *entry);
 void stop_read(struct __prefetch_entry_t *entry);
+int32_t get_lock_offset(struct __prefetch_entry_t *entry, void * addr);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

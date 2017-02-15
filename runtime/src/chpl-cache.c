@@ -3083,6 +3083,10 @@ void stop_update(struct __prefetch_entry_t *entry) {
   /*printf("%d Stopped update\n", chpl_nodeID);*/
 }
 
+// TODO make this safer
+int32_t get_lock_offset(struct __prefetch_entry_t *entry, void *addr) {
+  return (void *)(entry->state_lock)-addr;
+}
 
 static
 struct __prefetch_entry_t *add_to_prefetch_buffer(

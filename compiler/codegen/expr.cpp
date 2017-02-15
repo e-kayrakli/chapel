@@ -5186,6 +5186,7 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
       // sometimes it changed to CallExpr possibly due to ref
       // propagation
       Expr *arg = call->get(1);
+      Expr *lockOff = call->get(2);
       INT_ASSERT(arg);
 
       Type * argType = arg->typeInfo();
@@ -5194,7 +5195,7 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
       // argument is wide ref
       if (arg->isWideRef() || argTypeSymbol->hasFlag(FLAG_WIDE_CLASS)) {
         localAddr = codegenRaddr(arg);
-        ret = codegenWideAddr(codegenLocaleForNode(-1), localAddr);
+        ret = codegenWideAddr(codegenLocaleForNode(lockOff), localAddr);
         ret.chplType = argType;
         ret.isLVPtr = GEN_VAL;
         retval = true;
@@ -5222,7 +5223,7 @@ static bool codegenIsSpecialPrimitive(BaseAST* target, Expr* e, GenRet& ret) {
         Type *eltType = getDataClassType(argTypeSymbol)->typeInfo();
 
         localAddr = codegenValue(arg); // remove &
-        ret = codegenWideAddr(codegenLocaleForNode(-1), localAddr,
+        ret = codegenWideAddr(codegenLocaleForNode(lockOff), localAddr,
             getOrMakeWideTypeDuringCodegen(eltType->getRefType()));
         ret.chplType = eltType->getRefType();
         ret.isLVPtr = GEN_VAL;

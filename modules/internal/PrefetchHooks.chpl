@@ -55,6 +55,9 @@ module PrefetchHooks {
   extern proc update_prefetch_handle(owner_obj, origin_node,
       robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
       consistent): c_void_ptr;
+
+  extern proc get_lock_offset(handle, addr): int(32);
+
   inline proc getData(handle) {
     return get_data_from_prefetch_entry(handle);
   }
@@ -230,18 +233,28 @@ module PrefetchHooks {
           if unpackedDataTmp.domain.member(i) {
             ref retTmp = unpackedDataTmp[i];
             prefetched = true;
-            return __primitive("gen prefetch ptr", retTmp);
+            // NOTE: I am not sure why we always get a wide pointer out
+            // of this. Maybe the whole method whould be `local`ized.
+            // TODO but first, we can use C arrays for internal arrays
+            // like handles and unpackedData. I believe there will be
+            // significant speedup un prefetched data accesses
+            if __primitive("is wide pointer", retTmp) {
+              const lockOffset = get_lock_offset(handles[locIdx],
+                  __primitive("_wide_get_addr", retTmp)); return
+                __primitive("gen prefetch ptr", retTmp, lockOffset);
+            }
           }
         }
         else {
           var data = accessPrefetchedDataRef(locIdx, i);
           prefetched = !is_c_nil(data);
-          return __primitive("gen prefetch ptr", data);
+          const lockOffset = get_lock_offset(handles[locIdx], data);
+          return __primitive("gen prefetch ptr", data, lockOffset);
         }
       }
       prefetched = false;
       var dummyPtr: c_ptr(obj.eltType);
-      return __primitive("gen prefetch ptr", dummyPtr);
+      return __primitive("gen prefetch ptr", dummyPtr, -1);
     }
 
     iter dsiSerialize(slice_desc) {
