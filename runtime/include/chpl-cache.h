@@ -66,7 +66,7 @@ typedef struct __prefetch_entry_t{
   //we need to store and atomic state of the entry if it's marked to be
   //consistent I couldn't figure out a way to do that with an atomic
   //variable/c intrinsics. So I am relying on locks
-  int16_t state_counter;
+  int16_t *state_counter;
   chpl_sync_aux_t *state_lock;
   bool should_lock;
 

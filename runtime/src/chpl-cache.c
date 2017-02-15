@@ -3035,7 +3035,7 @@ void start_read(struct __prefetch_entry_t *entry) {
     //sequential context from one locale, similar to our assumption that
     //data will be prefetch only from single task from one locale
     chpl_sync_lock(entry->state_lock);
-    entry->state_counter++;
+    *(entry->state_counter)++;
     chpl_sync_unlock(entry->state_lock);
   }
 }
@@ -3045,7 +3045,7 @@ void stop_read(struct __prefetch_entry_t *entry) {
   //assert entry?
   if(entry->should_lock) {
     chpl_sync_lock(entry->state_lock);
-    entry->state_counter--;
+    *(entry->state_counter)--;
     chpl_sync_unlock(entry->state_lock);
   }
 }
@@ -3058,8 +3058,8 @@ void start_update(struct __prefetch_entry_t *entry) {
   bool done = false;
   do {
     chpl_sync_lock(entry->state_lock);
-    if(entry->state_counter == 0){
-      entry->state_counter = -1;
+    if(*(entry->state_counter) == 0){
+      *(entry->state_counter) = -1;
       done = true;
       //the lock should be unlocked by stop_update
       /*printf("%d Started update\n", chpl_nodeID);*/
@@ -3076,8 +3076,8 @@ static inline
 void stop_update(struct __prefetch_entry_t *entry) {
   // here we are assuming that state_counter is -1 and there is
   // definitely no readers in the entry
-  assert(entry->state_counter == -1);
-  entry->state_counter = 0;
+  assert(*(entry->state_counter) == -1);
+  *(entry->state_counter) = 0;
   /*printf("%d Trying to stop update\n", chpl_nodeID);*/
   chpl_sync_unlock(entry->state_lock);
   /*printf("%d Stopped update\n", chpl_nodeID);*/
@@ -3111,11 +3111,16 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   new_entry->slice_desc_size = slice_desc_size;
   new_entry->pf_type = PF_INIT;
 
-  void* lock_data_bundle = chpl_malloc(prefetch_size +
-      sizeof(chpl_sync_aux_t));
+  void* state_data_bundle = chpl_malloc(
+      sizeof(chpl_sync_aux_t) +
+      sizeof(int16_t) +
+      prefetch_size);
 
-  new_entry->state_lock = lock_data_bundle;
-  new_entry->data = lock_data_bundle + sizeof(chpl_sync_aux_t);
+  new_entry->state_lock = state_data_bundle;
+  new_entry->state_counter = state_data_bundle +
+    sizeof(chpl_sync_aux_t);
+  new_entry->data = state_data_bundle + sizeof(chpl_sync_aux_t) +
+    sizeof(int16_t);
 
   if(consistent) {
     new_entry->pf_type |= (PF_CONSISTENT|PF_PERSISTENT);
@@ -3135,7 +3140,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   
   // runtime assumes that prefetching happens with one task per
   // locale
-  new_entry->state_counter = 0;
+  *(new_entry->state_counter) = 0;
   chpl_sync_initAux(new_entry->state_lock);
 
   // make sure that thype of prefetch is somethin reasonable
@@ -3295,6 +3300,11 @@ void get_prefetched_data(void *accessor,
 
 
   stop_read(prefetch_entry);
+}
+
+void *prefetch_get(void *dst, int32_t lock_offset, void *src,
+    size_t size, int32_t typeIndex, int ln, int32_t fn) {
+
 }
 
 #define LOG_IDX 0
