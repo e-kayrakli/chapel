@@ -2991,16 +2991,6 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
   return;
 }
 
-#define PF_CONSISTENT 1
-#define PF_CANREAD 2
-#define PF_CANWRITE 4
-#define PF_PERSISTENT 8
-
-#define PF_DEFAULT (PF_CONSISTENT|PF_CANREAD|PF_PERSISTENT)
-#define PF_INCONSISTENT 0
-#define PF_INIT 0
-
-
 // FIXME how de store pbuf, global or pass as argument
 static
 void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,

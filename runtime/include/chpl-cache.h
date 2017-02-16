@@ -39,6 +39,15 @@ int chpl_cache_enabled(void)
 }
 
 #define CHECK_PFENTRY_INTEGRITY 0
+
+#define PF_CONSISTENT 1
+#define PF_CANREAD 2
+#define PF_CANWRITE 4
+#define PF_PERSISTENT 8
+
+#define PF_DEFAULT (PF_CONSISTENT|PF_CANREAD|PF_PERSISTENT)
+#define PF_INCONSISTENT 0
+#define PF_INIT 0
 // Note on throttling: Currently I am choosing to keep a big monolithic
 // chunk of data where active messages fill up gradually.
 //
