@@ -3348,27 +3348,6 @@ void *get_prefetched_data_addr(void *accessor,
 
   chpl_prefetch_taskPrvData_t* task_local = task_private_prefetch_data();
 
-  // shuold_lock also implies the data is consistetn
-  if(prefetch_entry->should_lock &&
-      task_local->last_acquire > prefetch_entry->sn) {
-      /*prefetch_entry->sn < pbuf->prefetch_sequence_number) {*/
-
-    start_update(prefetch_entry);
-    // someone might have already updated the entry, so check again if
-    // it's still stale
-    /*if(prefetch_entry->sn < pbuf->prefetch_sequence_number) {*/
-    if(task_local->last_acquire > prefetch_entry->sn) {
-      TRACE_PRINT(("Locale %d Task %d reprefetching. (entry: %p, \
-        entry->sn: %d, buf->sn: %d)\n", chpl_nodeID, chpl_task_getId(),
-          prefetch_entry, prefetch_entry->sn,
-          pbuf->prefetch_sequence_number));
-      reprefetch_single_entry(prefetch_entry);
-    }
-    stop_update(prefetch_entry);
-  }
-
-  start_read(prefetch_entry);
-
   offset = (int64_t)(__get_byte_idx_wrapper(accessor,
         prefetch_entry->data, idx));
 
@@ -3394,12 +3373,6 @@ void *get_prefetched_data_addr(void *accessor,
         ((int64_t*)prefetch_entry->data)[5]));
     retaddr = (void *)((uintptr_t)prefetch_entry->data+offset);
   }
-
-  // throttling TODO there will be a chunk logic here
-  // throttling TODO including a wait on corrseponding doneobj
-
-
-  stop_read(prefetch_entry);
   return retaddr;
 }
 
