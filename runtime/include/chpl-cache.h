@@ -66,7 +66,7 @@ typedef struct __prefetch_entry_t{
   //we need to store and atomic state of the entry if it's marked to be
   //consistent I couldn't figure out a way to do that with an atomic
   //variable/c intrinsics. So I am relying on locks
-  int16_t *state_counter;
+  int16_t state_counter;
   chpl_sync_aux_t *state_lock;
   bool should_lock;
 
@@ -82,6 +82,9 @@ typedef struct __prefetch_entry_t{
   //throttling TODO new field: chunk_size
   //throttling TODO new field: doneobj array(same size as void* array
 
+  // when data is allocated the chunk will start with a backlink to the
+  // prefetch entry
+  void **back_link;
   void *data; //throttling TODO this will be an array of void pointers
 #if CHECK_PFENTRY_INTEGRITY
   void *base_data;
@@ -184,6 +187,8 @@ void create_prefetch_handle(struct __prefetch_entry_t **entry);
 void start_read(struct __prefetch_entry_t *entry);
 void stop_read(struct __prefetch_entry_t *entry);
 int32_t get_lock_offset(struct __prefetch_entry_t *entry, void * addr);
+void prefetch_get(void *dst, int32_t lock_offset, void *src,
+    size_t size, int32_t typeIndex, int ln, int32_t fn);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

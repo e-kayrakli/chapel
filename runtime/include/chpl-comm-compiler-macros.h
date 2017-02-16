@@ -49,7 +49,8 @@ void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
   if (chpl_nodeID == node) {
     chpl_memcpy(addr, raddr, size);
   } else if (node < 0) { // prefetch pointer special case
-    chpl_memcpy(addr, raddr, size);
+    //chpl_memcpy(addr, raddr, size);
+    prefetch_get(addr, node, raddr, size, typeIndex, ln, fn);
 #ifdef HAS_DIRECT_PREFETCH
   } else if(is_prefetched(node, raddr, size) == 1) {
     chpl_prefetch_comm_get_fast(addr, node, raddr, size, typeIndex, ln, fn);

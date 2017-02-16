@@ -240,8 +240,8 @@ module PrefetchHooks {
             // significant speedup un prefetched data accesses
             if __primitive("is wide pointer", retTmp) {
               const lockOffset = get_lock_offset(handles[locIdx],
-                  __primitive("_wide_get_addr", retTmp)); return
-                __primitive("gen prefetch ptr", retTmp, lockOffset);
+                  __primitive("_wide_get_addr", retTmp));
+              return __primitive("gen prefetch ptr", retTmp, lockOffset);
             }
           }
         }
