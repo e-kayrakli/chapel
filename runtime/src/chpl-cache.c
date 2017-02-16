@@ -3019,25 +3019,21 @@ void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
 inline
 void start_read(struct __prefetch_entry_t *entry) {
   //assert entry?
-  if(entry->should_lock) {
-    //we only need to lock if the entry is marked consistent
-    //we are assuming that the user will call updatePrefetch only from a
-    //sequential context from one locale, similar to our assumption that
-    //data will be prefetch only from single task from one locale
-    chpl_sync_lock(entry->state_lock);
-    entry->state_counter++;
-    chpl_sync_unlock(entry->state_lock);
-  }
+  //we only need to lock if the entry is marked consistent
+  //we are assuming that the user will call updatePrefetch only from a
+  //sequential context from one locale, similar to our assumption that
+  //data will be prefetch only from single task from one locale
+  chpl_sync_lock(entry->state_lock);
+  entry->state_counter++;
+  chpl_sync_unlock(entry->state_lock);
 }
 
 inline
 void stop_read(struct __prefetch_entry_t *entry) {
   //assert entry?
-  if(entry->should_lock) {
-    chpl_sync_lock(entry->state_lock);
-    entry->state_counter--;
-    chpl_sync_unlock(entry->state_lock);
-  }
+  chpl_sync_lock(entry->state_lock);
+  entry->state_counter--;
+  chpl_sync_unlock(entry->state_lock);
 }
 
 static inline
@@ -3115,6 +3111,8 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
     new_entry->pf_type |= (PF_CONSISTENT|PF_PERSISTENT);
   }
 
+  // TODO I am not sure if should lock is necessary
+  // TODO think about persistency
   new_entry->should_lock = (new_entry->pf_type &
     (PF_CONSISTENT|PF_PERSISTENT)) == (PF_CONSISTENT|PF_PERSISTENT) ;
 
@@ -3292,26 +3290,20 @@ void get_prefetched_data(void *accessor,
   stop_read(prefetch_entry);
 }
 
-void prefetch_get(void *dst, int32_t lock_offset, void *src,
-    size_t size, int32_t typeIndex, int ln, int32_t fn) {
-
-  struct __prefetch_entry_t* prefetch_entry;
+// If this is called we know that data is prefetch consistently.
+// Therefore no need to check it again.
+static
+void prefetch_get_consistent(struct __prefetch_entry_t* prefetch_entry,
+    void *dst, void *src, size_t size) {
 
   chpl_prefetch_taskPrvData_t* task_local =
     task_private_prefetch_data();
 
-  /*printf("yaya");*/
-  prefetch_entry = *((struct __prefetch_entry_t **)((char *)src+lock_offset));
-
-  // shuold_lock also implies the data is consistetn
-  if(prefetch_entry->should_lock &&
-      task_local->last_acquire > prefetch_entry->sn) {
-      /*prefetch_entry->sn < pbuf->prefetch_sequence_number) {*/
+  if(task_local->last_acquire > prefetch_entry->sn) {
 
     start_update(prefetch_entry);
     // someone might have already updated the entry, so check again if
     // it's still stale
-    /*if(prefetch_entry->sn < pbuf->prefetch_sequence_number) {*/
     if(task_local->last_acquire > prefetch_entry->sn) {
       TRACE_PRINT(("Locale %d Task %d reprefetching. (entry: %p, \
         entry->sn: %d, buf->sn: %d)\n", chpl_nodeID, chpl_task_getId(),
@@ -3325,6 +3317,25 @@ void prefetch_get(void *dst, int32_t lock_offset, void *src,
   start_read(prefetch_entry);
   chpl_memcpy(dst, src, size);
   stop_read(prefetch_entry);
+}
+
+static inline
+void prefetch_get_inconsistent(void *dst, void *src, size_t size) {
+  chpl_memcpy(dst,src,size);
+}
+
+void prefetch_get(void *dst, int32_t lock_offset, void *src,
+    size_t size, int32_t typeIndex, int ln, int32_t fn) {
+
+  struct __prefetch_entry_t* prefetch_entry =
+    *((struct __prefetch_entry_t **)((char *)src+lock_offset));
+
+  if(prefetch_entry->should_lock) {
+    prefetch_get_consistent(prefetch_entry, dst, src, size);
+  }
+  else {
+    prefetch_get_inconsistent(dst,src,size);
+  }
 }
 
 #define LOG_IDX 0
