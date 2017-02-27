@@ -40,12 +40,6 @@ module PrefetchHooks {
   extern proc
     prefetch_entry_init_seqn_n(handle, offset);
 
-  extern proc
-    start_read(handle);
-
-  extern proc
-    stop_read(handle);
-
   extern proc create_prefetch_handle(ref handle);
 
   extern proc initialize_prefetch_handle(owner_obj, origin_node,
@@ -659,11 +653,12 @@ module PrefetchHooks {
       return false;
     }
 
+    // not used anymore
     proc accessUnpackedData(locIdx, i) ref {
       // start_read
-      start_read(handles(locIdx));
+      /*start_read(handles(locIdx));*/
       ref data = unpackedData[locIdx][i];
-      stop_read(handles(locIdx));
+      /*stop_read(handles(locIdx));*/
       return data;
       /*return unpackedData[locIdx][i];*/
       // stop_read

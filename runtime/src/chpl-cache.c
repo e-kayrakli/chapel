@@ -3017,7 +3017,7 @@ void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
 
 //these locks are managed from PrefetchHooks
 inline
-void start_read(struct __prefetch_entry_t *entry) {
+void start_read(struct __prefetch_entry_t *entry, int page_idx) {
   //assert entry?
   //we only need to lock if the entry is marked consistent
   //we are assuming that the user will call updatePrefetch only from a
@@ -3027,21 +3027,21 @@ void start_read(struct __prefetch_entry_t *entry) {
   /*entry->state_counter++;*/
   /*chpl_sync_unlock(entry->state_lock);*/
 
-  while(pthread_rwlock_tryrdlock(entry->rwl))
+  while(pthread_rwlock_tryrdlock(&(entry->rwl[page_idx])))
     chpl_task_yield();
 }
 
 inline
-void stop_read(struct __prefetch_entry_t *entry) {
+void stop_read(struct __prefetch_entry_t *entry, int page_idx) {
   //assert entry?
   /*chpl_sync_lock(entry->state_lock);*/
   /*entry->state_counter--;*/
   /*chpl_sync_unlock(entry->state_lock);*/
-  pthread_rwlock_unlock(entry->rwl);
+  pthread_rwlock_unlock(&(entry->rwl[page_idx]));
 }
 
 static inline
-void start_update(struct __prefetch_entry_t *entry) {
+void start_update(struct __prefetch_entry_t *entry, int page_idx) {
 
   //this is currently only called from a context where we check if the
   //entry is marked consistent, so I am not repeating that check here
@@ -3061,18 +3061,24 @@ void start_update(struct __prefetch_entry_t *entry) {
     /*}*/
   /*} while(!done);*/
 
-  while(pthread_rwlock_trywrlock(entry->rwl))
-    chpl_task_yield();
+  int i;
+  for(i = 0 ; i < entry->page_count ; i++) {
+    while(pthread_rwlock_trywrlock(&(entry->rwl[i])))
+      chpl_task_yield();
+  }
 }
 
 static inline
-void stop_update(struct __prefetch_entry_t *entry) {
+void stop_update(struct __prefetch_entry_t *entry, int page_idx) {
   // here we are assuming that state_counter is -1 and there is
   // definitely no readers in the entry
   /*assert(entry->state_counter == -1);*/
   /*entry->state_counter = 0;*/
   /*chpl_sync_unlock(entry->state_lock);*/
-  pthread_rwlock_unlock(entry->rwl);
+  int i;
+  for(i = 0 ; i < entry->page_count ; i++) {
+    pthread_rwlock_unlock(&(entry->rwl[i]));
+  }
 }
 
 // TODO make this safer
@@ -3089,6 +3095,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   struct __prefetch_entry_t *head;
   struct __prefetch_entry_t *new_entry;
   void *data_bundle;
+  int i;
 
   assert(pbuf);
 
@@ -3133,11 +3140,21 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   
   // runtime assumes that prefetching happens with one task per
   // locale
-  new_entry->state_counter = 0;
-  new_entry->state_lock = chpl_malloc(sizeof(chpl_sync_aux_t));
-  chpl_sync_initAux(new_entry->state_lock);
-  new_entry->rwl = chpl_malloc(sizeof(pthread_rwlock_t));
-  pthread_rwlock_init(new_entry->rwl, NULL);
+  
+  if(consistent) {
+    new_entry->state_counter = 0;
+    new_entry->state_lock = chpl_malloc(sizeof(chpl_sync_aux_t));
+    chpl_sync_initAux(new_entry->state_lock);
+
+    new_entry->page_count = prefetch_size/PF_PAGE_SIZE+1;
+
+    new_entry->rwl = chpl_malloc(sizeof(pthread_rwlock_t) *
+        (new_entry->page_count));
+
+    for(i = 0 ; i < new_entry->page_count ; i++) {
+      pthread_rwlock_init(&(new_entry->rwl[i]), NULL);
+    }
+  }
 
   // make sure that thype of prefetch is somethin reasonable
   // at least one of these must be set
@@ -3253,63 +3270,63 @@ void get_prefetched_data(void *accessor,
     struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
     int64_t* found, void *dest) {
 
-  int64_t offset; //this can be negative in current logic
-  printf("in here\n");
+  /*int64_t offset; //this can be negative in current logic*/
+  /*printf("in here\n");*/
 
-  if((prefetch_entry->should_lock) &&
-      // TODO this should compare task local data's sequence number
-      // if it's less then or equal to then we are in the same time fram
-      // as the data has been prefetched therefore we can read it
-      prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
-    /*printf("\t stale data: %ld %ld\n",*/
-        /*prefetch_entry->sn, pbuf->prefetch_sequence_number);*/
+  /*if((prefetch_entry->should_lock) &&*/
+      /*// TODO this should compare task local data's sequence number*/
+      /*// if it's less then or equal to then we are in the same time fram*/
+      /*// as the data has been prefetched therefore we can read it*/
+      /*prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {*/
+    /*[>printf("\t stale data: %ld %ld\n",<]*/
+        /*[>prefetch_entry->sn, pbuf->prefetch_sequence_number);<]*/
 
-    start_update(prefetch_entry);
-    // someone might have already updated the entry, so check again if
-    // it's still stale
-    if(prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {
-      reprefetch_single_entry(prefetch_entry);
-    }
-    stop_update(prefetch_entry);
-  }
+    /*start_update(prefetch_entry);*/
+    /*// someone might have already updated the entry, so check again if*/
+    /*// it's still stale*/
+    /*if(prefetch_entry->sn < pbuf->prefetch_sequence_number-1) {*/
+      /*reprefetch_single_entry(prefetch_entry);*/
+    /*}*/
+    /*stop_update(prefetch_entry);*/
+  /*}*/
 
-  start_read(prefetch_entry);
+  /*start_read(prefetch_entry);*/
 
-  offset = (int64_t)(__get_byte_idx_wrapper(accessor,
-        prefetch_entry->data, idx));
+  /*offset = (int64_t)(__get_byte_idx_wrapper(accessor,*/
+        /*prefetch_entry->data, idx));*/
 
-  // NULL check for prefetch entry has been handled by PrefethcHooks
-  if(offset < 0 ||
-      (intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
-    printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",
-        offset, size, offset, prefetch_entry->size);
-    *found = 0;
-  }
-  else {
-    *found = 1;
-    chpl_memcpy(dest,
-        (void *)((uintptr_t)prefetch_entry->data+offset), size);
-  }
+  /*// NULL check for prefetch entry has been handled by PrefethcHooks*/
+  /*if(offset < 0 ||*/
+      /*(intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {*/
+    /*printf("\t offset=%ld, size=%zd, sidx=%zd, entry_size=%zd\n",*/
+        /*offset, size, offset, prefetch_entry->size);*/
+    /**found = 0;*/
+  /*}*/
+  /*else {*/
+    /**found = 1;*/
+    /*chpl_memcpy(dest,*/
+        /*(void *)((uintptr_t)prefetch_entry->data+offset), size);*/
+  /*}*/
 
-  // throttling TODO there will be a chunk logic here
-  // throttling TODO including a wait on corrseponding doneobj
+  /*// throttling TODO there will be a chunk logic here*/
+  /*// throttling TODO including a wait on corrseponding doneobj*/
 
 
-  stop_read(prefetch_entry);
+  /*stop_read(prefetch_entry);*/
 }
 
 // If this is called we know that data is prefetch consistently.
 // Therefore no need to check it again.
 static
 void prefetch_get_consistent(struct __prefetch_entry_t* prefetch_entry,
-    void *dst, void *src, size_t size) {
+    void *dst, void *src, size_t size, int page_idx) {
 
   chpl_prefetch_taskPrvData_t* task_local =
     task_private_prefetch_data();
 
   if(task_local->last_acquire > prefetch_entry->sn) {
 
-    start_update(prefetch_entry);
+    start_update(prefetch_entry, page_idx);
     // someone might have already updated the entry, so check again if
     // it's still stale
     if(task_local->last_acquire > prefetch_entry->sn) {
@@ -3319,12 +3336,12 @@ void prefetch_get_consistent(struct __prefetch_entry_t* prefetch_entry,
           pbuf->prefetch_sequence_number));
       reprefetch_single_entry(prefetch_entry);
     }
-    stop_update(prefetch_entry);
+    stop_update(prefetch_entry, page_idx);
   }
 
-  start_read(prefetch_entry);
+  start_read(prefetch_entry, page_idx);
   chpl_memcpy(dst, src, size);
-  stop_read(prefetch_entry);
+  stop_read(prefetch_entry, page_idx);
 }
 
 static inline
@@ -3339,7 +3356,8 @@ void prefetch_get(void *dst, int32_t lock_offset, void *src,
     *((struct __prefetch_entry_t **)((char *)src+lock_offset));
 
   if(prefetch_entry->should_lock) {
-    prefetch_get_consistent(prefetch_entry, dst, src, size);
+    int page_idx = (-1*lock_offset)/PF_PAGE_SIZE;
+    prefetch_get_consistent(prefetch_entry, dst, src, size, page_idx);
   }
   else {
     prefetch_get_inconsistent(dst,src,size);

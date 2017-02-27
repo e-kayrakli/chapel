@@ -38,6 +38,7 @@ int chpl_cache_enabled(void)
   return CHPL_CACHE_REMOTE && chpl_task_supportsRemoteCache();
 }
 
+#define PF_PAGE_SIZE 4096
 #define CHECK_PFENTRY_INTEGRITY 0
 
 #define PF_CONSISTENT 1
@@ -79,7 +80,8 @@ typedef struct __prefetch_entry_t{
   chpl_sync_aux_t *state_lock;
   bool should_lock;
 
-  pthread_rwlock_t *rwl;
+  int page_count;
+  pthread_rwlock_t *rwl; //array of locks for pages
 
   // prefetch type controls consistency protocol on a sync event
   uint8_t pf_type;
@@ -195,8 +197,6 @@ void *update_prefetch_handle(void* owner_obj, c_nodeid_t
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
     consistent);
 void create_prefetch_handle(struct __prefetch_entry_t **entry);
-void start_read(struct __prefetch_entry_t *entry);
-void stop_read(struct __prefetch_entry_t *entry);
 int32_t get_lock_offset(struct __prefetch_entry_t *entry, void * addr);
 void prefetch_get(void *dst, int32_t lock_offset, void *src,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
