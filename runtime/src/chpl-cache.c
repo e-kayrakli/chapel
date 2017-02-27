@@ -3023,17 +3023,21 @@ void start_read(struct __prefetch_entry_t *entry) {
   //we are assuming that the user will call updatePrefetch only from a
   //sequential context from one locale, similar to our assumption that
   //data will be prefetch only from single task from one locale
-  chpl_sync_lock(entry->state_lock);
-  entry->state_counter++;
-  chpl_sync_unlock(entry->state_lock);
+  /*chpl_sync_lock(entry->state_lock);*/
+  /*entry->state_counter++;*/
+  /*chpl_sync_unlock(entry->state_lock);*/
+
+  while(pthread_rwlock_tryrdlock(entry->rwl))
+    chpl_task_yield();
 }
 
 inline
 void stop_read(struct __prefetch_entry_t *entry) {
   //assert entry?
-  chpl_sync_lock(entry->state_lock);
-  entry->state_counter--;
-  chpl_sync_unlock(entry->state_lock);
+  /*chpl_sync_lock(entry->state_lock);*/
+  /*entry->state_counter--;*/
+  /*chpl_sync_unlock(entry->state_lock);*/
+  pthread_rwlock_unlock(entry->rwl);
 }
 
 static inline
@@ -3041,32 +3045,34 @@ void start_update(struct __prefetch_entry_t *entry) {
 
   //this is currently only called from a context where we check if the
   //entry is marked consistent, so I am not repeating that check here
-  bool done = false;
-  do {
-    chpl_sync_lock(entry->state_lock);
-    if(entry->state_counter == 0){
-      entry->state_counter = -1;
-      done = true;
-      //the lock should be unlocked by stop_update
-      /*printf("%d Started update\n", chpl_nodeID);*/
-    }
-    else {
-      // we only unlock if we weren't able to start the update
-      chpl_sync_unlock(entry->state_lock);
-      chpl_task_yield();
-    }
-  } while(!done);
+  /*bool done = false;*/
+  /*do {*/
+    /*chpl_sync_lock(entry->state_lock);*/
+    /*if(entry->state_counter == 0){*/
+      /*entry->state_counter = -1;*/
+      /*done = true;*/
+      /*//the lock should be unlocked by stop_update*/
+      /*[>printf("%d Started update\n", chpl_nodeID);<]*/
+    /*}*/
+    /*else {*/
+      /*// we only unlock if we weren't able to start the update*/
+      /*chpl_sync_unlock(entry->state_lock);*/
+      /*chpl_task_yield();*/
+    /*}*/
+  /*} while(!done);*/
+
+  while(pthread_rwlock_trywrlock(entry->rwl))
+    chpl_task_yield();
 }
 
 static inline
 void stop_update(struct __prefetch_entry_t *entry) {
   // here we are assuming that state_counter is -1 and there is
   // definitely no readers in the entry
-  assert(entry->state_counter == -1);
-  entry->state_counter = 0;
-  /*printf("%d Trying to stop update\n", chpl_nodeID);*/
-  chpl_sync_unlock(entry->state_lock);
-  /*printf("%d Stopped update\n", chpl_nodeID);*/
+  /*assert(entry->state_counter == -1);*/
+  /*entry->state_counter = 0;*/
+  /*chpl_sync_unlock(entry->state_lock);*/
+  pthread_rwlock_unlock(entry->rwl);
 }
 
 // TODO make this safer
@@ -3130,6 +3136,8 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   new_entry->state_counter = 0;
   new_entry->state_lock = chpl_malloc(sizeof(chpl_sync_aux_t));
   chpl_sync_initAux(new_entry->state_lock);
+  new_entry->rwl = chpl_malloc(sizeof(pthread_rwlock_t));
+  pthread_rwlock_init(new_entry->rwl, NULL);
 
   // make sure that thype of prefetch is somethin reasonable
   // at least one of these must be set

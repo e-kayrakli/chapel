@@ -79,6 +79,8 @@ typedef struct __prefetch_entry_t{
   chpl_sync_aux_t *state_lock;
   bool should_lock;
 
+  pthread_rwlock_t *rwl;
+
   // prefetch type controls consistency protocol on a sync event
   uint8_t pf_type;
 
