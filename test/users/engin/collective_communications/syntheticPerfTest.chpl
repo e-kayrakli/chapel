@@ -21,7 +21,8 @@ select(accessType) {
   when 1 do accessLocalFast();
   when 2 do accessLocal();
   when 3 do accessRemote();
-  when 4 do accessRemotePrefetched();
+  when 4 do accessRemotePrefetched(consistent=true);
+  when 5 do accessRemotePrefetched(consistent=false);
 }
 
 proc accessPrivate() {
@@ -34,13 +35,12 @@ proc accessPrivate() {
 
   t.start();
   for i in 0..#numToRead*stride by stride {
-    sum += arr[i];
+    sum += arr[i%N];
   }
   t.stop();
 
   writeln("Time = ", t.elapsed());
   writeln("Sum = ", sum);
-
 }
 
 proc accessLocalFast() {
@@ -55,7 +55,7 @@ proc accessLocalFast() {
   on Locales[0] {
     t.start();
     local for i in 0..#numToRead*stride by stride {
-      sum += arr[i];
+      sum += arr[i%N];
     }
     t.stop();
 
@@ -76,7 +76,7 @@ proc accessLocal() {
   on Locales[0] {
     t.start();
     for i in 0..#numToRead*stride by stride {
-      sum += arr[i];
+      sum += arr[i%N];
     }
     t.stop();
 
@@ -98,7 +98,7 @@ proc accessRemote() {
     var localSum = 0.0;
     t.start();
     for i in 0..#numToRead*stride by stride {
-      localSum += arr[i];
+      localSum += arr[i%N];
     }
     t.stop();
     sum = localSum;
@@ -107,7 +107,7 @@ proc accessRemote() {
   }
 }
 
-proc accessRemotePrefetched() {
+proc accessRemotePrefetched(consistent) {
   var space = {0..#2*N}; // run with two locales
   var dom = space dmapped Block(space);
   var arr: [dom] real;
@@ -115,7 +115,7 @@ proc accessRemotePrefetched() {
 
   forall i in arr.domain do arr[i] = sin(i);
 
-  arr._value.allGather(consistent = false);
+  arr._value.allGather(consistent);
   on Locales[1] {
     var t = new Timer();
     /*const locNumToRead = numToRead;*/
@@ -123,7 +123,7 @@ proc accessRemotePrefetched() {
     var localSum = 0.0;
     t.start();
     for i in 0..#numToRead*stride by stride {
-      localSum += arr[i];
+      localSum += arr[i%N];
     }
     t.stop();
     sum = localSum;
@@ -131,6 +131,6 @@ proc accessRemotePrefetched() {
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);
 
-    arr._value.myLocArr.getPrefetchHook().printTimeStats();
+    /*arr._value.myLocArr.getPrefetchHook().printTimeStats();*/
   }
 }

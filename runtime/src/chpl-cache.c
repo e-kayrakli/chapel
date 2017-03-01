@@ -2805,6 +2805,7 @@ void prefetch_destroy(struct prefetch_buffer_s *pbuf) {
 
   while(cur) {
     next = cur->next;
+    /*printf("Hello!\n");*/
     chpl_free(cur->data);
     chpl_free(cur);
     cur = next;
@@ -3035,14 +3036,17 @@ void start_read(struct __prefetch_entry_t *entry, int page_idx) {
   if(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
         PF_PAGE_IDLE, PF_PAGE_SINGLE_READER, _defaultOfMemoryOrder())){
     // page was idle, it is now single reader
+    /*printf("First reader\n");*/
   }
   else {
     while(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
           PF_PAGE_SINGLE_WRITER, PF_PAGE_SINGLE_WRITER, _defaultOfMemoryOrder())){
       // there was a writer and there still is
+      /*printf("\t waiting for write\n");*/
       chpl_task_yield();
     }
     // I will be one of the many readers
+    /*printf("Non-first reader\n");*/
     atomic_fetch_add_explicit_uint_least32_t(state_addr, 1,
         _defaultOfMemoryOrder());
   }
@@ -3059,7 +3063,6 @@ void stop_read(struct __prefetch_entry_t *entry, int page_idx) {
   uint_least32_t *state_addr = &(entry->states[page_idx]);
   if(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
         PF_PAGE_SINGLE_READER, PF_PAGE_IDLE, _defaultOfMemoryOrder())){
-    // page was idle, it is now single reader
   }
   else {
     atomic_fetch_sub_explicit_uint_least32_t(state_addr, 1,
@@ -3089,10 +3092,14 @@ void start_update(struct __prefetch_entry_t *entry, int page_idx) {
     /*}*/
   /*} while(!done);*/
 
-  int i;
-  for(i = 0 ; i < entry->page_count ; i++) {
+  int i,j;
+  for(j = 0, i = page_idx ; j < entry->page_count ; j++, i=page_idx+j) {
     uint_least32_t *state_addr = &(entry->states[i]);
     /*while(pthread_rwlock_trywrlock(&(entry->rwl[i])))*/
+    if(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
+          PF_PAGE_SINGLE_WRITER, PF_PAGE_SINGLE_WRITER, _defaultOfMemoryOrder())){
+      /*printf("Writer writer contention\n");*/
+    }
     while(!atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
           PF_PAGE_IDLE, PF_PAGE_SINGLE_WRITER, _defaultOfMemoryOrder())){
       chpl_task_yield();
