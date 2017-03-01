@@ -3016,7 +3016,7 @@ void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
 }
 
 //these locks are managed from PrefetchHooks
-inline
+static inline
 void start_read(struct __prefetch_entry_t *entry, int page_idx) {
   //assert entry?
   //we only need to lock if the entry is marked consistent
@@ -3027,17 +3027,45 @@ void start_read(struct __prefetch_entry_t *entry, int page_idx) {
   /*entry->state_counter++;*/
   /*chpl_sync_unlock(entry->state_lock);*/
 
-  while(pthread_rwlock_tryrdlock(&(entry->rwl[page_idx])))
-    chpl_task_yield();
+  /*while(pthread_rwlock_tryrdlock(&(entry->rwl[page_idx])))*/
+    /*chpl_task_yield();*/
+
+  uint_least32_t *state_addr = &(entry->states[page_idx]);
+
+  if(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
+        PF_PAGE_IDLE, PF_PAGE_SINGLE_READER, _defaultOfMemoryOrder())){
+    // page was idle, it is now single reader
+  }
+  else {
+    while(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
+          PF_PAGE_SINGLE_WRITER, PF_PAGE_SINGLE_WRITER, _defaultOfMemoryOrder())){
+      // there was a writer and there still is
+      chpl_task_yield();
+    }
+    // I will be one of the many readers
+    atomic_fetch_add_explicit_uint_least32_t(state_addr, 1,
+        _defaultOfMemoryOrder());
+  }
+  /*printf("Acquired read lock\n");*/
 }
 
-inline
+static inline
 void stop_read(struct __prefetch_entry_t *entry, int page_idx) {
   //assert entry?
   /*chpl_sync_lock(entry->state_lock);*/
   /*entry->state_counter--;*/
   /*chpl_sync_unlock(entry->state_lock);*/
-  pthread_rwlock_unlock(&(entry->rwl[page_idx]));
+  /*pthread_rwlock_unlock(&(entry->rwl[page_idx]));*/
+  uint_least32_t *state_addr = &(entry->states[page_idx]);
+  if(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
+        PF_PAGE_SINGLE_READER, PF_PAGE_IDLE, _defaultOfMemoryOrder())){
+    // page was idle, it is now single reader
+  }
+  else {
+    atomic_fetch_sub_explicit_uint_least32_t(state_addr, 1,
+        _defaultOfMemoryOrder());
+  }
+  /*printf("Released read lock\n");*/
 }
 
 static inline
@@ -3063,9 +3091,14 @@ void start_update(struct __prefetch_entry_t *entry, int page_idx) {
 
   int i;
   for(i = 0 ; i < entry->page_count ; i++) {
-    while(pthread_rwlock_trywrlock(&(entry->rwl[i])))
+    uint_least32_t *state_addr = &(entry->states[i]);
+    /*while(pthread_rwlock_trywrlock(&(entry->rwl[i])))*/
+    while(!atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
+          PF_PAGE_IDLE, PF_PAGE_SINGLE_WRITER, _defaultOfMemoryOrder())){
       chpl_task_yield();
+    }
   }
+  /*printf("Acquired write lock\n");*/
 }
 
 static inline
@@ -3077,8 +3110,11 @@ void stop_update(struct __prefetch_entry_t *entry, int page_idx) {
   /*chpl_sync_unlock(entry->state_lock);*/
   int i;
   for(i = 0 ; i < entry->page_count ; i++) {
-    pthread_rwlock_unlock(&(entry->rwl[i]));
+    uint_least32_t *state_addr = &(entry->states[i]);
+    atomic_store_explicit_uint_least32_t(state_addr,
+        PF_PAGE_IDLE, _defaultOfMemoryOrder());
   }
+  /*printf("Released write lock\n");*/
 }
 
 // TODO make this safer
@@ -3154,6 +3190,9 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
     for(i = 0 ; i < new_entry->page_count ; i++) {
       pthread_rwlock_init(&(new_entry->rwl[i]), NULL);
     }
+
+    new_entry->states =
+      chpl_calloc(sizeof(pfpage_state_t), new_entry->page_count);
   }
 
   // make sure that thype of prefetch is somethin reasonable
