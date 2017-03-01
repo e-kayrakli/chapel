@@ -3024,13 +3024,8 @@ void start_read(struct __prefetch_entry_t *entry, int page_idx) {
   //we are assuming that the user will call updatePrefetch only from a
   //sequential context from one locale, similar to our assumption that
   //data will be prefetch only from single task from one locale
-  /*chpl_sync_lock(entry->state_lock);*/
-  /*entry->state_counter++;*/
-  /*chpl_sync_unlock(entry->state_lock);*/
 
-  /*while(pthread_rwlock_tryrdlock(&(entry->rwl[page_idx])))*/
-    /*chpl_task_yield();*/
-
+#if USE_CUSTOM_SYNCH
   uint_least32_t *state_addr = &(entry->states[page_idx]);
 
   if(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
@@ -3051,15 +3046,16 @@ void start_read(struct __prefetch_entry_t *entry, int page_idx) {
         _defaultOfMemoryOrder());
   }
   /*printf("Acquired read lock\n");*/
+#else
+  while(pthread_rwlock_tryrdlock(&(entry->rwl[page_idx])))
+    chpl_task_yield();
+#endif
 }
 
 static inline
 void stop_read(struct __prefetch_entry_t *entry, int page_idx) {
   //assert entry?
-  /*chpl_sync_lock(entry->state_lock);*/
-  /*entry->state_counter--;*/
-  /*chpl_sync_unlock(entry->state_lock);*/
-  /*pthread_rwlock_unlock(&(entry->rwl[page_idx]));*/
+#if USE_CUSTOM_SYNCH
   uint_least32_t *state_addr = &(entry->states[page_idx]);
   if(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
         PF_PAGE_SINGLE_READER, PF_PAGE_IDLE, _defaultOfMemoryOrder())){
@@ -3069,6 +3065,9 @@ void stop_read(struct __prefetch_entry_t *entry, int page_idx) {
         _defaultOfMemoryOrder());
   }
   /*printf("Released read lock\n");*/
+#else
+  pthread_rwlock_unlock(&(entry->rwl[page_idx]));
+#endif
 }
 
 static inline
@@ -3092,10 +3091,10 @@ void start_update(struct __prefetch_entry_t *entry, int page_idx) {
     /*}*/
   /*} while(!done);*/
 
+#if USE_CUSTOM_SYNCH
   int i,j;
   for(j = 0, i = page_idx ; j < entry->page_count ; j++, i=page_idx+j) {
     uint_least32_t *state_addr = &(entry->states[i]);
-    /*while(pthread_rwlock_trywrlock(&(entry->rwl[i])))*/
     if(atomic_compare_exchange_strong_explicit_uint_least32_t(state_addr,
           PF_PAGE_SINGLE_WRITER, PF_PAGE_SINGLE_WRITER, _defaultOfMemoryOrder())){
       /*printf("Writer writer contention\n");*/
@@ -3106,6 +3105,14 @@ void start_update(struct __prefetch_entry_t *entry, int page_idx) {
     }
   }
   /*printf("Acquired write lock\n");*/
+#else
+  int i,j;
+  for(j = 0, i = page_idx ; j < entry->page_count ; j++, i=page_idx+j) {
+    while(!pthread_rwlock_trywrlock(&(entry->rwl[i]))) {
+      chpl_task_yield();
+    }
+  }
+#endif
 }
 
 static inline
@@ -3115,6 +3122,7 @@ void stop_update(struct __prefetch_entry_t *entry, int page_idx) {
   /*assert(entry->state_counter == -1);*/
   /*entry->state_counter = 0;*/
   /*chpl_sync_unlock(entry->state_lock);*/
+#if USE_CUSTOM_SYNCH
   int i;
   for(i = 0 ; i < entry->page_count ; i++) {
     uint_least32_t *state_addr = &(entry->states[i]);
@@ -3122,6 +3130,12 @@ void stop_update(struct __prefetch_entry_t *entry, int page_idx) {
         PF_PAGE_IDLE, _defaultOfMemoryOrder());
   }
   /*printf("Released write lock\n");*/
+#else
+  int i;
+  for(i = 0 ; i < entry->page_count ; i++) {
+    pthread_rwlock_unlock(&(entry->rwl[i]));
+  }
+#endif
 }
 
 // TODO make this safer
@@ -3197,9 +3211,10 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
     for(i = 0 ; i < new_entry->page_count ; i++) {
       pthread_rwlock_init(&(new_entry->rwl[i]), NULL);
     }
-
+#if USE_CUSTOM_SYNCH
     new_entry->states =
       chpl_calloc(sizeof(pfpage_state_t), new_entry->page_count);
+#endif
   }
 
   // make sure that thype of prefetch is somethin reasonable

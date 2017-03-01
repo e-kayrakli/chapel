@@ -38,6 +38,9 @@ int chpl_cache_enabled(void)
   return CHPL_CACHE_REMOTE && chpl_task_supportsRemoteCache();
 }
 
+#define USE_CUSTOM_SYNCH 0
+
+#if USE_CUSTOM_SYNCH
 #define PF_PAGE_STATE_NUM_BITS 32
 #define PF_PAGE_IDLE 0
 #define PF_PAGE_READ_MASK 1<<(PF_PAGE_STATE_NUM_BITS-2)
@@ -46,6 +49,7 @@ int chpl_cache_enabled(void)
 #define PF_PAGE_SINGLE_WRITER PF_PAGE_WRITE_MASK
 
 #define pfpage_state_t atomic_uint_least32_t
+#endif //USE_CUSTOM_SYNC
 
 #define PF_PAGE_SIZE 4096
 #define CHECK_PFENTRY_INTEGRITY 0
@@ -92,7 +96,9 @@ typedef struct __prefetch_entry_t{
   int page_count;
   pthread_rwlock_t *rwl; //array of locks for pages
 
+#if USE_CUSTOM_SYNCH
   pfpage_state_t *states;
+#endif
 
   // prefetch type controls consistency protocol on a sync event
   uint8_t pf_type;
