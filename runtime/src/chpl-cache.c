@@ -3106,8 +3106,8 @@ void start_update(struct __prefetch_entry_t *entry, int page_idx) {
   }
   /*printf("Acquired write lock\n");*/
 #else
-  int i,j;
-  for(j = 0, i = page_idx ; j < entry->page_count ; j++, i=(page_idx+j)%entry->page_count) {
+  int i;
+  for(i = 0 ; i < entry->page_count ; i++) {
     while(!pthread_rwlock_trywrlock(&(entry->rwl[i]))) {
       chpl_task_yield();
     }
