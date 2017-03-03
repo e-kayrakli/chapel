@@ -220,36 +220,37 @@ module PrefetchHooks {
     pragma "no local return"
     proc unifiedAccessPrefetchedData(locIdx, i,
         out prefetched: bool) ref {
-
-      if unpackAccess {
-        if hasPrefetchedFrom(locIdx) {
-          ref unpackedDataTmp = unpackedData[locIdx];
-          if unpackedDataTmp.domain.member(i) {
-            ref retTmp = unpackedDataTmp[i];
-            prefetched = true;
-            // NOTE: I am not sure why we always get a wide pointer out
-            // of this. Maybe the whole method whould be `local`ized.
-            // TODO but first, we can use C arrays for internal arrays
-            // like handles and unpackedData. I believe there will be
-            // significant speedup un prefetched data accesses
-            if __primitive("is wide pointer", retTmp) {
-              const lockOffset = get_lock_offset(
+      local {
+        if unpackAccess {
+          if hasPrefetchedFrom(locIdx) {
+            ref unpackedDataTmp = unpackedData[locIdx];
+            if unpackedDataTmp.domain.member(i) {
+              ref retTmp = unpackedDataTmp[i];
+              prefetched = true;
+              // NOTE: I am not sure why we always get a wide pointer out
+              // of this. Maybe the whole method whould be `local`ized.
+              // TODO but first, we can use C arrays for internal arrays
+              // like handles and unpackedData. I believe there will be
+              // significant speedup un prefetched data accesses
+              if __primitive("is wide pointer", retTmp) {
+                const lockOffset = get_lock_offset(
                     handleFromLocaleIdx(locIdx),
-                  __primitive("_wide_get_addr", retTmp));
-              return __primitive("gen prefetch ptr", retTmp, lockOffset);
+                    __primitive("_wide_get_addr", retTmp));
+                return __primitive("gen prefetch ptr", retTmp, lockOffset);
+              }
             }
           }
         }
+        else {
+          const h = handleFromLocaleIdx(locIdx);
+          var (data, backLinkOffset) = accessPrefetchedDataRef(h, i);
+          prefetched = !is_c_nil(data);
+          return __primitive("gen prefetch ptr", data, backLinkOffset);
+        }
+        prefetched = false;
+        var dummyPtr: c_ptr(obj.eltType);
+        return __primitive("gen prefetch ptr", dummyPtr, -1);
       }
-      else {
-        const h = handleFromLocaleIdx(locIdx);
-        var (data, backLinkOffset) = accessPrefetchedDataRef(h, i);
-        prefetched = !is_c_nil(data);
-        return __primitive("gen prefetch ptr", data, backLinkOffset);
-      }
-      prefetched = false;
-      var dummyPtr: c_ptr(obj.eltType);
-      return __primitive("gen prefetch ptr", dummyPtr, -1);
     }
 
     iter dsiSerialize(slice_desc) {

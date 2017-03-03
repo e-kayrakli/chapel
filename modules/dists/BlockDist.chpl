@@ -410,7 +410,9 @@ class LocBlockArr {
   var locRADLock: atomicbool; // This will only be accessed locally
                               // force the use of processor atomics
 
-  var prefetchHook: PrefetchHook;
+  /*var prefetchHook: PrefetchHook;*/
+  var prefetchHook: GenericPrefetchHook(
+      LocBlockArr(eltType, rank, idxType, stridable), int, false);
   // These functions will always be called on this.locale, and so we do
   // not have an on statement around the while loop below (to avoid
   // the repeated on's from calling testAndSet()).
@@ -432,11 +434,14 @@ class LocBlockArr {
 }
 // this got real ugly
 inline proc LocBlockArr.getPrefetchHook(){
-  if allowPrefetchUnpacking then 
-    return prefetchHook:GenericPrefetchHook(this.type,
-        myElems.type, true);
-  else
-    return prefetchHook:GenericPrefetchHook(this.type, int, false);
+  local {
+    if allowPrefetchUnpacking then 
+      return prefetchHook:GenericPrefetchHook(this.type,
+          myElems.type, true);
+    else
+      return prefetchHook:GenericPrefetchHook(this.type, int, false);
+      /*return __primitive("cast",GenericPrefetchHook(this.type, int, false), prefetchHook);*/
+  }
 }
 
 //
@@ -1228,7 +1233,7 @@ inline proc BlockArr.dsiAccess(idx: rank*idxType) ref {
     if unifiedAccess {
       var hasPrefetched: bool;
       ref prefetchData =
-        myLocArr.getPrefetchHook().unifiedAccessPrefetchedData(locIdx,
+        myLocArr.prefetchHook.unifiedAccessPrefetchedData(locIdx,
             i, hasPrefetched);
       if hasPrefetched then return prefetchData;
     }
