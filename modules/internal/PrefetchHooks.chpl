@@ -110,11 +110,11 @@ module PrefetchHooks {
       return (isPrefetched, dummyPtr);
     }
 
-    inline proc accessPrefetchedDataRef(localeId, idx) {
+    inline proc accessPrefetchedDataRef(h, idx) {
       halt("This shouldn't have been called");
       var isPrefetched = false;
       var dummyPtr: c_ptr(uint(8));
-      return dummyPtr;
+      return (dummyPtr, -1);
     }
 
     proc finalizePrefetch() {
@@ -221,8 +221,8 @@ module PrefetchHooks {
     proc unifiedAccessPrefetchedData(locIdx, i,
         out prefetched: bool) ref {
 
-      if hasPrefetchedFrom(locIdx) {
-        if unpackAccess {
+      if unpackAccess {
+        if hasPrefetchedFrom(locIdx) {
           ref unpackedDataTmp = unpackedData[locIdx];
           if unpackedDataTmp.domain.member(i) {
             ref retTmp = unpackedDataTmp[i];
@@ -233,18 +233,19 @@ module PrefetchHooks {
             // like handles and unpackedData. I believe there will be
             // significant speedup un prefetched data accesses
             if __primitive("is wide pointer", retTmp) {
-              const lockOffset = get_lock_offset(handles[locIdx],
+              const lockOffset = get_lock_offset(
+                    handleFromLocaleIdx(locIdx),
                   __primitive("_wide_get_addr", retTmp));
               return __primitive("gen prefetch ptr", retTmp, lockOffset);
             }
           }
         }
-        else {
-          var data = accessPrefetchedDataRef(locIdx, i);
-          prefetched = !is_c_nil(data);
-          const lockOffset = get_lock_offset(handles[locIdx], data);
-          return __primitive("gen prefetch ptr", data, lockOffset);
-        }
+      }
+      else {
+        const h = handleFromLocaleIdx(locIdx);
+        var (data, backLinkOffset) = accessPrefetchedDataRef(h, i);
+        prefetched = !is_c_nil(data);
+        return __primitive("gen prefetch ptr", data, backLinkOffset);
       }
       prefetched = false;
       var dummyPtr: c_ptr(obj.eltType);
@@ -332,6 +333,8 @@ module PrefetchHooks {
       }
     }
 
+    // this is only used for reprefetching, where all we have is locale
+    // ID. FIXME this can be optimized
     inline proc handleFromLocaleID(id) {
       for idx in localeDom {
         if localeIDs[idx] == id then return handles[idx];
@@ -340,6 +343,13 @@ module PrefetchHooks {
       halt("This shouldn't have happened");
       var dummy: prefetch_entry_t;
       return dummy;
+    }
+
+    inline proc handleFromLocaleIdx(idx) {
+      return handles[idx];
+    }
+    inline proc handleFromLocaleIdx(idx) ref {
+      return handles[idx];
     }
 
     pragma "no remote memory fence"
@@ -425,11 +435,11 @@ module PrefetchHooks {
       if nodeId!=here.id {
         /*handles[localeIdx] = chpl_comm_request_prefetch(nodeId, robjaddr,*/
             /*c_nil, 0, consistent);*/
-        handles[localeIdx] = doPrefetch(here.id, nodeId, robjaddr,
+        handleFromLocaleIdx(localeIdx) = doPrefetch(here.id, nodeId, robjaddr,
             c_nil, 0, consistent);
 
         if unpackAccess {
-          var dataReceived = getData(handles[localeIdx]);
+          var dataReceived = getData(handleFromLocaleIdx(localeIdx));
           assignUnpackContainer(localeIdx,
               obj.getUnpackContainerDirect(dataReceived));
 
@@ -458,11 +468,11 @@ module PrefetchHooks {
         debug_writeln(here, " prefetching ",
             (sliceDescPtr:c_ptr(obj.idxType))[0], " size ",
             sliceDescSize);
-        handles[localeIdx] = doPrefetch(here.id, nodeId, robjaddr,
+        handleFromLocaleIdx(localeIdx) = doPrefetch(here.id, nodeId, robjaddr,
             sliceDescPtr, sliceDescSize, consistent);
 
         if unpackAccess {
-          var dataReceived = getData(handles[localeIdx]);
+          var dataReceived = getData(handleFromLocaleIdx(localeIdx));
           assignUnpackContainer(localeIdx,
               obj.getUnpackContainerDirect(dataReceived));
 
@@ -544,7 +554,7 @@ module PrefetchHooks {
         }
       }
     }
-
+/*
     inline proc accessPrefetchedData(localeId, idx) {
       var localIdx = idx;
       const handle = handles[localeId];
@@ -580,68 +590,19 @@ module PrefetchHooks {
         return (true, unpackData[localeId].dsiAccess(idx));
       }
     }
-
-    inline proc hasPrefetchedFrom(localeId) {
-      return entry_has_data(handles[localeId]);
+*/
+    inline proc hasPrefetchedFrom(localeIdx) {
+      return entry_has_data(handleFromLocaleIdx[localeIdx]);
     }
 
-    proc accessPrefetchedDataRef(localeId, idx) {
-      /*start_read(handles[localeId]);*/
-      /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
-      /*if(!entry_has_data(handle)) {*/
-        /*[>writeln(here, " doesn't have prefetched data from ", <]*/
-            /*[>localeId, " with index ", idx);<]*/
-        /*[>stop_read(handles[localeId]);<]*/
-        /*var dummy: obj.eltType;*/
-        /*return (false, c_ptrTo(dummy));*/
-      /*}*/
-
-      // TODO here data must be accessed only once therefore
-      // getByteIndex must be called from runtime from insde
-      // get_prefetched_data_addr
-
-      /*const __data = getData(handle);*/
-      /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
-      if !unpackAccess {
-        local{
-          /*if measureTime {*/
-            /*t.start();*/
-          /*}*/
-          var localIdx = idx;
-          const handle = handles[localeId];
-          var isPrefetched: int;
-          var thisaddr = __primitive("_wide_get_addr", this);
-          /*if measureTime {*/
-            /*t.stop();*/
-            /*accessPrepTime += t.elapsed();*/
-            /*t.clear();*/
-            /*t.start();*/
-          /*}*/
-          var data = get_prefetched_data_addr(thisaddr, handle,
-              getSize(1, obj.eltType), localIdx, isPrefetched);
-          /*if measureTime {*/
-            /*t.stop();*/
-            /*accessRealTime += t.elapsed();*/
-            /*t.clear();*/
-          /*}*/
-
-          /*if isPrefetched == 0 {*/
-          /*const cast_data = __data:c_ptr(int);*/
-          /*writeln("First two data: ", cast_data[0], " ", cast_data[1]);*/
-          /*writeln(here, " have prefetched data from ", */
-          /*localeId, " but not with serial index ", deserialIdx, */
-          /*" for index ", idx);*/
-          /*stop_read(handles[localeId]);*/
-          /*}*/
-          /*stop_read(handles[localeId]);*/
-          /*writeln("packed access to prefetched data?");*/
-          /*return (isPrefetched!=0, data:c_ptr(obj.eltType));*/
-          return data:c_ptr(obj.eltType);
-        }
-      }
-      else {
-        ref refData = unpackedData[localeId].dsiAccess(idx);
-        return c_ptrTo(refData);
+    proc accessPrefetchedDataRef(handle, idx) {
+      local{
+        var localIdx = idx;
+        var backLinkOffset: int;
+        var thisaddr = __primitive("_wide_get_addr", this);
+        var data = get_prefetched_data_addr(thisaddr, handle,
+            getSize(1, obj.eltType), localIdx, backLinkOffset);
+        return (data:c_ptr(obj.eltType), backLinkOffset);
       }
     }
 
@@ -653,7 +614,7 @@ module PrefetchHooks {
       return false;
     }
 
-    // not used anymore
+/*
     proc accessUnpackedData(locIdx, i) ref {
       // start_read
       /*start_read(handles(locIdx));*/
@@ -663,7 +624,7 @@ module PrefetchHooks {
       /*return unpackedData[locIdx][i];*/
       // stop_read
     }
-
+*/
     inline proc getUnpackedData(localeIdx) {
       return unpackedData[localeIdx];
     }

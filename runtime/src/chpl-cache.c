@@ -3429,13 +3429,17 @@ void prefetch_get(void *dst, int32_t lock_offset, void *src,
 
 void *get_prefetched_data_addr(void *accessor,
     struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
-    int64_t* found) {
+    int64_t* back_link_offset) {
 
   int64_t offset; //this can be negative in current logic
   void *retaddr=NULL;
+  chpl_prefetch_taskPrvData_t* task_local;
 
-  chpl_prefetch_taskPrvData_t* task_local = task_private_prefetch_data();
+  if(!prefetch_entry) {
+    return NULL;
+  }
 
+  task_local = task_private_prefetch_data();
   offset = (int64_t)(__get_byte_idx_wrapper(accessor,
         prefetch_entry->data, idx));
 
@@ -3445,10 +3449,10 @@ void *get_prefetched_data_addr(void *accessor,
     DEBUG_PRINT(("\t offset=%ld, size=%zd, origin=%d, entry_size=%zd\n",
         offset, size, prefetch_entry->origin_node,
         prefetch_entry->size));
-    *found = 0;
+    /**found = 0;*/
   }
   else {
-    *found = 1;
+    *back_link_offset = -offset-sizeof(struct __prefetch_entry_t *);
     DEBUG_PRINT(("%ld %ld %ld FOUND > offset=%ld, entry_size=%zd, \
         metadata=%ld %ld %ld %ld %ld %ld\n",
         ((int64_t*)idx)[0],((int64_t*)idx)[1],((int64_t*)idx)[2],
