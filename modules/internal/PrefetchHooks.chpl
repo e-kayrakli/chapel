@@ -190,7 +190,11 @@ module PrefetchHooks {
     var t = new Timer();
 
     /*var handles: c_ptr(prefetch_entry_t);*/
-    var handles: [localeDom] prefetch_entry_t;
+    /*var handles: [localeDom] prefetch_entry_t;*/
+    var handles: c_ptr(prefetch_entry_t);
+    var localeDomDimSize: localeDom.rank*int;
+    var localeDomSize: int;
+
     var unpackedData: [localeDom] unpackType;
     //FIXME this is a dangerous field now, since we can evict data with
     //no callback to change this array
@@ -208,17 +212,22 @@ module PrefetchHooks {
 
     proc GenericPrefetchHook(obj, type unpackType, param unpackAccess,
         localeContainer: [?D] locale) {
-      /*handles = c_calloc(prefetch_entry_t, numLocales);*/
+      localeDomSize = D.numIndices;
+      handles = c_calloc(prefetch_entry_t, localeDomSize);
       /*unpackedData = c_calloc(unpackType, numLocales);*/
       localeDom = D;
       forall (i,l) in zip(localeIDs, localeContainer) do i = l.id;
       hasLocaleContainer = true;
 
-      for h in handles do create_prefetch_handle(h);
+      for (idx,dim) in zip(1..localeDomDimSize.size, D.dims()) {
+        localeDomDimSize[idx] = dim.size;
+      }
+
+      for i in 0..#localeDomSize do create_prefetch_handle(handles[i]);
     }
 
     pragma "no local return"
-    proc unifiedAccessPrefetchedData(locIdx, i,
+    inline proc unifiedAccessPrefetchedData(locIdx, i,
         out prefetched: bool) ref {
       local {
         if unpackAccess {
@@ -338,7 +347,7 @@ module PrefetchHooks {
     // ID. FIXME this can be optimized
     inline proc handleFromLocaleID(id) {
       for idx in localeDom {
-        if localeIDs[idx] == id then return handles[idx];
+        if localeIDs[idx] == id then return handleFromLocaleIdx(idx);
       }
 
       halt("This shouldn't have happened");
@@ -347,10 +356,34 @@ module PrefetchHooks {
     }
 
     inline proc handleFromLocaleIdx(idx) {
-      return handles[idx];
+      var _idx = -1;
+      if isTuple(idx) {
+        if idx.size == 1 {
+          return handles[idx];
+        }
+        if idx.size == 2 {
+          return handles[idx[1]*localeDomDimSize[2]+idx[2]];
+        }
+      }
+      else {
+        return handles[idx];
+      }
+      halt("not ready for this - handleFromLocaleIdx");
     }
     inline proc handleFromLocaleIdx(idx) ref {
-      return handles[idx];
+      var _idx = -1;
+      if isTuple(idx) {
+        if idx.size == 1 {
+          return handles[idx];
+        }
+        if idx.size == 2 {
+          return handles[idx[1]*localeDomDimSize[2]+idx[2]];
+        }
+      }
+      else {
+        return handles[idx];
+      }
+      halt("not ready for this - handleFromLocaleIdx");
     }
 
     pragma "no remote memory fence"
@@ -596,7 +629,7 @@ module PrefetchHooks {
       return entry_has_data(handleFromLocaleIdx[localeIdx]);
     }
 
-    proc accessPrefetchedDataRef(handle, idx) {
+    inline proc accessPrefetchedDataRef(handle, idx) {
       local{
         var localIdx = idx;
         var backLinkOffset: int;
@@ -636,11 +669,11 @@ module PrefetchHooks {
       writeln("Hook access out time : ", accessOutTime);
     }
     proc finalizePrefetch() {
-      for h in handles {
+      /*for h in handles {*/
         // 2 acquires are added by the current finalization logic
         // this may not be necessary
         /*prefetch_entry_init_seqn_n(h, 0);*/
-      }
+      /*}*/
     }
 
     inline proc getByteIndex(data: c_void_ptr, __idx: c_void_ptr) {

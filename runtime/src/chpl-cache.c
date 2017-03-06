@@ -3433,13 +3433,11 @@ void *get_prefetched_data_addr(void *accessor,
 
   int64_t offset; //this can be negative in current logic
   void *retaddr=NULL;
-  chpl_prefetch_taskPrvData_t* task_local;
 
   if(!prefetch_entry) {
     return NULL;
   }
 
-  task_local = task_private_prefetch_data();
   offset = (int64_t)(__get_byte_idx_wrapper(accessor,
         prefetch_entry->data, idx));
 
