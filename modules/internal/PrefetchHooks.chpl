@@ -6,6 +6,7 @@ module PrefetchHooks {
   config param serializeBufferGrowthFactor = 1.5;
   config param measureTime = false;
   config param debugPrefetch = false;
+  config param prefetchTiming = false;
 
   extern type c_nodeid_t;
   /*extern class prefetch_entry_t {*/
@@ -63,6 +64,10 @@ module PrefetchHooks {
 
   class PrefetchHook {
     var x = 10;
+
+    proc reportPrefetchTimes() {
+      halt("This shouldn't have been called", x);
+    }
 
     iter dsiSerialize() {
       halt("This shouldn't have been called", x);
@@ -189,6 +194,10 @@ module PrefetchHooks {
     var accessOutTime = 0.0;
     var t = new Timer();
 
+    var prefetchTimer = new Timer();
+    var reprefetchTimer = new Timer();
+    var accessTimer = new Timer();
+
     /*var handles: c_ptr(prefetch_entry_t);*/
     /*var handles: [localeDom] prefetch_entry_t;*/
     var handles: c_ptr(prefetch_entry_t);
@@ -230,6 +239,7 @@ module PrefetchHooks {
     inline proc unifiedAccessPrefetchedData(locIdx, i,
         out prefetched: bool) ref {
       local {
+        if prefetchTiming then accessTimer.start();
         if unpackAccess {
           if hasPrefetchedFrom(locIdx) {
             ref unpackedDataTmp = unpackedData[locIdx];
@@ -245,6 +255,7 @@ module PrefetchHooks {
                 const lockOffset = get_lock_offset(
                     handleFromLocaleIdx(locIdx),
                     __primitive("_wide_get_addr", retTmp));
+                if prefetchTiming then accessTimer.stop();
                 return __primitive("gen prefetch ptr", retTmp, lockOffset);
               }
             }
@@ -254,10 +265,12 @@ module PrefetchHooks {
           const h = handleFromLocaleIdx(locIdx);
           var (data, backLinkOffset) = accessPrefetchedDataRef(h, i);
           prefetched = !is_c_nil(data);
+          if prefetchTiming then accessTimer.stop();
           return __primitive("gen prefetch ptr", data, backLinkOffset);
         }
         prefetched = false;
         var dummyPtr: c_ptr(obj.eltType);
+        if prefetchTiming then accessTimer.stop();
         return __primitive("gen prefetch ptr", dummyPtr, -1);
       }
     }
@@ -400,6 +413,8 @@ module PrefetchHooks {
     proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
         slice_desc_size: size_t, consistent) {
 
+      if prefetchTiming then reprefetchTimer.start();
+
       if destLocaleId != here.id {
         halt("doPrefetch can only be called from the prefetching \
             locale");
@@ -431,6 +446,8 @@ module PrefetchHooks {
           /*(slice_desc:c_ptr(int))[1],*/
           /*(slice_desc:c_ptr(int))[2],*/
           /*(slice_desc:c_ptr(int))[3]);*/
+
+      if prefetchTiming then reprefetchTimer.stop();
     }
 
     //srcObj is the remote PrefetchHook
@@ -469,9 +486,11 @@ module PrefetchHooks {
 
     // here obj needs to be a wide class refernece to another hook
     proc requestPrefetch(localeIdx, otherObj, consistent=true) {
+
+      if prefetchTiming then prefetchTimer.start();
+
       var robjaddr = __primitive("_wide_get_addr",
           otherObj.prefetchHook);
-
       const nodeId = localeIDs[localeIdx];
       /*writeln(here, " prefetching from nodeID ", nodeId, " localeIdx ",*/
           /*localeIdx);*/
@@ -494,10 +513,14 @@ module PrefetchHooks {
         }
         hasData[localeIdx] = true;
       }
+      if prefetchTiming then prefetchTimer.stop();
     }
 
     proc requestPrefetch(localeIdx, otherObj, sliceDesc,
         consistent=true) {
+
+      if prefetchTiming then prefetchTimer.start();
+
       var robjaddr = __primitive("_wide_get_addr",
           otherObj.prefetchHook);
       
@@ -528,6 +551,7 @@ module PrefetchHooks {
         }
         hasData[localeIdx] = true;
       }
+      if prefetchTiming then prefetchTimer.stop();
     }
 
     inline proc assignUnpackContainer(localeIdx, container) {
@@ -535,6 +559,17 @@ module PrefetchHooks {
       var localCopy: container.type;
 
       __primitive("=", unpackedData[localeIdx], localCopy);
+    }
+
+    proc reportPrefetchTimes() {
+      if prefetchTiming {
+        writeln("------------------");
+        writeln(here);
+        writeln("Prefetch Time : ", prefetchTimer.elapsed());
+        writeln("RePrefetch Time : ", reprefetchTimer.elapsed());
+        writeln("Access Time : ", accessTimer.elapsed());
+        writeln("------------------");
+      }
     }
 
     proc updatePrefetch() {

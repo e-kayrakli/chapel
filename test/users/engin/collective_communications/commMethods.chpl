@@ -9,6 +9,14 @@ inline proc BlockArr.updatePrefetch() {
   }
 }
 
+proc BlockArr.reportPrefetch() {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      locArr[localeIdx].prefetchHook.reportPrefetchTimes();
+    }
+  }
+}
+
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
