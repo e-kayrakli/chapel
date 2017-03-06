@@ -202,6 +202,8 @@ module PrefetchHooks {
     var reprefetchTimer = new Timer();
     var accessTimer = new Timer();
 
+    var reprefetchCount = 0;
+
     /*var handles: c_ptr(prefetch_entry_t);*/
     /*var handles: [localeDom] prefetch_entry_t;*/
     var handles: c_ptr(prefetch_entry_t);
@@ -418,6 +420,7 @@ module PrefetchHooks {
         slice_desc_size: size_t, consistent, fixedSize) {
 
       if prefetchTiming then reprefetchTimer.start();
+      if prefetchTiming then reprefetchCount += 1;
 
       if destLocaleId != here.id {
         halt("doPrefetch can only be called from the prefetching \
@@ -558,7 +561,8 @@ module PrefetchHooks {
         writeln("------------------");
         writeln(here);
         writeln("Prefetch Time : ", prefetchTimer.elapsed());
-        writeln("RePrefetch Time : ", reprefetchTimer.elapsed());
+        writeln("RePrefetch Time : ", reprefetchTimer.elapsed(), " (",
+            reprefetchCount, ")");
         writeln("Access Time : ", accessTimer.elapsed());
         writeln("------------------");
       }
@@ -759,44 +763,47 @@ module PrefetchHooks {
 
   }
 
-  /*export*/ proc __serialize_wrapper(__obj: c_void_ptr, __buf: c_void_ptr,
+  proc __serialize_wrapper(__obj: c_void_ptr, __buf: c_void_ptr,
       bufsize: size_t, slice_desc, slice_desc_size: size_t) {
 
-    type bufferEltType = uint(8);
-    var obj = __obj:PrefetchHook;
-    var buf = __buf:c_ptr(bufferEltType);
+    local {
+      type bufferEltType = uint(8);
+      var obj = __obj:PrefetchHook;
+      var buf = __buf:c_ptr(bufferEltType);
 
-    var curBufferSize = 0:uint;
+      var curBufferSize = 0:uint;
 
-    // chunk will be a heterogeneous tuple of
-    //
-    // (ref to first index:void, numBytes)
-    //
-    // currently I am providing a helper convertToSerialChunk that takes
-    // a rectangular array and returns the tuple we need. if the format
-    // is changed, only implementation of that function should change
-    if slice_desc_size > 0 {
-      for chunk in obj.dsiSerialize(slice_desc) {
-        const chunkSize = chunk[2];
-        //memcpy to buffer
-        c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
-            chunk[1]:c_ptr(bufferEltType), chunkSize);
+      // chunk will be a heterogeneous tuple of
+      //
+      // (ref to first index:void, numBytes)
+      //
+      // currently I am providing a helper convertToSerialChunk that
+      // takes a rectangular array and returns the tuple we need. if the
+      // format is changed, only implementation of that function should
+      // change
+      if slice_desc_size > 0 {
+        for chunk in obj.dsiSerialize(slice_desc) {
+          const chunkSize = chunk[2];
+          //memcpy to buffer
+          c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
+              chunk[1]:c_ptr(bufferEltType), chunkSize);
 
-        if chunk[3] {
-          c_free(chunk[1]:c_ptr(bufferEltType));
+          if chunk[3] {
+            c_free(chunk[1]:c_ptr(bufferEltType));
+          }
+
+          curBufferSize += chunkSize;
         }
-
-        curBufferSize += chunkSize;
       }
-    }
-    else {
-      for chunk in obj.dsiSerialize() {
-        const chunkSize = chunk[2];
-        //memcpy to buffer
-        c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
-            chunk[1]:c_ptr(bufferEltType), chunkSize);
+      else {
+        for chunk in obj.dsiSerialize() {
+          const chunkSize = chunk[2];
+          //memcpy to buffer
+          c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
+              chunk[1]:c_ptr(bufferEltType), chunkSize);
 
-        curBufferSize += chunkSize;
+          curBufferSize += chunkSize;
+        }
       }
     }
   }
