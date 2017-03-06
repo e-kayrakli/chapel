@@ -437,9 +437,8 @@ module PrefetchHooks {
             slice_desc_size, consistent));
 
 
-      if !consistent then
-        __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-            slice_desc, slice_desc_size, data, size);
+      __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+          slice_desc, slice_desc_size, data, size);
 
       /*writeln(here, " postreprefetch  : ",*/
           /*(slice_desc:c_ptr(int))[0],*/
