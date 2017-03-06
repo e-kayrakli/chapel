@@ -364,11 +364,16 @@ module PrefetchHooks {
         if idx.size == 2 {
           return handles[idx[1]*localeDomDimSize[2]+idx[2]];
         }
+        if idx.size == 3 {
+          return handles[idx[1]*localeDomDimSize[2]*
+            localeDomDimSize[3]+idx[2]*localeDomDimSize[3]+idx[3]];
+        }
       }
       else {
         return handles[idx];
       }
       halt("not ready for this - handleFromLocaleIdx");
+      return handles[0];
     }
     inline proc handleFromLocaleIdx(idx) ref {
       var _idx = -1;
@@ -379,11 +384,16 @@ module PrefetchHooks {
         if idx.size == 2 {
           return handles[idx[1]*localeDomDimSize[2]+idx[2]];
         }
+        if idx.size == 3 {
+          return handles[idx[1]*localeDomDimSize[2]*
+            localeDomDimSize[3]+idx[2]*localeDomDimSize[3]+idx[3]];
+        }
       }
       else {
         return handles[idx];
       }
       halt("not ready for this - handleFromLocaleIdx");
+      return handles[0];
     }
 
     pragma "no remote memory fence"
