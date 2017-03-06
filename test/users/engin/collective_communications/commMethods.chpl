@@ -22,7 +22,7 @@ inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent) {
   locArr[localeIdx].prefetchHook.requestPrefetch(
       sourceIdx,
       privCopy.locArr[sourceIdx],
-      consistent);
+      consistent, fixedSize=true);
 }
 
 inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
@@ -41,7 +41,7 @@ inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
   locArr[localeIdx].prefetchHook.requestPrefetch(
       sourceIdx,
       privCopy.locArr[sourceIdx], sliceDescArr,
-      consistent);
+      consistent, fixedSize=true);
 }
 
 proc BlockCyclicArr.__prefetchFrom(localeIdx, sourceIdx,

@@ -105,6 +105,8 @@ typedef struct __prefetch_entry_t{
 
   cache_seqn_t sn;
   bool sn_updated;
+
+  bool fixed_size;
   // we need to keep slice info, in case we need to reprefetch
   void *slice_desc;
   size_t slice_desc_size;
@@ -208,7 +210,7 @@ void reprefetch_single_entry(struct __prefetch_entry_t *entry);
 void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
-    consistent);
+    consistent, bool fixed_size);
 void *update_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
@@ -217,6 +219,9 @@ void create_prefetch_handle(struct __prefetch_entry_t **entry);
 int32_t get_lock_offset(struct __prefetch_entry_t *entry, void * addr);
 void prefetch_get(void *dst, int32_t lock_offset, void *src,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
+
+void *get_entry_data(struct __prefetch_entry_t *entry);
+size_t get_entry_size(struct __prefetch_entry_t *entry);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

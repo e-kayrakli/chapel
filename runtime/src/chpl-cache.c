@@ -3143,11 +3143,20 @@ int32_t get_lock_offset(struct __prefetch_entry_t *entry, void *addr) {
   return ((char *)entry->back_link)-((char *)addr);
 }
 
+void *get_entry_data(struct __prefetch_entry_t *entry) {
+  return entry->data;
+}
+
+size_t get_entry_size(struct __prefetch_entry_t *entry) {
+  return entry->size;
+}
+
+
 static
 struct __prefetch_entry_t *add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
     void* robjaddr, size_t prefetch_size, void *slice_desc,
-    size_t slice_desc_size, bool consistent){
+    size_t slice_desc_size, bool consistent, bool fixed_size){
 
   struct __prefetch_entry_t *head;
   struct __prefetch_entry_t *new_entry;
@@ -3173,7 +3182,10 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
       prefetch_size);
 
   new_entry->back_link = data_bundle;
-  new_entry->data = (char *)data_bundle + sizeof(struct __prefetch_entry *);
+  new_entry->data = (char *)data_bundle +
+    sizeof(struct __prefetch_entry *);
+
+  new_entry->fixed_size = fixed_size;
 
   *(new_entry->back_link) = new_entry;
 
@@ -3253,10 +3265,11 @@ void create_prefetch_handle(struct __prefetch_entry_t **entry) {
 void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
-    consistent) {
+    consistent, bool fixed_size) {
 
   *new_entry = add_to_prefetch_buffer(pbuf, origin_node, robjaddr,
-      prefetch_size, slice_desc, slice_desc_size, consistent);
+      prefetch_size, slice_desc, slice_desc_size, consistent,
+      fixed_size);
 
   /*printf("%d creating new handle %p\n", chpl_nodeID, *new_entry);*/
   (*new_entry)->owner_obj = owner_obj;
@@ -3565,7 +3578,8 @@ void chpl_comm_pbuf_acq() {
 
 extern void __reprefetch_wrapper(void* owner_obj, c_nodeid_t
     dest_node_id, c_nodeid_t src_node_id, void* robjaddr, void*
-    slice_desc, size_t slice_desc_size, bool consistent);
+    slice_desc, size_t slice_desc_size, bool consistent, bool
+    fixed_size);
 
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
   /*chpl_free(entry->data);*/
@@ -3581,7 +3595,8 @@ void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
 
   __reprefetch_wrapper(entry->owner_obj, chpl_nodeID,
       entry->origin_node, entry->robjaddr, entry->slice_desc,
-      entry->slice_desc_size, entry->pf_type & PF_CONSISTENT);
+      entry->slice_desc_size, entry->pf_type & PF_CONSISTENT,
+      entry->fixed_size);
 
   /*chpl_comm_prefetch(&(entry->data), entry->origin_node,*/
       /*entry->robjaddr, &(entry->size), entry->slice_desc,*/
