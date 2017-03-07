@@ -202,6 +202,8 @@ module PrefetchHooks {
     var reprefetchTimer = new Timer();
     var accessTimer = new Timer();
 
+    var subreprefetchTimer = new Timer();
+
     var reprefetchCount = 0;
 
     /*var handles: c_ptr(prefetch_entry_t);*/
@@ -334,17 +336,17 @@ module PrefetchHooks {
     }
 
     pragma "no remote memory fence"
-    inline proc __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+    proc __getSerializedData(destLocaleId, srcLocaleId, srcObj,
         slice_desc, slice_desc_size: size_t, data, size) {
 
       on Locales[srcLocaleId] {
         // write data to destLocales handle's data
+        if prefetchTiming then subreprefetchTimer.start();
         const size_local = size;
         var slice_desc_local: c_ptr(uint(8));
 
         if slice_desc_size > 0 {
-          slice_desc_local = c_malloc(uint(8),
-              slice_desc_size);
+          slice_desc_local = c_malloc(uint(8), slice_desc_size);
           __primitive("chpl_comm_array_get", slice_desc_local[0],
               destLocaleId, (slice_desc:c_ptr(uint(8)))[0],
               slice_desc_size);
@@ -359,6 +361,7 @@ module PrefetchHooks {
             slice_desc_local, slice_desc_size);
         __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
             data[0], size_local);
+        if prefetchTiming then subreprefetchTimer.stop();
       }
     }
 
@@ -475,8 +478,12 @@ module PrefetchHooks {
             c_ptrTo(new_handle_ptr), size, slice_desc:c_void_ptr,
             slice_desc_size, consistent, fixedSize));
 
-      __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-          slice_desc, slice_desc_size, data, size);
+      // if data is being prefetched consistently, don't bring in the
+      // data right away
+      if !consistent {
+        __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+            slice_desc, slice_desc_size, data, size);
+      }
 
       return new_handle_ptr;
     }
@@ -563,6 +570,7 @@ module PrefetchHooks {
         writeln("Prefetch Time : ", prefetchTimer.elapsed());
         writeln("RePrefetch Time : ", reprefetchTimer.elapsed(), " (",
             reprefetchCount, ")");
+        writeln("SubrePrefetch Time : ", subreprefetchTimer.elapsed());
         writeln("Access Time : ", accessTimer.elapsed());
         writeln("------------------");
       }
