@@ -17,59 +17,61 @@ proc BlockArr.reportPrefetch() {
   }
 }
 
-inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent) {
+inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent,
+    staticDomain=false) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
       sourceIdx,
       privCopy.locArr[sourceIdx],
-      consistent, fixedSize=true);
+      consistent, staticDomain);
 }
 
 inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
-    consistent) {
+    consistent, staticDomain=false) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
       dom.dist.targetLocales[sourceIdx].id, //TODO this can be avoided
       privCopy.locArr[sourceIdx],
-      consistent);
+      consistent, staticDomain);
 }
 
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
-    consistent) {
+    consistent, staticDomain=false) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   const sliceDescArr = domToArray(sliceDesc);
   locArr[localeIdx].prefetchHook.requestPrefetch(
       sourceIdx,
       privCopy.locArr[sourceIdx], sliceDescArr,
-      consistent, fixedSize=true);
+      consistent, staticDomain);
 }
 
 proc BlockCyclicArr.__prefetchFrom(localeIdx, sourceIdx,
-    consistent) {
+    consistent, staticDomain) {
 
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
       dom.dist.targetLocales[sourceIdx].id, //TODO this can be avoided
       privCopy.locArr[sourceIdx],
-      consistent);
+      consistent, staticDomain);
 }
 
 proc BlockCyclicArr.transposePrefetch(consistent=true) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       const sourceIdx = (localeIdx[2], localeIdx[1]);
-      __prefetchFrom(localeIdx, sourceIdx, consistent);
+      __prefetchFrom(localeIdx, sourceIdx, consistent,
+          staticDomain=false);
     }
   }
   /*writeln("Finalizing prefetch");*/
   finalizePrefetch();
 }
 
-proc BlockArr.allGather(consistent=true) {
+proc BlockArr.allGather(consistent=true, staticDomain=false) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for sourceIdx in dom.dist.targetLocDom {
-        __prefetchFrom(localeIdx, sourceIdx, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, consistent, staticDomain);
       }
     }
   }
@@ -80,7 +82,8 @@ proc SparseBlockArr.allGather(consistent=true) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for sourceIdx in dom.dist.targetLocDom {
-        __prefetchFrom(localeIdx, sourceIdx, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, consistent,
+            staticDomain=false);
       }
     }
   }

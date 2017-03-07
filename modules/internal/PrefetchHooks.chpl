@@ -26,7 +26,15 @@ module PrefetchHooks {
   extern proc
     get_entry_data(handle): c_void_ptr;
   extern proc
+    get_entry_data_start(handle): c_void_ptr;
+  extern proc
+    get_entry_remote_data_start(handle): c_void_ptr;
+  extern proc
+    set_entry_remote_data_start(handle, start);
+  extern proc
     get_entry_size(handle): size_t;
+  extern proc
+    get_entry_data_actual_size(handle): size_t;
   /*extern proc */
     /*get_prefetched_data(handle, offset, size, ref dest): c_int;*/
 
@@ -49,7 +57,7 @@ module PrefetchHooks {
 
   extern proc initialize_prefetch_handle(owner_obj, origin_node,
       robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
-      consistent, fixed_size): c_void_ptr;
+      consistent, fixed_size, data_start_offset): c_void_ptr;
 
   extern proc update_prefetch_handle(owner_obj, origin_node,
       robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
@@ -73,7 +81,7 @@ module PrefetchHooks {
       halt("This shouldn't have been called", x);
     }
 
-    iter dsiSerialize() {
+    iter dsiSerialize(metadataOnly) {
       halt("This shouldn't have been called", x);
       var dummyPtr: c_void_ptr;
       var dummySize: size_t;
@@ -86,7 +94,7 @@ module PrefetchHooks {
       return val;
     }
 
-    iter dsiSerialize(slice_desc) {
+    iter dsiSerialize(slice_desc, metadataOnly) {
       halt("This shouldn't have been called", x);
       var dummyPtr: c_void_ptr;
       var dummySize: size_t;
@@ -99,12 +107,13 @@ module PrefetchHooks {
       return val;
     }
 
-    proc requestPrefetch(localeIdx, otherObj, consistent=true) {
+    proc requestPrefetch(localeIdx, otherObj, consistent=true,
+        staticDomain) {
       halt("This shouldn't have been called");
     }
 
     proc requestPrefetch(localeIdx, otherObj, sliceDesc,
-        consistent=true) {
+        consistent=true, staticDomain) {
       halt("This shouldn't have been called");
     }
 
@@ -135,6 +144,12 @@ module PrefetchHooks {
       var dummy: uint(64);
       return dummy;
     }
+    
+    proc getBaseDataStartAddr() {
+      halt("This shouldn't have been called");
+      var dummy: c_void_ptr;
+      return dummy;
+    }
 
     inline proc hasPrefetchedFrom(localeId) {
       halt("This shouldn't have been called");
@@ -148,7 +163,7 @@ module PrefetchHooks {
       return new_handle_ptr;
     }
     proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
-        slice_desc_size: size_t, consistent, fixedSize) {
+        slice_desc_size: size_t, consistent, staticDomain) {
       halt("This shouldn't have been called");
     }
     /*inline proc getUnpackedData(localeIdx) {*/
@@ -283,9 +298,12 @@ module PrefetchHooks {
       }
     }
 
-    iter dsiSerialize(slice_desc) {
-      for val in obj.dsiSerialize(slice_desc:c_ptr(obj.idxType)) do
+    iter dsiSerialize(slice_desc, metadataOnly) {
+      for val in obj.dsiSerializeMetadata(slice_desc:c_ptr(obj.idxType)) do
         yield val;
+      if !metadataOnly then
+        for val in obj.dsiSerializeData(slice_desc:c_ptr(obj.idxType)) do
+          yield val;
     }
 
     proc dsiGetSerializedObjectSize(slice_desc): size_t {
@@ -297,8 +315,10 @@ module PrefetchHooks {
       return size;
     }
 
-    iter dsiSerialize() {
-      for val in obj.dsiSerialize() do yield val;
+    iter dsiSerialize(metadataOnly) {
+      for val in obj.dsiSerializeMetadata() do yield val;
+      if !metadataOnly then
+        for val in obj.dsiSerializeData() do yield val;
     }
     proc dsiGetSerializedObjectSize(): size_t {
       debug_writeln("getting size on ", here);
@@ -307,6 +327,10 @@ module PrefetchHooks {
         size += v;
       }
       return size;
+    }
+
+    proc getBaseDataStartAddr() {
+      return obj.dsiGetBaseDataStartAddr();
     }
 
     //prefetch-reprefetch helpers
@@ -337,7 +361,8 @@ module PrefetchHooks {
 
     pragma "no remote memory fence"
     proc __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-        slice_desc, slice_desc_size: size_t, data, size) {
+        slice_desc, slice_desc_size: size_t, data, size,
+        metadataOnly=false) {
 
       on Locales[srcLocaleId] {
         // write data to destLocales handle's data
@@ -358,7 +383,7 @@ module PrefetchHooks {
         var local_buffer = c_malloc(uint(8), size_local):c_ptr(uint(8));
 
         __serialize_wrapper(srcObj, local_buffer, size_local,
-            slice_desc_local, slice_desc_size);
+            slice_desc_local, slice_desc_size, metadataOnly);
         __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
             data[0], size_local);
         if prefetchTiming then subreprefetchTimer.stop();
@@ -420,19 +445,19 @@ module PrefetchHooks {
 
     pragma "no remote memory fence"
     proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
-        slice_desc_size: size_t, consistent, fixedSize) {
+        slice_desc_size: size_t, consistent, staticDomain) {
 
       if prefetchTiming then reprefetchTimer.start();
       if prefetchTiming then reprefetchCount += 1;
 
       if destLocaleId != here.id {
-        halt("doPrefetch can only be called from the prefetching \
+        halt("reprefetch can only be called from the prefetching \
             locale");
       }
 
       var handle = handleFromLocaleID(srcLocaleId);
 
-      if !fixedSize {
+      if !staticDomain {
         var data: _ddata(uint(8));
         var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
             slice_desc, slice_desc_size);
@@ -445,22 +470,49 @@ module PrefetchHooks {
 
         __getSerializedData(destLocaleId, srcLocaleId, srcObj,
             slice_desc, slice_desc_size, data, size);
+        /*writeln("Copied");*/
+        /*for i in 0..3 do {*/
+          /*write((get_entry_data(handle):c_ptr(int(64)))[i], " ");*/
+        /*}*/
+        /*writeln();*/
       }
       else {
-        var data = __primitive("cast", _ddata(uint(8)),
-            get_entry_data(handle));
-        var size = get_entry_size(handle);
+        var data = get_entry_data_start(handle):c_ptr(uint(8));
+        __primitive("chpl_comm_array_get",
+            get_entry_data_start(handle):c_ptr(uint(8)),
+            srcLocaleId,
+            get_entry_remote_data_start(handle):c_ptr(uint(8)),
+            get_entry_data_actual_size(handle));
 
-        __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-            slice_desc, slice_desc_size, data, size);
+        /*writeln("Copied");*/
+        /*for i in 0..31 do {*/
+          /*write(data[i], " ");*/
+        /*}*/
+        /*writeln();*/
       }
 
       if prefetchTiming then reprefetchTimer.stop();
     }
 
+    proc __getRemoteDataStartAddr(srcLocaleId, srcObj) {
+
+      var dataStartPtr: c_void_ptr;
+      on Locales[srcLocaleId] {
+        dataStartPtr = __get_data_start_ptr_wrapper(srcObj);
+      }
+      if is_c_nil(dataStartPtr) then halt("Received null pointer");
+      return dataStartPtr;
+    }
+
+    proc __get_data_start_ptr_wrapper(__obj: c_void_ptr) {
+      var obj = __obj:PrefetchHook;
+
+      return obj.getBaseDataStartAddr();
+    }
+
     //srcObj is the remote PrefetchHook
     proc doPrefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
-        slice_desc_size: size_t, consistent, fixedSize) {
+        slice_desc_size: size_t, consistent, staticDomain) {
 
       if destLocaleId != here.id {
         halt("doPrefetch can only be called from the prefetching \
@@ -476,7 +528,8 @@ module PrefetchHooks {
       data = __primitive("cast", _ddata(uint(8)),
           initialize_prefetch_handle(this, srcLocaleId, srcObj,
             c_ptrTo(new_handle_ptr), size, slice_desc:c_void_ptr,
-            slice_desc_size, consistent, fixedSize));
+            slice_desc_size, consistent, staticDomain,
+            obj.getDataStartByteIndex()));
 
       // if data is being prefetched consistently, don't bring in the
       // data right away
@@ -484,13 +537,28 @@ module PrefetchHooks {
         __getSerializedData(destLocaleId, srcLocaleId, srcObj,
             slice_desc, slice_desc_size, data, size);
       }
+      else {
+        // data is being prefetched consistently,
+        // if staticDomain, and is not slice we need to get the start
+        // address of the data in the owner node
+        if staticDomain && slice_desc_size <= 0 {
+          __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+              slice_desc, slice_desc_size, data, obj.getMetadataSize(),
+              metadataOnly=true);
+          var remoteDataStartPtr = __getRemoteDataStartAddr(srcLocaleId,
+              srcObj);
+
+          set_entry_remote_data_start(new_handle_ptr,
+              remoteDataStartPtr);
+        }
+      }
 
       return new_handle_ptr;
     }
 
     // here obj needs to be a wide class refernece to another hook
     proc requestPrefetch(localeIdx, otherObj, consistent=true,
-        fixedSize=false) {
+        staticDomain=false) {
 
       if prefetchTiming then prefetchTimer.start();
 
@@ -502,7 +570,7 @@ module PrefetchHooks {
 
       if nodeId!=here.id {
         handleFromLocaleIdx(localeIdx) = doPrefetch(here.id, nodeId,
-            robjaddr, c_nil, 0, consistent, fixedSize);
+            robjaddr, c_nil, 0, consistent, staticDomain);
 
         if unpackAccess {
           var dataReceived = getData(handleFromLocaleIdx(localeIdx));
@@ -511,7 +579,7 @@ module PrefetchHooks {
 
           unpackedData[localeIdx].setData(
                 getElementArrayAtOffset(dataReceived,
-                  obj.getDataStartByteIndex(dataReceived),
+                  obj.getDataStartByteIndex(),
                   obj.eltType));
         }
         hasData[localeIdx] = true;
@@ -520,7 +588,7 @@ module PrefetchHooks {
     }
 
     proc requestPrefetch(localeIdx, otherObj, sliceDesc,
-        consistent=true, fixedSize=false) {
+        consistent=true, staticDomain=false) {
 
       if prefetchTiming then prefetchTimer.start();
 
@@ -538,7 +606,7 @@ module PrefetchHooks {
             sliceDescSize);
         handleFromLocaleIdx(localeIdx) = doPrefetch(here.id, nodeId,
             robjaddr, sliceDescPtr, sliceDescSize, consistent,
-            fixedSize);
+            staticDomain);
 
         if unpackAccess {
           var dataReceived = getData(handleFromLocaleIdx(localeIdx));
@@ -547,7 +615,7 @@ module PrefetchHooks {
 
           unpackedData[localeIdx].setData(
                 getElementArrayAtOffset(dataReceived,
-                  obj.getDataStartByteIndex(dataReceived),
+                  obj.getDataStartByteIndex(),
                   obj.eltType));
 
         }
@@ -738,13 +806,13 @@ module PrefetchHooks {
 
   export proc __reprefetch_wrapper(__obj: c_void_ptr, destLocaleId:
       int(64), srcLocaleId: int(64), src_obj: c_void_ptr, slice_desc:
-      c_void_ptr, slice_desc_size: size_t, consistent: bool, fixedSize:
+      c_void_ptr, slice_desc_size: size_t, consistent: bool, staticDomain:
       bool) {
 
     var obj = __obj:PrefetchHook;
 
     obj.reprefetch(destLocaleId, srcLocaleId, src_obj, slice_desc,
-        slice_desc_size, consistent, fixedSize);
+        slice_desc_size, consistent, staticDomain);
   }
 
   export proc __get_byte_idx_wrapper(__obj: c_void_ptr,
@@ -772,7 +840,8 @@ module PrefetchHooks {
   }
 
   proc __serialize_wrapper(__obj: c_void_ptr, __buf: c_void_ptr,
-      bufsize: size_t, slice_desc, slice_desc_size: size_t) {
+      bufsize: size_t, slice_desc, slice_desc_size: size_t,
+      metadataOnly: bool) {
 
     local {
       type bufferEltType = uint(8);
@@ -790,7 +859,7 @@ module PrefetchHooks {
       // format is changed, only implementation of that function should
       // change
       if slice_desc_size > 0 {
-        for chunk in obj.dsiSerialize(slice_desc) {
+        for chunk in obj.dsiSerialize(slice_desc, metadataOnly) {
           const chunkSize = chunk[2];
           //memcpy to buffer
           c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
@@ -804,7 +873,7 @@ module PrefetchHooks {
         }
       }
       else {
-        for chunk in obj.dsiSerialize() {
+        for chunk in obj.dsiSerialize(metadataOnly) {
           const chunkSize = chunk[2];
           //memcpy to buffer
           c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here

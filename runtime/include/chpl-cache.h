@@ -106,18 +106,21 @@ typedef struct __prefetch_entry_t{
   cache_seqn_t sn;
   bool sn_updated;
 
-  bool fixed_size;
   // we need to keep slice info, in case we need to reprefetch
   void *slice_desc;
   size_t slice_desc_size;
 
-  //throttling TODO new field: chunk_size
-  //throttling TODO new field: doneobj array(same size as void* array
-
   // when data is allocated the chunk will start with a backlink to the
   // prefetch entry
   void **back_link;
-  void *data; //throttling TODO this will be an array of void pointers
+  void *data;
+
+  // we need to store the beginning of the actual data for fast
+  // reprefetch in static domains
+  bool static_domain;
+  void *data_start;
+  void *remote_data_start;
+  size_t actual_data_size;
 #if CHECK_PFENTRY_INTEGRITY
   void *base_data;
 #endif
@@ -210,7 +213,7 @@ void reprefetch_single_entry(struct __prefetch_entry_t *entry);
 void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
-    consistent, bool fixed_size);
+    consistent, bool static_domain, int64_t data_start_offset);
 void *update_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
@@ -221,7 +224,12 @@ void prefetch_get(void *dst, int32_t lock_offset, void *src,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
 
 void *get_entry_data(struct __prefetch_entry_t *entry);
+void *get_entry_data_start(struct __prefetch_entry_t *entry);
+void set_entry_data_start(struct __prefetch_entry_t *entry, void *start);
+void *get_entry_remote_data_start(struct __prefetch_entry_t *entry);
+void set_entry_remote_data_start(struct __prefetch_entry_t *entry, void *start);
 size_t get_entry_size(struct __prefetch_entry_t *entry);
+size_t get_entry_data_actual_size(struct __prefetch_entry_t *entry);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

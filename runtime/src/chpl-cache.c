@@ -3111,6 +3111,7 @@ void start_update(struct __prefetch_entry_t *entry, int page_idx) {
     while(pthread_rwlock_trywrlock(&(entry->rwl[i]))) {
       chpl_task_yield();
     }
+    /*printf("%d locked %p\n", chpl_nodeID, &(entry->rwl[i]));*/
   }
 #endif
 }
@@ -3133,6 +3134,7 @@ void stop_update(struct __prefetch_entry_t *entry, int page_idx) {
 #else
   int i;
   for(i = 0 ; i < entry->page_count ; i++) {
+    /*printf("%d unlocking %p\n", chpl_nodeID, &(entry->rwl[i]));*/
     pthread_rwlock_unlock(&(entry->rwl[i]));
   }
 #endif
@@ -3146,9 +3148,22 @@ int32_t get_lock_offset(struct __prefetch_entry_t *entry, void *addr) {
 void *get_entry_data(struct __prefetch_entry_t *entry) {
   return entry->data;
 }
+void *get_entry_data_start(struct __prefetch_entry_t *entry) {
+  return entry->data_start;
+}
 
+void *get_entry_remote_data_start(struct __prefetch_entry_t *entry) {
+  return entry->remote_data_start;
+}
+void set_entry_remote_data_start(struct __prefetch_entry_t *entry,
+    void *start) {
+  entry->remote_data_start = start;
+}
 size_t get_entry_size(struct __prefetch_entry_t *entry) {
   return entry->size;
+}
+size_t get_entry_data_actual_size(struct __prefetch_entry_t *entry) {
+  return entry->actual_data_size;
 }
 
 
@@ -3156,7 +3171,8 @@ static
 struct __prefetch_entry_t *add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
     void* robjaddr, size_t prefetch_size, void *slice_desc,
-    size_t slice_desc_size, bool consistent, bool fixed_size){
+    size_t slice_desc_size, bool consistent, bool static_domain,
+    int64_t data_start_offset){
 
   struct __prefetch_entry_t *head;
   struct __prefetch_entry_t *new_entry;
@@ -3185,7 +3201,13 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   new_entry->data = (char *)data_bundle +
     sizeof(struct __prefetch_entry *);
 
-  new_entry->fixed_size = fixed_size;
+  new_entry->data_start = (char *)new_entry->data + data_start_offset;
+
+  printf("%zd %p %p\n", prefetch_size, new_entry->data, new_entry->data_start);
+  // this should probably be handled by DSI
+  new_entry->actual_data_size = prefetch_size - data_start_offset;
+
+  new_entry->static_domain = static_domain;
 
   *(new_entry->back_link) = new_entry;
 
@@ -3265,11 +3287,11 @@ void create_prefetch_handle(struct __prefetch_entry_t **entry) {
 void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
-    consistent, bool fixed_size) {
+    consistent, bool static_domain, int64_t data_start_offset) {
 
   *new_entry = add_to_prefetch_buffer(pbuf, origin_node, robjaddr,
       prefetch_size, slice_desc, slice_desc_size, consistent,
-      fixed_size);
+      static_domain, data_start_offset);
 
   /*printf("%d creating new handle %p\n", chpl_nodeID, *new_entry);*/
   (*new_entry)->owner_obj = owner_obj;
@@ -3579,7 +3601,7 @@ void chpl_comm_pbuf_acq() {
 extern void __reprefetch_wrapper(void* owner_obj, c_nodeid_t
     dest_node_id, c_nodeid_t src_node_id, void* robjaddr, void*
     slice_desc, size_t slice_desc_size, bool consistent, bool
-    fixed_size);
+    static_domain);
 
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
   /*chpl_free(entry->data);*/
@@ -3596,7 +3618,7 @@ void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
   __reprefetch_wrapper(entry->owner_obj, chpl_nodeID,
       entry->origin_node, entry->robjaddr, entry->slice_desc,
       entry->slice_desc_size, entry->pf_type & PF_CONSISTENT,
-      entry->fixed_size);
+      entry->static_domain);
 
   /*chpl_comm_prefetch(&(entry->data), entry->origin_node,*/
       /*entry->robjaddr, &(entry->size), entry->slice_desc,*/

@@ -2232,8 +2232,12 @@ inline proc LocBlockArr.getUnpackContainerDirect(data: c_void_ptr) {
   return ret;
 }
 
-inline proc LocBlockArr.getDataStartByteIndex(data: c_void_ptr) {
+inline proc LocBlockArr.getDataStartByteIndex() {
   return getSize(rank*2, idxType);
+}
+
+proc LocBlockArr.dsiGetBaseDataStartAddr() {
+  return c_ptrTo(myElems[myElems.domain.low]):c_void_ptr;
 }
 
 inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
@@ -2263,6 +2267,7 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
   /*var low = getElementArrayAtOffset(data, 0, idxType);*/
   /*var high = getElementArrayAtOffset(data, getSize(rank,idxType), */
       /*idxType);*/
+
   const elemCount =
     if rank == 1 then
       /*idx[1]-low[1]*/
@@ -2342,8 +2347,7 @@ iter LocBlockArr.dsiGetSerializedObjectSize(slice_desc) {
   /*const sliceDom = {(...rangeTuple)};*/
   yield getSize(size, eltType);
 }
-
-iter LocBlockArr.dsiSerialize() {
+iter LocBlockArr.dsiSerializeMetadata() {
   // two points is enough to describe a slice
   // therefore we need rank*2 idxType variables for metadata
   /*const space = 0..#(rank*2);*/
@@ -2364,11 +2368,71 @@ iter LocBlockArr.dsiSerialize() {
     /*yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);*/
     yield convertToSerialChunk(size[i-rank]);
   }
+}
+
+iter LocBlockArr.dsiSerializeData() {
+  yield convertToSerialChunk(myElems);
+}
+
+iter LocBlockArr.dsiSerialize() {
+  // two points is enough to describe a slice
+  // therefore we need rank*2 idxType variables for metadata
+  /*const space = 0..#(rank*2);*/
+  /*var metaDataArr: [space] idxType;*/
+
+  compilerWarning("dsiSerialize is depracated");
+  var low = chpl__tuplify(locDom.myBlock.low);
+  var hi = chpl__tuplify(locDom.myBlock.high);
+  var size = hi-low + 1;
+
+  /*writeln(here, " serializing, ", low, " ", hi, " ", size);*/
+
+  for param i in 1..rank {
+    /*metaDataArr[i-1] = low[i];*/
+    yield convertToSerialChunk(low[i]);
+  }
+  for param i in rank+1..2*rank {
+    /*metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;*/
+    /*yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);*/
+    yield convertToSerialChunk(size[i-rank]);
+  }
   /*yield convertToSerialChunk(metaDataArr);*/
   yield convertToSerialChunk(myElems);
 }
 
+iter LocBlockArr.dsiSerializeMetadata(slice_desc) {
+  const space = 0..#(rank*2);
+  var metaDataArr: [space] idxType;
+  const myDom = locDom.myBlock;
+
+  /*for i in space do*/
+  /*metaDataArr[i] = slice_desc[i];*/
+
+  for param i in 1..rank {
+    metaDataArr[i-1] = max(myDom.dim(i).low, slice_desc[i-1]);
+    metaDataArr[i-1+rank] = min(myDom.dim(i).high,
+        slice_desc[i-1+rank])-max(myDom.dim(i).low, slice_desc[i-1])+1;
+  }
+
+  yield convertToSerialChunk(metaDataArr);
+}
+
+iter LocBlockArr.dsiSerializeData(slice_desc) {
+  var rangeTuple: rank*range(idxType);
+
+  for param i in 1..rank {
+    /*rangeTuple[i] = slice_desc[2*(i-1)]..slice_desc[2*(i-1)+1];*/
+    rangeTuple[i] = slice_desc[(i-1)]..slice_desc[(i-1)+rank];
+  }
+  const sliceDom = {(...rangeTuple)};
+  /*writeln(here, " will serialize slice : ", sliceDom);*/
+  /*halt("END");*/
+  var sliceToSend = myElems[sliceDom];
+  yield convertToSerialChunk(sliceToSend);
+}
+
 iter LocBlockArr.dsiSerialize(slice_desc) {
+  compilerWarning("dsiSerialize is depracated");
   // two points is enough to describe a slice
   // therefore we need rank*2 idxType variables for metadata
   const space = 0..#(rank*2);
