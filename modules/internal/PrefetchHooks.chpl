@@ -339,6 +339,7 @@ module PrefetchHooks {
         slice_desc, slice_desc_size) {
       var size = 0: size_t;
 
+        /*if prefetchTiming then subreprefetchTimer.start();*/
       on Locales[srcLocaleId] {
         // write size to destLocales handle's size
 
@@ -355,6 +356,7 @@ module PrefetchHooks {
         size = __serialized_obj_size_wrapper(srcObj,
             slice_desc_local, slice_desc_size);
       }
+        /*if prefetchTiming then subreprefetchTimer.stop();*/
 
       return size;
     }
@@ -366,7 +368,7 @@ module PrefetchHooks {
 
       on Locales[srcLocaleId] {
         // write data to destLocales handle's data
-        if prefetchTiming then subreprefetchTimer.start();
+        /*if prefetchTiming then subreprefetchTimer.start();*/
         const size_local = size;
         var slice_desc_local: c_ptr(uint(8));
 
@@ -387,7 +389,7 @@ module PrefetchHooks {
         /*writeln("Putting ", size_local, " to ", srcLocaleId);*/
         __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
             data[0], size_local);
-        if prefetchTiming then subreprefetchTimer.stop();
+        /*if prefetchTiming then subreprefetchTimer.stop();*/
       }
     }
 
@@ -460,8 +462,10 @@ module PrefetchHooks {
 
       if !staticDomain {
         var data: _ddata(uint(8));
-        var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
-            slice_desc, slice_desc_size);
+        /*var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,*/
+            /*slice_desc, slice_desc_size);*/
+
+        var size = get_entry_size(handle);
 
         data = __primitive("cast", _ddata(uint(8)),
             update_prefetch_handle(this, srcLocaleId, srcObj,
@@ -469,8 +473,11 @@ module PrefetchHooks {
               slice_desc_size, consistent));
 
 
+        
+        if prefetchTiming then subreprefetchTimer.start();
         __getSerializedData(destLocaleId, srcLocaleId, srcObj,
             slice_desc, slice_desc_size, data, size);
+        if prefetchTiming then subreprefetchTimer.stop();
         /*writeln("Copied");*/
         /*for i in 0..3 do {*/
           /*write((get_entry_data(handle):c_ptr(int(64)))[i], " ");*/
