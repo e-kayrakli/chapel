@@ -3203,7 +3203,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
 
   new_entry->data_start = (char *)new_entry->data + data_start_offset;
 
-  printf("%zd %p %p\n", prefetch_size, new_entry->data, new_entry->data_start);
+  /*printf("%zd %p %p\n", prefetch_size, new_entry->data, new_entry->data_start);*/
   // this should probably be handled by DSI
   new_entry->actual_data_size = prefetch_size - data_start_offset;
 

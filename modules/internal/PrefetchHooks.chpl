@@ -384,6 +384,7 @@ module PrefetchHooks {
 
         __serialize_wrapper(srcObj, local_buffer, size_local,
             slice_desc_local, slice_desc_size, metadataOnly);
+        /*writeln("Putting ", size_local, " to ", srcLocaleId);*/
         __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
             data[0], size_local);
         if prefetchTiming then subreprefetchTimer.stop();
@@ -478,8 +479,12 @@ module PrefetchHooks {
       }
       else {
         var data = get_entry_data_start(handle):c_ptr(uint(8));
+        /*writeln("Reprefetching ", get_entry_data_actual_size(handle),*/
+            /*" from ", srcLocaleId, " dest addr ",*/
+            /*__primitive("cast", int, get_entry_data_start(handle)));*/
         __primitive("chpl_comm_array_get",
-            get_entry_data_start(handle):c_ptr(uint(8)),
+            __primitive("array_get",
+                get_entry_data_start(handle):c_ptr(uint(8)), 0),
             srcLocaleId,
             get_entry_remote_data_start(handle):c_ptr(uint(8)),
             get_entry_data_actual_size(handle));

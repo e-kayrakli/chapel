@@ -58,6 +58,7 @@ void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
 #endif
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
+    //printf("%d getting into %p, with size %zd\n", chpl_nodeID, addr, size);
     chpl_cache_comm_get(addr, node, raddr, size, typeIndex, ln, fn);
     //printf("Satisfied from cache\n");
 #endif
