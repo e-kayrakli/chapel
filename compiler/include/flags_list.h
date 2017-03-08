@@ -281,6 +281,7 @@ symbolFlag( FLAG_WAS_COMPILER_GENERATED, npr, "was compiler generated", "used to
 symbolFlag( FLAG_WIDE_REF , npr, "wide" , ncm )
 symbolFlag( FLAG_WIDE_CLASS , npr, "wide class" , ncm )
 symbolFlag( FLAG_WRAPPER , npr, "wrapper" , "wrapper function" )
+symbolFlag( FLAG_WRAPPER_NEEDS_PBUF_ACQ , npr, "wrapper needs pbuf acq" , "add acquire_prefetch_buffer to the start of the wrapper function" )
 symbolFlag( FLAG_WRAPPER_NEEDS_START_FENCE , npr, "wrapper needs start fence" , "add PRIM_START_RMEM_FENCE to the start of the wrapper function" )
 symbolFlag( FLAG_WRAPPER_NEEDS_FINISH_FENCE , npr, "wrapper needs finish fence" , "add PRIM_FINISH_RMEM_FENCE to the end of the wrapper function" )
 symbolFlag( FLAG_WRAP_WRITTEN_FORMAL , npr, "wrap written formal" , "formal argument for wrapper for out/inout intent" )

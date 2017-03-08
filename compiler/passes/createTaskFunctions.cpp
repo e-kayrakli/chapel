@@ -693,8 +693,6 @@ void createTaskFunctions(void) {
             call->insertAfter(new CallExpr("chpl_rmem_consist_acquire"));
         }
 
-        block->blockInfoGet()->remove();
-
         // Now build the fn for the task or on statement.
 
         if( fCacheRemote ) {
@@ -708,7 +706,16 @@ void createTaskFunctions(void) {
           // the fence to the task function, we instruct
           // create_block_fn_wrapper to do it on our behalf.
           fn->addFlag(FLAG_WRAPPER_NEEDS_START_FENCE);
+          //if (info->isPrimitive(PRIM_BLOCK_COFORALL)) {
+          //if (fn->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
+          if (isCoforall) {
+          
+            fn->addFlag(FLAG_WRAPPER_NEEDS_PBUF_ACQ);
+            std::cout << "added\n";
+          }
         }
+
+        block->blockInfoGet()->remove();
 
         // This block becomes the body of the new function.
         // It is flattened so _downEndCount appears in the same scope as the

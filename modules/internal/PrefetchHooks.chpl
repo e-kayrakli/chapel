@@ -462,10 +462,11 @@ module PrefetchHooks {
 
       if !staticDomain {
         var data: _ddata(uint(8));
-        /*var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,*/
-            /*slice_desc, slice_desc_size);*/
+        var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
+            slice_desc, slice_desc_size);
 
-        var size = get_entry_size(handle);
+        /*if fixedSize then*/
+        /*var size = get_entry_size(handle);*/
 
         data = __primitive("cast", _ddata(uint(8)),
             update_prefetch_handle(this, srcLocaleId, srcObj,

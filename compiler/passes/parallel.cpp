@@ -671,6 +671,12 @@ static void create_block_fn_wrapper(FnSymbol* fn, CallExpr* fcall, BundleArgsFnD
     wrap_fn->insertAtTail(new CallExpr(PRIM_START_RMEM_FENCE));
   }
 
+  if (fn->hasFlag(FLAG_WRAPPER_NEEDS_PBUF_ACQ)) {
+    std::cout << "captured\n";
+    wrap_fn->addFlag(FLAG_WRAPPER_NEEDS_PBUF_ACQ); // helps optimizeOnClauses
+    wrap_fn->insertAtTail(new CallExpr(PRIM_ACQ_PBUF));
+  }
+
   // Create a call to the original function
   CallExpr *call_orig = new CallExpr(fn);
   bool first = true;

@@ -230,6 +230,7 @@ void *get_entry_remote_data_start(struct __prefetch_entry_t *entry);
 void set_entry_remote_data_start(struct __prefetch_entry_t *entry, void *start);
 size_t get_entry_size(struct __prefetch_entry_t *entry);
 size_t get_entry_data_actual_size(struct __prefetch_entry_t *entry);
+void acquire_prefetch_buffer(int ln, int fn);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 

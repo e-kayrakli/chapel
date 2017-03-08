@@ -241,6 +241,8 @@ enum PrimitiveTag {
   PRIM_START_RMEM_FENCE,
   PRIM_FINISH_RMEM_FENCE,
 
+  PRIM_ACQ_PBUF,
+
   PRIM_LOOKUP_FILENAME,   // Given an index, get a given filename (c_string)
 
   PRIM_GET_COMPILER_VAR,

@@ -2727,9 +2727,12 @@ void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
     cache_seqn_t sn = pbuf->prefetch_sequence_number;
     pbuf->prefetch_sequence_number++;
     entry->sn = seqn_max(entry->sn, sn);
-    TRACE_PRINT(("Locale %d Task %d has set sn. (entry->sn: %d)\n",
-        chpl_nodeID, chpl_task_getId(), entry->sn));
+    printf("Locale %d Task %d has set sn. (entry->sn: %ld)\n",
+        chpl_nodeID, chpl_task_getId(), entry->sn);
     entry->sn_updated = true;
+  }
+  else {
+    printf("Null entry\n");
   }
 }
 
@@ -3360,6 +3363,29 @@ void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
   }
 }
 
+void acquire_prefetch_buffer(int ln, int fn) {
+  struct __prefetch_entry_t *cur = pbuf->head;
+  chpl_prefetch_taskPrvData_t* task_local =
+    task_private_prefetch_data();
+
+  while(cur) {
+    if(task_local->last_acquire > cur->sn) {
+
+      start_update(cur, -1);
+      // someone might have already updated the entry, so check again if
+      // it's still stale
+      if(task_local->last_acquire > cur->sn) {
+        printf("Locale %d Task %d acquiring. (entry: %p, next: %p\
+          entry->sn: %ld, buf->sn: %ld) %d %d\n", chpl_nodeID, chpl_task_getId(),
+            cur, cur->next, cur->sn, pbuf->prefetch_sequence_number, ln, fn);
+        reprefetch_single_entry(cur);
+      }
+      stop_update(cur, -1);
+    }
+    cur = cur->next;
+  }
+}
+
 extern uint64_t __get_byte_idx_wrapper(void*, void*, void*);
 
 void get_prefetched_data(void *accessor,
@@ -3426,10 +3452,10 @@ void prefetch_get_consistent(struct __prefetch_entry_t* prefetch_entry,
     // someone might have already updated the entry, so check again if
     // it's still stale
     if(task_local->last_acquire > prefetch_entry->sn) {
-      TRACE_PRINT(("Locale %d Task %d reprefetching. (entry: %p, \
-        entry->sn: %d, buf->sn: %d)\n", chpl_nodeID, chpl_task_getId(),
+      printf("Locale %d Task %d reprefetching. (entry: %p, \
+        entry->sn: %ld, buf->sn: %ld)\n", chpl_nodeID, chpl_task_getId(),
           prefetch_entry, prefetch_entry->sn,
-          pbuf->prefetch_sequence_number));
+          pbuf->prefetch_sequence_number);
       reprefetch_single_entry(prefetch_entry);
     }
     stop_update(prefetch_entry, page_idx);
