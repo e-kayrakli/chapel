@@ -366,9 +366,9 @@ module PrefetchHooks {
         slice_desc, slice_desc_size: size_t, data, size,
         metadataOnly=false) {
 
+        if prefetchTiming then subreprefetchTimer.start();
       on Locales[srcLocaleId] {
         // write data to destLocales handle's data
-        /*if prefetchTiming then subreprefetchTimer.start();*/
         const size_local = size;
         var slice_desc_local: c_ptr(uint(8));
 
@@ -389,8 +389,8 @@ module PrefetchHooks {
         /*writeln("Putting ", size_local, " to ", srcLocaleId);*/
         __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
             data[0], size_local);
-        /*if prefetchTiming then subreprefetchTimer.stop();*/
       }
+      if prefetchTiming then subreprefetchTimer.stop();
     }
 
     // this is only used for reprefetching, where all we have is locale
@@ -474,10 +474,10 @@ module PrefetchHooks {
 
 
         
-        if prefetchTiming then subreprefetchTimer.start();
+        /*if prefetchTiming then subreprefetchTimer.start();*/
         __getSerializedData(destLocaleId, srcLocaleId, srcObj,
             slice_desc, slice_desc_size, data, size);
-        if prefetchTiming then subreprefetchTimer.stop();
+        /*if prefetchTiming then subreprefetchTimer.stop();*/
         /*writeln("Copied");*/
         /*for i in 0..3 do {*/
           /*write((get_entry_data(handle):c_ptr(int(64)))[i], " ");*/

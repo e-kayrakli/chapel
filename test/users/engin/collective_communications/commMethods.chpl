@@ -347,7 +347,8 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         /*writeln(here, " my west is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1),
             myDom.dim(2).low-1..myDom.dim(2).low-1};
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       //east
       if hasEast {
@@ -355,7 +356,8 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         /*writeln(here, " my east is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1),
             myDom.dim(2).high+1..myDom.dim(2).high+1};
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       //north
       if hasNorth {
@@ -363,7 +365,8 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         /*writeln(here, " my north is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
             myDom.dim(2)};
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       //south
       if hasSouth {
@@ -371,7 +374,8 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         /*writeln(here, " my south is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
             myDom.dim(2)};
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
 
       if(corners) {
@@ -380,7 +384,8 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
           /*[>writeln(here, " my nw is ", sourceIdx);<]*/
             const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
               myDom.dim(2).low-1..myDom.dim(2).low-1};
-          __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+          __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+              staticDomain=false);
 
         }
         if hasNorth && hasEast {
@@ -388,7 +393,8 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
           /*[>writeln(here, " my ne is ", sourceIdx);<]*/
             const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
               myDom.dim(2).high+1..myDom.dim(2).high+1};
-          __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+          __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+              staticDomain=false);
 
         }
         if hasSouth && hasWest {
@@ -396,7 +402,8 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
           /*[>writeln(here, " my sw is ", sourceIdx);<]*/
             const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
               myDom.dim(2).low-1..myDom.dim(2).low-1};
-          __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+            __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+                staticDomain=false);
 
         }
         if hasSouth && hasEast {
@@ -404,7 +411,8 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
           /*[>writeln(here, " my se is ", sourceIdx);<]*/
             const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
               myDom.dim(2).high+1..myDom.dim(2).high+1};
-          __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+            __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+                staticDomain=false);
 
         }
       }
