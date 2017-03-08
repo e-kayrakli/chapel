@@ -2427,8 +2427,14 @@ iter LocBlockArr.dsiSerializeData(slice_desc) {
   const sliceDom = {(...rangeTuple)};
   /*writeln(here, " will serialize slice : ", sliceDom);*/
   /*halt("END");*/
-  var sliceToSend = myElems[sliceDom];
-  yield convertToSerialChunk(sliceToSend);
+  /*var sliceToSend = myElems[sliceDom];*/
+  /*yield convertToSerialChunk(sliceToSend);*/
+
+  var sp = c_malloc(eltType, 1);
+  for i in sliceDom do
+    yield convertToSerialChunk(myElems[i], sp);
+  /*yield convertToSerialChunk(c_ptrTo(myElems[sliceDom.low]),*/
+      /*sliceDom.size, eltType);*/
 }
 
 iter LocBlockArr.dsiSerialize(slice_desc) {

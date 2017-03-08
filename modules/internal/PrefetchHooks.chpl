@@ -910,12 +910,28 @@ module PrefetchHooks {
 
   }
 
+  inline proc convertToSerialChunk(a: c_ptr, count, type t) {
+    return (a:c_void_ptr,
+        getSize(count, t),
+        false); //buffer needs to be freed?
+
+  }
+
   inline proc convertToSerialChunk(a: integral) {
     var dyn_mem = c_malloc(a.type, 1);
     dyn_mem[0] = a;
     return (dyn_mem:c_void_ptr,
         getSize(1, a.type),
         true); //buffer needs to be freed?
+
+  }
+
+  inline proc convertToSerialChunk(a, scratchPad)
+      where scratchPad.type == c_ptr(a.type) {
+    scratchPad[0] = a;
+    return (scratchPad:c_void_ptr,
+        getSize(1, a.type),
+        false); //buffer needs to be freed?
 
   }
 
