@@ -273,7 +273,8 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       if hasBack {
         const sourceIdx = localeIdx + (1,0,0);
@@ -282,7 +283,8 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
 
       if hasTop {
@@ -292,7 +294,8 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       if hasBottom {
         const sourceIdx = localeIdx + (0,1,0);
@@ -301,7 +304,8 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
 
       if hasLeft {
@@ -311,7 +315,8 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       if hasRight {
         const sourceIdx = localeIdx + (0,0,1);
@@ -320,7 +325,8 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
     }
   }
