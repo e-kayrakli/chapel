@@ -2727,8 +2727,8 @@ void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
     cache_seqn_t sn = pbuf->prefetch_sequence_number;
     pbuf->prefetch_sequence_number++;
     entry->sn = seqn_max(entry->sn, sn);
-    printf("Locale %d Task %d has set sn. (entry->sn: %ld)\n",
-        chpl_nodeID, chpl_task_getId(), entry->sn);
+    /*printf("Locale %d Task %d has set sn. (entry->sn: %ld)\n",*/
+        /*chpl_nodeID, chpl_task_getId(), entry->sn);*/
     entry->sn_updated = true;
   }
   else {
@@ -3264,10 +3264,12 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
 
   // currentyl we are always adding to head
   if(head != NULL) {
-    new_entry->next = head->next;
-    if(head->next) {
-      head->next->prev = new_entry;
-    }
+    /*new_entry->next = head->next;*/
+    /*if(head->next) {*/
+      /*head->next->prev = new_entry;*/
+    /*}*/
+    new_entry->next = head;
+    head->prev = new_entry;
   }
   else {
     new_entry->next = NULL;
@@ -3375,9 +3377,9 @@ void acquire_prefetch_buffer(int ln, int fn) {
       // someone might have already updated the entry, so check again if
       // it's still stale
       if(task_local->last_acquire > cur->sn) {
-        printf("Locale %d Task %d acquiring. (entry: %p, next: %p\
-          entry->sn: %ld, buf->sn: %ld) %d %d\n", chpl_nodeID, chpl_task_getId(),
-            cur, cur->next, cur->sn, pbuf->prefetch_sequence_number, ln, fn);
+        /*printf("Locale %d Task %d acquiring. (entry: %p, next: %p\*/
+          /*entry->sn: %ld, buf->sn: %ld) %d %d\n", chpl_nodeID, chpl_task_getId(),*/
+            /*cur, cur->next, cur->sn, pbuf->prefetch_sequence_number, ln, fn);*/
         reprefetch_single_entry(cur);
       }
       stop_update(cur, -1);
@@ -3441,7 +3443,7 @@ void get_prefetched_data(void *accessor,
 // Therefore no need to check it again.
 static
 void prefetch_get_consistent(struct __prefetch_entry_t* prefetch_entry,
-    void *dst, void *src, size_t size, int page_idx) {
+    void *dst, void *src, size_t size, int page_idx, int ln, int fn) {
 
   chpl_prefetch_taskPrvData_t* task_local =
     task_private_prefetch_data();
@@ -3453,9 +3455,9 @@ void prefetch_get_consistent(struct __prefetch_entry_t* prefetch_entry,
     // it's still stale
     if(task_local->last_acquire > prefetch_entry->sn) {
       printf("Locale %d Task %d reprefetching. (entry: %p, \
-        entry->sn: %ld, buf->sn: %ld)\n", chpl_nodeID, chpl_task_getId(),
+        entry->sn: %ld, buf->sn: %ld) %d %d\n", chpl_nodeID, chpl_task_getId(),
           prefetch_entry, prefetch_entry->sn,
-          pbuf->prefetch_sequence_number);
+          pbuf->prefetch_sequence_number, ln, fn);
       reprefetch_single_entry(prefetch_entry);
     }
     stop_update(prefetch_entry, page_idx);
@@ -3479,7 +3481,8 @@ void prefetch_get(void *dst, int32_t lock_offset, void *src,
 
   if(prefetch_entry->should_lock) {
     int page_idx = (-1*lock_offset)/PF_PAGE_SIZE;
-    prefetch_get_consistent(prefetch_entry, dst, src, size, page_idx);
+    prefetch_get_consistent(prefetch_entry, dst, src, size, page_idx,
+         ln, fn);
   }
   else {
     prefetch_get_inconsistent(dst,src,size);
