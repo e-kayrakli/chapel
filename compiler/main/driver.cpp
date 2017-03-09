@@ -159,6 +159,7 @@ char fExplainCall[256] = "";
 int explainCallID = -1;
 int breakOnResolveID = -1;
 bool fDenormalize = true;
+bool fEagerPrefetchUpdate = false;
 char fExplainInstantiation[256] = "";
 bool fExplainVerbose = false;
 bool fParseOnly = false;
@@ -811,6 +812,7 @@ static ArgumentDescription arg_desc[] = {
  {"replace-array-accesses-with-ref-temps", ' ', NULL, "Enable [disable] replacing array accesses with reference temps (experimental)", "N", &fReplaceArrayAccessesWithRefTemps, NULL, NULL },
  {"incremental", ' ', NULL, "Enable [disable] using incremental compilation", "N", &fIncrementalCompilation, "CHPL_INCREMENTAL_COMP", NULL},
  {"minimal-modules", ' ', NULL, "Enable [disable] using minimal modules",               "N", &fMinimalModules, "CHPL_MINIMAL_MODULES", NULL},
+ {"eager-prefetch-update", ' ', NULL, "Enable [disable] eager prefetch updates", "F", &fEagerPrefetchUpdate, "CHPL_EAGER_PREFETCH_UPDATE", NULL},
  DRIVER_ARG_PRINT_CHPL_HOME,
  DRIVER_ARG_LAST
 };

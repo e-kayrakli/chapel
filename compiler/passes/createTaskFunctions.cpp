@@ -706,12 +706,11 @@ void createTaskFunctions(void) {
           // the fence to the task function, we instruct
           // create_block_fn_wrapper to do it on our behalf.
           fn->addFlag(FLAG_WRAPPER_NEEDS_START_FENCE);
-          //if (info->isPrimitive(PRIM_BLOCK_COFORALL)) {
-          //if (fn->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
-          if (isCoforall) {
-          
-            fn->addFlag(FLAG_WRAPPER_NEEDS_PBUF_ACQ);
-            std::cout << "added\n";
+          if(fEagerPrefetchUpdate) {
+            if (isCoforall) {
+              fn->addFlag(FLAG_WRAPPER_NEEDS_PBUF_ACQ);
+              std::cout << "added\n";
+            }
           }
         }
 
