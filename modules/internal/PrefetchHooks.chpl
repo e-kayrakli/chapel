@@ -474,7 +474,6 @@ module PrefetchHooks {
               slice_desc_size, consistent));
 
 
-        
         /*if prefetchTiming then subreprefetchTimer.start();*/
         __getSerializedData(destLocaleId, srcLocaleId, srcObj,
             slice_desc, slice_desc_size, data, size);
@@ -551,13 +550,21 @@ module PrefetchHooks {
             slice_desc, slice_desc_size, data, size);
       }
       else {
+        // even though we are not prefetching the full data, we still
+        // need to bring in the metadata b/c:
+        // when we  don't bring in the metadata, first access to the
+        // data is done through junk metadata(all zeroes). Remember that
+        // we are checking for stale data while doing the actual read
+        // from the buffer and not when calculating the byte index,
+        // which happens without any lockign(we assume that metadata
+        // never changes and it is always there
+        __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+            slice_desc, slice_desc_size, data, obj.getMetadataSize(),
+            metadataOnly=true);
         // data is being prefetched consistently,
         // if staticDomain, and is not slice we need to get the start
         // address of the data in the owner node
         if staticDomain && slice_desc_size <= 0 {
-          __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-              slice_desc, slice_desc_size, data, obj.getMetadataSize(),
-              metadataOnly=true);
           var remoteDataStartPtr = __getRemoteDataStartAddr(srcLocaleId,
               srcObj);
 

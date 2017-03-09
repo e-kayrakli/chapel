@@ -2280,6 +2280,9 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
       (idx[2]-metadata[1])*metadata[5]+
       (idx[1]-metadata[0])*metadata[5]*metadata[4];
 
+  // TODO TODO TODO
+  /*if elemCount < 0 then return -1:size_t;*/
+
 
   // TODO this loop should work but it has one extra multiplication so I
   // am typing the code explicitly
@@ -2291,7 +2294,7 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
     /*coeff *= metadata[i+rank-1];*/
   /*}*/
 
-  /*writeln("Byte index for ", idx, " ",*/
+  /*writeln(here, " > Byte index for ", idx, " ",*/
       /*getMetadataSize() + getSize(elemCount, eltType), " elemCount: ",*/
       /*elemCount);*/
   return getMetadataSize() + getSize(elemCount, eltType);

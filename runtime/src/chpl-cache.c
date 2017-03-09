@@ -3454,17 +3454,37 @@ void prefetch_get_consistent(struct __prefetch_entry_t* prefetch_entry,
     // someone might have already updated the entry, so check again if
     // it's still stale
     if(task_local->last_acquire > prefetch_entry->sn) {
-      printf("Locale %d Task %d reprefetching. (entry: %p, \
-        entry->sn: %ld, buf->sn: %ld) %d %d\n", chpl_nodeID, chpl_task_getId(),
-          prefetch_entry, prefetch_entry->sn,
-          pbuf->prefetch_sequence_number, ln, fn);
+      /*printf("\t>\t");*/
+      int i;
+      double * tmp_data = (double *)get_entry_data_start(prefetch_entry);
+      /*for(i = 0 ; i < 8 ; i++) {*/
+        /*printf("%f ", tmp_data[i]);*/
+      /*}*/
+      /*printf("\n");*/
+      /*printf("Locale %d Task %d reprefetching. (entry: %p, \*/
+        /*entry->sn: %ld, buf->sn: %ld) %d %d\n", chpl_nodeID, chpl_task_getId(),*/
+          /*prefetch_entry, prefetch_entry->sn,*/
+          /*pbuf->prefetch_sequence_number, ln, fn);*/
       reprefetch_single_entry(prefetch_entry);
+
+      /*if(chpl_nodeID == 1) {*/
+        /*printf("\t>\t");*/
+        /*for(i = 0 ; i < 8 ; i++) {*/
+          /*printf("%f ", tmp_data[i]);*/
+        /*}*/
+        /*printf("\n");*/
+        /*for(i = 8 ; i < 16 ; i++) {*/
+          /*printf("%f ", tmp_data[i]);*/
+        /*}*/
+        /*printf("\n");*/
+      /*}*/
     }
     stop_update(prefetch_entry, page_idx);
   }
 
   start_read(prefetch_entry, page_idx);
   chpl_memcpy(dst, src, size);
+  /*printf("Locale %d read %f\n", chpl_nodeID, *((double *)(src)));*/
   stop_read(prefetch_entry, page_idx);
 }
 
