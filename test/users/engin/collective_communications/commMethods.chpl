@@ -332,7 +332,7 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
   }
   finalizePrefetch();
 }
-proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
+proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
   if rank != 2 then
     halt("This Prefetch pattern is only supprted for 2D arrays");
 
@@ -352,7 +352,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         const sourceIdx = localeIdx - (0,1);
         /*writeln(here, " my west is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1),
-            myDom.dim(2).low-1..myDom.dim(2).low-1};
+            myDom.dim(2).low-depth..myDom.dim(2).low-1};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
             staticDomain=false);
       }
@@ -361,7 +361,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         const sourceIdx = localeIdx + (0,1);
         /*writeln(here, " my east is ", sourceIdx);*/
         const sliceDesc = {myDom.dim(1),
-            myDom.dim(2).high+1..myDom.dim(2).high+1};
+            myDom.dim(2).high+1..myDom.dim(2).high+depth};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
             staticDomain=false);
       }
@@ -369,7 +369,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
       if hasNorth {
         const sourceIdx = localeIdx - (1,0);
         /*writeln(here, " my north is ", sourceIdx);*/
-        const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
+        const sliceDesc = {myDom.dim(1).low-depth..myDom.dim(1).low-1,
             myDom.dim(2)};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
             staticDomain=false);
@@ -378,7 +378,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
       if hasSouth {
         const sourceIdx = localeIdx + (1,0);
         /*writeln(here, " my south is ", sourceIdx);*/
-        const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
+        const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+depth,
             myDom.dim(2)};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
             staticDomain=false);
@@ -388,8 +388,9 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         if hasNorth && hasWest {
           const sourceIdx = localeIdx + (-1,-1);
           /*[>writeln(here, " my nw is ", sourceIdx);<]*/
-            const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
-              myDom.dim(2).low-1..myDom.dim(2).low-1};
+            const sliceDesc =
+            {myDom.dim(1).low-depth..myDom.dim(1).low-1,
+              myDom.dim(2).low-depth..myDom.dim(2).low-1};
           __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
               staticDomain=false);
 
@@ -397,8 +398,9 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         if hasNorth && hasEast {
           const sourceIdx = localeIdx + (-1,1);
           /*[>writeln(here, " my ne is ", sourceIdx);<]*/
-            const sliceDesc = {myDom.dim(1).low-1..myDom.dim(1).low-1,
-              myDom.dim(2).high+1..myDom.dim(2).high+1};
+            const sliceDesc =
+            {myDom.dim(1).low-depth..myDom.dim(1).low-1,
+              myDom.dim(2).high+1..myDom.dim(2).high+depth};
           __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
               staticDomain=false);
 
@@ -406,8 +408,9 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         if hasSouth && hasWest {
           const sourceIdx = localeIdx + (1,-1);
           /*[>writeln(here, " my sw is ", sourceIdx);<]*/
-            const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
-              myDom.dim(2).low-1..myDom.dim(2).low-1};
+            const sliceDesc =
+            {myDom.dim(1).high+1..myDom.dim(1).high+depth,
+              myDom.dim(2).low-depth..myDom.dim(2).low-1};
             __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
                 staticDomain=false);
 
@@ -415,8 +418,9 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false) {
         if hasSouth && hasEast {
           const sourceIdx = localeIdx + (1,1);
           /*[>writeln(here, " my se is ", sourceIdx);<]*/
-            const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+1,
-              myDom.dim(2).high+1..myDom.dim(2).high+1};
+            const sliceDesc =
+            {myDom.dim(1).high+1..myDom.dim(1).high+depth,
+              myDom.dim(2).high+1..myDom.dim(2).high+depth};
             __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
                 staticDomain=false);
 

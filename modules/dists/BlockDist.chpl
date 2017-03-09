@@ -2291,6 +2291,9 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
     /*coeff *= metadata[i+rank-1];*/
   /*}*/
 
+  /*writeln("Byte index for ", idx, " ",*/
+      /*getMetadataSize() + getSize(elemCount, eltType), " elemCount: ",*/
+      /*elemCount);*/
   return getMetadataSize() + getSize(elemCount, eltType);
 }
 
