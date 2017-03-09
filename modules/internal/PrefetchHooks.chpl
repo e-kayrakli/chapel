@@ -687,7 +687,7 @@ module PrefetchHooks {
               /*}*/
             /*}*/
           /*}*/
-          reprefetch_single_entry(handles[i]);
+          reprefetch_single_entry(handleFromLocaleIdx(i));
           /*if allowPrefetchUnpacking {*/
             /*if here.id == 0 {*/
               /*for idx in unpackedData[i].dom {*/
