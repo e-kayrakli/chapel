@@ -55,6 +55,19 @@ proc BlockCyclicArr.__prefetchFrom(localeIdx, sourceIdx,
       consistent, staticDomain);
 }
 
+// number of locales must be square
+proc BlockArr.transposePrefetch(consistent=true) {
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+      const sourceIdx = (localeIdx[2], localeIdx[1]);
+      __prefetchFrom(localeIdx, sourceIdx, consistent,
+          staticDomain=false);
+    }
+  }
+  /*writeln("Finalizing prefetch");*/
+  finalizePrefetch();
+}
+
 proc BlockCyclicArr.transposePrefetch(consistent=true) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
