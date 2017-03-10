@@ -439,12 +439,13 @@ class LocBlockArr {
 // this got real ugly
 inline proc LocBlockArr.getPrefetchHook(){
   local {
-    if allowPrefetchUnpacking then 
-      return prefetchHook:GenericPrefetchHook(this.type,
-          myElems.type, true);
-    else
-      return prefetchHook:GenericPrefetchHook(this.type, int, false);
-      /*return __primitive("cast",GenericPrefetchHook(this.type, int, false), prefetchHook);*/
+    return prefetchHook;
+    /*if allowPrefetchUnpacking then */
+      /*return prefetchHook:GenericPrefetchHook(this.type,*/
+          /*myElems.type, true);*/
+    /*else*/
+      /*return prefetchHook:GenericPrefetchHook(this.type, int, false);*/
+      /*[>return __primitive("cast",GenericPrefetchHook(this.type, int, false), prefetchHook);<]*/
   }
 }
 
