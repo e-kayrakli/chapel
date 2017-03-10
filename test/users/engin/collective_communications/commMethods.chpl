@@ -129,7 +129,8 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
 
         /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
             /*[>dom.dist.targetLocales(sourceIdx));<]*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       /*if hasBack {*/
         /*const sourceIdx = localeIdx + (1,0,0);*/
@@ -148,7 +149,8 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
 
         /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
             /*[>dom.dist.targetLocales(sourceIdx));<]*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       /*if hasBottom {*/
         /*const sourceIdx = localeIdx + (0,1,0);*/
@@ -167,7 +169,8 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
 
         /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
             /*[>dom.dist.targetLocales(sourceIdx));<]*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       /*if hasRight {*/
         /*const sourceIdx = localeIdx + (0,0,1);*/
@@ -186,7 +189,8 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       /*if hasBack && hasRight {*/
         /*const sourceIdx = localeIdx + (1,0,1);*/
@@ -204,7 +208,8 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       /*if hasBack && hasBottom {*/
         /*const sourceIdx = localeIdx + (1,1,0);*/
@@ -223,7 +228,8 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       /*if hasBack && hasBottom && hasRight{*/
         /*const sourceIdx = localeIdx + (1,1,1);*/
@@ -243,7 +249,8 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
 
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
-        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+            staticDomain=false);
       }
       /*if hasRight && hasBottom {*/
         /*const sourceIdx = localeIdx + (0,1,1);*/
@@ -472,12 +479,13 @@ inline proc domToArray(dom: domain) where dom.rank == 3 {
          dom.dim(1).high, dom.dim(2).high, dom.dim(3).high];
 }
 
-proc BlockArr.rowWiseAllGather(consistent=true) {
+proc BlockArr.rowWiseAllGather(consistent=true, staticDomain=false) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for i in dom.dist.targetLocDom.dim(2) {
         const sourceIdx = chpl__tuplify(i).withIdx(1, localeIdx[1]);
-        __prefetchFrom(localeIdx, sourceIdx, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, consistent,
+            staticDomain=staticDomain);
       }
     }
   }
@@ -549,12 +557,13 @@ proc BlockArr.rowWiseAllGatherTranspose(consistent=true) {
   finalizePrefetch();
 }
 
-proc BlockArr.colWiseAllGather(consistent=true) {
+proc BlockArr.colWiseAllGather(consistent=true, staticDomain=false) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for i in dom.dist.targetLocDom.dim(1) {
         const sourceIdx = chpl__tuplify(i).withIdx(2, localeIdx[2]);
-        __prefetchFrom(localeIdx, sourceIdx, consistent);
+        __prefetchFrom(localeIdx, sourceIdx, consistent,
+            staticDomain=staticDomain);
       }
     }
   }
