@@ -412,7 +412,9 @@ class LocBlockArr {
 
   /*var prefetchHook: PrefetchHook;*/
   var prefetchHook: GenericPrefetchHook(
-      LocBlockArr(eltType, rank, idxType, stridable), int, false);
+      LocBlockArr(eltType, rank, idxType, stridable),
+      myElems.type,
+      allowPrefetchUnpacking);
   // These functions will always be called on this.locale, and so we do
   // not have an on statement around the while loop below (to avoid
   // the repeated on's from calling testAndSet()).
@@ -425,10 +427,12 @@ class LocBlockArr {
   }
 
   proc setup(targetLocales) {
-    prefetchHook = if allowPrefetchUnpacking then
-      getNewPrefetchHook(this, myElems.type, targetLocales)
-      else getNewPrefetchHook(this, targetLocales);
+    /*prefetchHook = if allowPrefetchUnpacking then*/
+      /*getNewPrefetchHook(this, myElems.type, targetLocales)*/
+      /*else getNewPrefetchHook(this, targetLocales);*/
 
+    prefetchHook = getNewPrefetchHook(this, myElems.type,
+        allowPrefetchUnpacking, targetLocales);
   }
 
 }

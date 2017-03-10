@@ -184,6 +184,12 @@ module PrefetchHooks {
     }
   }
 
+  inline proc getNewPrefetchHook(obj, type unpackType, param
+      unpackAccess, localeContainer) {
+    return new GenericPrefetchHook(obj, unpackType, unpackAccess,
+        localeContainer);
+  }
+
   inline proc getNewPrefetchHook(obj, type unpackType, localeContainer) {
     return new GenericPrefetchHook(obj, unpackType, true,
         localeContainer);
