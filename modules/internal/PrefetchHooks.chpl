@@ -81,6 +81,11 @@ module PrefetchHooks {
       halt("This shouldn't have been called", x);
     }
 
+    proc getSerializedMetadataSize() {
+      halt("This shouldn't have been called", x);
+      return 0:uint;
+    }
+
     iter dsiSerialize(metadataOnly) {
       halt("This shouldn't have been called", x);
       var dummyPtr: c_void_ptr;
@@ -262,6 +267,10 @@ module PrefetchHooks {
       }
 
       for i in 0..#localeDomSize do create_prefetch_handle(handles[i]);
+    }
+
+    proc getSerializedMetadataSize() {
+      return obj.getMetadataSize();
     }
 
     pragma "no local return"
@@ -564,9 +573,13 @@ module PrefetchHooks {
         // from the buffer and not when calculating the byte index,
         // which happens without any lockign(we assume that metadata
         // never changes and it is always there
+        const metadataSize = __getSerializedMetadataSize(destLocaleId,
+            srcLocaleId, srcObj, slice_desc, slice_desc_size): size_t;
+
         __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-            slice_desc, slice_desc_size, data, obj.getMetadataSize(),
+            slice_desc, slice_desc_size, data, metadataSize,
             metadataOnly=true);
+
         // data is being prefetched consistently,
         // if staticDomain, and is not slice we need to get the start
         // address of the data in the owner node
@@ -580,6 +593,19 @@ module PrefetchHooks {
       }
 
       return new_handle_ptr;
+    }
+
+    inline proc __getSerializedMetadataSize(destLocaleId, srcLocaleId,
+        srcObj, slice_desc, slice_desc_size) {
+
+      var size = 0:uint;
+      on Locales[srcLocaleId] {
+        var hookObj = srcObj:PrefetchHook;
+
+        size = hookObj.getSerializedMetadataSize();
+      }
+
+      return size;
     }
 
     // here obj needs to be a wide class refernece to another hook
@@ -820,9 +846,17 @@ module PrefetchHooks {
     }
 
     inline proc getByteIndex(data: c_void_ptr, __idx: c_void_ptr) {
-      var idx = __idx:c_ptr(obj.rank*obj.idxType);
+      if !unpackAccess {
+        var idx = __idx:c_ptr(obj.rank*obj.idxType);
 
-      return obj.getByteIndex(data, idx.deref());
+        return obj.getByteIndex(data, idx.deref());
+      }
+      else {
+        halt("getByteIndex is called on an object that doesn't " +
+            "support it");
+
+        return 0:uint;
+      }
     }
 
     proc test() {
@@ -905,6 +939,9 @@ module PrefetchHooks {
           c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
               chunk[1]:c_ptr(bufferEltType), chunkSize);
 
+          if chunk[3] then writeln(here, " X ",
+              (chunk[1]:c_ptr(int))[0]);
+
           curBufferSize += chunkSize;
         }
       }
@@ -954,6 +991,14 @@ module PrefetchHooks {
         getSize(1, a.type),
         false); //buffer needs to be freed?
 
+  }
+  
+  inline proc convertToSerialChunk(a) where isTuple(a) {
+    var dyn_mem = c_malloc(a.type, 1);
+    dyn_mem[0] = a;
+    return (dyn_mem:c_void_ptr,
+        getSize(1, a.type),
+        true); //buffer needs to be freed?
   }
 
   inline proc getElementArrayAtOffset(data: c_void_ptr, offset, 

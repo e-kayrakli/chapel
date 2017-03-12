@@ -28,10 +28,10 @@ inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent,
 
 inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
     consistent, staticDomain=false) {
-  var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  /*var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);*/
   locArr[localeIdx].prefetchHook.requestPrefetch(
       dom.dist.targetLocales[sourceIdx].id, //TODO this can be avoided
-      privCopy.locArr[sourceIdx],
+      locArr[sourceIdx],
       consistent, staticDomain);
 }
 
@@ -452,6 +452,14 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
 }
 
 inline proc BlockArr.finalizePrefetch() {
+  coforall l in dom.dist.targetLocDom {
+    on dom.dist.targetLocales[l] {
+      locArr[l].prefetchHook.finalizePrefetch();
+    }
+  }
+}
+
+inline proc SparseBlockArr.finalizePrefetch() {
   coforall l in dom.dist.targetLocDom {
     on dom.dist.targetLocales[l] {
       locArr[l].prefetchHook.finalizePrefetch();

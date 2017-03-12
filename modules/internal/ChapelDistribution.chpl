@@ -709,6 +709,14 @@ module ChapelDistribution {
     // clear how to initialize this in that class.
     var data: [dom.nnzDom] eltType;
 
+    proc setData(d: _ddata) {
+      data.setData(d);
+    }
+
+    proc setData(d: c_ptr) {
+      data.setData(d);
+    }
+
     proc dsiGetBaseDom() return dom;
 
     proc ~BaseSparseArr() {

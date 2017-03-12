@@ -273,7 +273,6 @@ class LocSparseBlockDom {
   var sparseDist = new sparseLayoutType; //unresolved call workaround
   var mySparseBlock: sparse subdomain(parentDom) dmapped new dmap(sparseDist);
 
-  /*var prefetchHook: PrefetchHook;*/
   /*proc setup() {*/
     /*prefetchHook = new GenericPrefetchHook(this);*/
   /*}*/
@@ -388,6 +387,7 @@ class SparseBlockArr: BaseSparseArr {
         const locDom = dom.getLocDom(localeIdx);
         locArr(localeIdx) = new LocSparseBlockArr(eltType, rank, idxType,
             stridable, sparseLayoutType, locDom);
+        locArr(localeIdx).setup(dom.dist.targetLocales);
         if thisid == here.id then
           myLocArr = locArr(localeIdx);
       }
@@ -494,6 +494,16 @@ class LocSparseBlockArr {
   const locDom: LocSparseBlockDom(rank, idxType, stridable, sparseLayoutType);
   var myElems: [locDom.mySparseBlock] eltType;
 
+  var prefetchHook: GenericPrefetchHook(
+      LocSparseBlockArr(eltType, rank, idxType, stridable,
+        sparseLayoutType),
+      myElems.type,
+      true);
+
+  proc setup(targetLocales) {
+    prefetchHook = getNewPrefetchHook(this, myElems.type,
+        true, targetLocales);
+  }
   proc dsiAccess(i) ref {
     return myElems[i];
   }
@@ -587,6 +597,134 @@ class LocSparseBlockArr {
       /*return metadataSize+indexArraySize+dataArraySize;*/
     /*}*/
   /*}*/
+
+
+  //.why is this an iterator? FIXME
+  iter dsiGetSerializedObjectSize() {
+
+    
+    yield getSize(rank*2, idxType); //metadata
+    yield getSize(myElems.size * rank, idxType); // indices
+    yield getSize(1, int); // num indices
+
+    const dataSize = getSize(myElems.size, eltType); // data
+    yield dataSize;
+  }
+
+  // BlockArr slice descriptors are range tuples
+  iter dsiGetSerializedObjectSize(slice_desc) {
+    halt("dsiGetSerializedObjectSize - " +
+        "Slice prefetching is not supported by SparseBlock arrays");
+    yield getSize(rank*2, idxType);
+  }
+
+  iter dsiSerializeMetadata() {
+
+    var low = chpl__tuplify(locDom.mySparseBlock.low);
+    var hi = chpl__tuplify(locDom.mySparseBlock.high);
+    var size = hi-low + 1;
+
+    writeln(here, " serializing, ", low, " ", hi, " ", size);
+
+    // yield the boundaries
+    for param i in 1..rank {
+      /*metaDataArr[i-1] = low[i];*/
+      yield convertToSerialChunk(low[i]);
+    }
+    for param i in rank+1..2*rank {
+      /*metaDataArr[i-1] = hi[i-rank] - low[i-rank] + 1;*/
+      /*yield convertToSerialChunk(hi[i-rank] - low[i-rank] + 1);*/
+      yield convertToSerialChunk(size[i-rank]);
+    }
+
+    // yield num indices
+    writeln("\t\t>", here, " dsiSerializeMetadata yielding ",
+        locDom.mySparseBlock.numIndices);
+    yield convertToSerialChunk(locDom.mySparseBlock.numIndices);
+
+    // yield indices
+    //TODO this can be optimized if DefaultSparse
+    for idx in locDom.mySparseBlock {
+      writeln(here, " yielding index ", idx);
+      yield convertToSerialChunk(idx);
+    }
+  }
+
+  iter dsiSerializeData() {
+    yield convertToSerialChunk(myElems._value.data);
+  }
+
+  iter dsiSerializeMetadata(slice_desc) {
+    halt("dsiSerializeMetadata - " +
+        "Slice prefetching is not supported by SparseBlock arrays");
+    yield convertToSerialChunk(0);
+  }
+
+  iter dsiSerializeData(slice_desc) {
+    halt("dsiSerializeData - " +
+        "Slice prefetching is not supported by SparseBlock arrays");
+    yield convertToSerialChunk(0);
+  }
+
+  inline proc getUnpackContainerDirect(data: c_void_ptr) {
+    var metadata = getElementArrayAtOffset(data, 0, idxType);
+    var ranges: rank*range;
+
+    for param i in 1..rank do
+      ranges[i] = metadata[i-1]..#metadata[i+rank-1];
+
+    const parentDom = {(...ranges)};
+
+    writeln(here, " Creating container : ", parentDom);
+    // TODO add support for CSR
+    var sparseDom: sparse subdomain(parentDom);
+
+    var numIndices = getElementArrayAtOffset(data,
+        getSize(rank*2, idxType),
+        int);
+
+    writeln(here, " received ", numIndices[0]);
+
+    // add indices
+
+    // convert C array to Chapel array TODO: optimize
+    const indicesDom = {0..#numIndices[0]};
+    var indices: [indicesDom] rank*idxType;
+
+    var idxIntoData = getSize(rank*2, idxType) + getSize(1, int);
+    for i in 0..#numIndices[0] {
+      var idx = getElementArrayAtOffset(data, idxIntoData, idxType);
+      writeln(here, "\t\t\t >> ", idx[0]);
+      writeln(here, "\t\t\t >> ", idx[1]);
+      writeln(here, "\t\t\t >> ", idx[2]);
+      for param r in 1..rank {
+        indices[i][r] = idx[r-1];
+      }
+      idxIntoData += getSize(rank, idxType);
+    }
+    writeln(here, "Creating container with indices:\n\t", indices);
+    sparseDom += indices;
+
+    var ret: [sparseDom] eltType;
+    return ret;
+  }
+
+  // these two are identical
+  inline proc getMetadataSize() {
+    return getSize(rank*2, idxType) + // metadata
+      getSize(1, int) + // num indices
+      getSize(myElems.size * rank, idxType); // indices
+  }
+
+  inline proc getDataStartByteIndex() {
+    return getSize(rank*2, idxType) + // metadata
+      getSize(1, int) + // num indices
+      getSize(myElems.size * rank, idxType); // indices
+  }
+
+  proc dsiGetBaseDataStartAddr() {
+    return c_ptrTo(myElems[myElems.domain.low]):c_void_ptr;
+  }
 }
 
 /*
