@@ -30,7 +30,7 @@ inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
     consistent, staticDomain=false) {
   /*var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);*/
   locArr[localeIdx].prefetchHook.requestPrefetch(
-      dom.dist.targetLocales[sourceIdx].id, //TODO this can be avoided
+      sourceIdx, //TODO this can be avoided
       locArr[sourceIdx],
       consistent, staticDomain);
 }

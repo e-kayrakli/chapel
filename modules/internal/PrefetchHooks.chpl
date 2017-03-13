@@ -279,9 +279,12 @@ module PrefetchHooks {
       local {
         if prefetchTiming then accessTimer.start();
         if unpackAccess {
+          /*writeln(here, " unpacked access");*/
           if hasPrefetchedFrom(locIdx) {
+            /*writeln(here, " has prefetched from ", locIdx);*/
             ref unpackedDataTmp = unpackedData[locIdx];
             if unpackedDataTmp.domain.member(i) {
+              /*writeln(here, " has prefetched ", i, " from ", locIdx);*/
               ref retTmp = unpackedDataTmp[i];
               prefetched = true;
               // NOTE: I am not sure why we always get a wide pointer out
@@ -427,6 +430,9 @@ module PrefetchHooks {
           return handles[idx];
         }
         if idx.size == 2 {
+          /*var thisIntTmp = __primitive("cast", uint,*/
+              /*__primitive("_wide_get_addr", this));*/
+          /*writeln(here, " accesing handle of hook obj ", thisIntTmp);*/
           return handles[idx[1]*localeDomDimSize[2]+idx[2]];
         }
         if idx.size == 3 {

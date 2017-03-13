@@ -437,11 +437,12 @@ class SparseBlockArr: BaseSparseArr {
         //      }
     }
     const locIdx = dom.dist.targetLocsIdx(i);
+    var hereLocIdx = dom.dist.targetLocaleIDs[here.id];
 
     if dom.dist.targetLocales[locIdx] != here {
       var hasPrefetched: bool;
       ref prefetchData =
-        myLocArr.prefetchHook.unifiedAccessPrefetchedData(locIdx,
+        locArr[hereLocIdx].prefetchHook.unifiedAccessPrefetchedData(locIdx,
             i, hasPrefetched);
 
       if hasPrefetched then return prefetchData;
@@ -458,6 +459,7 @@ class SparseBlockArr: BaseSparseArr {
 
     const locIdx = dom.dist.targetLocsIdx(i);
     var hereLocIdx = dom.dist.targetLocaleIDs[here.id];
+    /*writeln(here, " accessing ", i, " my own locidx ", hereLocIdx);*/
     var hasPrefetched: bool;
     ref prefetchData =
       locArr[hereLocIdx].prefetchHook.unifiedAccessPrefetchedData(locIdx,
@@ -475,10 +477,11 @@ class SparseBlockArr: BaseSparseArr {
         //      }
     }
     const locIdx = dom.dist.targetLocsIdx(i);
+    var hereLocIdx = dom.dist.targetLocaleIDs[here.id];
     if dom.dist.targetLocales[locIdx] != here {
       var hasPrefetched: bool;
       ref prefetchData =
-        myLocArr.prefetchHook.unifiedAccessPrefetchedData(locIdx,
+        locArr[hereLocIdx].prefetchHook.unifiedAccessPrefetchedData(locIdx,
             i, hasPrefetched);
 
       if hasPrefetched then return prefetchData;

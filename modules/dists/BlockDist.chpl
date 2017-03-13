@@ -1708,9 +1708,9 @@ proc Block.Block(other: Block, privateData,
 
   for i in targetLocDom {
     targetLocales(i) = other.targetLocales(i);
-    targetLocaleIDs(i) = other.targetLocaleIDs(i);
     locDist(i) = other.locDist(i);
   }
+  for (o, t) in zip(other.targetLocaleIDs, targetLocaleIDs) do t=o;
 }
 
 proc Block.dsiSupportsPrivatization() param return true;
