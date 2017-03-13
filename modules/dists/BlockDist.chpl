@@ -309,7 +309,8 @@ class Block : BaseDist {
   var boundingBox: domain(rank, idxType);
   var targetLocDom: domain(rank);
   var targetLocales: [targetLocDom] locale;
-  var targetLocaleIDs: [targetLocDom] int(64); //locale ID type?
+  var targetLocaleIdxsDom = {0..#numLocales};
+  var targetLocaleIDs: [targetLocaleIdxsDom] rank*int;
   var locDist: [targetLocDom] LocBlock(rank, idxType);
   var dataParTasksPerLocale: int;
   var dataParIgnoreRunningTasks: bool;
@@ -471,14 +472,16 @@ proc Block.Block(boundingBox: domain,
 
   setupTargetLocalesArray(targetLocDom, this.targetLocales, targetLocales);
 
-  forall (id,loc) in zip(targetLocaleIDs, this.targetLocales) do
-    id = loc.id;
   const boundingBoxDims = this.boundingBox.dims();
   const targetLocDomDims = targetLocDom.dims();
-  coforall locid in targetLocDom do
-    on this.targetLocales(locid) do
+  coforall locid in targetLocDom {
+    on this.targetLocales(locid) {
       locDist(locid) =  new LocBlock(rank, idxType, locid, boundingBoxDims,
                                      targetLocDomDims);
+      targetLocaleIDs[here.id] = chpl__tuplify(locid);
+    }
+  }
+
 
   // NOTE: When these knobs stop using the global defaults, we will need
   // to add checks to make sure dataParTasksPerLocale<0 and

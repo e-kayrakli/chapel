@@ -388,8 +388,8 @@ class SparseBlockArr: BaseSparseArr {
         locArr(localeIdx) = new LocSparseBlockArr(eltType, rank, idxType,
             stridable, sparseLayoutType, locDom);
         locArr(localeIdx).setup(dom.dist.targetLocales);
-        if thisid == here.id then
-          myLocArr = locArr(localeIdx);
+        /*if thisid == here.id then*/
+          /*myLocArr = locArr(localeIdx);*/
       }
     }
   }
@@ -436,6 +436,16 @@ class SparseBlockArr: BaseSparseArr {
         return myLocArr.dsiAccess(i);
         //      }
     }
+    const locIdx = dom.dist.targetLocsIdx(i);
+
+    if dom.dist.targetLocales[locIdx] != here {
+      var hasPrefetched: bool;
+      ref prefetchData =
+        myLocArr.prefetchHook.unifiedAccessPrefetchedData(locIdx,
+            i, hasPrefetched);
+
+      if hasPrefetched then return prefetchData;
+    }
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
   proc dsiAccess(i: rank*idxType)
@@ -445,7 +455,17 @@ class SparseBlockArr: BaseSparseArr {
         return myLocArr.dsiAccess(i);
         //      }
     }
-    return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
+
+    const locIdx = dom.dist.targetLocsIdx(i);
+    var hereLocIdx = dom.dist.targetLocaleIDs[here.id];
+    var hasPrefetched: bool;
+    ref prefetchData =
+      locArr[hereLocIdx].prefetchHook.unifiedAccessPrefetchedData(locIdx,
+          i, hasPrefetched);
+
+    if hasPrefetched then return prefetchData;
+
+    return locArr[locIdx].dsiAccess(i);
   }
   proc dsiAccess(i: rank*idxType) const ref
   where shouldReturnRvalueByConstRef(eltType) {
@@ -453,6 +473,15 @@ class SparseBlockArr: BaseSparseArr {
       if myLocArr != nil && myLocArr.locDom.dsiMember(i) {
         return myLocArr.dsiAccess(i);
         //      }
+    }
+    const locIdx = dom.dist.targetLocsIdx(i);
+    if dom.dist.targetLocales[locIdx] != here {
+      var hasPrefetched: bool;
+      ref prefetchData =
+        myLocArr.prefetchHook.unifiedAccessPrefetchedData(locIdx,
+            i, hasPrefetched);
+
+      if hasPrefetched then return prefetchData;
     }
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
@@ -624,7 +653,7 @@ class LocSparseBlockArr {
     var hi = chpl__tuplify(locDom.mySparseBlock.high);
     var size = hi-low + 1;
 
-    writeln(here, " serializing, ", low, " ", hi, " ", size);
+    /*writeln(here, " serializing, ", low, " ", hi, " ", size);*/
 
     // yield the boundaries
     for param i in 1..rank {
@@ -638,14 +667,14 @@ class LocSparseBlockArr {
     }
 
     // yield num indices
-    writeln("\t\t>", here, " dsiSerializeMetadata yielding ",
-        locDom.mySparseBlock.numIndices);
+    /*writeln("\t\t>", here, " dsiSerializeMetadata yielding ",*/
+        /*locDom.mySparseBlock.numIndices);*/
     yield convertToSerialChunk(locDom.mySparseBlock.numIndices);
 
     // yield indices
     //TODO this can be optimized if DefaultSparse
     for idx in locDom.mySparseBlock {
-      writeln(here, " yielding index ", idx);
+      /*writeln(here, " yielding index ", idx);*/
       yield convertToSerialChunk(idx);
     }
   }
@@ -675,7 +704,7 @@ class LocSparseBlockArr {
 
     const parentDom = {(...ranges)};
 
-    writeln(here, " Creating container : ", parentDom);
+    /*writeln(here, " Creating container : ", parentDom);*/
     // TODO add support for CSR
     var sparseDom: sparse subdomain(parentDom);
 
@@ -683,7 +712,7 @@ class LocSparseBlockArr {
         getSize(rank*2, idxType),
         int);
 
-    writeln(here, " received ", numIndices[0]);
+    /*writeln(here, " received ", numIndices[0]);*/
 
     // add indices
 
@@ -694,15 +723,15 @@ class LocSparseBlockArr {
     var idxIntoData = getSize(rank*2, idxType) + getSize(1, int);
     for i in 0..#numIndices[0] {
       var idx = getElementArrayAtOffset(data, idxIntoData, idxType);
-      writeln(here, "\t\t\t >> ", idx[0]);
-      writeln(here, "\t\t\t >> ", idx[1]);
-      writeln(here, "\t\t\t >> ", idx[2]);
+      /*writeln(here, "\t\t\t >> ", idx[0]);*/
+      /*writeln(here, "\t\t\t >> ", idx[1]);*/
+      /*writeln(here, "\t\t\t >> ", idx[2]);*/
       for param r in 1..rank {
         indices[i][r] = idx[r-1];
       }
       idxIntoData += getSize(rank, idxType);
     }
-    writeln(here, "Creating container with indices:\n\t", indices);
+    /*writeln(here, "Creating container with indices:\n\t", indices);*/
     sparseDom += indices;
 
     var ret: [sparseDom] eltType;

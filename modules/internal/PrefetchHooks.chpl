@@ -939,9 +939,6 @@ module PrefetchHooks {
           c_memcpy(c_ptrTo(buf[curBufferSize]), //there was a cast here
               chunk[1]:c_ptr(bufferEltType), chunkSize);
 
-          if chunk[3] then writeln(here, " X ",
-              (chunk[1]:c_ptr(int))[0]);
-
           curBufferSize += chunkSize;
         }
       }
