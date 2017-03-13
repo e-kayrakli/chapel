@@ -1,13 +1,16 @@
 use Time;
+use LayoutCSR;
 use commMethods;
 
 config const N = 10;
 config const prefetch = false;
 config const consistent = true;
 
+config type sparseLayoutType = DefaultDist;
+
 var space = {0..#N, 0..#N};
 
-var dom = space dmapped Block(space, sparseLayoutType=DefaultDist);
+var dom = space dmapped Block(space, sparseLayoutType=sparseLayoutType);
 var sparseDom: sparse subdomain(dom);
 
 var sparseArr: [sparseDom] int;

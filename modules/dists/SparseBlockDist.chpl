@@ -708,8 +708,9 @@ class LocSparseBlockArr {
     const parentDom = {(...ranges)};
 
     /*writeln(here, " Creating container : ", parentDom);*/
-    // TODO add support for CSR
-    var sparseDom: sparse subdomain(parentDom);
+
+    var sparseDom: sparse subdomain(parentDom) dmapped
+      new dmap(new sparseLayoutType);
 
     var numIndices = getElementArrayAtOffset(data,
         getSize(rank*2, idxType),
