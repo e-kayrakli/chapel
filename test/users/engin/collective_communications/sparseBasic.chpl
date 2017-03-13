@@ -22,7 +22,7 @@ for l in Locales do on l {
   writeln(here);
   for i in 0..#N {
     for j in 0..#N {
-      write(sparseArr[i], " ");
+      write(sparseArr[i,j], " ");
     }
     writeln();
   }
