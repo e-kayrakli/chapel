@@ -23,6 +23,7 @@ select(accessType) {
   when 3 do accessRemote();
   when 4 do accessRemotePrefetched(consistent=true);
   when 5 do accessRemotePrefetched(consistent=false);
+  when 6 do accessRemotePrefetched(consistent=false, isLocal=true);
 }
 
 proc accessPrivate() {
@@ -107,7 +108,7 @@ proc accessRemote() {
   }
 }
 
-proc accessRemotePrefetched(consistent) {
+proc accessRemotePrefetched(consistent, param isLocal=false) {
   var space = {0..#2*N}; // run with two locales
   var dom = space dmapped Block(space);
   var arr: [dom] real;
@@ -117,13 +118,17 @@ proc accessRemotePrefetched(consistent) {
 
   arr._value.allGather(consistent);
   on Locales[1] {
+    if !consistent then writeln(arr[0]); // make sure we bring the data
     var t = new Timer();
     /*const locNumToRead = numToRead;*/
     /*const locStride = stride;*/
     var localSum = 0.0;
     t.start();
     for i in 0..#numToRead*stride by stride {
-      localSum += arr[i%N];
+      if isLocal then
+        local localSum += arr[i%N];
+      else
+        localSum += arr[i%N];
     }
     t.stop();
     sum = localSum;
