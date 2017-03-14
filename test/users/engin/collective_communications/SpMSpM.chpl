@@ -49,11 +49,13 @@ if outputData {
 
 const t = new Timer();
 
+
 t.start();
 if prefetch {
   A._value.rowWiseAllGather(consistent, staticDomain);
   B._value.colWiseAllGather(consistent, staticDomain);
 }
+const prefetchTime = t.elapsed();
 
 forall i in distDom.dim(1) {
   for j in distDom.dim(2) {
@@ -69,7 +71,8 @@ if outputData {
   writeln();
 }
 
-writeln("Time : ", t.elapsed());
+writeln("Prefetch time = ", prefetchTime);
+writeln("Time = ", t.elapsed());
 
 proc matWriter(mat) {
   for i in mat.domain.dim(1) {
