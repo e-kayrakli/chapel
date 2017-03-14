@@ -1,9 +1,17 @@
 use Random;
 use LayoutCSR;
+use commMethods;
+use Time;
+
+config const prefetch = false;
+config const consistent = true;
+config const staticDomain = false;
 
 config const N = 10;
 config const nnzPerRow = 3;
 config type sparseLayoutType = CSR;
+
+config const outputData = false;
 
 const space = {0..#N, 0..#N};
 var distDom = space dmapped Block(boundingBox=space,
@@ -29,15 +37,23 @@ sparseDomA.bulkAdd(indices, preserveInds=false);
 indexArrayHelper();
 sparseDomB.bulkAdd(indices, preserveInds=false);
 
-
 A = 3;
 B = 5;
 
-matWriter(A);
-writeln();
-matWriter(B);
-writeln();
+if outputData {
+  matWriter(A);
+  writeln();
+  matWriter(B);
+  writeln();
+}
 
+const t = new Timer();
+
+t.start();
+if prefetch {
+  A._value.rowWiseAllGather(consistent, staticDomain);
+  B._value.colWiseAllGather(consistent, staticDomain);
+}
 
 forall i in distDom.dim(1) {
   for j in distDom.dim(2) {
@@ -46,9 +62,14 @@ forall i in distDom.dim(1) {
     }
   }
 }
+t.stop();
 
-matWriter(C);
-writeln();
+if outputData {
+  matWriter(C);
+  writeln();
+}
+
+writeln("Time : ", t.elapsed());
 
 proc matWriter(mat) {
   for i in mat.domain.dim(1) {
@@ -72,7 +93,7 @@ proc indexArrayHelper() {
 
 iter SparseBlockDom.dimIter(param dim, idx) {
   var targetLocRow = dist.targetLocsIdx((idx, whole.dim(2).low));
-  writeln("dimIter idx: ", idx, " targetLocRow ", targetLocRow);
+  /*writeln("dimIter idx: ", idx, " targetLocRow ", targetLocRow);*/
 
   for l in dist.targetLocales.domain.dim(2) {
     for idx in locDoms[(targetLocRow[1], l)].mySparseBlock.dimIter(2, idx) {
