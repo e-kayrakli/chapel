@@ -26,13 +26,17 @@ select(accessType) {
   when 6 do accessRemotePrefetched(consistent=false, isLocal=true);
 }
 
+inline proc initVal(i) {
+  return i+10;
+}
+
 proc accessPrivate() {
   var space = {0..#N};
   var arr: [space] real;
   var sum = 0.0;
   var t = new Timer();
 
-  forall i in arr.domain do arr[i] = sin(i);
+  forall i in arr.domain do arr[i] = initVal(i);
 
   t.start();
   for i in 0..#numToRead*stride by stride {
@@ -51,7 +55,7 @@ proc accessLocalFast() {
   var sum = 0.0;
   var t = new Timer();
 
-  forall i in arr.domain do arr[i] = sin(i);
+  forall i in arr.domain do arr[i] = initVal(i);
 
   on Locales[0] {
     t.start();
@@ -73,7 +77,7 @@ proc accessLocal() {
   var t = new Timer();
 
 
-  forall i in arr.domain do arr[i] = sin(i);
+  forall i in arr.domain do arr[i] = initVal(i);
   on Locales[0] {
     t.start();
     for i in 0..#numToRead*stride by stride {
@@ -93,7 +97,7 @@ proc accessRemote() {
   var sum = 0.0;
   var t = new Timer();
 
-  forall i in arr.domain do arr[i] = sin(i);
+  forall i in arr.domain do arr[i] = initVal(i);
 
   on Locales[1] {
     var localSum = 0.0;
@@ -114,14 +118,13 @@ proc accessRemotePrefetched(consistent, param isLocal=false) {
   var arr: [dom] real;
   var sum = 0.0;
 
-  forall i in arr.domain do arr[i] = sin(i);
+  forall i in arr.domain do arr[i] = initVal(i);
 
   arr._value.allGather(consistent);
   on Locales[1] {
-    if !consistent then writeln(arr[0]); // make sure we bring the data
+    var junk: real;
+    if consistent then junk = arr[0]; // make sure we bring the data
     var t = new Timer();
-    /*const locNumToRead = numToRead;*/
-    /*const locStride = stride;*/
     var localSum = 0.0;
     t.start();
     for i in 0..#numToRead*stride by stride {
@@ -133,6 +136,7 @@ proc accessRemotePrefetched(consistent, param isLocal=false) {
     t.stop();
     sum = localSum;
 
+    writeln("Junk = ", junk);
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);
 
