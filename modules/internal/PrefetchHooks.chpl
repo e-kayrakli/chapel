@@ -564,13 +564,16 @@ module PrefetchHooks {
             slice_desc_size, consistent, staticDomain,
             obj.getDataStartByteIndex()));
 
-      // if data is being prefetched consistently, don't bring in the
-      // data right away
-      if !consistent {
-        __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-            slice_desc, slice_desc_size, data, size);
-      }
-      else {
+      // TODO update this comment
+      // if staticDomain, and is not slice we need to get the start
+      // address of the data in the owner node
+      if staticDomain && slice_desc_size <= 0 {
+        var remoteDataStartPtr = __getRemoteDataStartAddr(srcLocaleId,
+            srcObj);
+
+        set_entry_remote_data_start(new_handle_ptr,
+            remoteDataStartPtr);
+
         // even though we are not prefetching the full data, we still
         // need to bring in the metadata b/c:
         // when we  don't bring in the metadata, first access to the
@@ -581,20 +584,25 @@ module PrefetchHooks {
         // never changes and it is always there
         const metadataSize = __getSerializedMetadataSize(destLocaleId,
             srcLocaleId, srcObj, slice_desc, slice_desc_size): size_t;
-
         __getSerializedData(destLocaleId, srcLocaleId, srcObj,
             slice_desc, slice_desc_size, data, metadataSize,
             metadataOnly=true);
+      }
 
-        // data is being prefetched consistently,
-        // if staticDomain, and is not slice we need to get the start
-        // address of the data in the owner node
+      // if data is being prefetched consistently, don't bring in the
+      // data right away
+      if !consistent {
         if staticDomain && slice_desc_size <= 0 {
-          var remoteDataStartPtr = __getRemoteDataStartAddr(srcLocaleId,
-              srcObj);
-
-          set_entry_remote_data_start(new_handle_ptr,
-              remoteDataStartPtr);
+          __primitive("chpl_comm_array_get",
+              __primitive("array_get",
+                  get_entry_data_start(new_handle_ptr):c_ptr(uint(8)), 0),
+              srcLocaleId,
+              get_entry_remote_data_start(new_handle_ptr):c_ptr(uint(8)),
+              get_entry_data_actual_size(new_handle_ptr));
+        }
+        else {
+          __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+              slice_desc, slice_desc_size, data, size);
         }
       }
 
