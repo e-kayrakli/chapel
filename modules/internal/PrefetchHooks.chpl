@@ -427,7 +427,7 @@ module PrefetchHooks {
       var _idx = -1;
       if isTuple(idx) {
         if idx.size == 1 {
-          return handles[idx];
+          return handles[idx[1]];
         }
         if idx.size == 2 {
           /*var thisIntTmp = __primitive("cast", uint,*/
@@ -450,7 +450,7 @@ module PrefetchHooks {
       var _idx = -1;
       if isTuple(idx) {
         if idx.size == 1 {
-          return handles[idx];
+          return handles[idx[1]];
         }
         if idx.size == 2 {
           return handles[idx[1]*localeDomDimSize[2]+idx[2]];

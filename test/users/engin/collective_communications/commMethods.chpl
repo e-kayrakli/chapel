@@ -55,6 +55,32 @@ proc BlockCyclicArr.__prefetchFrom(localeIdx, sourceIdx,
       consistent, staticDomain);
 }
 
+proc BlockArr.customPrefetch(consistent=true, descTable) {
+  if descTable.rank != 2 then
+    halt("Description talbe must be two-dimensional");
+
+  coforall l in descTable.domain.dim(1) do on Locales[l] {
+    var localeIdx = locIdxFromId(l);
+    for l2 in descTable.domain.dim(2) {
+      var sliceDesc = descTable[l,l2];
+      if sliceDesc.numIndices != 0 {
+        var sourceIdx = locIdxFromId(l2);
+        __prefetchFrom(localeIdx, sourceIdx, sliceDesc,
+            consistent, staticDomain=false);
+      }
+    }
+  }
+
+  proc locIdxFromId(id) {
+    for (i,l) in zip(dom.dist.targetLocDom, dom.dist.targetLocales) do
+      if l.id == id then
+        return chpl__tuplify(i);
+
+    var dummy: rank*int;
+    return dummy;
+  }
+}
+
 // number of locales must be square
 proc BlockArr.transposePrefetch(consistent=true) {
   coforall localeIdx in dom.dist.targetLocDom {
