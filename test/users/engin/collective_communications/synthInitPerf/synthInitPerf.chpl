@@ -3,7 +3,6 @@ use commMethods;
 use Barrier;
 
 config const prefetch = false;
-config const staticDomain = false;
 config const N = 10;
 
 const space = {0..#N, 0..#N};
@@ -20,7 +19,7 @@ forall (i,j) in dom do arr[i,j] = i+j;
 
 if prefetch {
   t.start();
-  arr._value.allGather(consistent=false, staticDomain=staticDomain);
+  arr._value.allGather(consistent=false);
   t.stop();
   prefetchTime = t.elapsed();
   t.clear();
