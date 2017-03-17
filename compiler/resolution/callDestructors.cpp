@@ -229,9 +229,8 @@ ArgSymbol* ReturnByRef::addFormal(FnSymbol* fn)
 
   Type*          type    = fn->retType;
   AggregateType* refType = type->refType;
-  IntentTag      intent  = blankIntentForType(refType);
   // Note: other code does strcmps against the name _retArg
-  ArgSymbol*     formal  = new ArgSymbol(intent, "_retArg", refType);
+  ArgSymbol*     formal  = new ArgSymbol(INTENT_REF, "_retArg", refType);
   formal->addFlag(FLAG_RETARG);
 
   fn->insertFormalAtTail(formal);
@@ -306,7 +305,9 @@ void ReturnByRef::updateAssignmentsFromRefArgToValue(FnSymbol* fn)
           if (isUserDefinedRecord(symLhs->type) == true &&
               symRhs->type                      == symLhs->type)
           {
-            if (symLhs->hasFlag(FLAG_ARG_THIS) == false &&
+            if (symLhs->hasFlag(FLAG_ARG_THIS)   == false &&
+                symLhs->hasFlag(FLAG_NO_COPY)    == false &&
+                symLhs->hasFlag(FLAG_CHPL__ITER) == false &&
                 (symRhs->intent == INTENT_REF ||
                  symRhs->intent == INTENT_CONST_REF))
             {
@@ -315,7 +316,7 @@ void ReturnByRef::updateAssignmentsFromRefArgToValue(FnSymbol* fn)
               CallExpr* autoCopy = NULL;
 
               rhs->remove();
-              autoCopy = new CallExpr(autoCopyMap.get(symRhs->type), rhs);
+              autoCopy = new CallExpr(getAutoCopyForType(symRhs->type), rhs);
               move->insertAtTail(autoCopy);
             }
           }
@@ -344,10 +345,6 @@ void ReturnByRef::updateAssignmentsFromRefTypeToValue(FnSymbol* fn)
   std::vector<CallExpr*> callExprs;
 
   collectCallExprs(fn, callExprs);
-
-  Map<Symbol*,Vec<SymExpr*>*> defMap;
-  Map<Symbol*,Vec<SymExpr*>*> useMap;
-  buildDefUseMaps(fn, defMap, useMap);
 
   for (size_t i = 0; i < callExprs.size(); i++)
   {
@@ -378,24 +375,28 @@ void ReturnByRef::updateAssignmentsFromRefTypeToValue(FnSymbol* fn)
             // `init_untyped_var` in the `normalize` pass may insert an
             // initCopy, which means that we should not insert an autocopy
             // for that same variable.
-            bool initCopied = false;
-            for_uses(use, useMap, varLhs) {
+            //
+            // A chpl__unref call may be inserted to implement copy-out
+            // semantics for the returning of arrays.
+            bool isCopied = false;
+            for_SymbolUses(use, varLhs) {
               if (CallExpr* call = toCallExpr(use->parentExpr)) {
                 if (FnSymbol* parentFn = call->isResolved()) {
-                  if (parentFn->hasFlag(FLAG_INIT_COPY_FN)) {
-                    initCopied = true;
+                  if (parentFn->hasFlag(FLAG_INIT_COPY_FN) ||
+                      parentFn->hasFlag(FLAG_UNREF_FN)) {
+                    isCopied = true;
                     break;
                   }
                 }
               }
             }
 
-            if (!initCopied) {
+            if (!isCopied) {
               SET_LINENO(move);
 
               SymExpr*  lhsCopy0 = symLhs->copy();
               SymExpr*  lhsCopy1 = symLhs->copy();
-              FnSymbol* autoCopy = autoCopyMap.get(varLhs->type);
+              FnSymbol* autoCopy = getAutoCopyForType(varLhs->type);
               CallExpr* copyExpr = new CallExpr(autoCopy, lhsCopy0);
               CallExpr* moveExpr = new CallExpr(PRIM_MOVE,lhsCopy1, copyExpr);
 
@@ -449,7 +450,7 @@ void ReturnByRef::updateAssignmentsFromModuleLevelValue(FnSymbol* fn)
               CallExpr* autoCopy = NULL;
 
               rhs->remove();
-              autoCopy = new CallExpr(autoCopyMap.get(symRhs->type), rhs);
+              autoCopy = new CallExpr(getAutoCopyForType(symRhs->type), rhs);
               move->insertAtTail(autoCopy);
             }
           }
@@ -527,34 +528,59 @@ void ReturnByRef::transform()
 //
 // with
 //
+//     define tmp;
 //     define ref;
 //
-//     ref = &dst;
+//     ref = &tmp;
 //     func(a, b, c, ref);
+//     dst = tmp;
 //
-// In some cases the statement after the move is another move
-// with a RHS that performs a superfluous initCopy/autoCopy.
-// If so reduce to a simple move.  The called-function is responsible
-// for performing a copy when needed.
+// A tmp is created and then assigned to 'dst' to clarify that this is
+// a def of 'dst'.  It is currently less clear to the compiler that this
+// is also a def of 'tmp'.
+//
+// This is particularly important for replication of const module level
+// variables (findHeapVarsAndRefs() and for wide-pointer analysis
+//
+// In some cases the statement after the move is another move with a RHS
+// that performs a superfluous initCopy/autoCopy.  If so reduce to a simple
+// move.  The called-function is responsible for performing a copy when needed.
+//
+//
+//
+//
+// Noakes 2017/03/04: The implementation of deadStringLiteralElimination()
+// is currently coupled to the details of this transformation
+//
+//    a) Assigning variables by reference currently confuses def-use
+//       analysis.  This is one of the motivations for inserting a tmp
+//
+//    b) deadStringLiteralElimination is intended to remove the AST that
+//       is used to initialize a string.  That code is modified by this
+//       transformation.
 //
 
 void ReturnByRef::transformMove(CallExpr* moveExpr)
 {
   SET_LINENO(moveExpr);
 
-  Expr*     lhs      = moveExpr->get(1);
+  Expr*     lhs       = moveExpr->get(1);
 
-  CallExpr* callExpr = toCallExpr(moveExpr->get(2));
-  FnSymbol* fn       = callExpr->isResolved();
+  CallExpr* callExpr  = toCallExpr(moveExpr->get(2));
+  FnSymbol* fn        = callExpr->isResolved();
 
-  Expr*     nextExpr = moveExpr->next;
-  CallExpr* copyExpr = NULL;
+  Expr*     nextExpr  = moveExpr->next;
+  CallExpr* copyExpr  = NULL;
 
-  Symbol*   useLhs   = toSymExpr(lhs)->symbol();
-  Symbol*   refVar   = newTemp("ret_to_arg_ref_tmp_", useLhs->type->refType);
+  Symbol*   useLhs    = toSymExpr(lhs)->symbol();
 
-  // Make sure that we created a temp with a type
-  INT_ASSERT(useLhs->type->refType);
+  // Noakes 2017/03/04
+  // Cannot use the qualified-type here.  The formal may be still a _ref(type)
+  // and using a qualified-type generates yet another temp.
+  Symbol*   tmpVar    = newTemp("ret_tmp",             useLhs->type);
+  Symbol*   refVar    = newTemp("ret_to_arg_ref_tmp_", useLhs->type->refType);
+
+  FnSymbol* unaliasFn = NULL;
 
   // Determine if
   //   a) current call is not a PRIMOP
@@ -582,10 +608,16 @@ void ReturnByRef::transformMove(CallExpr* moveExpr)
             Type*      formalType = formalArg->type;
             Type*      actualType = rhsCall->get(1)->getValType();
             Type*      returnType = rhsFn->retType->getValType();
+
+            unaliasFn = getUnalias(useLhs->type);
+
             // Cannot reduce initCopy/autoCopy when types differ
+            //   (unless there is an unaliasFn available)
             // Cannot reduce initCopy/autoCopy for sync variables
-            if (actualType == returnType &&
-                isSyncType(formalType) == false &&
+            bool typesOK = unaliasFn != NULL || actualType == returnType;
+
+            if (typesOK                  == true  &&
+                isSyncType(formalType)   == false &&
                 isSingleType(formalType) == false)
             {
               copyExpr = rhsCall;
@@ -596,29 +628,42 @@ void ReturnByRef::transformMove(CallExpr* moveExpr)
     }
   }
 
-  // Introduce a reference to the return value
+  // Introduce a tmpVar and a reference to the tmpVar
+  CallExpr* addrOfTmp = new CallExpr(PRIM_ADDR_OF, tmpVar);
+
+  moveExpr->insertBefore(new DefExpr(tmpVar));
   moveExpr->insertBefore(new DefExpr(refVar));
-  moveExpr->insertBefore(new CallExpr(PRIM_MOVE,
-                                      refVar,
-                                      new CallExpr(PRIM_ADDR_OF, useLhs)));
+  moveExpr->insertBefore(new CallExpr(PRIM_MOVE, refVar, addrOfTmp));
 
   // Convert the by-value call to a void call with an additional formal
   moveExpr->replace(callExpr->remove());
+
   callExpr->insertAtTail(refVar);
+  callExpr->insertAfter(new CallExpr(PRIM_MOVE, useLhs, tmpVar));
 
   // Possibly reduce a copy operation to a simple move
   if (copyExpr) {
     FnSymbol* rhsFn = copyExpr->isResolved();
 
-    copyExpr->replace(copyExpr->get(1)->remove());
+    // If replacing an init copy, we got to a user variable.
+    // Use an unalias call if possible
+    if (rhsFn->hasFlag(FLAG_INIT_COPY_FN) && unaliasFn != NULL) {
+      // BHARSH: It seems important that there's a temporary to store the
+      // result of the unaliasFn call. Otherwise we'll move into a variable
+      // that has multiplie uses, which seems to cause a variety of problems.
+      //
+      // In particular, I noticed that `changeRetToArgAndClone` generates
+      // bad AST if I simply did this:
+      //   copyExpr->replace(new CallExpr(unaliasFn, refVar));
+      VarSymbol* unaliasTemp = newTemp("unaliasTemp", unaliasFn->retType);
+      CallExpr*  unaliasCall = new CallExpr(unaliasFn, refVar);
 
-    // But... if we're replacing an init copy, we got to a user
-    // variable, so add an unalias call if there is one
-    if (rhsFn->hasFlag(FLAG_INIT_COPY_FN)) {
-      FnSymbol* unaliasFn = getUnalias(useLhs->type);
-      if (unaliasFn) {
-        callExpr->insertAfter(new CallExpr(unaliasFn, refVar));
-      }
+      callExpr->insertBefore(new DefExpr(unaliasTemp));
+      callExpr->insertAfter(new CallExpr(PRIM_MOVE, unaliasTemp, unaliasCall));
+
+      copyExpr->replace(new SymExpr(unaliasTemp));
+    } else {
+      copyExpr->replace(copyExpr->get(1)->remove());
     }
   }
 }
@@ -669,7 +714,7 @@ createClonedFnWithRetArg(FnSymbol* fn, FnSymbol* useFn)
   SET_LINENO(fn);
   FnSymbol* newFn = fn->copy();
   // Note: other code does strcmps against the name _retArg
-  ArgSymbol* arg = new ArgSymbol(blankIntentForType(useFn->retType->refType), "_retArg", useFn->retType->refType);
+  ArgSymbol* arg = new ArgSymbol(INTENT_REF, "_retArg", useFn->retType->refType);
   arg->addFlag(FLAG_RETARG);
   newFn->insertFormalAtTail(arg);
   newFn->addFlag(FLAG_FN_RETARG);
@@ -851,9 +896,7 @@ static void replaceUsesOfFnResultInCaller(CallExpr* move, CallExpr* call,
 
 static void
 changeRetToArgAndClone(CallExpr* move, Symbol* lhs,
-                       CallExpr* call, FnSymbol* fn,
-                       Map<Symbol*,Vec<SymExpr*>*>& defMap,
-                       Map<Symbol*,Vec<SymExpr*>*>& useMap) {
+                       CallExpr* call, FnSymbol* fn) {
   // Here are some relations between the arguments that can be relied upon.
   INT_ASSERT(call->parentExpr == move);
   INT_ASSERT(call->isResolved() == fn);
@@ -861,8 +904,8 @@ changeRetToArgAndClone(CallExpr* move, Symbol* lhs,
   // In the suffix of the containing function, look for uses of the lhs of the
   // move containing the call to fn.
   Vec<SymExpr*> use;
-  if (useMap.get(lhs) && useMap.get(lhs)->n == 1) {
-    use = *useMap.get(lhs);
+  if (SymExpr* singleUse = lhs->getSingleUse()) {
+    use.add(singleUse);
   } else {
     for (Expr* stmt = move->next; stmt; stmt = stmt->next) {
       std::vector<SymExpr*> symExprs;
@@ -886,10 +929,6 @@ changeRetToArgAndClone(CallExpr* move, Symbol* lhs,
 
 static void
 returnRecordsByReferenceArguments() {
-  Map<Symbol*,Vec<SymExpr*>*> defMap;
-  Map<Symbol*,Vec<SymExpr*>*> useMap;
-  buildDefUseMaps(defMap, useMap);
-
   forv_Vec(CallExpr, call, gCallExprs) {
     if (call->parentSymbol) {
       if (FnSymbol* fn = requiresImplicitDestroy(call)) {
@@ -900,11 +939,10 @@ returnRecordsByReferenceArguments() {
                    move->isPrimitive(PRIM_ASSIGN));
         SymExpr* lhs = toSymExpr(move->get(1));
         INT_ASSERT(!lhs->symbol()->hasFlag(FLAG_TYPE_VARIABLE));
-        changeRetToArgAndClone(move, lhs->symbol(), call, fn, defMap, useMap);
+        changeRetToArgAndClone(move, lhs->symbol(), call, fn);
       }
     }
   }
-  freeDefUseMaps(defMap, useMap);
 }
 
 static void
@@ -925,22 +963,22 @@ fixupDestructors() {
           if (!isClass(fct)) {
             bool useRefType = !isRecordWrappedType(fct);
             VarSymbol* tmp = newTemp("_field_destructor_tmp_", useRefType ? fct->refType : fct);
-            fn->insertBeforeReturnAfterLabel(new DefExpr(tmp));
-            fn->insertBeforeReturnAfterLabel(new CallExpr(PRIM_MOVE, tmp,
+            fn->insertIntoEpilogue(new DefExpr(tmp));
+            fn->insertIntoEpilogue(new CallExpr(PRIM_MOVE, tmp,
               new CallExpr(useRefType ? PRIM_GET_MEMBER : PRIM_GET_MEMBER_VALUE, fn->_this, field)));
             FnSymbol* autoDestroyFn = autoDestroyMap.get(field->type);
             if (autoDestroyFn && autoDestroyFn->hasFlag(FLAG_REMOVABLE_AUTO_DESTROY))
-              fn->insertBeforeReturnAfterLabel(new CallExpr(autoDestroyFn, tmp));
+              fn->insertIntoEpilogue(new CallExpr(autoDestroyFn, tmp));
             else
-              fn->insertBeforeReturnAfterLabel(new CallExpr(field->type->destructor, tmp));
+              fn->insertIntoEpilogue(new CallExpr(field->type->destructor, tmp));
           }
         } else if (FnSymbol* autoDestroyFn = autoDestroyMap.get(field->type)) {
           VarSymbol* tmp = newTemp("_field_destructor_tmp_", field->type);
-          fn->insertBeforeReturnAfterLabel(new DefExpr(tmp));
-          fn->insertBeforeReturnAfterLabel(
+          fn->insertIntoEpilogue(new DefExpr(tmp));
+          fn->insertIntoEpilogue(
                 new CallExpr(PRIM_MOVE, tmp,
                   new CallExpr(PRIM_GET_MEMBER_VALUE, fn->_this, field)));
-          fn->insertBeforeReturnAfterLabel(new CallExpr(autoDestroyFn, tmp));
+          fn->insertIntoEpilogue(new CallExpr(autoDestroyFn, tmp));
         }
       }
 
@@ -955,10 +993,10 @@ fixupDestructors() {
           Type* tmpType = isClass(ct) ?
             ct->dispatchParents.v[0] : ct->dispatchParents.v[0]->refType;
           VarSymbol* tmp = newTemp("_parent_destructor_tmp_", tmpType);
-          fn->insertBeforeReturnAfterLabel(new DefExpr(tmp));
-          fn->insertBeforeReturnAfterLabel(new CallExpr(PRIM_MOVE, tmp,
+          fn->insertIntoEpilogue(new DefExpr(tmp));
+          fn->insertIntoEpilogue(new CallExpr(PRIM_MOVE, tmp,
             new CallExpr(PRIM_CAST, tmpType->symbol, fn->_this)));
-          fn->insertBeforeReturnAfterLabel(new CallExpr(parentDestructor, tmp));
+          fn->insertIntoEpilogue(new CallExpr(parentDestructor, tmp));
         }
       }
     }
@@ -979,7 +1017,7 @@ static void insertGlobalAutoDestroyCalls() {
   fn->retType = dtVoid;
 
   chpl_gen_main->defPoint->insertBefore(new DefExpr(fn));
-  chpl_gen_main->insertBeforeReturnAfterLabel(new CallExpr(fn));
+  chpl_gen_main->insertIntoEpilogue(new CallExpr(fn));
 
   forv_Vec(DefExpr, def, gDefExprs) {
     if (isModuleSymbol(def->parentSymbol))
@@ -1065,14 +1103,10 @@ static void insertDestructorCalls() {
 
  */
 static void insertAutoCopyTemps() {
-  Map<Symbol*,Vec<SymExpr*>*> defMap;
-  Map<Symbol*,Vec<SymExpr*>*> useMap;
-  buildDefUseMaps(defMap, useMap);
-
   forv_Vec(VarSymbol, sym, gVarSymbols) {
     if (sym->hasFlag(FLAG_INSERT_AUTO_COPY)) {
       CallExpr* move = NULL;
-      for_defs(def, defMap, sym) {
+      for_SymbolDefs(def, sym) {
         CallExpr* defCall = toCallExpr(def->parentExpr);
         if (defCall->isPrimitive(PRIM_MOVE)) {
           CallExpr* rhs = toCallExpr(defCall->get(2));
@@ -1121,13 +1155,11 @@ static void insertAutoCopyTemps() {
       move->insertBefore(new DefExpr(tmp));
       move->insertAfter(new CallExpr(PRIM_MOVE,
                                      sym,
-                                     new CallExpr(autoCopyMap.get(sym->type),
+                                     new CallExpr(getAutoCopyForType(sym->type),
                                                   tmp)));
       move->get(1)->replace(new SymExpr(tmp));
     }
   }
-
-  freeDefUseMaps(defMap, useMap);
 }
 
 
@@ -1171,44 +1203,54 @@ static void insertYieldTemps()
       Symbol* tmp = newTemp("_yield_expr_tmp_", type);
       Expr* stmt = call->getStmtExpr();
       stmt->insertBefore(new DefExpr(tmp));
-      stmt->insertBefore(new CallExpr(PRIM_MOVE, tmp, new CallExpr(autoCopyMap.get(type), yieldExpr->remove())));
+      stmt->insertBefore(new CallExpr(PRIM_MOVE, tmp, new CallExpr(getAutoCopyForType(type), yieldExpr->remove())));
       call->insertAtHead(new SymExpr(tmp)); // New first argument.
     }
   }
 }
 
-
-//
-// Insert reference temps for function arguments that expect them.
-//
-void insertReferenceTemps(CallExpr* call) {
-  for_formals_actuals(formal, actual, call) {
-    if (formal->type == actual->typeInfo()->refType) {
-      SET_LINENO(call);
-      Expr* stmt = call->getStmtExpr();
-      VarSymbol* tmp = newTemp("_ref_tmp_", formal->type);
-      tmp->addFlag(FLAG_REF_TEMP);
-      stmt->insertBefore(new DefExpr(tmp));
-      actual->replace(new SymExpr(tmp));
-      stmt->insertBefore(
-        new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_ADDR_OF, actual)));
-    }
-  }
-}
-
+/************************************* | **************************************
+*                                                                             *
+* Insert reference temps for function arguments that expect them.             *
+*                                                                             *
+************************************** | *************************************/
 
 static void insertReferenceTemps() {
   forv_Vec(CallExpr, call, gCallExprs) {
     // Is call in the tree?
     if (call->parentSymbol != NULL) {
-      if (call->isResolved() ||
-          call->isPrimitive(PRIM_VIRTUAL_METHOD_CALL)) {
+      if (call->isResolved() || call->isPrimitive(PRIM_VIRTUAL_METHOD_CALL)) {
         insertReferenceTemps(call);
       }
     }
   }
 }
 
+void insertReferenceTemps(CallExpr* call) {
+  for_formals_actuals(formal, actual, call) {
+    if (formal->type == actual->typeInfo()->refType) {
+      SET_LINENO(call);
+
+      VarSymbol* tmp    = newTemp("_ref_tmp_", formal->qualType());
+
+      tmp->addFlag(FLAG_REF_TEMP);
+      actual->replace(new SymExpr(tmp));
+
+      Expr*      stmt   = call->getStmtExpr();
+      CallExpr*  addrOf = new CallExpr(PRIM_ADDR_OF, actual);
+
+      stmt->insertBefore(new DefExpr(tmp));
+      stmt->insertBefore(new CallExpr(PRIM_MOVE, tmp, addrOf));
+    }
+  }
+}
+
+
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
 
 // code like
 //    var x => GlobalArray[1..10]; // create a slice
@@ -1293,6 +1335,31 @@ void fixupNewAlias(void) {
   }
 }
 
+
+// Function resolution adds "dummy" initCopy functions for types
+// that cannot be copied. These "dummy" initCopy functions are marked
+// with the flag FLAG_ERRONEOUS_INITCOPY. This pattern enables
+// the compiler to continue to operate with its current structure
+// even for types that cannot be copied. In particular, this pass
+// has the ability to remove initCopy calls in some cases.
+//
+// This function simply checks that no function marked with that
+// flag is ever called and raises an error if so.
+static
+void checkForErroneousInitCopies() {
+
+  forv_Vec(FnSymbol, fn, gFnSymbols) {
+    if (fn->hasFlag(FLAG_ERRONEOUS_INITCOPY)) {
+      // Error on each call site
+      for_SymbolSymExprs(se, fn) {
+        USR_FATAL_CONT(se, "copy-initialization invoked for a type"
+                           " that does not have a copy initializer");
+      }
+    }
+  }
+}
+
+
 /************************************* | **************************************
 *                                                                             *
 * Entry point                                                                 *
@@ -1316,4 +1383,6 @@ void callDestructors() {
   insertYieldTemps();
   insertGlobalAutoDestroyCalls();
   insertReferenceTemps();
+
+  checkForErroneousInitCopies();
 }

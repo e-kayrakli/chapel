@@ -54,6 +54,7 @@ void insertLineNumbers();
 void insertWideReferences();
 void localizeGlobals();
 void loopInvariantCodeMotion();
+void lowerErrorHandling();
 void lowerIterators();
 void makeBinary();
 void normalize();
@@ -109,6 +110,9 @@ void flattenNestedFunction(FnSymbol* nestedFunction);
 
 // callDestructors.cpp
 void insertReferenceTemps(CallExpr* call);
+
+// normalize.cpp
+void normalize(FnSymbol* fn);
 
 // parallel.cpp
 Type* getOrMakeRefTypeDuringCodegen(Type* type);

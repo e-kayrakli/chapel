@@ -47,6 +47,7 @@ ArgSymbol* tiMarkForIntent(IntentTag intent) {
     case INTENT_REF:       return tiMarkRef;       break;
     case INTENT_PARAM:     return NULL;            break;
     case INTENT_TYPE:      return NULL;            break;
+    case INTENT_REF_MAYBE_CONST:      return NULL;            break;
   }
   INT_FATAL("unexpected intent in tiMarkForIntent()");
   return NULL; // dummy
@@ -452,6 +453,10 @@ addVarsToFormalsActuals(FnSymbol* fn, SymbolMap& vars,
               newFormal->addFlag(FLAG_MARKED_GENERIC);
           newActual = e->key;
           symReplace = newFormal;
+          // MPF 2017-03-09
+          // I don't think this check should be here; it depends
+          // on the type and in my experiments type is usually dtUnknown
+          // at this point.
           if (!newActual->isConstant() && newFormal->isConstant())
             newFormal->addFlag(FLAG_CONST_DUE_TO_TASK_FORALL_INTENT);
         }
@@ -546,7 +551,7 @@ void createTaskFunctions(void) {
             SET_LINENO(fnSymbol);
             fnSymbol->insertAtHead(
                 new CallExpr("chpl_rmem_consist_maybe_release", order));
-            fnSymbol->insertBeforeReturn(
+            fnSymbol->insertBeforeEpilogue(
                 new CallExpr("chpl_rmem_consist_maybe_acquire", order));
           }
         }
@@ -602,7 +607,7 @@ void createTaskFunctions(void) {
             CallExpr* neq = new CallExpr(PRIM_NOTEQUAL, curNodeID, targetNodeID);
 
             // Build error
-            CallExpr* err = new CallExpr(PRIM_RT_ERROR, new_CStringSymbol("Local-on is not local")); 
+            CallExpr* err = new CallExpr(PRIM_RT_ERROR, new_CStringSymbol("Local-on is not local"));
 
             CondStmt* cond = new CondStmt(neq, err);
             block->insertBefore(cond);
@@ -649,7 +654,8 @@ void createTaskFunctions(void) {
               // Do not add remote memory barriers.
               needsMemFence = false;
             } else {
-              FnSymbol* fnSymbol = parent->getFnSymbol();
+              FnSymbol* fnSymbol = toFnSymbol(parent);
+
               // For methods on atomic types, we do not add the memory
               // barriers, because these functions have an 'order'
               // argument, which needs to get passed to the memory barrier,

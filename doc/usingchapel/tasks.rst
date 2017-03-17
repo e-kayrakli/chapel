@@ -36,7 +36,7 @@ detail.  The rest of this document includes:
 * a brief description of future directions for the tasking layer
 
 If you have questions about tasks that are not covered in the following,
-please send them to chapel_info@cray.com.
+please send them to :disguise:`chapel_info@cray.com`.
 
 
 --------------------------
@@ -199,7 +199,8 @@ When ``CHPL_TASKS=qthreads``, the default for ``CHPL_HWLOC`` becomes "hwloc",
 and the hwloc third-party package will be built.  Qthreads depends on
 this package to provide it with a description of the locale hardware, to
 support locality and affinity operations.  This is especially important
-when ``CHPL_LOCALE_MODEL=numa``, and will become more so in the future.
+when ``CHPL_LOCALE_MODEL=numa`` or ``CHPL_LOCALE_MODEL=knl``, and will
+become more so in the future.
 
 
 Further information
@@ -311,8 +312,8 @@ threads per locale is too large.  For example, when running multi-locale
 programs, the GASNet communication layer typically places an upper bound
 of 127 or 255 on the number of threads per locale (There are ways to
 work around this assumption on certain platforms -- please contact us at
-chapel_info@cray.com or peruse the GASNet documentation if you need to
-do so.)
+:disguise:`chapel_info@cray.com` or peruse the GASNet documentation if you need
+to do so.)
 
 CHPL_TASKS == fifo
 ------------------
@@ -478,5 +479,5 @@ balancing at the other end of the spectrum (for programmers who would
 prefer not to manage threads or whose programs cannot trivially be
 load balanced manually).  Our hope is to leverage existing open source
 threading and task management software and to collaborate with others
-in these areas, so please contact us at chapel_info@cray.com if you'd
+in these areas, so please contact us at :disguise:`chapel_info@cray.com` if you'd
 like to work with us in this area.

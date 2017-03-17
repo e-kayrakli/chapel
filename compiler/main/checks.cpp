@@ -26,6 +26,7 @@
 #include "primitive.h"
 #include "resolution.h"
 #include "docsDriver.h" // for fDocs
+#include "TryStmt.h"
 
 //
 // Static function declarations.
@@ -41,6 +42,7 @@ static void check_afterNormalization(); // Checks to be performed after
 static void check_afterResolution(); // Checks to be performed after every pass
                                      // following resolution.
 static void check_afterResolveIntents();
+static void check_afterLowerErrorHandling();
 static void check_afterCallDestructors(); // Checks to be performed after every
                                           // pass following callDestructors.
 static void check_afterLowerIterators();
@@ -198,6 +200,13 @@ void check_cullOverReferences()
   }
 }
 
+void check_lowerErrorHandling()
+{
+  check_afterEveryPass();
+  check_afterNormalization();
+  check_afterLowerErrorHandling();
+}
+
 void check_callDestructors()
 {
   check_afterEveryPass();
@@ -303,7 +312,7 @@ void check_deadCodeElimination()
   check_afterEveryPass();
   check_afterNormalization();
   check_afterCallDestructors();
-  check_afterLowerIterators(); 
+  check_afterLowerIterators();
   check_afterResolveIntents();
   // Suggestion: Ensure no dead code.
 }
@@ -422,7 +431,7 @@ void check_makeBinary()
 // Extra structural checks on the AST, applicable to all passes.
 void check_afterEveryPass()
 {
-  if (fVerify) 
+  if (fVerify)
   {
     verify();
     checkForDuplicateUses();
@@ -493,6 +502,29 @@ static void check_afterResolveIntents()
 }
 
 
+static void check_afterLowerErrorHandling()
+{
+  if (fVerify)
+  {
+    // check that TryStmt is not in the tree
+    forv_Vec(TryStmt, stmt, gTryStmts)
+    {
+      if (stmt->inTree())
+        INT_FATAL(stmt, "TryStmt should no longer be in the tree");
+    }
+
+    // TODO: check no more CatchStmt
+
+    // check no more PRIM_THROW
+    forv_Vec(CallExpr, call, gCallExprs)
+    {
+      if (call->isPrimitive(PRIM_THROW) && call->inTree())
+        INT_FATAL(call, "PRIM_THROW should no longer exist");
+    }
+  }
+}
+
+
 // Checks that should remain true after the callDestructors pass is complete.
 static void check_afterCallDestructors()
 {
@@ -541,8 +573,10 @@ static void checkAggregateTypes()
   {
     if (! at->defaultInitializer && at->initializerStyle != DEFINES_INITIALIZER)
       INT_FATAL(at, "aggregate type did not define an initializer and has no default constructor");
-    if (! at->defaultTypeConstructor)
-      INT_FATAL(at, "aggregate type has no default type constructor");
+    if (! at->defaultTypeConstructor &&
+        at->initializerStyle != DEFINES_INITIALIZER)
+      INT_FATAL(at, "aggregate type did not define an initializer and "
+                "has no default type constructor");
   }
 }
 
@@ -559,6 +593,7 @@ checkResolveRemovedPrims(void) {
         case PRIM_INIT:
         case PRIM_NO_INIT:
         case PRIM_TYPE_INIT:
+        case PRIM_INITIALIZER_SET_FIELD:
         case PRIM_LOGICAL_FOLDER:
         case PRIM_TYPEOF:
         case PRIM_TYPE_TO_STRING:
@@ -604,7 +639,7 @@ checkTaskRemovedPrims()
       }
 }
 
-static void 
+static void
 checkLowerIteratorsRemovedPrims()
 {
   for_alive_in_Vec(CallExpr, call, gCallExprs)
@@ -643,12 +678,14 @@ static void
 checkAutoCopyMap()
 {
   Vec<Type*> keys;
-  autoCopyMap.get_keys(keys);
+  getAutoCopyTypeKeys(keys);
   forv_Vec(Type, key, keys)
   {
-    FnSymbol* fn = autoCopyMap.get(key);
-    Type* baseType = fn->getFormal(1)->getValType();
-    INT_ASSERT(baseType == key);
+    if (hasAutoCopyForType(key)) {
+      FnSymbol* fn = getAutoCopyForType(key);
+      Type* baseType = fn->getFormal(1)->getValType();
+      INT_ASSERT(baseType == key);
+    }
   }
 }
 

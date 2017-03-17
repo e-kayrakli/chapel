@@ -86,6 +86,7 @@ VarSymbol *gFalse = NULL;
 VarSymbol *gTryToken = NULL;
 VarSymbol *gBoundsChecking = NULL;
 VarSymbol *gCastChecking = NULL;
+VarSymbol *gDivZeroChecking = NULL;
 VarSymbol* gPrivatization = NULL;
 VarSymbol* gLocal = NULL;
 VarSymbol* gNodeID = NULL;
@@ -198,6 +199,9 @@ static Qualifier qualifierForArgIntent(IntentTag intent)
     case INTENT_PARAM:     return QUAL_PARAM; // TODO
     case INTENT_TYPE:      return QUAL_UNKNOWN; // TODO
     case INTENT_BLANK:     return QUAL_UNKNOWN;
+    case INTENT_REF_MAYBE_CONST:
+           return QUAL_REF; // a white lie until cullOverReferences
+
     // no default to get compiler warning if other intents are added
   }
   return QUAL_UNKNOWN;
@@ -210,10 +214,13 @@ QualifiedType Symbol::qualType() {
     Qualifier q = qualifierForArgIntent(arg->intent);
     if (qual == QUAL_WIDE_REF && (q == QUAL_REF || q == QUAL_CONST_REF)) {
       q = QUAL_WIDE_REF;
+      // MPF: Should this be CONST_WIDE_REF in some cases?
     }
     ret = QualifiedType(type, q);
   } else {
     ret = QualifiedType(type, qual);
+    if (hasFlag(FLAG_CONST))
+      ret = ret.toConst();
   }
 
   return ret;
@@ -254,11 +261,6 @@ bool Symbol::isRefOrWideRef() {
 // Returns the scope in which the given symbol is declared; NULL otherwise.
 BlockStmt* Symbol::getDeclarationScope() const {
   return (defPoint != NULL) ? defPoint->getScopeBlock() : NULL;
-}
-
-
-FnSymbol* Symbol::getFnSymbol() {
-  return NULL;
 }
 
 
@@ -344,6 +346,53 @@ SymExpr* Symbol::firstSymExpr() const {
 SymExpr* Symbol::lastSymExpr() const {
   return symExprsTail;
 }
+
+int Symbol::countDefs(int max) const {
+  int ret = 0;
+  for_SymbolDefs(def, this) {
+    ret += 1;
+    if (ret >= max) break;
+  }
+  return ret;
+}
+
+int Symbol::countUses(int max) const {
+  int ret = 0;
+  for_SymbolUses(use, this) {
+    ret += 1;
+    if (ret >= max) break;
+  }
+  return ret;
+}
+
+bool Symbol::isUsed() const {
+  return (this->countUses(1) >= 1);
+}
+
+bool Symbol::isDefined() const {
+  return (this->countDefs(1) >= 1);
+}
+
+SymExpr* Symbol::getSingleUse() const {
+  SymExpr* ret = NULL;
+  for_SymbolUses(use, this) {
+    if (ret != NULL) return NULL;
+    ret = use;
+  }
+  return ret;
+}
+
+SymExpr* Symbol::getSingleDef() const {
+  SymExpr* ret = NULL;
+  for_SymbolDefs(def, this) {
+    if (ret != NULL) return NULL;
+    ret = def;
+  }
+  return ret;
+}
+
+
+
 
 bool Symbol::isImmediate() const {
   return false;
@@ -722,6 +771,7 @@ const char* ArgSymbol::intentDescrString(void) {
     case INTENT_CONST: return "'const'";
     case INTENT_CONST_IN: return "'const in'";
     case INTENT_CONST_REF: return "'const ref'";
+    case INTENT_REF_MAYBE_CONST: return "'const? ref'";
     case INTENT_REF: return "'ref'";
     case INTENT_PARAM: return "'param'";
     case INTENT_TYPE: return "'type'";
@@ -741,6 +791,7 @@ const char* intentDescrString(IntentTag intent) {
     case INTENT_CONST:     return "'const' intent";
     case INTENT_CONST_IN:  return "'const in' intent";
     case INTENT_CONST_REF: return "'const ref' intent";
+    case INTENT_REF_MAYBE_CONST: return "'const? ref' intent";
     case INTENT_REF:       return "'ref' intent";
     case INTENT_PARAM:     return "'param' intent";
     case INTENT_TYPE:      return "'type' intent";
@@ -820,37 +871,128 @@ void TypeSymbol::accept(AstVisitor* visitor) {
   }
 }
 
-/******************************** | *********************************
-*                                                                   *
-*                                                                   *
-********************************* | ********************************/
+void TypeSymbol::renameInstantiatedMulti(SymbolMap& subs, FnSymbol* fn) {
+  renameInstantiatedStart();
 
-FnSymbol::FnSymbol(const char* initName) :
-  Symbol(E_FnSymbol, initName),
-  formals(),
-  retType(dtUnknown),
-  where(NULL),
-  retExprType(NULL),
-  body(new BlockStmt()),
-  thisTag(INTENT_BLANK),
-  retTag(RET_VALUE),
-  iteratorInfo(NULL),
-  _this(NULL),
-  _outer(NULL),
-  instantiatedFrom(NULL),
-  instantiationPoint(NULL),
-  basicBlocks(NULL),
-  calledBy(NULL),
-  userString(NULL),
-  valueFunction(NULL),
-  codegenUniqueNum(1),
-  doc(NULL),
-  retSymbol(NULL),
-  llvmDISubprogram(NULL),
-  _throwsError(false)
-{
+  bool notFirst = false;
+  for_formals(formal, fn) {
+    if (Symbol* value = subs.get(formal)) {
+      if (!notFirst) {
+        if (TypeSymbol* ts = toTypeSymbol(value)) {
+          if (this->hasFlag(FLAG_TUPLE)) {
+            if (this->hasFlag(FLAG_STAR_TUPLE)) {
+              this->name = astr(istr(fn->numFormals()-1), "*", ts->name);
+              this->cname = astr(this->cname, "star_", ts->cname);
+              return;
+            } else {
+              this->name = astr("(");
+            }
+          }
+        }
+        notFirst = true;
+      } else {
+        this->name = astr(this->name, ",");
+        this->cname = astr(this->cname, "_");
+      }
+      renameInstantiatedIndividual(value);
+    }
+  }
+
+  renameInstantiatedEnd();
+}
+
+void TypeSymbol::renameInstantiatedSingle(Symbol* sym) {
+  renameInstantiatedStart();
+  if (this->hasFlag(FLAG_TUPLE)) {
+    USR_FATAL(sym, "initializers don't handle tuples yet, sorry!");
+  } else {
+    renameInstantiatedIndividual(sym);
+  }
+  renameInstantiatedEnd();
+}
+
+void TypeSymbol::renameInstantiatedStart() {
+  if (this->name[strlen(this->name)-1] == ')') {
+    // avoid "strange" instantiated type names based on partial instantiation
+    //  instead of C(int,real)(imag) this results in C(int,real,imag)
+    char* buf = (char*)malloc(strlen(this->name) + 1);
+    memcpy(buf, this->name, strlen(this->name));
+    buf[strlen(this->name)-1] = '\0';
+    this->name = astr(buf, ",");
+    free(buf);
+  } else {
+    this->name = astr(this->name, "(");
+  }
+  this->cname = astr(this->cname, "_");
+}
+
+void TypeSymbol::renameInstantiatedIndividual(Symbol* sym) {
+  if (TypeSymbol* ts = toTypeSymbol(sym)) {
+    if (!this->hasFlag(FLAG_STAR_TUPLE)) {
+      this->name = astr(this->name, ts->name);
+      this->cname = astr(this->cname, ts->cname);
+    }
+  } else {
+    VarSymbol* var = toVarSymbol(sym);
+    if (var && var->immediate) {
+      Immediate* immediate = var->immediate;
+      if (var->type == dtString || var->type == dtStringC)
+        renameInstantiatedTypeString(this, var);
+      else if (immediate->const_kind == NUM_KIND_BOOL) {
+        // Handle boolean types specially.
+        const char* name4bool = immediate->bool_value() ? "true" : "false";
+        const char* cname4bool = immediate->bool_value() ? "T" : "F";
+        this->name = astr(this->name, name4bool);
+        this->cname = astr(this->cname, cname4bool);
+      } else {
+        const size_t bufSize = 128;
+        char imm[bufSize];
+        snprint_imm(imm, bufSize, *var->immediate);
+        this->name = astr(this->name, imm);
+        this->cname = astr(this->cname, imm);
+      }
+    } else {
+      this->name = astr(this->name, sym->cname);
+      this->cname = astr(this->cname, sym->cname);
+    }
+  }
+}
+
+void TypeSymbol::renameInstantiatedEnd() {
+  this->name = astr(this->name, ")");
+}
+
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
+
+FnSymbol::FnSymbol(const char* initName) : Symbol(E_FnSymbol, initName) {
+  retType            = dtUnknown;
+  where              = NULL;
+  retExprType        = NULL;
+  body               = new BlockStmt();
+  thisTag            = INTENT_BLANK;
+  retTag             = RET_VALUE;
+  iteratorInfo       = NULL;
+  _this              = NULL;
+  _outer             = NULL;
+  instantiatedFrom   = NULL;
+  instantiationPoint = NULL;
+  basicBlocks        = NULL;
+  calledBy           = NULL;
+  userString         = NULL;
+  valueFunction      = NULL;
+  codegenUniqueNum   = 1;
+  doc                = NULL;
+  retSymbol          = NULL;
+  llvmDISubprogram   = NULL;
+  _throwsError       = false;
+
   substitutions.clear();
+
   gFnSymbols.add(this);
+
   formals.parent = this;
 }
 
@@ -858,16 +1000,24 @@ FnSymbol::FnSymbol(const char* initName) :
 FnSymbol::~FnSymbol() {
   if (iteratorInfo) {
     // Also set iterator class and iterator record iteratorInfo = NULL.
-    if (iteratorInfo->iclass)
+    if (iteratorInfo->iclass) {
       iteratorInfo->iclass->iteratorInfo = NULL;
-    if (iteratorInfo->irecord)
+    }
+
+    if (iteratorInfo->irecord) {
       iteratorInfo->irecord->iteratorInfo = NULL;
+    }
+
     delete iteratorInfo;
   }
+
   BasicBlock::clear(this);
-  delete basicBlocks; basicBlocks = 0;
-  if (calledBy)
+
+  delete basicBlocks;
+
+  if (calledBy) {
     delete calledBy;
+  }
 }
 
 
@@ -904,11 +1054,6 @@ void FnSymbol::verify() {
   // Should those even persist between passes?
   verifyInTree(valueFunction, "FnSymbol::valueFunction");
   verifyInTree(retSymbol, "FnSymbol::retSymbol");
-}
-
-
-FnSymbol* FnSymbol::getFnSymbol(void) {
-  return this;
 }
 
 
@@ -1303,24 +1448,56 @@ FnSymbol::replaceReturnSymbol(Symbol* newRetSymbol, Type* newRetType)
 
 
 void
-FnSymbol::insertBeforeReturn(Expr* ast) {
-  CallExpr* ret = toCallExpr(body->body.last());
-  if (!ret || !ret->isPrimitive(PRIM_RETURN))
-    INT_FATAL(this, "function is not normal");
-  Expr* last = ret;
-  if (DefExpr* def = toDefExpr(last->prev))
-    if (toLabelSymbol(def->sym))
-      last = last->prev; // label before return
-  last->insertBefore(ast);
+FnSymbol::insertBeforeEpilogue(Expr* ast) {
+  LabelSymbol* label = getEpilogueLabel();
+  if (label) {
+    DefExpr* def = label->defPoint;
+    def->insertBefore(ast);
+  } else {
+    // if an epilogue is later added, this will be excluded
+    CallExpr* ret = toCallExpr(body->body.last());
+    ret->insertBefore(ast);
+  }
 }
 
 
 void
-FnSymbol::insertBeforeReturnAfterLabel(Expr* ast) {
+FnSymbol::insertIntoEpilogue(Expr* ast) {
+  getOrCreateEpilogueLabel(); // always inserting into an epilogue
+  CallExpr* ret = toCallExpr(body->body.last());
+  ret->insertBefore(ast);
+}
+
+
+LabelSymbol*
+FnSymbol::getEpilogueLabel() {
   CallExpr* ret = toCallExpr(body->body.last());
   if (!ret || !ret->isPrimitive(PRIM_RETURN))
     INT_FATAL(this, "function is not normal");
-  ret->insertBefore(ast);
+  for (Expr* last = ret; last; last = last->prev) {
+    if (DefExpr* def = toDefExpr(last->prev)) {
+      if (LabelSymbol* label = toLabelSymbol(def->sym)) {
+        if (label->hasFlag(FLAG_EPILOGUE_LABEL)) {
+          return label;
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
+
+LabelSymbol*
+FnSymbol::getOrCreateEpilogueLabel() {
+  LabelSymbol* label = getEpilogueLabel();
+  if (!label) {
+    label = new LabelSymbol(astr("_end", name));
+    label->addFlag(FLAG_EPILOGUE_LABEL);
+
+    CallExpr* ret = toCallExpr(body->body.last());
+    ret->insertBefore(new DefExpr(label));
+  }
+  return label;
 }
 
 void
@@ -1369,57 +1546,131 @@ FnSymbol::collapseBlocks() {
   body->accept(&visitor);
 }
 
+
+
+
+
 //
-// returns 1 if generic
-// returns 2 if they all have defaults
+// If the function is not currently marked as generic
+//    then if it is generic
+//      1) Update some flags
+//      2) Return true to indicate the status has been modified
 //
-static int
-hasGenericArgs(FnSymbol* fn) {
-  bool isGeneric = false;
-  bool hasGenericDefaults = true;
-  for_formals(formal, fn) {
-    if ((formal->type->symbol->hasFlag(FLAG_GENERIC) &&
-         (!formal->type->hasGenericDefaults ||
-          formal->hasFlag(FLAG_MARKED_GENERIC) ||
-          formal == fn->_this ||
-          formal->hasFlag(FLAG_IS_MEME))) ||
-        formal->intent == INTENT_PARAM) {
+bool FnSymbol::tagIfGeneric() {
+  bool retval = false;
+
+  if (hasFlag(FLAG_GENERIC) == false) {
+    int result = hasGenericFormals();
+
+    // If this function has at least 1 generic formal
+    if (result > 0) {
+      addFlag(FLAG_GENERIC);
+
+      if (retType != dtUnknown && hasFlag(FLAG_TYPE_CONSTRUCTOR)) {
+        retType->symbol->addFlag(FLAG_GENERIC);
+
+        if (result == 2) {
+          retType->hasGenericDefaults = true;
+        }
+      }
+
+      retval = true;
+    }
+  }
+
+  return retval;
+}
+
+
+
+//
+// Scan the formals and return:
+//   2 is there is at least 1 generic formal and every generic
+//     formal has a default value
+//
+//   1 if there is at least 1 generic formal
+//
+//   0 if there are no generic formals
+//
+int FnSymbol::hasGenericFormals() const {
+  bool hasGenericFormal   = false;
+  bool hasGenericDefaults =  true;
+  int  retval             =     0;
+
+  bool resolveInit = false;
+  if (this->hasFlag(FLAG_METHOD) && _this) {
+    if (AggregateType* at = toAggregateType(_this->type)) {
+      if (at->initializerStyle == DEFINES_INITIALIZER  &&
+          strcmp(name, "init") == 0) {
+        resolveInit = true;
+      }
+    }
+  }
+
+  for_formals(formal, this) {
+    bool isGeneric = false;
+
+    if (formal->intent == INTENT_PARAM) {
       isGeneric = true;
-      if (!formal->defaultExpr)
+
+    } else if (formal->type->symbol->hasFlag(FLAG_GENERIC) == true) {
+      if (formal->type->hasGenericDefaults     == false ||
+          formal->hasFlag(FLAG_MARKED_GENERIC) == true ||
+          formal                               == _this ||
+          formal->hasFlag(FLAG_IS_MEME)        == true) {
+        if (!(formal == _this && resolveInit)) {
+          isGeneric = true;
+        }
+      }
+    }
+
+    if (isGeneric == true) {
+      hasGenericFormal = true;
+
+      if (formal->defaultExpr == NULL) {
         hasGenericDefaults = false;
+      }
     }
   }
-  if (isGeneric && !hasGenericDefaults)
-    return 1;
-  else if (isGeneric && hasGenericDefaults)
-    return 2;
-  else
-    return 0;
+
+  if (hasGenericFormal == false) {
+    retval = 0;
+
+  } else if (hasGenericDefaults == false) {
+    retval = 1;
+
+  } else if (hasGenericDefaults ==  true) {
+    retval = 2;
+
+  } else {
+    INT_ASSERT(false);
+  }
+
+  return retval;
 }
 
 
-// Tag the given function as generic.
-// Returns true if there was a change, false otherwise.
-bool FnSymbol::tag_generic() {
-  if (hasFlag(FLAG_GENERIC))
-    return false;  // Already generic, no change.
 
-  if (int result = hasGenericArgs(this)) {
-    // This function has generic arguments, so mark it as generic.
-    addFlag(FLAG_GENERIC);
 
-    // If the return type is not completely unknown (which is generic enough)
-    // and this function is a type constructor function,
-    // then mark its return type as generic.
-    if (retType != dtUnknown && hasFlag(FLAG_TYPE_CONSTRUCTOR)) {
-      retType->symbol->addFlag(FLAG_GENERIC);
-      if (result == 2)
-        retType->hasGenericDefaults = true;
-    }
-    return true;
-  }
-  return false;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 bool FnSymbol::isResolved() const {
   return hasFlag(FLAG_RESOLVED);
@@ -1577,6 +1828,24 @@ bool FnSymbol::throwsError() const {
   return _throwsError;
 }
 
+bool FnSymbol::retExprDefinesNonVoid() const {
+  bool retval = true;
+
+  if (retExprType == NULL) {
+    retval = false;
+
+  } else if (retExprType->length() != 1) {
+    retval = true;
+
+  } else if (SymExpr* expr = toSymExpr(retExprType->body.get(1))) {
+    retval = expr->symbol()->type != dtVoid ? true : false;
+
+  } else {
+    retval = true;
+  }
+
+  return retval;
+}
 
 /******************************** | *********************************
 *                                                                   *
@@ -2185,6 +2454,7 @@ static int literal_id = 1;
 HashMap<Immediate *, ImmHashFns, VarSymbol *> uniqueConstantsHash;
 HashMap<Immediate *, ImmHashFns, VarSymbol *> stringLiteralsHash;
 FnSymbol* initStringLiterals = NULL;
+LabelSymbol* initStringLiteralsEpilogue = NULL;
 
 void createInitStringLiterals() {
   SET_LINENO(stringLiteralModule);
@@ -2233,7 +2503,7 @@ VarSymbol *new_StringSymbol(const char *str) {
   VarSymbol* castTemp = newTemp("call_tmp");
   CallExpr *castCall = new CallExpr(PRIM_MOVE,
       castTemp,
-      new CallExpr("_cast", cptrTemp, new_CStringSymbol(str)));
+      createCast(new_CStringSymbol(str), cptrTemp));
 
   int strLength = unescapeString(str, castCall).length();
 
@@ -2256,14 +2526,18 @@ VarSymbol *new_StringSymbol(const char *str) {
 
   CallExpr* ctorCall = new CallExpr(PRIM_MOVE, new SymExpr(s), ctor);
 
-  if (initStringLiterals == NULL)
+  if (initStringLiterals == NULL) {
     createInitStringLiterals();
+    initStringLiteralsEpilogue = initStringLiterals->getOrCreateEpilogueLabel();
+  }
 
-  initStringLiterals->insertBeforeReturn(new DefExpr(cptrTemp));
-  initStringLiterals->insertBeforeReturn(cptrCall);
-  initStringLiterals->insertBeforeReturn(new DefExpr(castTemp));
-  initStringLiterals->insertBeforeReturn(castCall);
-  initStringLiterals->insertBeforeReturn(ctorCall);
+  Expr* insertPt = initStringLiteralsEpilogue->defPoint;
+
+  insertPt->insertBefore(new DefExpr(cptrTemp));
+  insertPt->insertBefore(cptrCall);
+  insertPt->insertBefore(new DefExpr(castTemp));
+  insertPt->insertBefore(castCall);
+  insertPt->insertBefore(ctorCall);
 
   s->immediate = new Immediate;
   *s->immediate = imm;

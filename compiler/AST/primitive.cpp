@@ -173,26 +173,13 @@ returnInfoCast(CallExpr* call) {
 static QualifiedType
 returnInfoVal(CallExpr* call) {
   AggregateType* ct = toAggregateType(call->get(1)->typeInfo());
-  if (ct) {
-    if (call->get(1)->isRef()) {
-      if(ct->symbol->hasFlag(FLAG_REF)) {
-        return QualifiedType(ct->getField(1)->type, QUAL_VAL);
-      } else {
-        return QualifiedType(ct, QUAL_VAL);
-      }
-    } else if (call->get(1)->isWideRef()) {
-      if(ct->symbol->hasFlag(FLAG_WIDE_REF)) {
-        return QualifiedType(ct->getField(2)->type, QUAL_VAL);
-      } else {
-        return QualifiedType(ct, QUAL_VAL);
-      }
-    } else if (ct->symbol->hasFlag(FLAG_WIDE_CLASS)) {
-      // insertWideReferences will sometimes insert a PRIM_DEREF to a
-      // wide class. There should probably be a better way of expressing the
-      // desired pattern...
-      return QualifiedType(ct, QUAL_VAL);
-    }
+
+  if (call->get(1)->isRefOrWideRef()) {
+    return QualifiedType(call->get(1)->getValType(), QUAL_VAL);
+  } else if (ct && ct->symbol->hasFlag(FLAG_WIDE_CLASS)) {
+    return QualifiedType(ct, QUAL_VAL);
   }
+
   INT_FATAL(call, "attempt to get value type of non-reference type");
   return QualifiedType(NULL);
 }
@@ -462,13 +449,17 @@ void
 initPrimitive() {
   primitives[PRIM_UNKNOWN] = NULL;
 
-
   prim_def(PRIM_ACTUALS_LIST, "actuals list", returnInfoVoid);
   prim_def(PRIM_NOOP, "noop", returnInfoVoid);
+  // dst, src. PRIM_MOVE can set a reference.
   prim_def(PRIM_MOVE, "move", returnInfoVoid, false, true);
-  prim_def(PRIM_INIT, "init", returnInfoFirstDeref);
-  prim_def(PRIM_NO_INIT, "no init", returnInfoFirstDeref);
+
+  prim_def(PRIM_INIT,      "init",      returnInfoFirstDeref);
+  prim_def(PRIM_INIT_VAR,  "initVar",   returnInfoVoid);
+  prim_def(PRIM_NO_INIT,   "no init",   returnInfoFirstDeref);
   prim_def(PRIM_TYPE_INIT, "type init", returnInfoFirstDeref);
+
+  prim_def(PRIM_INITIALIZER_SET_FIELD, "initializer set field", returnInfoVoid, false, true);
   prim_def(PRIM_REF_TO_STRING, "ref to string", returnInfoStringC);
   prim_def(PRIM_RETURN, "return", returnInfoFirst, true);
   prim_def(PRIM_THROW, "throw", returnInfoFirst, true, true);
@@ -495,6 +486,7 @@ initPrimitive() {
   prim_def(PRIM_XOR, "^", returnInfoFirstDeref);
   prim_def(PRIM_POW, "**", returnInfoNumericUp);
 
+  // dst, src. PRIM_ASSIGN with reference dst sets *dst
   prim_def(PRIM_ASSIGN, "=", returnInfoVoid, true);
   prim_def(PRIM_ADD_ASSIGN, "+=", returnInfoVoid, true);
   prim_def(PRIM_SUBTRACT_ASSIGN, "-=", returnInfoVoid, true);
@@ -518,6 +510,7 @@ initPrimitive() {
   prim_def(PRIM_GET_UNION_ID, "get_union_id", returnInfoDefaultInt, false, true);
   prim_def(PRIM_GET_MEMBER, ".", returnInfoGetMemberRef);
   prim_def(PRIM_GET_MEMBER_VALUE, ".v", returnInfoGetMember, false, true);
+  // base, field, value
   prim_def(PRIM_SET_MEMBER, ".=", returnInfoVoid, true, true);
   prim_def(PRIM_CHECK_NIL, "_check_nil", returnInfoVoid, true, true);
   prim_def(PRIM_NEW, "new", returnInfoFirst);
@@ -568,7 +561,6 @@ initPrimitive() {
   prim_def(PRIM_CHPL_COMM_GET_STRD, "chpl_comm_get_strd", returnInfoVoid, true, true);
   prim_def(PRIM_CHPL_COMM_PUT_STRD, "chpl_comm_put_strd", returnInfoVoid, true, true);
 
-  prim_def(PRIM_OPTIMIZE_ARRAY_BLK_MULT, "optimize_array_blk_mult", returnInfoBool);
   prim_def(PRIM_ARRAY_SHIFT_BASE_POINTER, "shift_base_pointer", returnInfoVoid, true, true);
   prim_def(PRIM_SHIFT_REF, "shift_ref", returnInfoVoid, true, true);
   prim_def(PRIM_ARRAY_ALLOC, "array_alloc", returnInfoVoid, true, true);
@@ -659,6 +651,7 @@ initPrimitive() {
 
   prim_def(PRIM_IS_TUPLE_TYPE, "is tuple type", returnInfoBool);
   prim_def(PRIM_IS_STAR_TUPLE_TYPE, "is star tuple type", returnInfoBool);
+  // base, index, value
   prim_def(PRIM_SET_SVEC_MEMBER, "set svec member", returnInfoVoid, true, true);
   prim_def(PRIM_GET_SVEC_MEMBER, "get svec member", returnInfoGetTupleMemberRef);
   prim_def(PRIM_GET_SVEC_MEMBER_VALUE, "get svec member value", returnInfoGetTupleMember, false, true);
@@ -703,11 +696,12 @@ initPrimitive() {
   prim_def(PRIM_REQUIRE, "require", returnInfoVoid, false, false);
 }
 
-Map<const char*, VarSymbol*> memDescsMap;
+static Map<const char*, VarSymbol*> memDescsMap;
+static Map<int, VarSymbol*> memDescsNodeMap;  // key is the Type node's ID
 Vec<const char*> memDescsVec;
+static int64_t memDescInt = 0;
 
 VarSymbol* newMemDesc(const char* str) {
-  static int64_t memDescInt = 0;
   const char* s = astr(str);
   if (VarSymbol* v = memDescsMap.get(s))
     return v;
@@ -715,4 +709,33 @@ VarSymbol* newMemDesc(const char* str) {
   memDescsMap.put(s, memDescVar);
   memDescsVec.add(s);
   return memDescVar;
+}
+
+VarSymbol* newMemDesc(Type* type) {
+  if (VarSymbol* v = memDescsNodeMap.get(type->id))
+    return v;
+  VarSymbol* memDescVar = new_IntSymbol(memDescInt++, INT_SIZE_16);
+  memDescsNodeMap.put(type->id, memDescVar);
+  memDescsVec.add(type->symbol->name);
+  return memDescVar;
+}
+
+bool getSettingPrimitiveDstSrc(CallExpr* call, Expr** dest, Expr** src)
+{
+  if (call->isPrimitive(PRIM_MOVE) || call->isPrimitive(PRIM_ASSIGN)) {
+    // dest, src
+    *dest = call->get(1);
+    *src = call->get(2);
+    return true;
+  }
+
+  if (call->isPrimitive(PRIM_SET_MEMBER) ||
+      call->isPrimitive(PRIM_SET_SVEC_MEMBER)) {
+    // base, field/index, value
+    *dest = call->get(1);
+    *src = call->get(3);
+    return true;
+  }
+
+  return false;
 }

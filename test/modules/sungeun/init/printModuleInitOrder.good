@@ -32,7 +32,7 @@ Initializing Modules:
      List
     ChapelIO
      IO
-      Error
+      SysError
       Regexp
     LocaleTree
     DefaultAssociative
@@ -41,7 +41,6 @@ Initializing Modules:
     ChapelUtil
     ChapelDynDispHack
     Assert
-    CommDiagnostics
     AlignedTSupport
     RangeChunk
    printModuleInitOrder

@@ -89,7 +89,8 @@ CHPL_HOST_PLATFORM
    We are interested in making our code framework portable to other platforms --
    if you are using Chapel on a platform other than the ones listed above,
    please refer to :ref:`platform-specific-settings` for ways to set up a
-   Makefile for this platform and/or contact us at: chapel_info@cray.com
+   Makefile for this platform and/or contact us at:
+   :disguise:`chapel_info@cray.com`
 
 PATH
 ~~~~
@@ -295,6 +296,10 @@ CHPL_LOCALE_MODEL
         flat     top-level locales are not further subdivided
         numa     top-level locales are further subdivided into
                  sublocales, each one a NUMA domain
+        knl      a processor-specific locale model for the
+                 self-hosted Xeon Phi (Knight's Landing) which
+                 includes NUMA support and access to the
+                 tightly-coupled high-bandwidth memory
         ======== =============================================
 
    If unset, ``CHPL_LOCALE_MODEL`` defaults to ``flat``.
@@ -353,16 +358,14 @@ CHPL_COMM
         ======= ============================================
         none    only supports single-locale execution
         gasnet  use the GASNet-based communication layer
-        ugni    Cray-specific native communications (with
-                Cray pre-built module only)
+        ugni    Cray-specific native communication layer
         ======= ============================================
 
-   If unset, ``CHPL_COMM`` defaults to ``none`` in most cases.  On a Cray
-   system it defaults to ``gasnet`` except when using a pre-built module on a
-   Cray XC or XE\ |trade| system, where it defaults to ``ugni``.  See
-   :ref:`readme-multilocale` for more information on executing Chapel programs
-   using multiple locales.  See also :ref:`readme-cray` for more information
-   about Cray-specific runtime layers.
+   If unset, ``CHPL_COMM`` defaults to ``none`` in most cases.  On Cray XE
+   and XC systems it defaults to ``ugni``.  On Cray CS systems it defaults
+   to ``gasnet``.  See :ref:`readme-multilocale` for more information on
+   executing Chapel programs using multiple locales.  See :ref:`readme-cray`
+   for more information about Cray-specific runtime layers.
 
 
 .. _readme-chplenv.CHPL_MEM:
