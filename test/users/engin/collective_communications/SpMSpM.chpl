@@ -59,7 +59,7 @@ const prefetchTime = t.elapsed();
 
 forall i in distDom.dim(1) {
   for j in distDom.dim(2) {
-    for k in A.domain.dimIter(2, i) {
+    for k in A.domain.dimIter(2, i) { // this is still a remote call
       C[i,j] += A[i,k] * B[k,j];
     }
   }

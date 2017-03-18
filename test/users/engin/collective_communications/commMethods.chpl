@@ -10,7 +10,7 @@ inline proc BlockArr.updatePrefetch() {
 }
 
 proc BlockArr.reportPrefetch() {
-  coforall localeIdx in dom.dist.targetLocDom {
+  for localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       locArr[localeIdx].prefetchHook.reportPrefetchTimes();
     }
