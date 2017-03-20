@@ -3354,6 +3354,25 @@ static void check_integrity(struct __prefetch_entry_t *entry) {
 }
 #endif
 
+void initialize_opt_fields(struct __prefetch_entry_t *entry,
+    bool strided_remote_data, bool consec_remote_data,
+    int32_t stridelevels, size_t *dststrides, size_t *srcstrides,
+    size_t *counts) {
+
+  entry->strided_remote_data = strided_remote_data;
+  entry->consec_remote_data = consec_remote_data;
+
+  entry->stridelevels = stridelevels;
+
+  entry->dststrides = chpl_calloc(stridelevels, sizeof(size_t));
+  memcpy(entry->dststrides, dststrides, sizeof(size_t)*stridelevels);
+  entry->srcstrides = chpl_calloc(stridelevels, sizeof(size_t));
+  memcpy(entry->srcstrides, srcstrides, sizeof(size_t)*stridelevels);
+  entry->counts = chpl_calloc(stridelevels+1, sizeof(size_t));
+  memcpy(entry->counts, counts,
+      sizeof(size_t)*(stridelevels+1));
+}
+
 // assumed to be called from a thread-safe context
 void reprefetch_single_entry(struct __prefetch_entry_t *entry) {
   if(entry) {

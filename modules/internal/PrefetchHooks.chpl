@@ -20,7 +20,9 @@ module PrefetchHooks {
   /*extern proc */
     /*chpl_comm_prefetch(node, raddr, size,*/
       /*serialized_base_idx): prefetch_entry_t;*/
-  
+
+  extern proc initialize_opt_fields(handle, strided_remote_data,
+    consec_remote_data, stridelevel, dstStrides, srcStrides, counts);
   extern proc
     entry_has_data(handle): bool;
   extern proc
@@ -1073,9 +1075,9 @@ module PrefetchHooks {
       counts[0] *= slice.dim(r).length.safeCast(size_t);
     }
 
-    var destStrides = c_calloc(size_t, differentDims);
+    var dstStrides = c_calloc(size_t, differentDims);
     // we are assuming strideLevels == 1
-    destStrides[0] = counts[0];
+    dstStrides[0] = counts[0];
 
     // we are assuming stridelevels == 1
     counts[1] = 1;
@@ -1094,8 +1096,12 @@ module PrefetchHooks {
     writeln(here, " from ", srcLocaleId, " SrcStrides:", srcStrides[0],
         " flags: ", incompatSlice, ", ", nonstrConsData);
     writeln(here, " from ", srcLocaleId, " DestStrides:",
-        destStrides[0], " flags: ", incompatSlice, ", ",
+        dstStrides[0], " flags: ", incompatSlice, ", ",
         nonstrConsData);
+
+    initialize_opt_fields(handle,
+        !incompatSlice, nonstrConsData, // flags
+        strideLevels, dstStrides, srcStrides, counts);
   }
   inline proc domToArray(dom: domain) where dom.rank == 1 {
     return [dom.dim(1).low, dom.dim(1).high];

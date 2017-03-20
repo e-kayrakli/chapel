@@ -120,7 +120,7 @@ typedef struct __prefetch_entry_t{
   // we need to store the beginning of the actual data for fast
   // reprefetch in static domains
   bool static_domain;
-  void *data_start;
+  void *data_start; // TODO change to local_data_start
   void *remote_data_start;
   size_t actual_data_size;
 
@@ -132,8 +132,14 @@ typedef struct __prefetch_entry_t{
    else if !static_domain then
     on statement
   */
-  bool strided_reprefetch; // if static_domain && !strided then do get
+  bool strided_remote_data; // if static_domain && !strided then do get
+  bool consec_remote_data;
 
+  // meaningful iff strided_remote_data && static_domain
+  int32_t stridelevels;
+  size_t *dststrides;
+  size_t *srcstrides;
+  size_t *counts;
 
 #if CHECK_PFENTRY_INTEGRITY
   void *base_data;
@@ -248,6 +254,10 @@ void acquire_prefetch_buffer(int ln, int fn);
 #endif
 // ifdef HAS_CHPL_CACHE_FNS
 
+void initialize_opt_fields(struct __prefetch_entry_t *entry,
+    bool strided_remote_data, bool consec_remote_data,
+    int32_t stridelevels, size_t *dstStrides, size_t *srcStrides,
+    size_t *counts);
 
 #endif
 
