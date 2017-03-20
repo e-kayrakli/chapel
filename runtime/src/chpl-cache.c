@@ -3175,7 +3175,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
     void* robjaddr, size_t prefetch_size, void *slice_desc,
     size_t slice_desc_size, bool consistent, bool static_domain,
-    int64_t data_start_offset){
+    int64_t data_start_offset, size_t elemsize){
 
   struct __prefetch_entry_t *head;
   struct __prefetch_entry_t *new_entry;
@@ -3183,6 +3183,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   int i;
 
   assert(pbuf);
+  assert(elemsize);
 
   head = pbuf->head;
 
@@ -3195,6 +3196,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   chpl_memcpy(new_entry->slice_desc, slice_desc, slice_desc_size);
   new_entry->slice_desc_size = slice_desc_size;
   new_entry->pf_type = PF_INIT;
+  new_entry->elemsize = elemsize;
 
   data_bundle = chpl_malloc(
       sizeof(struct __prefetch_entry *) +
@@ -3206,11 +3208,13 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
 
   new_entry->data_start = (char *)new_entry->data + data_start_offset;
 
-  /*printf("%zd %p %p\n", prefetch_size, new_entry->data, new_entry->data_start);*/
+  // optimization properties
+  new_entry->static_domain = static_domain;
+  new_entry->strided_remote_data = false;
+  new_entry->consec_remote_data = false;
+
   // this should probably be handled by DSI
   new_entry->actual_data_size = prefetch_size - data_start_offset;
-
-  new_entry->static_domain = static_domain;
 
   *(new_entry->back_link) = new_entry;
 
@@ -3292,11 +3296,12 @@ void create_prefetch_handle(struct __prefetch_entry_t **entry) {
 void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
-    consistent, bool static_domain, int64_t data_start_offset) {
+    consistent, bool static_domain, int64_t data_start_offset,
+    size_t elemsize) {
 
   *new_entry = add_to_prefetch_buffer(pbuf, origin_node, robjaddr,
       prefetch_size, slice_desc, slice_desc_size, consistent,
-      static_domain, data_start_offset);
+      static_domain, data_start_offset, elemsize);
 
   /*printf("%d creating new handle %p\n", chpl_nodeID, *new_entry);*/
   (*new_entry)->owner_obj = owner_obj;
@@ -3369,6 +3374,7 @@ void initialize_opt_fields(struct __prefetch_entry_t *entry,
   entry->srcstrides = chpl_calloc(stridelevels, sizeof(size_t));
   memcpy(entry->srcstrides, srcstrides, sizeof(size_t)*stridelevels);
   entry->counts = chpl_calloc(stridelevels+1, sizeof(size_t));
+  printf("%d Init %d %d\n", chpl_nodeID, counts[0], counts[1]);
   memcpy(entry->counts, counts,
       sizeof(size_t)*(stridelevels+1));
 }
@@ -3672,70 +3678,69 @@ extern void __reprefetch_wrapper(void* owner_obj, c_nodeid_t
     static_domain);
 
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
-  /*chpl_free(entry->data);*/
 
-  /*printf("%d Reprefetching from %d %p\n", chpl_nodeID,*/
-      /*entry->origin_node, entry);*/
-
-  /*printf("\t\t Slice desc: %ld %ld %ld %ld\n",*/
-      /*((int64_t *)entry->slice_desc)[0],*/
-      /*((int64_t *)entry->slice_desc)[1],*/
-      /*((int64_t *)entry->slice_desc)[2],*/
-      /*((int64_t *)entry->slice_desc)[3]);*/
-
+  if(entry->static_domain) {
+    if(entry->consec_remote_data) {
+      printf("%d Reprefetching from %d %p - Using bulk\
+          get\n", chpl_nodeID, entry->origin_node, entry);
+      prefetch_consec_entry(entry);
+      return;
+    }
+    else if(entry->strided_remote_data) {
+      printf("%d Reprefetching from %d %p - Using strided\
+          get\n", chpl_nodeID, entry->origin_node, entry);
+      prefetch_strided_entry(entry);
+      return;
+    }
+  }
+  printf("%d Reprefetching from %d %p - Using on stmt\
+      \n", chpl_nodeID, entry->origin_node, entry);
   __reprefetch_wrapper(entry->owner_obj, chpl_nodeID,
       entry->origin_node, entry->robjaddr, entry->slice_desc,
       entry->slice_desc_size, entry->pf_type & PF_CONSISTENT,
       entry->static_domain);
-
-  /*chpl_comm_prefetch(&(entry->data), entry->origin_node,*/
-      /*entry->robjaddr, &(entry->size), entry->slice_desc,*/
-      /*entry->slice_desc_size, -1, -1, -1);*/
 }
 
-/*struct __prefetch_entry_t *chpl_comm_request_prefetch(c_nodeid_t node,*/
-    /*void* robjaddr, void *slice_desc, size_t slice_desc_size,*/
-    /*bool consistent) {*/
+void prefetch_consec_entry(struct __prefetch_entry_t *entry) {
 
-  /*[>struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();<]*/
-  /*struct __prefetch_entry_t* new_data;*/
-  /*TRACE_PRINT(("%d: in chpl_comm_requestprefetch\n", chpl_nodeID));*/
-  /*if (chpl_verbose_comm)*/
-    /*printf("%d: remote prefetch request from %d\n", chpl_nodeID, node);*/
+  if(!entry->consec_remote_data) {
+    chpl_internal_error("Remote data is not strided\n");
+  }
 
-  /*// add the data to the prefetch buffer*/
-  /*new_data = add_to_prefetch_buffer(pbuf, node, robjaddr,*/
-      /*slice_desc, slice_desc_size,*/
-      /*consistent);*/
+  chpl_comm_get(entry->data_start, entry->origin_node,
+      entry->remote_data_start, entry->actual_data_size, -1, 0, 0);
+}
 
-  /*chpl_comm_prefetch(&(new_data->data), node, robjaddr,*/
-      /*&(new_data->size), slice_desc, slice_desc_size, -1, -1, -1);*/
-/*#if CHECK_PFENTRY_INTEGRITY*/
-  /*new_data->base_data = chpl_malloc(new_data->size);*/
-  /*chpl_memcpy(new_data->base_data, new_data->data, new_data->size);*/
-/*#endif*/
+void prefetch_strided_entry(struct __prefetch_entry_t *entry) {
 
-  /*return new_data;*/
-/*}*/
+  if(!entry->strided_remote_data) {
+    chpl_internal_error("Remote data is not strided\n");
+  }
+  if(entry->stridelevels > 1) {
+    chpl_internal_error("Cannot strided-prefetch where stridelevels >\
+        1\n");
+  }
 
-/*void get_prefetched_data(struct __prefetch_entry_t *entry,*/
-    /*int offset, size_t size, void *dest) {*/
-  /*memcpy(dest, ((unsigned char *)entry->data)+offset, size);*/
-/*}*/
-/*static*/
-/*void prefetch_get(struct prefetch_buffer_s* pbuf,*/
-                /*unsigned char * addr, c_nodeid_t node, void *raddr,*/
-                /*size_t size, int ln, int32_t fn) {*/
+  assert(entry);
+  assert(entry->remote_data_start);
 
-  /*void *addr_in_buf = find_in_prefetch_buffer(pbuf->head,*/
-      /*node, raddr, size);*/
-
-  /*if(addr_in_buf) {*/
-    /*memcpy(addr, addr_in_buf, size);*/
-    /*[>printf("Prefetch get returns %f, on locale %d\n",<]*/
-        /*[>*(double*)(addr_in_buf), chpl_nodeID);<]*/
-  /*}*/
-/*}*/
+  uint8_t *data_temp = (uint8_t *)(entry->data_start);
+  printf("\t\t%d pre-strd pref: %d %d %d %d\n\
+      \t\t\tstridelevels:%d, counts: %d %d, srcstride: %d,\
+      dststride: %d", chpl_nodeID, data_temp[0],
+                                             data_temp[1],
+                                             data_temp[2],
+                                             data_temp[3],
+           entry->stridelevels, entry->counts[0], entry->counts[1],
+           entry->srcstrides[0], entry->dststrides[0]);
+  chpl_comm_get_strd(entry->data_start, entry->dststrides,
+      entry->origin_node, entry->remote_data_start, entry->srcstrides,
+      entry->counts, entry->stridelevels, entry->elemsize, -1, 0, 0);
+  printf("\t\t%d pre-strd pref: %d %d %d %d\n", chpl_nodeID, data_temp[0],
+                                             data_temp[1],
+                                             data_temp[2],
+                                             data_temp[3]);
+}
 
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
     raddr, size_t size, int32_t typeIndex, int ln, int32_t fn) {
@@ -3747,18 +3752,6 @@ void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
 
   memcpy(addr, pbuf->fast_access_addr, size);
 }
-
-/*void chpl_prefetch_comm_get(void *addr, c_nodeid_t node, void* raddr,*/
-                         /*size_t size, int32_t typeIndex,*/
-                         /*int ln, int32_t fn)*/
-/*{*/
-  /*struct prefetch_buffer_s* pbuf = tls_prefetch_remote_data();*/
-  /*if (chpl_verbose_comm) */
-    /*printf("%d: %s:%d: remote put to (chpl_prefetch_comm_get) %d\n",*/
-        /*chpl_nodeID, chpl_lookupFilename(fn), ln, node);*/
-
-  /*prefetch_get(pbuf, addr, node, raddr, size, ln, fn);*/
-/*}*/
 
 void chpl_cache_comm_prefetch(c_nodeid_t node, void* raddr,
                               size_t size, int32_t typeIndex,

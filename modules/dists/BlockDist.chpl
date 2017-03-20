@@ -2248,6 +2248,10 @@ proc LocBlockArr.dsiGetBaseDataStartAddr() {
   return c_ptrTo(myElems[myElems.domain.low]):c_void_ptr;
 }
 
+proc LocBlockArr.dsiGetBaseDataStartAddr(startIdx: rank*idxType) {
+  return c_ptrTo(myElems[startIdx]):c_void_ptr;
+}
+
 inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
 
   if rank > 3 then

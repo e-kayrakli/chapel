@@ -21,6 +21,8 @@ module PrefetchHooks {
     /*chpl_comm_prefetch(node, raddr, size,*/
       /*serialized_base_idx): prefetch_entry_t;*/
 
+  extern proc prefetch_strided_entry(entry);
+
   extern proc initialize_opt_fields(handle, strided_remote_data,
     consec_remote_data, stridelevel, dstStrides, srcStrides, counts);
   extern proc
@@ -59,7 +61,7 @@ module PrefetchHooks {
 
   extern proc initialize_prefetch_handle(owner_obj, origin_node,
       robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
-      consistent, fixed_size, data_start_offset): c_void_ptr;
+      consistent, fixed_size, data_start_offset, elemsize): c_void_ptr;
 
   extern proc update_prefetch_handle(owner_obj, origin_node,
       robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
@@ -153,6 +155,12 @@ module PrefetchHooks {
     }
     
     proc getBaseDataStartAddr() {
+      halt("This shouldn't have been called");
+      var dummy: c_void_ptr;
+      return dummy;
+    }
+
+    proc getBaseDataStartAddr(startIdx) {
       halt("This shouldn't have been called");
       var dummy: c_void_ptr;
       return dummy;
@@ -347,6 +355,10 @@ module PrefetchHooks {
       return obj.dsiGetBaseDataStartAddr();
     }
 
+    proc getBaseDataStartAddr(startIdx) {
+      return obj.dsiGetBaseDataStartAddr(startIdx);
+    }
+
     //prefetch-reprefetch helpers
     pragma "no remote memory fence"
     inline proc __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
@@ -502,7 +514,7 @@ module PrefetchHooks {
         /*writeln();*/
       }
       else {
-        var data = get_entry_data_start(handle):c_ptr(uint(8));
+        /*var data = get_entry_data_start(handle):c_ptr(uint(8));*/
         /*writeln("Reprefetching ", get_entry_data_actual_size(handle),*/
             /*" from ", srcLocaleId, " dest addr ",*/
             /*__primitive("cast", int, get_entry_data_start(handle)));*/
@@ -533,15 +545,31 @@ module PrefetchHooks {
       return dataStartPtr;
     }
 
+    proc __getRemoteDataStartAddr(srcLocaleId, srcObj, startIdx) {
+
+      var dataStartPtr: c_void_ptr;
+      on Locales[srcLocaleId] {
+        dataStartPtr = __get_data_start_ptr_wrapper(srcObj, startIdx);
+      }
+      if is_c_nil(dataStartPtr) then halt("Received null pointer");
+      return dataStartPtr;
+    }
+
     proc __get_data_start_ptr_wrapper(__obj: c_void_ptr) {
       var obj = __obj:PrefetchHook;
 
       return obj.getBaseDataStartAddr();
     }
 
+    proc __get_data_start_ptr_wrapper(__obj: c_void_ptr, startIdx) {
+      var obj = __obj:PrefetchHook;
+
+      return obj.getBaseDataStartAddr(startIdx);
+    }
+
     //srcObj is the remote PrefetchHook
     proc doPrefetch(destLocaleId, srcLocaleId, srcObj, sliceDesc,
-        wholeDesc, consistent, staticDomain, prefetchSlice) {
+        wholeDesc, consistent, staticDomain, param prefetchSlice) {
 
       if destLocaleId != here.id {
         halt("doPrefetch can only be called from the prefetching \
@@ -565,16 +593,65 @@ module PrefetchHooks {
           initialize_prefetch_handle(this, srcLocaleId, srcObj,
             c_ptrTo(new_handle_ptr), size, slice_desc:c_void_ptr,
             slice_desc_size, consistent, staticDomain,
-            obj.getDataStartByteIndex()));
+            obj.getDataStartByteIndex(), getSize(1, obj.eltType)));
 
-      generateStridedGetData(new_handle_ptr, sliceDesc, wholeDesc,
-          obj.eltType, srcLocaleId); //srcLocaleId is for dbg
+      const (consData, stridedData) =
+        generateStridedGetData(new_handle_ptr, sliceDesc, wholeDesc,
+            obj.eltType, srcLocaleId); //srcLocaleId is for dbg
+
 
       // if data is being prefetched consistently, don't bring in the
       // data right away
       if !consistent {
-        __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-            slice_desc, slice_desc_size, data, size);
+        if staticDomain && (consData || stridedData) {
+        /*if staticDomain && (consData || false) {*/
+          // even though we are not prefetching the full data, we still
+          // need to bring in the metadata b/c:
+          // when we  don't bring in the metadata, first access to the
+          // data is done through junk metadata(all zeroes). Remember that
+          // we are checking for stale data while doing the actual read
+          // from the buffer and not when calculating the byte index,
+          // which happens without any lockign(we assume that metadata
+          // never changes and it is always there
+          const metadataSize = __getSerializedMetadataSize(destLocaleId,
+              srcLocaleId, srcObj, slice_desc, slice_desc_size): size_t;
+
+          __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+              slice_desc, slice_desc_size, data, metadataSize,
+              metadataOnly=true);
+
+          writeln(here, " querying remote start of index ",
+              sliceDesc.first , " on ", srcLocaleId);
+          var remoteDataStartPtr =
+            if prefetchSlice then
+              __getRemoteDataStartAddr(srcLocaleId, srcObj,
+                  sliceDesc.first)
+            else
+              __getRemoteDataStartAddr(srcLocaleId, srcObj);
+
+          set_entry_remote_data_start(new_handle_ptr,
+              remoteDataStartPtr);
+
+          if consData {
+            writeln(here, " doing consec prefetch");
+            __primitive("chpl_comm_array_get",
+              __primitive("array_get",
+                  get_entry_data_start(new_handle_ptr):c_ptr(uint(8)),
+                  0),
+              srcLocaleId,
+              get_entry_remote_data_start(new_handle_ptr):c_ptr(uint(8)),
+              get_entry_data_actual_size(new_handle_ptr));
+          }
+          else { //strided data
+            writeln(here, " doing strided prefetch");
+            prefetch_strided_entry(new_handle_ptr);
+          }
+        }
+        else {
+          writeln(here, " doing full prefetch");
+          __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+              slice_desc, slice_desc_size, data, size);
+        }
       }
       else {
         // even though we are not prefetching the full data, we still
@@ -1102,6 +1179,8 @@ module PrefetchHooks {
     initialize_opt_fields(handle,
         !incompatSlice, nonstrConsData, // flags
         strideLevels, dstStrides, srcStrides, counts);
+
+    return (nonstrConsData, !incompatSlice);
   }
   inline proc domToArray(dom: domain) where dom.rank == 1 {
     return [dom.dim(1).low, dom.dim(1).high];

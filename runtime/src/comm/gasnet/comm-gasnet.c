@@ -1293,10 +1293,10 @@ void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
 // * convert count[0] and all of 'srcstr' and 'dststr' from counts of element
 //   to counts of bytes,
 //
-void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_id, 
-                         void* srcaddr, size_t* srcstrides, size_t* count,
-                         int32_t stridelevels, size_t elemSize, int32_t typeIndex, 
-                         int ln, int32_t fn) {
+void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t
+    srcnode_id, void* srcaddr, size_t* srcstrides, size_t* count,
+    int32_t stridelevels, size_t elemSize, int32_t typeIndex, int ln,
+    int32_t fn) {
   int i;
   const size_t strlvls = (size_t)stridelevels;
   const gasnet_node_t srcnode = (gasnet_node_t)srcnode_id;
@@ -1305,9 +1305,15 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_i
   size_t srcstr[strlvls];
   size_t cnt[strlvls+1];
 
+  for (i=0;i<=strlvls;i++) 
+    printf("\n%d precount[%d]: %zd %zd %zd\n",
+        chpl_nodeID, i, cnt[i], count[i], elemSize);
   // Only count[0] and strides are measured in number of bytes.
   cnt[0] = count[0] * elemSize;
 
+  for (i=0;i<=strlvls;i++) 
+    printf("\n%d postcount[%d]: %zd %zd %zd\n",
+        chpl_nodeID, i, cnt[i], count[i], elemSize);
   if (strlvls>0) {
     srcstr[0] = srcstrides[0] * elemSize;
     dststr[0] = dststrides[0] * elemSize;
@@ -1319,7 +1325,8 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_i
     cnt[strlvls] = count[strlvls];
   }
 
-  if (chpl_verbose_comm && !chpl_comm_no_debug_private) {
+  /*if (chpl_verbose_comm && !chpl_comm_no_debug_private) {*/
+  if (1) {
     printf("%d: %s:%d: remote get from %d. strlvls:%ld. elemSize:%ld  "
            "sizeof(size_t):%ld  sizeof(gasnet_node_t):%ld\n",
            chpl_nodeID, chpl_lookupFilename(fn), ln, srcnode, (long)strlvls,

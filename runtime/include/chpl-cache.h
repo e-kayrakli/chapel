@@ -86,6 +86,8 @@ typedef struct __prefetch_entry_t{
   void* robjaddr;
   size_t size;
 
+  size_t elemsize; // necessary for strided gets
+
   //we need to store and atomic state of the entry if it's marked to be
   //consistent I couldn't figure out a way to do that with an atomic
   //variable/c intrinsics. So I am relying on locks
@@ -233,7 +235,8 @@ void reprefetch_single_entry(struct __prefetch_entry_t *entry);
 void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
-    consistent, bool static_domain, int64_t data_start_offset);
+    consistent, bool static_domain, int64_t data_start_offset,
+    size_t elemsize);
 void *update_prefetch_handle(void* owner_obj, c_nodeid_t
     origin_node, void* robjaddr, struct __prefetch_entry_t **new_entry,
     size_t prefetch_size, void *slice_desc, size_t slice_desc_size, bool
@@ -251,13 +254,15 @@ void set_entry_remote_data_start(struct __prefetch_entry_t *entry, void *start);
 size_t get_entry_size(struct __prefetch_entry_t *entry);
 size_t get_entry_data_actual_size(struct __prefetch_entry_t *entry);
 void acquire_prefetch_buffer(int ln, int fn);
-#endif
-// ifdef HAS_CHPL_CACHE_FNS
-
 void initialize_opt_fields(struct __prefetch_entry_t *entry,
     bool strided_remote_data, bool consec_remote_data,
     int32_t stridelevels, size_t *dstStrides, size_t *srcStrides,
     size_t *counts);
+void prefetch_consec_entry(struct __prefetch_entry_t *entry);
+void prefetch_strided_entry(struct __prefetch_entry_t *entry);
+#endif
+// ifdef HAS_CHPL_CACHE_FNS
+
 
 #endif
 

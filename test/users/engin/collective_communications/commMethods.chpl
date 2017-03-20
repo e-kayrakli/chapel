@@ -19,11 +19,12 @@ proc BlockArr.reportPrefetch() {
 
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent,
     staticDomain=false) {
+  compilerWarning("Full prefetch resolved");
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
       sourceIdx,
       privCopy.locArr[sourceIdx],
-      consistent, staticDomain);
+      consistent=consistent, staticDomain=staticDomain);
 }
 
 inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
@@ -37,6 +38,8 @@ inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
 
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
     consistent, staticDomain=false) {
+  compilerWarning("Slice prefetch resolved");
+  writeln("Slice __prefetchFrom ", sliceDesc);
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch( sourceIdx,
       privCopy.locArr[sourceIdx], sliceDesc,
@@ -108,7 +111,8 @@ proc BlockArr.allGather(consistent=true, staticDomain=false) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for sourceIdx in dom.dist.targetLocDom {
-        __prefetchFrom(localeIdx, sourceIdx, consistent, staticDomain);
+        __prefetchFrom(localeIdx, sourceIdx, consistent=consistent,
+            staticDomain=staticDomain);
       }
     }
   }
@@ -290,12 +294,11 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
   }
   finalizePrefetch();
 }
-proc BlockArr.stencilPrefetch3d(consistent=true) {
+proc BlockArr.stencilPrefetch3d(consistent=true, staticDomain=false) {
 
   if rank != 3 then
     halt("This Prefetch pattern is only supprted for 3D arrays");
 
-  //TODO FIXME TODO FIXME coforall --fixed
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       const myDom = dom.locDoms[localeIdx].myBlock;
@@ -318,7 +321,7 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
       if hasBack {
         const sourceIdx = localeIdx + (1,0,0);
@@ -328,7 +331,7 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
 
       if hasTop {
@@ -339,7 +342,7 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
       if hasBottom {
         const sourceIdx = localeIdx + (0,1,0);
@@ -349,7 +352,7 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
 
       if hasLeft {
@@ -360,7 +363,7 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
       if hasRight {
         const sourceIdx = localeIdx + (0,0,1);
@@ -370,13 +373,14 @@ proc BlockArr.stencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
     }
   }
   finalizePrefetch();
 }
-proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
+proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1,
+    staticDomain=false) {
   if rank != 2 then
     halt("This Prefetch pattern is only supprted for 2D arrays");
 
@@ -398,7 +402,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
         const sliceDesc = {myDom.dim(1),
             myDom.dim(2).low-depth..myDom.dim(2).low-1};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
       //east
       if hasEast {
@@ -407,7 +411,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
         const sliceDesc = {myDom.dim(1),
             myDom.dim(2).high+1..myDom.dim(2).high+depth};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
       //north
       if hasNorth {
@@ -416,7 +420,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
         const sliceDesc = {myDom.dim(1).low-depth..myDom.dim(1).low-1,
             myDom.dim(2)};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
       //south
       if hasSouth {
@@ -425,7 +429,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
         const sliceDesc = {myDom.dim(1).high+1..myDom.dim(1).high+depth,
             myDom.dim(2)};
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain);
       }
 
       if(corners) {
@@ -436,7 +440,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
             {myDom.dim(1).low-depth..myDom.dim(1).low-1,
               myDom.dim(2).low-depth..myDom.dim(2).low-1};
           __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-              staticDomain=false);
+              staticDomain);
 
         }
         if hasNorth && hasEast {
@@ -446,7 +450,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
             {myDom.dim(1).low-depth..myDom.dim(1).low-1,
               myDom.dim(2).high+1..myDom.dim(2).high+depth};
           __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-              staticDomain=false);
+              staticDomain);
 
         }
         if hasSouth && hasWest {
@@ -456,7 +460,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
             {myDom.dim(1).high+1..myDom.dim(1).high+depth,
               myDom.dim(2).low-depth..myDom.dim(2).low-1};
             __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-                staticDomain=false);
+                staticDomain);
 
         }
         if hasSouth && hasEast {
@@ -466,7 +470,7 @@ proc BlockArr.stencilPrefetch(consistent=true, corners=false, depth=1) {
             {myDom.dim(1).high+1..myDom.dim(1).high+depth,
               myDom.dim(2).high+1..myDom.dim(2).high+depth};
             __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-                staticDomain=false);
+                staticDomain);
 
         }
       }
