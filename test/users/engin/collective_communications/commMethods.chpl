@@ -38,11 +38,9 @@ inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
     consistent, staticDomain=false) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-  const sliceDescArr = domToArray(sliceDesc);
-  locArr[localeIdx].prefetchHook.requestPrefetch(
-      sourceIdx,
-      privCopy.locArr[sourceIdx], sliceDescArr,
-      consistent, staticDomain);
+  locArr[localeIdx].prefetchHook.requestPrefetch( sourceIdx,
+      privCopy.locArr[sourceIdx], sliceDesc,
+      locArr[sourceIdx].locDom.myBlock, consistent, staticDomain);
 }
 
 proc BlockCyclicArr.__prefetchFrom(localeIdx, sourceIdx,
@@ -500,7 +498,7 @@ inline proc BlockCyclicArr.finalizePrefetch() {
     }
   }
 }
-
+/*
 inline proc domToArray(dom: domain) where dom.rank == 1 {
   return [dom.dim(1).low, dom.dim(1).high];
 }
@@ -512,6 +510,7 @@ inline proc domToArray(dom: domain) where dom.rank == 3 {
   return [dom.dim(1).low, dom.dim(2).low, dom.dim(3).low,
          dom.dim(1).high, dom.dim(2).high, dom.dim(3).high];
 }
+ */
 
 proc BlockArr.rowWiseAllGather(consistent=true, staticDomain=false) {
   coforall localeIdx in dom.dist.targetLocDom {

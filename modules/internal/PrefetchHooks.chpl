@@ -117,7 +117,7 @@ module PrefetchHooks {
       halt("This shouldn't have been called");
     }
 
-    proc requestPrefetch(localeIdx, otherObj, sliceDesc,
+    proc requestPrefetch(localeIdx, otherObj, sliceDesc, wholeDesc,
         consistent=true, staticDomain) {
       halt("This shouldn't have been called");
     }
@@ -161,12 +161,6 @@ module PrefetchHooks {
       return false;;
     }
 
-    proc doPrefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
-        slice_desc_size: size_t, consistent) {
-      halt("This shouldn't have been called");
-      var new_handle_ptr: prefetch_entry_t;
-      return new_handle_ptr;
-    }
     proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
         slice_desc_size: size_t, consistent, staticDomain) {
       halt("This shouldn't have been called");
@@ -544,8 +538,8 @@ module PrefetchHooks {
     }
 
     //srcObj is the remote PrefetchHook
-    proc doPrefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
-        slice_desc_size: size_t, consistent, staticDomain) {
+    proc doPrefetch(destLocaleId, srcLocaleId, srcObj, sliceDesc,
+        wholeDesc, consistent, staticDomain, prefetchSlice) {
 
       if destLocaleId != here.id {
         halt("doPrefetch can only be called from the prefetching \
@@ -555,6 +549,13 @@ module PrefetchHooks {
       var new_handle_ptr: prefetch_entry_t;
       var data: _ddata(uint(8));
 
+      const sliceDescArr = domToArray(sliceDesc);
+      var (slice_desc, slice_desc_size, dummyBool) =
+        if prefetchSlice then
+          convertToSerialChunk(sliceDescArr)
+        else
+          (c_nil, 0:size_t, false);
+
       var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
           slice_desc, slice_desc_size);
 
@@ -563,6 +564,9 @@ module PrefetchHooks {
             c_ptrTo(new_handle_ptr), size, slice_desc:c_void_ptr,
             slice_desc_size, consistent, staticDomain,
             obj.getDataStartByteIndex()));
+
+      generateStridedGetData(new_handle_ptr, sliceDesc, wholeDesc,
+          obj.eltType, srcLocaleId); //srcLocaleId is for dbg
 
       // if data is being prefetched consistently, don't bring in the
       // data right away
@@ -623,12 +627,12 @@ module PrefetchHooks {
       var robjaddr = __primitive("_wide_get_addr",
           otherObj.prefetchHook);
       const nodeId = localeIDs[localeIdx];
-      /*writeln(here, " prefetching from nodeID ", nodeId, " localeIdx ",*/
-          /*localeIdx);*/
 
       if nodeId!=here.id {
+        const emptySliceDom = {1..0};
         handleFromLocaleIdx(localeIdx) = doPrefetch(here.id, nodeId,
-            robjaddr, c_nil, 0, consistent, staticDomain);
+            robjaddr, emptySliceDom, emptySliceDom, consistent,
+            staticDomain, prefetchSlice=false);
 
         if unpackAccess {
           var dataReceived = getData(handleFromLocaleIdx(localeIdx));
@@ -645,7 +649,7 @@ module PrefetchHooks {
       if prefetchTiming then prefetchTimer.stop();
     }
 
-    proc requestPrefetch(localeIdx, otherObj, sliceDesc,
+    proc requestPrefetch(localeIdx, otherObj, sliceDesc, wholeDesc,
         consistent=true, staticDomain=false) {
 
       if prefetchTiming then prefetchTimer.start();
@@ -657,14 +661,9 @@ module PrefetchHooks {
 
       if nodeId!=here.id {
         debug_writeln(here, " prefetching ", sliceDesc);
-        var (sliceDescPtr, sliceDescSize, dummyBool) =
-          convertToSerialChunk(sliceDesc);
-        debug_writeln(here, " prefetching ",
-            (sliceDescPtr:c_ptr(obj.idxType))[0], " size ",
-            sliceDescSize);
         handleFromLocaleIdx(localeIdx) = doPrefetch(here.id, nodeId,
-            robjaddr, sliceDescPtr, sliceDescSize, consistent,
-            staticDomain);
+            robjaddr, sliceDesc, wholeDesc, consistent,
+            staticDomain, prefetchSlice=true);
 
         if unpackAccess {
           var dataReceived = getData(handleFromLocaleIdx(localeIdx));
@@ -1018,4 +1017,95 @@ module PrefetchHooks {
     return numElems.safeCast(size_t)*sizeof(eltType);
   }
 
+  proc generateStridedGetData(handle, slice, whole, type eltType,
+      srcLocaleId) {
+
+    writeln("Generate called with slice: ", slice, " whole ", whole);
+
+    if whole.rank != slice.rank then
+      compilerError("Slice with different rank than whole is not " +
+          "allowed");
+
+    param rank = slice.rank;
+    const wholePrefetch = (slice==whole);
+
+    // TODO we can probably stop here if wholePrefetch
+
+    var differentDims = 0;
+    var lastDiffDim = -1;
+
+    var incompatSlice = false;
+    var nonstrConsData = false;
+
+    if !wholePrefetch {
+      for param r in 1..rank {
+        if slice.dim(r) != whole.dim(r) {
+          lastDiffDim = r;
+          differentDims += 1;
+        }
+      }
+
+      // TODO probably disable optimization silently
+      if differentDims > 1 {
+        incompatSlice = true;
+        writeln("Different dimensions = 2");
+      }
+
+    }
+
+    if lastDiffDim == 1 then {
+      // this is not a whole nor strided prefetch, but remote data is
+      // consecutive
+      nonstrConsData = true;
+      /*writeln("Do something for consecutive access");*/
+    }
+
+    // strideLevels to be copied to entry
+    const strideLevels = differentDims;
+
+    // to be copied to the entry
+    var counts = c_calloc(size_t, differentDims+1);
+    const startIdx = slice.first;
+
+    // count[0] is a special case
+    counts[0] = 1;
+    for r in lastDiffDim..rank {
+      counts[0] *= slice.dim(r).length.safeCast(size_t);
+    }
+
+    var destStrides = c_calloc(size_t, differentDims);
+    // we are assuming strideLevels == 1
+    destStrides[0] = counts[0];
+
+    // we are assuming stridelevels == 1
+    counts[1] = 1;
+    for r in 1..lastDiffDim-1 {
+      counts[1] *= slice.dim(r).length.safeCast(size_t);
+    }
+
+    var srcStrides = c_calloc(size_t, differentDims);
+    srcStrides[0] = 1;
+    for r in lastDiffDim..rank {
+      srcStrides[0] *= whole.dim(r).length.safeCast(size_t);
+    }
+
+    writeln(here, " from ", srcLocaleId, " Counts :", counts[0], " ",
+        counts[1], " flags: ", incompatSlice, ", ", nonstrConsData);
+    writeln(here, " from ", srcLocaleId, " SrcStrides:", srcStrides[0],
+        " flags: ", incompatSlice, ", ", nonstrConsData);
+    writeln(here, " from ", srcLocaleId, " DestStrides:",
+        destStrides[0], " flags: ", incompatSlice, ", ",
+        nonstrConsData);
+  }
+  inline proc domToArray(dom: domain) where dom.rank == 1 {
+    return [dom.dim(1).low, dom.dim(1).high];
+  }
+  inline proc domToArray(dom: domain) where dom.rank == 2 {
+    return [dom.dim(1).low, dom.dim(2).low,
+           dom.dim(1).high, dom.dim(2).high];
+  }
+  inline proc domToArray(dom: domain) where dom.rank == 3 {
+    return [dom.dim(1).low, dom.dim(2).low, dom.dim(3).low,
+           dom.dim(1).high, dom.dim(2).high, dom.dim(3).high];
+  }
 }

@@ -115,12 +115,26 @@ typedef struct __prefetch_entry_t{
   void **back_link;
   void *data;
 
+  //fields used in optimizations
+
   // we need to store the beginning of the actual data for fast
   // reprefetch in static domains
   bool static_domain;
   void *data_start;
   void *remote_data_start;
   size_t actual_data_size;
+
+  /*
+   if static_domain && !strided_reprefetch then
+    array_get
+   else if static_domain && strided_prefetch then
+    strided_array_get
+   else if !static_domain then
+    on statement
+  */
+  bool strided_reprefetch; // if static_domain && !strided then do get
+
+
 #if CHECK_PFENTRY_INTEGRITY
   void *base_data;
 #endif
