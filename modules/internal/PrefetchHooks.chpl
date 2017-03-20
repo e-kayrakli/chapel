@@ -475,6 +475,7 @@ module PrefetchHooks {
       return handles[0];
     }
 
+    // this is now the last resort for reprefetching
     pragma "no remote memory fence"
     proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
         slice_desc_size: size_t, consistent, staticDomain) {
@@ -489,48 +490,28 @@ module PrefetchHooks {
 
       var handle = handleFromLocaleID(srcLocaleId);
 
-      if !staticDomain {
-        var data: _ddata(uint(8));
-        var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
-            slice_desc, slice_desc_size);
+      var data: _ddata(uint(8));
+      var size = __getSerializedSize(destLocaleId, srcLocaleId, srcObj,
+          slice_desc, slice_desc_size);
 
-        /*if fixedSize then*/
-        /*var size = get_entry_size(handle);*/
+      /*if fixedSize then*/
+      /*var size = get_entry_size(handle);*/
 
-        data = __primitive("cast", _ddata(uint(8)),
-            update_prefetch_handle(this, srcLocaleId, srcObj,
-              c_ptrTo(handle), size, slice_desc:c_void_ptr,
-              slice_desc_size, consistent));
+      data = __primitive("cast", _ddata(uint(8)),
+          update_prefetch_handle(this, srcLocaleId, srcObj,
+            c_ptrTo(handle), size, slice_desc:c_void_ptr,
+            slice_desc_size, consistent));
 
 
-        /*if prefetchTiming then subreprefetchTimer.start();*/
-        __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-            slice_desc, slice_desc_size, data, size);
-        /*if prefetchTiming then subreprefetchTimer.stop();*/
-        /*writeln("Copied");*/
-        /*for i in 0..3 do {*/
-          /*write((get_entry_data(handle):c_ptr(int(64)))[i], " ");*/
-        /*}*/
-        /*writeln();*/
-      }
-      else {
-        /*var data = get_entry_data_start(handle):c_ptr(uint(8));*/
-        /*writeln("Reprefetching ", get_entry_data_actual_size(handle),*/
-            /*" from ", srcLocaleId, " dest addr ",*/
-            /*__primitive("cast", int, get_entry_data_start(handle)));*/
-        __primitive("chpl_comm_array_get",
-            __primitive("array_get",
-                get_entry_data_start(handle):c_ptr(uint(8)), 0),
-            srcLocaleId,
-            get_entry_remote_data_start(handle):c_ptr(uint(8)),
-            get_entry_data_actual_size(handle));
-
-        /*writeln("Copied");*/
-        /*for i in 0..31 do {*/
-          /*write(data[i], " ");*/
-        /*}*/
-        /*writeln();*/
-      }
+      /*if prefetchTiming then subreprefetchTimer.start();*/
+      __getSerializedData(destLocaleId, srcLocaleId, srcObj,
+          slice_desc, slice_desc_size, data, size);
+      /*if prefetchTiming then subreprefetchTimer.stop();*/
+      /*writeln("Copied");*/
+      /*for i in 0..3 do {*/
+      /*write((get_entry_data(handle):c_ptr(int(64)))[i], " ");*/
+      /*}*/
+      /*writeln();*/
 
       if prefetchTiming then reprefetchTimer.stop();
     }
@@ -681,6 +662,11 @@ module PrefetchHooks {
 
           set_entry_remote_data_start(new_handle_ptr,
               remoteDataStartPtr);
+        }
+        else {
+          writeln(here, " prefetch from ", srcLocaleId, " cant be opt");
+          // we cannot do any optimization for reprefetching
+          // runtime will call `reprefetch`
         }
       }
 

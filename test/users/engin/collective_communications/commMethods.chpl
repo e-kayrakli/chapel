@@ -19,7 +19,6 @@ proc BlockArr.reportPrefetch() {
 
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, consistent,
     staticDomain=false) {
-  compilerWarning("Full prefetch resolved");
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch(
       sourceIdx,
@@ -38,7 +37,6 @@ inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
 
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
     consistent, staticDomain=false) {
-  compilerWarning("Slice prefetch resolved");
   writeln("Slice __prefetchFrom ", sliceDesc);
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
   locArr[localeIdx].prefetchHook.requestPrefetch( sourceIdx,
