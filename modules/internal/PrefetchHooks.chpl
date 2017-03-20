@@ -620,8 +620,6 @@ module PrefetchHooks {
               slice_desc, slice_desc_size, data, metadataSize,
               metadataOnly=true);
 
-          writeln(here, " querying remote start of index ",
-              sliceDesc.first , " on ", srcLocaleId);
           var remoteDataStartPtr =
             if prefetchSlice then
               __getRemoteDataStartAddr(srcLocaleId, srcObj,
@@ -672,9 +670,14 @@ module PrefetchHooks {
         // data is being prefetched consistently,
         // if staticDomain, and is not slice we need to get the start
         // address of the data in the owner node
-        if staticDomain && slice_desc_size <= 0 {
-          var remoteDataStartPtr = __getRemoteDataStartAddr(srcLocaleId,
-              srcObj);
+        if staticDomain && (consData || stridedData) {
+
+          var remoteDataStartPtr =
+            if prefetchSlice then
+              __getRemoteDataStartAddr(srcLocaleId, srcObj,
+                  sliceDesc.first)
+            else
+              __getRemoteDataStartAddr(srcLocaleId, srcObj);
 
           set_entry_remote_data_start(new_handle_ptr,
               remoteDataStartPtr);
