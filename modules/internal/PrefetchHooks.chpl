@@ -1128,6 +1128,11 @@ module PrefetchHooks {
       /*writeln("Do something for consecutive access");*/
     }
 
+    // we can still support this case even if incompatSlice
+    if slice.numIndices == 1 {
+      nonstrConsData = true;
+    }
+
     // strideLevels to be copied to entry
     const strideLevels = differentDims;
 
