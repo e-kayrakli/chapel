@@ -3374,7 +3374,7 @@ void initialize_opt_fields(struct __prefetch_entry_t *entry,
   entry->srcstrides = chpl_calloc(stridelevels, sizeof(size_t));
   memcpy(entry->srcstrides, srcstrides, sizeof(size_t)*stridelevels);
   entry->counts = chpl_calloc(stridelevels+1, sizeof(size_t));
-  printf("%d Init %d %d\n", chpl_nodeID, counts[0], counts[1]);
+  /*printf("%d Init %d %d\n", chpl_nodeID, counts[0], counts[1]);*/
   memcpy(entry->counts, counts,
       sizeof(size_t)*(stridelevels+1));
 }
@@ -3681,20 +3681,20 @@ void chpl_comm_reprefetch(struct __prefetch_entry_t *entry) {
 
   if(entry->static_domain) {
     if(entry->consec_remote_data) {
-      printf("%d Reprefetching from %d %p - Using bulk\
-          get\n", chpl_nodeID, entry->origin_node, entry);
+      /*printf("%d Reprefetching from %d %p - Using bulk\*/
+          /*get\n", chpl_nodeID, entry->origin_node, entry);*/
       prefetch_consec_entry(entry);
       return;
     }
     else if(entry->strided_remote_data) {
-      printf("%d Reprefetching from %d %p - Using strided\
-          get\n", chpl_nodeID, entry->origin_node, entry);
+      /*printf("%d Reprefetching from %d %p - Using strided\*/
+          /*get\n", chpl_nodeID, entry->origin_node, entry);*/
       prefetch_strided_entry(entry);
       return;
     }
   }
-  printf("%d Reprefetching from %d %p - Using on stmt\
-      \n", chpl_nodeID, entry->origin_node, entry);
+  /*printf("%d Reprefetching from %d %p - Using on stmt\*/
+      /*\n", chpl_nodeID, entry->origin_node, entry);*/
   __reprefetch_wrapper(entry->owner_obj, chpl_nodeID,
       entry->origin_node, entry->robjaddr, entry->slice_desc,
       entry->slice_desc_size, entry->pf_type & PF_CONSISTENT,
@@ -3724,22 +3724,22 @@ void prefetch_strided_entry(struct __prefetch_entry_t *entry) {
   assert(entry);
   assert(entry->remote_data_start);
 
-  uint8_t *data_temp = (uint8_t *)(entry->data_start);
-  printf("\t\t%d pre-strd pref: %d %d %d %d\n\
-      \t\t\tstridelevels:%d, counts: %d %d, srcstride: %d,\
-      dststride: %d", chpl_nodeID, data_temp[0],
-                                             data_temp[1],
-                                             data_temp[2],
-                                             data_temp[3],
-           entry->stridelevels, entry->counts[0], entry->counts[1],
-           entry->srcstrides[0], entry->dststrides[0]);
+  /*uint8_t *data_temp = (uint8_t *)(entry->data_start);*/
+  /*printf("\t\t%d pre-strd pref: %d %d %d %d\n\*/
+      /*\t\t\tstridelevels:%d, counts: %d %d, srcstride: %d,\*/
+      /*dststride: %d", chpl_nodeID, data_temp[0],*/
+                                             /*data_temp[1],*/
+                                             /*data_temp[2],*/
+                                             /*data_temp[3],*/
+           /*entry->stridelevels, entry->counts[0], entry->counts[1],*/
+           /*entry->srcstrides[0], entry->dststrides[0]);*/
   chpl_comm_get_strd(entry->data_start, entry->dststrides,
       entry->origin_node, entry->remote_data_start, entry->srcstrides,
       entry->counts, entry->stridelevels, entry->elemsize, -1, 0, 0);
-  printf("\t\t%d pre-strd pref: %d %d %d %d\n", chpl_nodeID, data_temp[0],
-                                             data_temp[1],
-                                             data_temp[2],
-                                             data_temp[3]);
+  /*printf("\t\t%d pre-strd pref: %d %d %d %d\n", chpl_nodeID, data_temp[0],*/
+                                             /*data_temp[1],*/
+                                             /*data_temp[2],*/
+                                             /*data_temp[3]);*/
 }
 
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*

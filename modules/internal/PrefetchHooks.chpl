@@ -612,7 +612,7 @@ module PrefetchHooks {
               remoteDataStartPtr);
 
           if consData {
-            writeln(here, " doing consec prefetch");
+            /*writeln(here, " doing consec prefetch");*/
             __primitive("chpl_comm_array_get",
               __primitive("array_get",
                   get_entry_data_start(new_handle_ptr):c_ptr(uint(8)),
@@ -622,12 +622,12 @@ module PrefetchHooks {
               get_entry_data_actual_size(new_handle_ptr));
           }
           else { //strided data
-            writeln(here, " doing strided prefetch");
+            /*writeln(here, " doing strided prefetch");*/
             prefetch_strided_entry(new_handle_ptr);
           }
         }
         else {
-          writeln(here, " doing full prefetch");
+          /*writeln(here, " doing full prefetch");*/
           __getSerializedData(destLocaleId, srcLocaleId, srcObj,
               slice_desc, slice_desc_size, data, size);
         }
@@ -664,7 +664,7 @@ module PrefetchHooks {
               remoteDataStartPtr);
         }
         else {
-          writeln(here, " prefetch from ", srcLocaleId, " cant be opt");
+          /*writeln(here, " prefetch from ", srcLocaleId, " cant be opt");*/
           // we cannot do any optimization for reprefetching
           // runtime will call `reprefetch`
         }
@@ -1088,7 +1088,7 @@ module PrefetchHooks {
   proc generateStridedGetData(handle, slice, whole, type eltType,
       srcLocaleId) {
 
-    writeln("Generate called with slice: ", slice, " whole ", whole);
+    /*writeln("Generate called with slice: ", slice, " whole ", whole);*/
 
     if whole.rank != slice.rank then
       compilerError("Slice with different rank than whole is not " +
@@ -1116,7 +1116,7 @@ module PrefetchHooks {
       // TODO probably disable optimization silently
       if differentDims > 1 {
         incompatSlice = true;
-        writeln("Different dimensions = 2");
+        /*writeln("Different dimensions = 2");*/
       }
 
     }
@@ -1169,13 +1169,14 @@ module PrefetchHooks {
       }
     /*}*/
 
-    writeln(here, " from ", srcLocaleId, " Counts :", counts[0], " ",
-        counts[1], " flags: ", incompatSlice, ", ", nonstrConsData);
-    writeln(here, " from ", srcLocaleId, " SrcStrides:", srcStrides[0],
-        " flags: ", incompatSlice, ", ", nonstrConsData);
-    writeln(here, " from ", srcLocaleId, " DestStrides:",
-        dstStrides[0], " flags: ", incompatSlice, ", ",
-        nonstrConsData);
+    // TODO thise writelns can be debug writelns
+    /*writeln(here, " from ", srcLocaleId, " Counts :", counts[0], " ",*/
+        /*counts[1], " flags: ", incompatSlice, ", ", nonstrConsData);*/
+    /*writeln(here, " from ", srcLocaleId, " SrcStrides:", srcStrides[0],*/
+        /*" flags: ", incompatSlice, ", ", nonstrConsData);*/
+    /*writeln(here, " from ", srcLocaleId, " DestStrides:",*/
+        /*dstStrides[0], " flags: ", incompatSlice, ", ",*/
+        /*nonstrConsData);*/
 
     initialize_opt_fields(handle,
         !incompatSlice, nonstrConsData, // flags

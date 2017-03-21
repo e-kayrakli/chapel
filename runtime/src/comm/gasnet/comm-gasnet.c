@@ -1305,15 +1305,9 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t
   size_t srcstr[strlvls];
   size_t cnt[strlvls+1];
 
-  for (i=0;i<=strlvls;i++) 
-    printf("\n%d precount[%d]: %zd %zd %zd\n",
-        chpl_nodeID, i, cnt[i], count[i], elemSize);
   // Only count[0] and strides are measured in number of bytes.
   cnt[0] = count[0] * elemSize;
 
-  for (i=0;i<=strlvls;i++) 
-    printf("\n%d postcount[%d]: %zd %zd %zd\n",
-        chpl_nodeID, i, cnt[i], count[i], elemSize);
   if (strlvls>0) {
     srcstr[0] = srcstrides[0] * elemSize;
     dststr[0] = dststrides[0] * elemSize;
@@ -1325,8 +1319,7 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t
     cnt[strlvls] = count[strlvls];
   }
 
-  /*if (chpl_verbose_comm && !chpl_comm_no_debug_private) {*/
-  if (1) {
+  if (chpl_verbose_comm && !chpl_comm_no_debug_private) {
     printf("%d: %s:%d: remote get from %d. strlvls:%ld. elemSize:%ld  "
            "sizeof(size_t):%ld  sizeof(gasnet_node_t):%ld\n",
            chpl_nodeID, chpl_lookupFilename(fn), ln, srcnode, (long)strlvls,
