@@ -1133,34 +1133,41 @@ module PrefetchHooks {
       nonstrConsData = true;
     }
 
-    // strideLevels to be copied to entry
-    const strideLevels = differentDims;
+    var strideLevels: int;
+    var counts: c_ptr(size_t);
+    var srcStrides: c_ptr(size_t);
+    var dstStrides: c_ptr(size_t);
 
-    // to be copied to the entry
-    var counts = c_calloc(size_t, differentDims+1);
-    const startIdx = slice.first;
+    // TODO work out the bug preventing this if -- not urgent
+    /*if !nonstrConsData {*/
+      // strideLevels to be copied to entry
+      strideLevels = differentDims;
 
-    // count[0] is a special case
-    counts[0] = 1;
-    for r in lastDiffDim..rank {
-      counts[0] *= slice.dim(r).length.safeCast(size_t);
-    }
+      // to be copied to the entry
+      counts = c_calloc(size_t, differentDims+1);
 
-    var dstStrides = c_calloc(size_t, differentDims);
-    // we are assuming strideLevels == 1
-    dstStrides[0] = counts[0];
+      // count[0] is a special case
+      counts[0] = 1;
+      for r in lastDiffDim..rank {
+        counts[0] *= slice.dim(r).length.safeCast(size_t);
+      }
 
-    // we are assuming stridelevels == 1
-    counts[1] = 1;
-    for r in 1..lastDiffDim-1 {
-      counts[1] *= slice.dim(r).length.safeCast(size_t);
-    }
+      dstStrides = c_calloc(size_t, differentDims);
+      // we are assuming strideLevels == 1
+      dstStrides[0] = counts[0];
 
-    var srcStrides = c_calloc(size_t, differentDims);
-    srcStrides[0] = 1;
-    for r in lastDiffDim..rank {
-      srcStrides[0] *= whole.dim(r).length.safeCast(size_t);
-    }
+      // we are assuming stridelevels == 1
+      counts[1] = 1;
+      for r in 1..lastDiffDim-1 {
+        counts[1] *= slice.dim(r).length.safeCast(size_t);
+      }
+
+      srcStrides = c_calloc(size_t, differentDims);
+      srcStrides[0] = 1;
+      for r in lastDiffDim..rank {
+        srcStrides[0] *= whole.dim(r).length.safeCast(size_t);
+      }
+    /*}*/
 
     writeln(here, " from ", srcLocaleId, " Counts :", counts[0], " ",
         counts[1], " flags: ", incompatSlice, ", ", nonstrConsData);
