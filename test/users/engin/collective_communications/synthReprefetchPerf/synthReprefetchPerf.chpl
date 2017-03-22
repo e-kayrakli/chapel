@@ -7,7 +7,7 @@ if numLocales <= 1 then
   halt("This test needs at least 2 locales");
 
 config const staticDomain = false;
-config const size = 10;
+config const size = 2048;
 config const N = 5;
 
 const space = {0..#size, 0..#size};
