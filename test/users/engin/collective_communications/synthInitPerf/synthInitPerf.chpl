@@ -5,6 +5,7 @@ use Barrier;
 config const prefetch = false;
 config const staticDomain = false;
 config const N = 10;
+config const numAccesses = 100;
 
 const space = {0..#N, 0..#N};
 const dom = space dmapped Block(space);
@@ -28,7 +29,8 @@ if prefetch {
   t.start();
   coforall l in Locales do on l {
     var sum = 0.0;
-    for i in arr.domain do sum += arr[i];
+    for (num, i) in zip(1..numAccesses, arr.domain) do
+      sum += arr[i];
     writeln(here, " - ", sum);
   }
   t.stop();
@@ -51,7 +53,8 @@ else {
     b.barrier();
 
     var sum = 0.0;
-    for i in localArr.domain do sum += localArr[i];
+    for (num, i) in zip(1..numAccesses, localArr.domain) do
+      sum += localArr[i];
     writeln(here, " - ", sum);
   }
   t.stop();
