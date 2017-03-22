@@ -7,10 +7,10 @@ if numLocales <= 1 then
   halt("This test needs at least 2 locales");
 
 config const staticDomain = false;
-config const N = 10;
-config const numReads = 5;
+config const size = 10;
+config const N = 5;
 
-const space = {0..#N, 0..#N};
+const space = {0..#size, 0..#size};
 const dom = space dmapped Block(space);
 
 var arr: [dom] real;
@@ -30,7 +30,7 @@ var times: [Locales.domain] real;
 coforall l in Locales do on l {
   const t = new Timer();
   var sum = 0.0;
-  for (_,idx) in zip(1..#numReads, randomRemoteIndex()) {
+  for (_,idx) in zip(1..#N, randomRemoteIndex()) {
     t.start();
     sum += arr[idx];
     t.stop();
@@ -53,7 +53,7 @@ iter randomRemoteIndex() {
   var idx: 2*int;
   while true {
     do {
-      idx = (rs.getNext()%N:uint, rs.getNext()%N:uint):idx.type;
+      idx = (rs.getNext()%size:uint, rs.getNext()%size:uint):idx.type;
     } while(locSubDom.member(idx));
 
     yield idx;
