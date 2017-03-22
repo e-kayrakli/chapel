@@ -14,3 +14,13 @@ cleanout:
 
 clean:
 	rm -f ./bin/$(MAIN)*
+
+runlocal:
+	python scripts/run.py RUN $(SIZE) $(NUMTRIES)
+plotlocal:
+	python scripts/run.py PLOT $(SIZE) $(NUMTRIES)
+
+runslurm:
+	python scripts/run.py --slurm RUN $(SIZE) $(NUMTRIES)
+plotslurm:
+	python scripts/run.py --slurm PLOT $(SIZE) $(NUMTRIES)

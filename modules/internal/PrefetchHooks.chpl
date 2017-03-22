@@ -1049,7 +1049,7 @@ module PrefetchHooks {
     var lastDiffDim = -1;
 
     var incompatSlice = false;
-    var nonstrConsData = false;
+    var nonstrConsData = wholePrefetch;
 
     if !wholePrefetch {
       for param r in 1..rank {
