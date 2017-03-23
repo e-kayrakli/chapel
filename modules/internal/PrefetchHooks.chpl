@@ -242,7 +242,8 @@ module PrefetchHooks {
     var localeDomDimSize: localeDom.rank*int;
     var localeDomSize: int;
 
-    var unpackedData: [localeDom] unpackType;
+    /*var unpackedData: [localeDom] unpackType;*/
+    var unpackedData: c_ptr(unpackType);
     //FIXME this is a dangerous field now, since we can evict data with
     //no callback to change this array
     var hasData: [localeDom] bool = false; // only to be use for reprefetch
@@ -261,7 +262,7 @@ module PrefetchHooks {
         localeContainer: [?D] locale) {
       localeDomSize = D.numIndices;
       handles = c_calloc(prefetch_entry_t, localeDomSize);
-      /*unpackedData = c_calloc(unpackType, numLocales);*/
+      unpackedData = c_calloc(unpackType, localeDomSize);
       localeDom = D;
       forall (i,l) in zip(localeIDs, localeContainer) do i = l.id;
       hasLocaleContainer = true;
@@ -286,7 +287,7 @@ module PrefetchHooks {
           /*writeln(here, " unpacked access");*/
           if hasPrefetchedFrom(locIdx) {
             /*writeln(here, " has prefetched from ", locIdx);*/
-            ref unpackedDataTmp = unpackedData[locIdx];
+            ref unpackedDataTmp = unpackedData[flattenLocaleIdx(locIdx)];
             if unpackedDataTmp.domain.member(i) {
               /*writeln(here, " has prefetched ", i, " from ", locIdx);*/
               ref retTmp = unpackedDataTmp[i];
@@ -429,6 +430,30 @@ module PrefetchHooks {
       halt("This shouldn't have happened");
       var dummy: prefetch_entry_t;
       return dummy;
+    }
+
+    inline proc flattenLocaleIdx(idx) {
+      var _idx = -1;
+      if isTuple(idx) {
+        if idx.size == 1 {
+          return idx[1];
+        }
+        if idx.size == 2 {
+          /*var thisIntTmp = __primitive("cast", uint,*/
+              /*__primitive("_wide_get_addr", this));*/
+          /*writeln(here, " accesing handle of hook obj ", thisIntTmp);*/
+          return idx[1]*localeDomDimSize[2]+idx[2];
+        }
+        if idx.size == 3 {
+          return idx[1]*localeDomDimSize[2]*
+            localeDomDimSize[3]+idx[2]*localeDomDimSize[3]+idx[3];
+        }
+      }
+      else {
+        return idx;
+      }
+      halt("not ready for this - handleFromLocaleIdx");
+      return 0;
     }
 
     inline proc handleFromLocaleIdx(idx) {
@@ -707,7 +732,7 @@ module PrefetchHooks {
           assignUnpackContainer(localeIdx,
               obj.getUnpackContainerDirect(dataReceived));
 
-          unpackedData[localeIdx].setData(
+          unpackedData[flattenLocaleIdx(localeIdx)].setData(
                 getElementArrayAtOffset(dataReceived,
                   obj.getDataStartByteIndex(),
                   obj.eltType));
@@ -738,7 +763,7 @@ module PrefetchHooks {
           assignUnpackContainer(localeIdx,
               obj.getUnpackContainerDirect(dataReceived));
 
-          unpackedData[localeIdx].setData(
+          unpackedData[flattenLocaleIdx(localeIdx)].setData(
                 getElementArrayAtOffset(dataReceived,
                   obj.getDataStartByteIndex(),
                   obj.eltType));
@@ -753,7 +778,7 @@ module PrefetchHooks {
       pragma "no auto destroy"
       var localCopy: container.type;
 
-      __primitive("=", unpackedData[localeIdx], localCopy);
+      __primitive("=", unpackedData[flattenLocaleIdx(localeIdx)], localCopy);
     }
 
     proc reportPrefetchTimes() {
@@ -830,7 +855,7 @@ module PrefetchHooks {
 
     proc hasPrefetchedFrom(locIdx, i) {
       if unpackAccess {
-        return unpackedData[locIdx].domain.member(i);
+        return unpackedData[flattenLocaleIdx(locIdx)].domain.member(i);
       }
       halt("Not ready for this yet");
       return false;
@@ -848,7 +873,7 @@ module PrefetchHooks {
     }
 */
     inline proc getUnpackedData(localeIdx) {
-      return unpackedData[localeIdx];
+      return unpackedData[flattenLocaleIdx(localeIdx)];
     }
 
     proc printTimeStats() {
