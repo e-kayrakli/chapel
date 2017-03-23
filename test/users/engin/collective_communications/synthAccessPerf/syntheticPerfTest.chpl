@@ -36,16 +36,27 @@ proc accessPrivate() {
   var sum = 0.0;
   var t = new Timer();
 
+  const detailTimer_calc = new Timer();
+  const detailTimer_acc = new Timer();
+  //these calls are moved in the generated c code
+  detailTimer_calc.start();
+  detailTimer_calc.stop();
+  detailTimer_acc.start();
+  detailTimer_acc.stop();
+
   forall i in arr.domain do arr[i] = initVal(i);
 
   t.start();
-  for i in 0..#numToRead*stride by stride {
+  local for i in 0..#numToRead*stride by stride {
     sum += arr[i%N];
   }
   t.stop();
 
   writeln("Time = ", t.elapsed());
   writeln("Sum = ", sum);
+
+  writeln("Detail timer calc : ", detailTimer_calc.elapsed());
+  writeln("Detail timer acc : ", detailTimer_acc.elapsed());
 }
 
 proc accessLocalFast() {
@@ -58,6 +69,15 @@ proc accessLocalFast() {
   forall i in arr.domain do arr[i] = initVal(i);
 
   on Locales[0] {
+
+    const detailTimer_calc = new Timer();
+    const detailTimer_acc = new Timer();
+    //these calls are moved in the generated c code
+    detailTimer_calc.start();
+    detailTimer_calc.stop();
+    detailTimer_acc.start();
+    detailTimer_acc.stop();
+
     t.start();
     local for i in 0..#numToRead*stride by stride {
       sum += arr[i%N];
@@ -66,6 +86,9 @@ proc accessLocalFast() {
 
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);
+
+    writeln("Detail timer calc : ", detailTimer_calc.elapsed());
+    writeln("Detail timer acc : ", detailTimer_acc.elapsed());
   }
 }
 
@@ -79,6 +102,15 @@ proc accessLocal() {
 
   forall i in arr.domain do arr[i] = initVal(i);
   on Locales[0] {
+
+    const detailTimer_calc = new Timer();
+    const detailTimer_acc = new Timer();
+    //these calls are moved in the generated c code
+    detailTimer_calc.start();
+    detailTimer_calc.stop();
+    detailTimer_acc.start();
+    detailTimer_acc.stop();
+
     t.start();
     for i in 0..#numToRead*stride by stride {
       sum += arr[i%N];
@@ -87,6 +119,9 @@ proc accessLocal() {
 
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);
+
+    writeln("Detail timer calc : ", detailTimer_calc.elapsed());
+    writeln("Detail timer acc : ", detailTimer_acc.elapsed());
   }
 }
 
@@ -100,6 +135,15 @@ proc accessRemote() {
   forall i in arr.domain do arr[i] = initVal(i);
 
   on Locales[1] {
+
+    const detailTimer_calc = new Timer();
+    const detailTimer_acc = new Timer();
+    //these calls are moved in the generated c code
+    detailTimer_calc.start();
+    detailTimer_calc.stop();
+    detailTimer_acc.start();
+    detailTimer_acc.stop();
+
     var localSum = 0.0;
     t.start();
     for i in 0..#numToRead*stride by stride {
@@ -109,6 +153,9 @@ proc accessRemote() {
     sum = localSum;
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);
+
+    writeln("Detail timer calc : ", detailTimer_calc.elapsed());
+    writeln("Detail timer acc : ", detailTimer_acc.elapsed());
   }
 }
 
@@ -122,6 +169,15 @@ proc accessRemotePrefetched(consistent, param isLocal=false) {
 
   arr._value.allGather(consistent);
   on Locales[1] {
+
+    const detailTimer_calc = new Timer();
+    const detailTimer_acc = new Timer();
+    //these calls are moved in the generated c code
+    detailTimer_calc.start();
+    detailTimer_calc.stop();
+    detailTimer_acc.start();
+    detailTimer_acc.stop();
+
     var junk: real;
     if consistent then junk = arr[0]; // make sure we bring the data
     var t = new Timer();
@@ -140,6 +196,7 @@ proc accessRemotePrefetched(consistent, param isLocal=false) {
     writeln("Time = ", t.elapsed());
     writeln("Sum = ", sum);
 
-    /*arr._value.myLocArr.getPrefetchHook().printTimeStats();*/
+    writeln("Detail timer calc : ", detailTimer_calc.elapsed());
+    writeln("Detail timer acc : ", detailTimer_acc.elapsed());
   }
 }
