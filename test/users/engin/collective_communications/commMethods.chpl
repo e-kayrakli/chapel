@@ -53,7 +53,8 @@ proc BlockCyclicArr.__prefetchFrom(localeIdx, sourceIdx,
       consistent, staticDomain);
 }
 
-proc BlockArr.customPrefetch(consistent=true, descTable) {
+proc BlockArr.customPrefetch(consistent=true, descTable,
+    staticDomain=false) {
   if descTable.rank != 2 then
     halt("Description talbe must be two-dimensional");
 
@@ -64,7 +65,7 @@ proc BlockArr.customPrefetch(consistent=true, descTable) {
       if sliceDesc.numIndices != 0 {
         var sourceIdx = locIdxFromId(l2);
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc,
-            consistent, staticDomain=false);
+            consistent, staticDomain=staticDomain);
       }
     }
   }
