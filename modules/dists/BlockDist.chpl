@@ -1058,7 +1058,7 @@ inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
   return myLocArr.this(i);
 }
 
-
+/*
 // nonref versions
 //
 // the global accessor for the array
@@ -1121,6 +1121,8 @@ proc BlockArr.nonLocalAccess(i: rank*idxType)  {
   }
   return locArr(dom.dist.targetLocsIdx(i))(i);
 }
+*/
+
 //ref versions
 //
 // the global accessor for the array
@@ -1240,6 +1242,7 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) ref {
   return locArr(dom.dist.targetLocsIdx(i))(i);
 }
 
+/*
 inline proc BlockArr.dsiAccess(i: rank*idxType) const ref {
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
@@ -1298,6 +1301,8 @@ proc BlockArr.nonLocalAccess(i: rank*idxType) const ref {
   }
   return locArr(dom.dist.targetLocsIdx(i))(i);
 }
+*/
+
 proc BlockArr.dsiAccess(i: idxType...rank) ref
   return dsiAccess(i);
 

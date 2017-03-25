@@ -584,7 +584,7 @@ module PrefetchHooks {
       var new_handle_ptr: prefetch_entry_t;
       var data: _ddata(uint(8));
 
-      const sliceDescArr = domToArray(sliceDesc);
+      var sliceDescArr = domToArray(sliceDesc);
       var (slice_desc, slice_desc_size, dummyBool) =
         if prefetchSlice then
           convertToSerialChunk(sliceDescArr)
