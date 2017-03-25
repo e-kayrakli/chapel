@@ -278,6 +278,11 @@ module PrefetchHooks {
       return obj.getMetadataSize();
     }
 
+    inline proc is_ud_nil(locIdx) {
+      const flatIdx = flattenLocaleIdx(locIdx);
+      return is_c_nil(__primitive("+", unpackedData, flatIdx));
+    }
+
     pragma "no local return"
     inline proc unifiedAccessPrefetchedData(locIdx, i,
         out prefetched: bool) ref {
@@ -287,23 +292,17 @@ module PrefetchHooks {
           /*writeln(here, " unpacked access");*/
           if hasPrefetchedFrom(locIdx) {
             /*writeln(here, " has prefetched from ", locIdx);*/
-            ref unpackedDataTmp = unpackedData[flattenLocaleIdx(locIdx)];
+            const flatIdx = flattenLocaleIdx(locIdx);
+            ref unpackedDataTmp = unpackedData[flatIdx];
             if unpackedDataTmp.domain.member(i) {
               /*writeln(here, " has prefetched ", i, " from ", locIdx);*/
               ref retTmp = unpackedDataTmp[i];
               prefetched = true;
-              // NOTE: I am not sure why we always get a wide pointer out
-              // of this. Maybe the whole method whould be `local`ized.
-              // TODO but first, we can use C arrays for internal arrays
-              // like handles and unpackedData. I believe there will be
-              // significant speedup un prefetched data accesses
-              if __primitive("is wide pointer", retTmp) {
-                const lockOffset = get_lock_offset(
-                    handleFromLocaleIdx(locIdx),
-                    __primitive("_wide_get_addr", retTmp));
-                if prefetchTiming then accessTimer.stop();
-                return __primitive("gen prefetch ptr", retTmp, lockOffset);
-              }
+              const lockOffset = get_lock_offset(
+                  handles[flatIdx],
+                  __primitive("_wide_get_addr", retTmp));
+              if prefetchTiming then accessTimer.stop();
+              return __primitive("gen prefetch ptr", retTmp, lockOffset);
             }
           }
         }
