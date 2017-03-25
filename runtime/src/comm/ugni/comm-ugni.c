@@ -1508,6 +1508,7 @@ int chpl_comm_numPollingTasks(void)
 
 void chpl_comm_post_task_init(void)
 {
+  chpl_prefetch_init();
   if (chpl_numNodes == 1)
     return;
 
@@ -1688,7 +1689,6 @@ void chpl_comm_post_task_init(void)
   // Initialize the caching layer, if it is active.
   //
   chpl_cache_init();
-  chpl_prefetch_init();
 }
 
 
