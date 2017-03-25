@@ -197,11 +197,11 @@ class ``GlobalDomain``
   Returns this domain's domain map. This procedure should be provided as shown.
   (Exception: see ``dsiLinksDistribution()``.)
 
-.. method:: proc GlobalDistribution.dsiNewRectangularDom(param rank: int, type idxType, param stridable: bool) : GlobalDomain(rank, idxType, stridable)
+.. method:: proc GlobalDistribution.dsiNewRectangularDom(param rank: int, type idxType, param stridable: bool, inds) : GlobalDomain(rank, idxType, stridable)
 
-  This method is invoked when the Chapel program is creating an uninitialized
-  domain value of the type domain(rank, idxType, stridable)
-  mapped using the domain map `this`.
+  This method is invoked when the Chapel program is creating a domain
+  value of the type domain(rank, idxType, stridable) mapped using the
+  domain map `this` with initial indices `inds`.
 
   This method returns a new ``GlobalDomain`` instance that will correspond to
   that Chapel domain value, i.e., be that value's runtime representation.
@@ -606,73 +606,10 @@ as an indication of what procedure(s) need to be defined.
   ``dsiDims()`` and ``dsiGetIndices()`` have the same specification
   and so may be implemented in terms of one another.
 
-.. method:: proc GlobalDomain.dsiBuildRectangularDom(param rank: int, type idxType, param stridable: bool, ranges: rank * range(idxType, BoundedRangeType.bounded, stridable))
-
-  This method is similar to ``dsiNewRectangularDom()``, except it is used
-  in the cases where a new Chapel domain is created from an existing
-  Chapel domain (represented by `this`) and the index set of the desired
-  domain is known (it is defined by the ``ranges`` argument). For example,
-  it is invoked upon domain slicing and when applying domain operations
-  such as expand, exterior, interior, translate.
-  The ``GlobalDistribution`` of the result is the same as that of `this`.
-
-  This method returns a new instance of
-  ``GlobalDomain(rank, idxType, stridable)``
-  that will be the runtime representation of a Chapel domain whose index set
-  is initialized as defined by ``ranges``. Other than that, this instance must
-  satisfy the same constraints as the result of ``dsiNewRectangularDom()``.
-
-  This method can be implemented as follows,
-  unless a more efficient implementation is desired:
-
-   .. code-block:: chapel
-
-    const result = dist.dsiNewRectangularDom(rank, idxType, stridable);
-    result.dsiSetIndices(ranges);
-    return result;
-
 .. [TODO: the following seems correct. The returned object can be an instance
   of a different class than the receiver, at the implementor's discretion.
   That class must satisfy the requirements on ``GlobalDomain`` defined in this
   document.]
-
-.. method:: proc GlobalArray.dsiSlice(sliceDef: GlobalDomain)
-
-  Returns a ``GlobalArray`` object representing a slice of the array
-  corresponding to `this`. Like generally in Chapel, the array elements
-  in the slice must be aliases of the corresponding elements of `this`.
-  The argument ``sliceDef`` defines the slice, i.e., which of the elements
-  of `this` are to be included in the result.
-
-.. [TODO: the following seems correct. The returned object can be an instance
-  of a different class than the receiver, at the implementor's discretion.
-  That class must satisfy the requirements on ``GlobalArray`` defined in this
-  document.]
-
-.. method:: proc GlobalArray.dsiReindex(reindexDef: GlobalDomain)
-
-  Similar to ``dsiSlice``, except: The array alias represented by the
-  returned object is a reindexing, rather than a slice, of the array
-  represented by `this`. The argument ``reindexDef`` represents the
-  reindexing expression. The callers of dsiReindex must ensure that
-  the domain of this array and ``reindexDef`` have the same number of
-  dimensions and the same number of indices along each dimension.
-.. [TODO: is it required that the ``dom`` field of the returned
-   ``GlobalArray`` refer to ``reindexDef``?]
-
-.. method:: proc GlobalArray.dsiRankChange(reindexDef: GlobalDomain, param newRank: int, param newStridable: bool, args)
-
-  Similar to ``dsiReindex``, except reindexing changes the rank.
-
-  .. [TODO: explain the arguments.]
-
-.. [TODO: the following seem to support dsiReindex and dsiRankChange:]
-   .. method:: proc GlobalDistribution.dsiCreateReindexDist(newSpace, oldSpace)
-   .. method:: proc GlobalDistribution.dsiCreateRankChangeDist(param newRank: int, args)
-.. [TODO: the following seems correct. The returned object can be an instance
-  of a different class than the receiver, at the implementor's discretion.
-  That class must satisfy the requirements on "GlobalDistribution"
-  defined in this document.]
 
 .. method:: proc GlobalDomain.linksDistribution() param
 
@@ -998,3 +935,10 @@ implicitly for each ``GlobalDomain`` object and so will be local in any case.
       auxArrayED2 = privatizeData(5));
 
   }
+
+=================================
+Phase 4: Bulk-Transfer Interface
+=================================
+
+The bulk-transfer interface design is still in flux. Once finalized, it will
+be documented here.

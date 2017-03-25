@@ -187,11 +187,6 @@ OPTIONS
     Enable [disable] live variable analysis, which is currently only used to
     optimize iterators that are not inlined.
 
-**--[no-]optimize-array-indexing**
-
-    Enable [disable] an optimization that removes an extra multiply in array
-    indexing when it's provably unnecessary. By default this is enabled.
-
 **--[no-]optimize-loop-iterators**
 
     Enable [disable] optimizations to aggressively optimize iterators that
@@ -257,6 +252,11 @@ OPTIONS
     Enable [disable] ability to skip default initialization through the
     keyword noinit
 
+**--[no-]infer-local-fields**
+
+    Enable [disable] analysis to infer local fields in classes and records
+    (experimental)
+
 *Run-time Semantic Check Options* 
 
 **--no-checks**
@@ -270,6 +270,16 @@ OPTIONS
 
     Enable [disable] run-time bounds checking, e.g. during slicing and array
     indexing.
+
+**--[no-]cast-checks**
+
+    Enable [disable] run-time checks in safeCast calls for casts that
+    wouldn't preserve the logical value being cast.
+
+**--[no-]div-by-zero-checks**
+
+    Enable [disable] run-time checks in integer division routines to
+    guard against dividing by zero.
 
 **--[no-]formal-domain-checks**
 
@@ -290,11 +300,6 @@ OPTIONS
 **--[no-]stack-checks**
 
     Enable [disable] run-time checking for stack overflow.
-
-**--[no-]cast-checks**
-
-    Enable [disable] run-time checks in safeCast calls for casts that
-    wouldn't preserve the logical value being cast.
 
 *C Code Generation Options* 
 
@@ -498,6 +503,10 @@ OPTIONS
     Overrides the default value of a configuration parameter in the code.
     For boolean configuration variables, the value can be omitted, causing
     the default value to be toggled.
+
+**--strict-errors**
+
+    Enable strict mode for error handling.
 
 **--[no-]task-tracking**
 
@@ -732,8 +741,7 @@ effect as passing that option once.
 BUGS
 ----
 
-See $CHPL\_HOME/STATUS for a list of known bugs and
-$CHPL\_HOME/doc/bugs.rst for instructions on reporting bugs.
+See $CHPL\_HOME/doc/bugs.rst for instructions on reporting bugs.
 
 SEE ALSO
 --------

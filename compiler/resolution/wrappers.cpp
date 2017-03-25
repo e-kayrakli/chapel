@@ -583,7 +583,7 @@ void reorderActuals(FnSymbol* fn,
 static IntentTag getIntent(ArgSymbol* formal)
 {
   IntentTag intent = formal->intent;
-  if (intent == INTENT_BLANK &&
+  if ((intent == INTENT_BLANK || intent == INTENT_CONST) &&
       !formal->type->symbol->hasFlag(FLAG_ITERATOR_RECORD))
     intent = concreteIntentForArg(formal);
   return intent;
@@ -698,7 +698,7 @@ static void addArgCoercion(FnSymbol*  fn,
 
   if (castCall == NULL) {
     // the common case
-    castCall = new CallExpr("_cast", fts, prevActual);
+    castCall = createCast(prevActual, fts);
 
     if (isString(fts))
       castTemp->addFlag(FLAG_INSERT_AUTO_DESTROY);
@@ -1034,6 +1034,7 @@ buildPromotionWrapper(FnSymbol* fn,
     theProgram->block->insertAtTail(new DefExpr(lifn));
     toBlockStmt(body->parentExpr)->insertAtHead(new DefExpr(leaderIndex));
     normalize(lifn);
+    lifn->addFlag(FLAG_GENERIC);
     lifn->instantiationPoint = getVisibilityBlock(info->call);
 
 
