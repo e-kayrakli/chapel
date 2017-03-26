@@ -392,9 +392,10 @@ module PrefetchHooks {
         slice_desc, slice_desc_size: size_t, data, size,
         metadataOnly=false) {
 
-extern proc  chpl_comm_put(ref addr, node, ref raddr,
-                    size, typeIndex: int(32),
-                    ln, fn:int(32));
+      extern proc  chpl_comm_put(ref addr, node, ref raddr,
+          size, typeIndex: int(32),
+          ln, fn:int(32));
+
         if prefetchTiming then subreprefetchTimer.start();
       on Locales[srcLocaleId] {
         // write data to destLocales handle's data
@@ -582,6 +583,10 @@ extern proc  chpl_comm_put(ref addr, node, ref raddr,
     proc doPrefetch(destLocaleId, srcLocaleId, srcObj, sliceDesc,
         wholeDesc, consistent, staticDomain, param prefetchSlice) {
 
+      extern proc  chpl_comm_get(addr, node, raddr,
+          size, typeIndex: int(32),
+          ln, fn:int(32));
+
       if destLocaleId != here.id {
         halt("doPrefetch can only be called from the prefetching \
             locale");
@@ -643,13 +648,20 @@ extern proc  chpl_comm_put(ref addr, node, ref raddr,
 
           if consData {
             /*writeln(here, " doing consec prefetch");*/
-            __primitive("chpl_comm_array_get",
-              __primitive("array_get",
-                  get_entry_data_start(new_handle_ptr):c_ptr(uint(8)),
-                  0),
-              srcLocaleId,
-              get_entry_remote_data_start(new_handle_ptr):c_ptr(uint(8)),
-              get_entry_data_actual_size(new_handle_ptr));
+            /*__primitive("chpl_comm_array_get",*/
+              /*__primitive("array_get",*/
+                  /*get_entry_data_start(new_handle_ptr):c_ptr(uint(8)),*/
+                  /*0),*/
+              /*srcLocaleId,*/
+              /*get_entry_remote_data_start(new_handle_ptr):c_ptr(uint(8)),*/
+              /*get_entry_data_actual_size(new_handle_ptr));*/
+
+            chpl_comm_get(
+                get_entry_data_start( new_handle_ptr),
+                srcLocaleId,
+                get_entry_remote_data_start(new_handle_ptr),
+                get_entry_data_actual_size(new_handle_ptr),
+                -1,0,0);
           }
           else { //strided data
             /*writeln(here, " doing strided prefetch");*/
