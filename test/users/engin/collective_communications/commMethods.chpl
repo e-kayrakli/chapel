@@ -81,12 +81,19 @@ proc BlockArr.customPrefetch(consistent=true, descTable,
 }
 
 // number of locales must be square
-proc BlockArr.transposePrefetch(consistent=true) {
+proc BlockArr.transposePrefetch(consistent=true, staticDomain=false) {
+
+  const tld = dom.dist.targetLocDom;
+  if tld.rank != 2 then
+    halt("Only 2D array s can be transpose-prefetched");
+  if tld.dim(1).length != tld.dim(2).length then
+    halt("Number of locales can only be a full square");
+
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       const sourceIdx = (localeIdx[2], localeIdx[1]);
       __prefetchFrom(localeIdx, sourceIdx, consistent,
-          staticDomain=false);
+          staticDomain=staticDomain);
     }
   }
   /*writeln("Finalizing prefetch");*/
