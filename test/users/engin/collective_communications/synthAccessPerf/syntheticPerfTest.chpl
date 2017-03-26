@@ -36,8 +36,8 @@ proc accessPrivate() {
   var sum = 0.0;
   var t = new Timer();
 
-  const detailTimer_calc = new Timer();
-  const detailTimer_acc = new Timer();
+  var detailTimer_calc = new Timer();
+  var detailTimer_acc = new Timer();
   //these calls are moved in the generated c code
   detailTimer_calc.start();
   detailTimer_calc.stop();
@@ -70,8 +70,8 @@ proc accessLocalFast() {
 
   on Locales[0] {
 
-    const detailTimer_calc = new Timer();
-    const detailTimer_acc = new Timer();
+    var detailTimer_calc = new Timer();
+    var detailTimer_acc = new Timer();
     //these calls are moved in the generated c code
     detailTimer_calc.start();
     detailTimer_calc.stop();
@@ -103,8 +103,8 @@ proc accessLocal() {
   forall i in arr.domain do arr[i] = initVal(i);
   on Locales[0] {
 
-    const detailTimer_calc = new Timer();
-    const detailTimer_acc = new Timer();
+    var detailTimer_calc = new Timer();
+    var detailTimer_acc = new Timer();
     //these calls are moved in the generated c code
     detailTimer_calc.start();
     detailTimer_calc.stop();
@@ -136,8 +136,8 @@ proc accessRemote() {
 
   on Locales[1] {
 
-    const detailTimer_calc = new Timer();
-    const detailTimer_acc = new Timer();
+    var detailTimer_calc = new Timer();
+    var detailTimer_acc = new Timer();
     //these calls are moved in the generated c code
     detailTimer_calc.start();
     detailTimer_calc.stop();
@@ -170,8 +170,8 @@ proc accessRemotePrefetched(consistent, param isLocal=false) {
   arr._value.allGather(consistent);
   on Locales[1] {
 
-    const detailTimer_calc = new Timer();
-    const detailTimer_acc = new Timer();
+    var detailTimer_calc = new Timer();
+    var detailTimer_acc = new Timer();
     //these calls are moved in the generated c code
     detailTimer_calc.start();
     detailTimer_calc.stop();
