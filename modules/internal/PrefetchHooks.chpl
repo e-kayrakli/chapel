@@ -392,6 +392,9 @@ module PrefetchHooks {
         slice_desc, slice_desc_size: size_t, data, size,
         metadataOnly=false) {
 
+extern proc  chpl_comm_put(ref addr, node, ref raddr,
+                    size, typeIndex: int(32),
+                    ln, fn:int(32));
         if prefetchTiming then subreprefetchTimer.start();
       on Locales[srcLocaleId] {
         // write data to destLocales handle's data
@@ -413,8 +416,11 @@ module PrefetchHooks {
         __serialize_wrapper(srcObj, local_buffer, size_local,
             slice_desc_local, slice_desc_size, metadataOnly);
         /*writeln("Putting ", size_local, " to ", srcLocaleId);*/
-        __primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,
-            data[0], size_local);
+        /*__primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,*/
+            /*data[0], size_local);*/
+
+        chpl_comm_put(local_buffer[0], destLocaleId, data[0],
+            size_local, -1, 0, 0);
       }
       if prefetchTiming then subreprefetchTimer.stop();
     }
