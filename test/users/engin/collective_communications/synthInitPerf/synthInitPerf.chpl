@@ -15,7 +15,7 @@ var arr: [dom] real;
 var prefetchTime = 0.0;
 var accessTime = 0.0;
 
-const t = new Timer();
+var t = new Timer();
 
 forall (i,j) in dom do arr[i,j] = i+j;
 
@@ -39,7 +39,7 @@ if prefetch {
 else {
   var b = new Barrier(numLocales);
   t.start();
-  coforall l in Locales with (ref prefetchTime) do on l {
+  coforall l in Locales with (ref prefetchTime, ref t) do on l {
     var localArr = arr;
 
     b.barrier();

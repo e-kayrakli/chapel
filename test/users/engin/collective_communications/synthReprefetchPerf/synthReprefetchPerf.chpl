@@ -28,7 +28,7 @@ arr._value.allGather(consistent=true, staticDomain=staticDomain);
 var times: [Locales.domain] real;
 
 coforall l in Locales do on l {
-  const t = new Timer();
+  var t = new Timer();
   var sum = 0.0;
   for (_,idx) in zip(1..#N, randomRemoteIndex()) {
     t.start();
