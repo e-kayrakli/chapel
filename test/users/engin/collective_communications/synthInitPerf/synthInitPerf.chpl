@@ -40,7 +40,8 @@ else {
   var b = new Barrier(numLocales);
   t.start();
   coforall l in Locales with (ref prefetchTime, ref t) do on l {
-    var localArr = arr;
+    var localArr: [space] real;
+    localArr = arr;
 
     b.barrier();
     if l.id == 0 {
