@@ -136,7 +136,8 @@ proc SparseBlockArr.allGather(consistent=true) {
   finalizePrefetch();
 }
 
-proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
+proc BlockArr.luleshStencilPrefetch3d(consistent=true,
+    staticDomain=false) {
 
   if rank != 3 then
     halt("This Prefetch pattern is only supprted for 3D arrays");
@@ -163,7 +164,7 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
         /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
             /*[>dom.dist.targetLocales(sourceIdx));<]*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain=staticDomain);
       }
       /*if hasBack {*/
         /*const sourceIdx = localeIdx + (1,0,0);*/
@@ -183,7 +184,7 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
         /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
             /*[>dom.dist.targetLocales(sourceIdx));<]*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain=staticDomain);
       }
       /*if hasBottom {*/
         /*const sourceIdx = localeIdx + (0,1,0);*/
@@ -203,7 +204,7 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
         /*[>writeln(here, " will get " , sliceDesc, " from ",<]*/
             /*[>dom.dist.targetLocales(sourceIdx));<]*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain=staticDomain);
       }
       /*if hasRight {*/
         /*const sourceIdx = localeIdx + (0,0,1);*/
@@ -223,7 +224,7 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain=staticDomain);
       }
       /*if hasBack && hasRight {*/
         /*const sourceIdx = localeIdx + (1,0,1);*/
@@ -242,7 +243,7 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain=staticDomain);
       }
       /*if hasBack && hasBottom {*/
         /*const sourceIdx = localeIdx + (1,1,0);*/
@@ -262,7 +263,7 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain=staticDomain);
       }
       /*if hasBack && hasBottom && hasRight{*/
         /*const sourceIdx = localeIdx + (1,1,1);*/
@@ -283,7 +284,7 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true) {
         /*writeln(here, " will get " , sliceDesc, " from ",*/
             /*dom.dist.targetLocales(sourceIdx));*/
         __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
-            staticDomain=false);
+            staticDomain=staticDomain);
       }
       /*if hasRight && hasBottom {*/
         /*const sourceIdx = localeIdx + (0,1,1);*/
