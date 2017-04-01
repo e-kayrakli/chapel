@@ -6,9 +6,9 @@ from util import *
 from plot_utils import *
 
 versions = [
-    VersionType("synthInitPerf", "Manual", "", "b", "o", "solid"),
-    VersionType("synthInitPerf", "Auto", "--prefetch", "g", "v", "solid"),
-    VersionType("synthInitPerf", "Auto-Static", "--prefetch --staticDomain", "r", "^", "solid")]
+    VersionType("synthInitPerf", "Hand", "", "b", "o", "solid"),
+    VersionType("synthInitPerf", "Prefetch", "--prefetch", "g", "v", "solid"),
+    VersionType("synthInitPerf", "Prefetch-Static", "--prefetch --staticDomain", "r", "^", "solid")]
 
 # create weak scaling data size lookup table
 for l in locales:

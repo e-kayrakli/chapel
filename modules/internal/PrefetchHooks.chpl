@@ -370,7 +370,7 @@ module PrefetchHooks {
     }
 
     proc getBaseDataStartAddr(startIdx) {
-      return obj.dsiGetBaseDataStartAddr(startIdx);
+      return obj.dsiGetBaseDataStartAddr(chpl__tuplify(startIdx));
     }
 
     //prefetch-reprefetch helpers
@@ -401,6 +401,58 @@ module PrefetchHooks {
         /*if prefetchTiming then subreprefetchTimer.stop();*/
 
       return (size, dataStartByteOffset);
+    }
+
+    pragma "no remote memory fence"
+    proc __getSerializedMetadataAndStart(destLocaleId, srcLocaleId, srcObj,
+        slice_desc, slice_desc_size: size_t, data, size,
+        startIdx, param prefetchSlice=false) {
+
+      extern proc  chpl_comm_put(ref addr, node, ref raddr,
+          size, typeIndex: int(32),
+          ln, fn:int(32));
+
+      var dataStartPtr: c_void_ptr;
+        if prefetchTiming then subreprefetchTimer.start();
+      on Locales[srcLocaleId] {
+        // write data to destLocales handle's data
+        const size_local = size;
+        var slice_desc_local: c_ptr(uint(8));
+
+        if slice_desc_size > 0 {
+          slice_desc_local = c_malloc(uint(8), slice_desc_size);
+          __primitive("chpl_comm_array_get", slice_desc_local[0],
+              destLocaleId, (slice_desc:c_ptr(uint(8)))[0],
+              slice_desc_size);
+        }
+
+        //NOTE for now we are serializing the data ad hoc. previously,
+        //when we relied on AM's data serialization used to start right
+        //after responding to size query. This is a TODO for now
+        var local_buffer = c_malloc(uint(8), size_local):c_ptr(uint(8));
+
+        __serialize_wrapper(this.type, srcObj, local_buffer, size_local,
+            slice_desc_local, slice_desc_size, metadataOnly=true);
+        /*writeln("Putting ", size_local, " to ", srcLocaleId);*/
+        /*__primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,*/
+            /*data[0], size_local);*/
+        /*var tmp = local_buffer:c_ptr(int);*/
+        /*for i in 0..#(size_local/8) {*/
+          /*writeln(here, " local buffer[", i, "]", tmp[i]);*/
+        /*}*/
+        /*writeln(here, " putting ", size_local, " bytes");*/
+
+        chpl_comm_put(local_buffer[0], destLocaleId, data[0],
+            size_local, -1, 0, 0);
+        dataStartPtr = if prefetchSlice
+          then
+            __get_data_start_ptr_wrapper(srcObj, startIdx)
+          else
+            __get_data_start_ptr_wrapper(srcObj);
+      }
+      if prefetchTiming then subreprefetchTimer.stop();
+      if is_c_nil(dataStartPtr) then halt("Received null pointer");
+      return dataStartPtr;
     }
 
     pragma "no remote memory fence"
@@ -662,16 +714,17 @@ module PrefetchHooks {
 
           /*writeln(here, " received metadata size=", metadataSize);*/
 
-          __getSerializedData(destLocaleId, srcLocaleId, srcObj,
-              slice_desc, slice_desc_size, data, metadataSize,
-              metadataOnly=true);
-
           var remoteDataStartPtr =
-            if prefetchSlice then
-              __getRemoteDataStartAddr(srcLocaleId, srcObj,
-                  sliceDesc.first)
-            else
-              __getRemoteDataStartAddr(srcLocaleId, srcObj);
+            __getSerializedMetadataAndStart(destLocaleId, srcLocaleId,
+                srcObj, slice_desc, slice_desc_size, data, metadataSize,
+                sliceDesc.first, prefetchSlice=prefetchSlice);
+
+          /*var remoteDataStartPtr =*/
+            /*if prefetchSlice then*/
+              /*__getRemoteDataStartAddr(srcLocaleId, srcObj,*/
+                  /*sliceDesc.first)*/
+            /*else*/
+              /*__getRemoteDataStartAddr(srcLocaleId, srcObj);*/
 
           set_entry_remote_data_start(new_handle_ptr,
               remoteDataStartPtr);
