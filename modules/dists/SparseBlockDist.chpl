@@ -535,6 +535,8 @@ class LocSparseBlockArr {
   proc setup(targetLocales) {
     prefetchHook = getNewPrefetchHook(this, myElems.type,
         true, targetLocales);
+    /*writeln(here, " creates obj ", __primitive("cast", uint,*/
+          /*__primitive("_wide_get_addr", prefetchHook)));*/
   }
   proc dsiAccess(i) ref {
     return myElems[i];
@@ -716,7 +718,7 @@ class LocSparseBlockArr {
         getSize(rank*2, idxType),
         int);
 
-    /*writeln(here, " received ", numIndices[0]);*/
+    /*writeln(here, " received ", numIndices[0], " indices");*/
 
     // add indices
 
@@ -727,6 +729,7 @@ class LocSparseBlockArr {
     var idxIntoData = getSize(rank*2, idxType) + getSize(1, int);
     for i in 0..#numIndices[0] {
       var idx = getElementArrayAtOffset(data, idxIntoData, idxType);
+      /*writeln(here, "\t\t\t idxintodata>> ", idxIntoData);*/
       /*writeln(here, "\t\t\t >> ", idx[0]);*/
       /*writeln(here, "\t\t\t >> ", idx[1]);*/
       /*writeln(here, "\t\t\t >> ", idx[2]);*/
@@ -756,7 +759,12 @@ class LocSparseBlockArr {
   }
 
   proc dsiGetBaseDataStartAddr() {
-    return c_ptrTo(myElems[myElems.domain.low]):c_void_ptr;
+    /*writeln(here, " base idx ", myElems.domain.first);*/
+
+    // if the domain is empty, the following goes haywire:
+    /*return c_ptrTo(myElems[myElems.domain.first]):c_void_ptr;*/
+    const dataBaseIndex = myElems._value.data.domain.low;
+    return c_ptrTo(myElems._value.data[dataBaseIndex]):c_void_ptr;
   }
 }
 

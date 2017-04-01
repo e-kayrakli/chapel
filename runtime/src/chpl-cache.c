@@ -3369,14 +3369,21 @@ void initialize_opt_fields(struct __prefetch_entry_t *entry,
 
   entry->stridelevels = stridelevels;
 
-  entry->dststrides = chpl_calloc(stridelevels, sizeof(size_t));
-  memcpy(entry->dststrides, dststrides, sizeof(size_t)*stridelevels);
-  entry->srcstrides = chpl_calloc(stridelevels, sizeof(size_t));
-  memcpy(entry->srcstrides, srcstrides, sizeof(size_t)*stridelevels);
-  entry->counts = chpl_calloc(stridelevels+1, sizeof(size_t));
-  /*printf("%d Init %d %d\n", chpl_nodeID, counts[0], counts[1]);*/
-  memcpy(entry->counts, counts,
-      sizeof(size_t)*(stridelevels+1));
+  if(stridelevels != 0) {
+    entry->dststrides = chpl_calloc(stridelevels, sizeof(size_t));
+    memcpy(entry->dststrides, dststrides, sizeof(size_t)*stridelevels);
+    entry->srcstrides = chpl_calloc(stridelevels, sizeof(size_t));
+    memcpy(entry->srcstrides, srcstrides, sizeof(size_t)*stridelevels);
+    entry->counts = chpl_calloc(stridelevels+1, sizeof(size_t));
+    /*printf("%d Init %d %d\n", chpl_nodeID, counts[0], counts[1]);*/
+    memcpy(entry->counts, counts,
+        sizeof(size_t)*(stridelevels+1));
+  }
+  else {
+    entry->dststrides = NULL;
+    entry->srcstrides = NULL;
+    entry->counts = NULL;
+  }
 }
 
 // assumed to be called from a thread-safe context
