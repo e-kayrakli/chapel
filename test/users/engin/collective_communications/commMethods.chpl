@@ -124,12 +124,12 @@ proc BlockArr.allGather(consistent=true, staticDomain=false) {
   finalizePrefetch();
 }
 
-proc SparseBlockArr.allGather(consistent=true) {
+proc SparseBlockArr.allGather(consistent=true, staticDomain=false) {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       for sourceIdx in dom.dist.targetLocDom {
         __prefetchFrom(localeIdx, sourceIdx, consistent,
-            staticDomain=false);
+            staticDomain=staticDomain);
       }
     }
   }
