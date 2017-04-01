@@ -405,7 +405,7 @@ module PrefetchHooks {
 
     pragma "no remote memory fence"
     proc __getSerializedMetadataAndStart(destLocaleId, srcLocaleId, srcObj,
-        slice_desc, slice_desc_size: size_t, data, size,
+        slice_desc, slice_desc_size: size_t, data,
         startIdx, param prefetchSlice=false) {
 
       extern proc  chpl_comm_put(ref addr, node, ref raddr,
@@ -416,7 +416,9 @@ module PrefetchHooks {
         if prefetchTiming then subreprefetchTimer.start();
       on Locales[srcLocaleId] {
         // write data to destLocales handle's data
-        const size_local = size;
+        var hookObj = srcObj:PrefetchHook;
+
+        const size_local = hookObj.getSerializedMetadataSize();
         var slice_desc_local: c_ptr(uint(8));
 
         if slice_desc_size > 0 {
@@ -709,14 +711,14 @@ module PrefetchHooks {
           // from the buffer and not when calculating the byte index,
           // which happens without any lockign(we assume that metadata
           // never changes and it is always there
-          const metadataSize = __getSerializedMetadataSize(destLocaleId,
-              srcLocaleId, srcObj, slice_desc, slice_desc_size): size_t;
+          /*const metadataSize = __getSerializedMetadataSize(destLocaleId,*/
+              /*srcLocaleId, srcObj, slice_desc, slice_desc_size): size_t;*/
 
           /*writeln(here, " received metadata size=", metadataSize);*/
 
           var remoteDataStartPtr =
             __getSerializedMetadataAndStart(destLocaleId, srcLocaleId,
-                srcObj, slice_desc, slice_desc_size, data, metadataSize,
+                srcObj, slice_desc, slice_desc_size, data,
                 sliceDesc.first, prefetchSlice=prefetchSlice);
 
           /*var remoteDataStartPtr =*/
