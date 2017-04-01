@@ -28,14 +28,19 @@ arr._value.allGather(consistent=true, staticDomain=staticDomain);
 var times: [Locales.domain] real;
 
 coforall l in Locales do on l {
+  var rrIdxDom = {0..#N};
+  var rrIdxArr: [rrIdxDom] 2*int;
+
+  for (rr,idx) in zip(rrIdxArr, randomRemoteIndex()) {
+    rr = idx;
+  }
   var t = new Timer();
   var sum = 0.0;
-  for (_,idx) in zip(1..#N, randomRemoteIndex()) {
+  for idx in rrIdxArr {
     t.start();
     sum += arr[idx];
     t.stop();
     b.barrier();
-
   }
   times[here.id] = t.elapsed();
 }
