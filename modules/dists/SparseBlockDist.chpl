@@ -447,6 +447,7 @@ class SparseBlockArr: BaseSparseArr {
 
       if hasPrefetched then return prefetchData;
     }
+    /*writeln(here, " remote access ", i);*/
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
   proc dsiAccess(i: rank*idxType)
@@ -467,6 +468,7 @@ class SparseBlockArr: BaseSparseArr {
 
     if hasPrefetched then return prefetchData;
 
+    /*writeln(here, " remote access ", i);*/
     return locArr[locIdx].dsiAccess(i);
   }
   proc dsiAccess(i: rank*idxType) const ref
@@ -486,6 +488,7 @@ class SparseBlockArr: BaseSparseArr {
 
       if hasPrefetched then return prefetchData;
     }
+    /*writeln(here, " remote access ", i);*/
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
 

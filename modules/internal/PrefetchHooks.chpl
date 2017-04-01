@@ -291,13 +291,27 @@ module PrefetchHooks {
         if unpackAccess {
           /*writeln(here, " unpacked access");*/
           if hasPrefetchedFrom(locIdx) {
-            /*writeln(here, " has prefetched from ", locIdx);*/
             const flatIdx = flattenLocaleIdx(locIdx);
             ref unpackedDataTmp = unpackedData[flatIdx];
-            if unpackedDataTmp.domain.member(i) {
+
+            if isSparseArr(unpackedDataTmp) {
+              prefetched = unpackedDataTmp.domain._value.parentDom.member(i);
+            }
+            else {
+              prefetched = unpackedDataTmp.domain.member(i);
+            }
+
+            /*writeln(here, " has prefetched from ", locIdx,*/
+                /*" and the domain is ",*/
+                /*unpackedDataTmp.domain._value.parentDom);*/
+            if prefetched {
               /*writeln(here, " has prefetched ", i, " from ", locIdx);*/
+              if isSparseArr(unpackedDataTmp) &&
+                !unpackedDataTmp.domain.member(i) {
+                  return unpackedDataTmp.IRV;
+              }
               ref retTmp = unpackedDataTmp[i];
-              prefetched = true;
+              /*prefetched = true;*/
               const lockOffset = get_lock_offset(
                   handles[flatIdx],
                   __primitive("_wide_get_addr", retTmp));
