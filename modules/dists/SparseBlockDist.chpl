@@ -60,7 +60,7 @@ class SparseBlockDom: BaseSparseDomImpl {
   type sparseLayoutType;
   param stridable: bool = false;  // TODO: remove default value eventually
   const dist: Block(rank, idxType, sparseLayoutType);
-  const whole: domain(rank=rank, idxType=idxType, stridable=stridable);
+  var whole: domain(rank=rank, idxType=idxType, stridable=stridable);
   var locDoms: [dist.targetLocDom] LocSparseBlockDom(rank, idxType, stridable,
       sparseLayoutType);
 
@@ -664,15 +664,16 @@ proc LocSparseBlockArr.dsiSerialWrite(f) {
 
 proc SparseBlockDom.dsiSupportsPrivatization() param return true;
 
-proc SparseBlockDom.dsiGetPrivatizeData() return dist.pid;
+proc SparseBlockDom.dsiGetPrivatizeData() return (dist.pid, whole.dims());
 
 proc SparseBlockDom.dsiPrivatize(privatizeData) {
-  var privdist = chpl_getPrivatizedCopy(dist.type, privatizeData);
+  var privdist = chpl_getPrivatizedCopy(dist.type, privatizeData(1));
   var c = new SparseBlockDom(rank=rank, idxType=idxType,
       sparseLayoutType=sparseLayoutType, dist=privdist, whole=whole,
       parentDom=parentDom);
   for i in c.dist.targetLocDom do
     c.locDoms(i) = locDoms(i);
+  c.whole = {(...privatizeData(2))};
   return c;
 }
 
