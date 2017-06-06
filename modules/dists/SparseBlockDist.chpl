@@ -387,11 +387,15 @@ class SparseBlockArr: BaseSparseArr {
   }
   proc dsiAccess(i: rank*idxType)
   where shouldReturnRvalueByValue(eltType) {
-    local {
+    writeln(myLocArr.locale.id, " ",
+            myLocArr.locDom.locale.id, " ",
+            myLocArr.locDom.parentDom.locale.id, " ");
+
+    /*local {*/
       if myLocArr != nil && myLocArr.locDom.parentDom.member(i) {
         return myLocArr.dsiAccess(i);
       }
-    }
+    /*}*/
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
   proc dsiAccess(i: rank*idxType) const ref
@@ -676,11 +680,12 @@ proc SparseBlockDom.dsiPrivatize(privatizeData) {
   return c;
 }
 
-proc SparseBlockDom.dsiGetReprivatizeData() return nil;
+proc SparseBlockDom.dsiGetReprivatizeData() return whole.dims();
 
 proc SparseBlockDom.dsiReprivatize(other, reprivatizeData) {
   for i in dist.targetLocDom do
     locDoms(i) = other.locDoms(i);
+  whole = {(...reprivatizeData)};
 }
 
 proc SparseBlockArr.dsiSupportsPrivatization() param return true;
