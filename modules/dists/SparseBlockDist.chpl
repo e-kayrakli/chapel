@@ -387,15 +387,11 @@ class SparseBlockArr: BaseSparseArr {
   }
   proc dsiAccess(i: rank*idxType)
   where shouldReturnRvalueByValue(eltType) {
-    writeln(myLocArr.locale.id, " ",
-            myLocArr.locDom.locale.id, " ",
-            myLocArr.locDom.parentDom.locale.id, " ");
-
-    /*local {*/
+    local {
       if myLocArr != nil && myLocArr.locDom.parentDom.member(i) {
         return myLocArr.dsiAccess(i);
       }
-    /*}*/
+    }
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
   proc dsiAccess(i: rank*idxType) const ref
