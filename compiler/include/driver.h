@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -48,6 +48,7 @@ extern bool fNoLocalChecks;
 extern bool fNoNilChecks;
 extern bool fNoStackChecks;
 extern bool fNoCastChecks;
+extern bool fNoDivZeroChecks;
 extern bool fMungeUserIdents;
 extern bool fEnableTaskTracking;
 extern bool fLLVMWideOpt;
@@ -61,7 +62,9 @@ extern bool fNoVectorize;
 extern bool fNoPrivatization;
 extern bool fNoOptimizeOnClauses;
 extern bool fNoRemoveEmptyRecords;
+extern bool fNoInferLocalFields;
 extern bool fRemoveUnreachableBlocks;
+extern bool fReplaceArrayAccessesWithRefTemps;
 extern int  optimize_on_clause_limit;
 extern int  scalar_replace_limit;
 extern int  tuple_copy_limit;
@@ -75,6 +78,9 @@ bool useDefaultEnv(std::string key);
 extern std::map<std::string, const char*> envMap;
 
 extern char CHPL_HOME[FILENAME_MAX+1];
+extern char CHPL_RUNTIME_LIB[FILENAME_MAX+1];
+extern char CHPL_RUNTIME_INCL[FILENAME_MAX+1];
+extern char CHPL_THIRD_PARTY[FILENAME_MAX+1];
 
 extern const char* CHPL_HOST_PLATFORM;
 extern const char* CHPL_HOST_COMPILER;
@@ -118,6 +124,7 @@ extern char fExplainInstantiation[256];
 /// resolution.
 extern bool fExplainVerbose;
 extern bool fParseOnly;
+extern bool fPrintCallGraph;
 extern bool fPrintCallStackOnError;
 extern bool fPrintIDonError;
 extern bool fPrintModuleResolution;
@@ -157,7 +164,6 @@ extern int  num_constants_per_variable;
 extern bool printCppLineno;
 
 extern char defaultDist[256];
-extern char mainModuleName[256];
 extern bool printSearchDirs;
 extern bool printModuleFiles;
 extern bool ignore_warnings;
@@ -173,6 +179,8 @@ extern bool fReportPromotion;
 extern bool fReportScalarReplace;
 extern bool fReportDeadBlocks;
 extern bool fReportDeadModules;
+
+extern bool fStrictErrorHandling;
 
 extern bool debugCCode;
 extern bool optimizeCCode;

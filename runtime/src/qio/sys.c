@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -328,11 +328,13 @@ static const char* error_string_no_error = "No error";
 
 static
 const char* extended_errors[] = {
-  "end of file",
-  "short read or write",
-  "bad format",
-  "illegal multibyte sequence", // most systems already have EILSEQ but not all
-  "overflow", // most systems already have EOVERFLOW but not all
+  /* EEOF */     "end of file",
+  /* ESHORT */   "short read or write",
+  /* EFORMAT */  "bad format",
+  // most systems already have the following but not all
+  /* EILSEQ */    "illegal multibyte sequence",
+  /* EOVERFLOW */ "overflow",
+  /* ENODATA */   "no data",
   NULL
 };
 
@@ -874,7 +876,7 @@ err_t do_pread(int fd, void* buf, size_t count, off_t offset, ssize_t *num_read)
     *num_read = 0;
     return errno;
   }
-  assert(got <= count); // can't read more than requested!
+  assert((size_t) got <= count); // can't read more than requested!
   *num_read = got;
   return 0;
 #endif
@@ -919,7 +921,7 @@ err_t do_pwrite(int fd, const void* buf, size_t count, off_t offset, ssize_t *nu
     *num_written = 0;
     return errno;
   }
-  assert(got <= count); // can't write more than requested!
+  assert((size_t) got <= count); // can't write more than requested!
   *num_written = got;
   return 0;
 #endif
@@ -1449,10 +1451,22 @@ err_t sys_getnameinfo(const sys_sockaddr_t* addr, char** host_out, char** serv_o
   char* new_host_buf;
   char* serv_buf=0;
   char* new_serv_buf;
-  int host_buf_sz = NI_MAXHOST;
-  int serv_buf_sz = NI_MAXSERV;
+  int host_buf_sz;
+  int serv_buf_sz;
   int got;
   err_t err_out;
+
+#ifdef NI_MAXHOST
+  host_buf_sz = NI_MAXHOST;
+#else
+  host_buf_sz = 1025;
+#endif
+
+#ifdef NI_MAXSERV
+  serv_buf_sz = NI_MAXSERV;
+#else
+  serv_buf_sz = 32;
+#endif
 
   STARTING_SLOW_SYSCALL;
 

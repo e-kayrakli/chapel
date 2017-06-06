@@ -1,4 +1,4 @@
-# Copyright 2004-2016 Cray Inc.
+# Copyright 2004-2017 Cray Inc.
 # Other additional copyright holders may be indicated within.
 # 
 # The entirety of this work is licensed under the Apache License,
@@ -21,9 +21,16 @@ CRAYPE_GEN_CFLAGS = -hnomessage=7212
 # Suppress warnings about unsigned ints being compared to 0
 CRAYPE_GEN_CFLAGS += -hnomessage=186
 
+# Suppress warnings about needing the optimizer to handle
+# certain cases of __asm__
+CRAYPE_GEN_CFLAGS += -hnomessage=3140
+
+# Could set CRAYPE_COMP_CXXFLAGS, CRAYPE_GEN_CFLAGS
 
 FAST_FLOAT_GEN_CFLAGS = -hfp2
 IEEE_FLOAT_GEN_CFLAGS = -hfp0
+
+CXX11_STD := -h std=c++11
 
 # If this is not a --fast compilation or OPTIMIZE=1 is not set, disable
 # optimizations for cce. This is done by default for other compilers and it
@@ -34,9 +41,7 @@ IEEE_FLOAT_GEN_CFLAGS = -hfp0
 # to add time. For Chapel codes, -O0 tends to give the fastest compile times,
 # which is why it is used here. -hdevelop is something to look at in the future
 # if execution time becomes too slow with -O0.
-ifneq ($(OPTIMIZE),1)
-CFLAGS += -O0
-endif
+NO_OPT_CFLAGS += -O0
 
 #
 # The current Cray compiler does not compile GASNet cleanly, so we have

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -21,25 +21,35 @@
 #define _chpl_atomics_h_
 
 #include "chpltypes.h"
+#include "chpl-comp-detect-macros.h"
 #include <assert.h>
 
-// required to use __builtin_ia32_mfence
-#ifdef _CRAYC
-  #include <intrinsics.h>
-#endif
+//
+// SIZE_ALIGN_TYPE:  Declare a version of a type aligned to at least its size.
+//
+// All the compilers we support with the intrinsics version of atomics
+// also support the gcc alignment attribute syntax used here.
+//
+// This is needed for 64-bit atomic types on 32-bit machines,
+// to guarantee that the atomic objects will never straddle a
+// cache line boundary, which has a severe performance penalty.
+//
+#define SIZE_ALIGN_TYPE(t) __attribute__ ((aligned (sizeof(t)))) t
 
 typedef int_least8_t atomic_int_least8_t;
 typedef int_least16_t atomic_int_least16_t;
 typedef int_least32_t atomic_int_least32_t;
-typedef int_least64_t atomic_int_least64_t;
+typedef SIZE_ALIGN_TYPE(int_least64_t) atomic_int_least64_t;
 typedef uint_least8_t atomic_uint_least8_t;
 typedef uint_least16_t atomic_uint_least16_t;
 typedef uint_least32_t atomic_uint_least32_t;
-typedef uint_least64_t atomic_uint_least64_t;
+typedef SIZE_ALIGN_TYPE(uint_least64_t) atomic_uint_least64_t;
 typedef uintptr_t atomic_uintptr_t;
 typedef chpl_bool atomic_bool;
-typedef uint64_t atomic__real64;
+typedef SIZE_ALIGN_TYPE(uint64_t) atomic__real64;
 typedef uint32_t atomic__real32;
+
+#undef SIZE_ALIGN_TYPE
 
 typedef enum {
  memory_order_relaxed,
@@ -54,10 +64,11 @@ static inline memory_order _defaultOfMemoryOrder(void) {
   return memory_order_seq_cst;
 }
 
-// Cray does not support __sync_synchronize so we use a cray specific memory
-// fence. Cray also does not support __sync_bool_compare_and_swap so we 
-// cheat our way around this using __sync_val_compare_and_swap
-#ifdef _CRAYC
+// __sync_synchronize/__sync_bool_compare_and_swap are missing for cce < 8.4
+// and __sync_bool_compare_and_swap is broken in newer versions. Use
+// __builtin_ia32_mfence and __sync_val_compare_and_swap instead.
+#if RT_COMP_CC == RT_COMP_CRAY
+  #include <intrinsics.h>
   #define full_memory_barrier __builtin_ia32_mfence
   
   # define my__sync_bool_compare_and_swap(obj, expected, desired) \
@@ -84,7 +95,7 @@ static inline void atomic_signal_fence(memory_order order)
 ////                      START OF INTEGER ATOMICS BASE                   ////
 //////////////////////////////////////////////////////////////////////////////
 
-// The obvious implementation of atomic stores is insufficient.
+// The obvious implementation of atomic loads and stores is insufficient.
 // They must be implemented with atomic primitives to ensure consistent
 // visibility of the results.
 #define DECLARE_ATOMICS_BASE(type, basetype) \
@@ -185,7 +196,7 @@ static inline type atomic_fetch_xor_ ## type(atomic_ ## type * obj, type operand
 ////                       START OF REAL ATOMICS BASE                     ////
 //////////////////////////////////////////////////////////////////////////////
 
-// The obvious implementation of atomic stores is insufficient.
+// The obvious implementation of atomic loads and stores is insufficient.
 // They must be implemented with atomic primitives to ensure consistent
 // visibility of the results.
 #define DECLARE_REAL_ATOMICS_BASE(type, uinttype) \
@@ -213,7 +224,7 @@ static inline void atomic_store_ ## type(atomic_ ## type * obj, type value) { \
 } \
 static inline type atomic_load_explicit_ ## type(atomic_ ## type * obj, memory_order order) { \
   type ret; \
-  uinttype ret_uint = __sync_fetch_and_or(obj, (uinttype)0); \
+  uinttype ret_uint = __sync_val_compare_and_swap(obj, (uinttype)0, (uinttype)0); \
   memcpy(&ret, &ret_uint, sizeof(ret)); \
   return ret; \
 } \

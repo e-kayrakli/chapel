@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -19,9 +19,11 @@
 
 #include "runpasses.h"
 
-#include "checks.h"        // For check function prototypes.
-#include "log.h"           // For LOG_<passname> #defines.
-#include "passes.h"        // For pass function prototypes.
+#include "checks.h"
+#include "driver.h"
+#include "log.h"
+#include "parser.h"
+#include "passes.h"
 #include "PhaseTracker.h"
 
 #include <cstdio>
@@ -52,9 +54,11 @@ struct PassInfo {
 #define LOG_resolve                            'R'
 #define LOG_resolveIntents                     'i'
 #define LOG_checkResolved                      NUL
+#define LOG_replaceArrayAccessesWithRefTemps   'T'
 #define LOG_processIteratorYields              'y'
 #define LOG_flattenFunctions                   'e'
 #define LOG_cullOverReferences                 'O'
+#define LOG_lowerErrorHandling                 NUL
 #define LOG_callDestructors                    'd'
 #define LOG_lowerIterators                     'L'
 #define LOG_parallel                           'P'
@@ -115,10 +119,13 @@ static PassInfo sPassList[] = {
   RUN(resolveIntents),          // resolve argument intents
   RUN(checkResolved),           // checks semantics of resolved AST
 
+  RUN(replaceArrayAccessesWithRefTemps), // replace multiple array access calls with reference temps
+
   // Post-resolution cleanup
   RUN(processIteratorYields),   // adjustments to iterators
   RUN(flattenFunctions),        // denest nested functions
   RUN(cullOverReferences),      // remove excess references
+  RUN(lowerErrorHandling),      // lower error handling constructs
   RUN(callDestructors),
   RUN(lowerIterators),          // lowers iterators into functions/classes
   RUN(parallel),                // parallel transforms

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -18,8 +18,8 @@
  */
 
 config param debugCSR = false;
+use RangeChunk only ;
 
-// In the following, I insist on SUBdomains because
 // I have not seen us test a non-"sub" CSR domain
 // and I do not want untested code in the docs.
 // TODO: change to 'sparse domain' and add that code to the test suite.
@@ -123,21 +123,21 @@ class CSRDom: BaseSparseDomImpl {
   iter these(param tag: iterKind) where tag == iterKind.leader {
     // same as DefaultSparseDom's leader
     const numElems = nnz;
-      const numChunks = _computeNumChunks(numElems);
-      //writeln("leader- rowRange=", rowRange, " colRange=", colRange, "\n",
-      //        "        rowStart=", rowStart, " colIdx=", colIdx);
-      if debugCSR then
-        writeln("CSRDom leader: ", numChunks, " chunks, ", numElems, " elems");
+    const numChunks = _computeNumChunks(numElems);
+    //writeln("leader- rowRange=", rowRange, " colRange=", colRange, "\n",
+    //        "        rowStart=", rowStart, " colIdx=", colIdx);
+    if debugCSR then
+      writeln("CSRDom leader: ", numChunks, " chunks, ", numElems, " elems");
 
-      // split our numElems elements over numChunks tasks
-      if numChunks == 1 then
-        yield (this, 1, numElems);
-      else
-        coforall chunk in 1..numChunks do
-          yield (this, (..._computeChunkStartEnd(numElems, numChunks, chunk)));
-      // TODO: to handle large numElems and numChunks faster, it would be great
-      // to run the binary search in _private_findStartRow smarter, e.g.
-      // pass to the tasks created in 'coforall' smaller ranges to search over.
+    // split our numElems elements over numChunks tasks
+    if numChunks == 1 then
+      yield (this, 1, numElems);
+    else
+      coforall chunk in chunks(1..numElems, numChunks) do
+        yield (this, chunk.first, chunk.last);
+    // TODO: to handle large numElems and numChunks faster, it would be great
+    // to run the binary search in _private_findStartRow smarter, e.g.
+    // pass to the tasks created in 'coforall' smaller ranges to search over.
   }
 
   iter these(param tag: iterKind, followThis: (?,?,?)) where tag == iterKind.follower {
@@ -286,14 +286,50 @@ class CSRDom: BaseSparseDomImpl {
   proc bulkAdd_help(inds: [?indsDom] rank*idxType, dataSorted=false,
       isUnique=false){
 
+    bulkAdd_prepareInds(inds, dataSorted, isUnique);
+
+    if nnz == 0 {
+
+      const dupCount = if isUnique then 0 else _countDuplicates(inds);
+
+      nnz += inds.size-dupCount;
+      _bulkGrow();
+
+      var colIdxIdx = 1;
+      var currentRow = parentDom.dim(1).low;
+      var prevIdx = parentDom.low - (1,1);
+
+      for (i,j) in inds {
+        if !isUnique && (i,j) == prevIdx then continue;
+        else prevIdx = (i,j);
+
+        while i != currentRow {
+          currentRow += 1;
+          rowStart[currentRow+1] = rowStart[currentRow];
+        }
+        rowStart[i+1] += 1;
+        colIdx[colIdxIdx] = j;
+        colIdxIdx += 1;
+      }
+
+      // make sure rowStart[i]>rowStart[j] for i>j for possibly
+      // untouched part of rowStart
+      const rowStartHigh = rowStart[currentRow+1];
+      for r in currentRow+2..rowStart.domain.high {
+        rowStart[r] = rowStartHigh;
+      }
+
+      return colIdxIdx-1;
+    }
+
     const (actualInsertPts, actualAddCnt) =
-      __getActualInsertPts(this, inds, dataSorted, isUnique);
+      __getActualInsertPts(this, inds, isUnique);
 
     const oldnnz = nnz;
     nnz += actualAddCnt;
 
     //grow nnzDom if necessary
-    _bulkGrow(nnz);
+    _bulkGrow();
 
     //linearly fill the new colIdx from backwards
     var newIndIdx = indsDom.high; //index into new indices
@@ -437,7 +473,7 @@ class CSRArr: BaseSparseArrImpl {
   }
   // value version for POD types
   proc dsiAccess(ind: rank*idxType)
-  where !shouldReturnRvalueByConstRef(eltType) {
+  where shouldReturnRvalueByValue(eltType) {
     // make sure we're in the dense bounding box
     dom.boundsCheck(ind);
 

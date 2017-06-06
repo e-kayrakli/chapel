@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -52,11 +52,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include "driver.h"
 #include "files.h"
 #include "misc.h"
 #include "stringutil.h"
 
 #include <cstdio>
+
 #include <inttypes.h>
 
 static const char* get_envvar_setting(const ArgumentDescription& desc);

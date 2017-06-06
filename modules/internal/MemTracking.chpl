@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,6 +21,8 @@
 //
 module MemTracking
 {
+  use ChapelStandard;
+
   config const
     memTrack: bool = false,
     memStats: bool = false,
@@ -40,7 +42,7 @@ module MemTracking
      because they are tracked allocations with no corresponding free.
 
      The dump is performed only if the --memLeaksByDesc option is present and has
-     a string argument.  
+     a string argument.
        --memLeaksByDesc="" causes all memory records to be printed.  Same as --memLeaks.
        --memLeaksByDesc="<alloc-type-string>" causes only those memory records
          matching the given <alloc-type-string> to be printed.

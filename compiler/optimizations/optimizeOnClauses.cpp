@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -24,12 +24,16 @@
 //  the handler (rather than creating a new task).
 //
 
-#include <vector>
-#include "stlUtil.h"
-#include "astutil.h"
-#include "expr.h"
-#include "stmt.h"
 #include "passes.h"
+
+#include "astutil.h"
+#include "driver.h"
+#include "expr.h"
+#include "stlUtil.h"
+#include "stmt.h"
+
+#include <vector>
+
 
 // There are two questions:
 // 1- is the primitive/function eligible to run in a fast block?
@@ -104,6 +108,7 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_GET_IMAG:
 
   case PRIM_ADDR_OF:
+  case PRIM_SET_REFERENCE:
   case PRIM_LOCAL_CHECK:
 
   case PRIM_INIT_FIELDS:
@@ -126,6 +131,8 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_GET_USER_LINE:
   case PRIM_GET_USER_FILE:
   case PRIM_LOOKUP_FILENAME:
+
+  case PRIM_STACK_ALLOCATE_CLASS:
     return FAST_AND_LOCAL;
 
   case PRIM_MOVE:
@@ -145,8 +152,8 @@ classifyPrimitive(CallExpr *call) {
       // the callExpr will be checked in the calling function
       return FAST_AND_LOCAL;
     } else {
-      bool arg1wide = call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF);
-      bool arg2wide = call->get(2)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF);
+      bool arg1wide = call->get(1)->isWideRef();
+      bool arg2wide = call->get(2)->isWideRef();
 
       // If neither argument is a wide reference, OK: no communication
       if (!arg1wide && !arg2wide) {
@@ -154,8 +161,8 @@ classifyPrimitive(CallExpr *call) {
       }
 
       if (call->isPrimitive(PRIM_MOVE)) {
-        bool arg1ref = call->get(1)->typeInfo()->symbol->hasFlag(FLAG_REF);
-        bool arg2ref = call->get(2)->typeInfo()->symbol->hasFlag(FLAG_REF);
+        bool arg1ref = call->get(1)->isRef();
+        bool arg2ref = call->get(2)->isRef();
         // Handle (move tmp:ref, other_tmp:wide_ref)
         // and    (move tmp:wide_ref, other_tmp:ref)
         // these does not require communication and merely adjust
@@ -175,7 +182,7 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_WIDE_GET_NODE:
   case PRIM_WIDE_GET_ADDR:
     // If this test is true, a remote get is required.
-    if (!(call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF) &&
+    if (!(call->get(1)->isWideRef() &&
           call->get(1)->getValType()->symbol->hasFlag(FLAG_WIDE_CLASS))) {
       return FAST_AND_LOCAL;
     }
@@ -184,9 +191,9 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_ARRAY_SHIFT_BASE_POINTER:
     // SHIFT_BASE_POINTER is fast as long as none of the
     // arguments are wide references.
-    if (call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF) ||
-        call->get(2)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF) ||
-        call->get(3)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF))
+    if (call->get(1)->isWideRef() ||
+        call->get(2)->isWideRef() ||
+        call->get(3)->isWideRef())
       return FAST_NOT_LOCAL;
     else
       return FAST_AND_LOCAL;
@@ -195,7 +202,7 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_GET_UNION_ID:
   case PRIM_GET_MEMBER_VALUE:
   case PRIM_GET_SVEC_MEMBER_VALUE:
-    if (!call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF)) {
+    if (!call->get(1)->isWideRef()) {
       return FAST_AND_LOCAL;
     }
     return FAST_NOT_LOCAL;
@@ -216,7 +223,7 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_DEREF:
   case PRIM_SET_MEMBER:
   case PRIM_SET_SVEC_MEMBER:
-    if (!call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_REF) &&
+    if (!call->get(1)->isWideRef() &&
         !call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_CLASS)) {
       return FAST_AND_LOCAL;
     }
@@ -234,10 +241,15 @@ classifyPrimitive(CallExpr *call) {
     // Shouldn't this be return FAST_NOT_LOCAL ?
     return NOT_FAST_NOT_LOCAL;
 
+  case PRIM_REDUCE_ASSIGN:
   case PRIM_NEW:
+
   case PRIM_INIT:
+  case PRIM_INIT_FIELD:
+  case PRIM_INIT_VAR:
   case PRIM_NO_INIT:
   case PRIM_TYPE_INIT:
+
   case PRIM_LOGICAL_FOLDER:
   case PRIM_TYPEOF:
   case PRIM_TYPE_TO_STRING:
@@ -283,14 +295,17 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_FIELD_NAME_TO_NUM:
   case PRIM_FIELD_BY_NUM:
 
-  case PRIM_FORALL_LOOP:
   case PRIM_TO_STANDALONE:
   case PRIM_IS_REF_ITER_TYPE:
   case PRIM_COERCE:
   case PRIM_CALL_RESOLVES:
   case PRIM_METHOD_CALL_RESOLVES:
   case PRIM_GET_COMPILER_VAR:
+  case PRIM_ZIP:
+  case PRIM_REQUIRE:
   case NUM_KNOWN_PRIMS:
+  case PRIM_ITERATOR_RECORD_FIELD_VALUE_BY_FORMAL:
+  case PRIM_THROW:
     INT_FATAL("This primitive should have been removed from the tree by now.");
     break;
 
@@ -300,7 +315,7 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_BLOCK_FOR_LOOP:
   case PRIM_BLOCK_C_FOR_LOOP:
     return FAST_AND_LOCAL;
- 
+
     // These don't block in the Chapel sense, but they may require a system
     // call so we don't consider them fast-eligible.
     // However, they are communication free.
@@ -395,10 +410,10 @@ inLocalBlock(CallExpr *call) {
 }
 
 static int
-markFastSafeFn(FnSymbol *fn, int recurse, Vec<FnSymbol*> *visited) {
+markFastSafeFn(FnSymbol *fn, int recurse, std::set<FnSymbol*>& visited) {
 
   // First, handle functions we've already visited.
-  if (visited->in(fn)) {
+  if (visited.count(fn) != 0) {
     if (fn->hasFlag(FLAG_FAST_ON))
       return FAST_AND_LOCAL;
     if (fn->hasFlag(FLAG_LOCAL_FN))
@@ -408,7 +423,7 @@ markFastSafeFn(FnSymbol *fn, int recurse, Vec<FnSymbol*> *visited) {
 
   // Now, add fn to the set of visited functions,
   // since we will categorize it now.
-  visited->add_exclusive(fn);
+  visited.insert(fn);
 
   // Next, classify extern functions
   if (fn->hasFlag(FLAG_EXTERN)) {
@@ -445,38 +460,48 @@ markFastSafeFn(FnSymbol *fn, int recurse, Vec<FnSymbol*> *visited) {
 
     if (call->primitive) {
       int is = classifyPrimitive(call, inLocal);
+
       if (!isLocal(is)) {
         // FAST_NOT_LOCAL or NOT_FAST_NOT_LOCAL
         return NOT_FAST_NOT_LOCAL;
       }
+
       // is == FAST_AND_LOCAL requires no action
-      if (is == LOCAL_NOT_FAST)
+      if (is == LOCAL_NOT_FAST) {
         maybefast = false;
+      }
+
     } else {
       if (recurse<=0 || !call->isResolved()) {
         // didn't resolve or past too much recursion.
         // No function calls allowed
         return NOT_FAST_NOT_LOCAL;
+
       } else {
         // Handle nested 'on' statements
-        if (call->isResolved()->hasFlag(FLAG_ON_BLOCK)) {
-          if (inLocal)
+        if (call->resolvedFunction()->hasFlag(FLAG_ON_BLOCK)) {
+          if (inLocal) {
             maybefast = false;
-          else
+          } else {
             return NOT_FAST_NOT_LOCAL;
+          }
         }
 
         // is the call to a fast/local function?
-        int is = markFastSafeFn(call->isResolved(), recurse-1, visited);
+        int is = markFastSafeFn(call->resolvedFunction(),
+                                recurse - 1,
+                                visited);
 
         // Remove NOT_LOCAL parts if it's in a local block
         is = setLocal(is, inLocal);
 
-        if (!isLocal(is))
+        if (!isLocal(is)) {
           return NOT_FAST_NOT_LOCAL;
+        }
 
-        if (is == LOCAL_NOT_FAST)
+        if (is == LOCAL_NOT_FAST) {
           maybefast = false;
+        }
         // otherwise, possibly still fast.
       }
     }
@@ -488,8 +513,10 @@ markFastSafeFn(FnSymbol *fn, int recurse, Vec<FnSymbol*> *visited) {
   // We only get to this point if the function is local
   // (otherwise we would return above)
   fn->addFlag(FLAG_LOCAL_FN);
+
   if (maybefast) {
     fn->addFlag(FLAG_FAST_ON);
+
     return FAST_AND_LOCAL;
   } else {
     return LOCAL_NOT_FAST;
@@ -554,9 +581,9 @@ optimizeOnClauses(void) {
   compute_call_sites();
 
   forv_Vec(FnSymbol, fn, gFnSymbols) {
-    Vec<FnSymbol*> visited;
+    std::set<FnSymbol*> visited;
 
-    int is = markFastSafeFn(fn, optimize_on_clause_limit, &visited);
+    int is = markFastSafeFn(fn, optimize_on_clause_limit, visited);
 
     bool fastFork = isFast(is);
     bool removeRmemFences = isLocal(is);

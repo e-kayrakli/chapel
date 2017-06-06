@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -22,7 +22,7 @@
 #include "AstDump.h"
 #include "AstDumpToHtml.h"
 #include "AstDumpToNode.h"
-
+#include "driver.h"
 #include "files.h"
 #include "misc.h"
 #include "runpasses.h"
@@ -34,7 +34,7 @@
 char             log_dir   [FILENAME_MAX + 1]           = "./log";
 char             log_module[FILENAME_MAX + 1]           =      "";
 
-bool             fLogIds                                =   false;
+bool             fLogIds                                =    true;
 
 int              fdump_html                             =       0;
 char             fdump_html_chpl_home[FILENAME_MAX + 1] =      "";

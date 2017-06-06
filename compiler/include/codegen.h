@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -79,7 +79,8 @@ struct GenInfo {
   LayeredValueTable *lvt;
 
   // Clang Stuff
-  std::string clangInstallDir;
+  std::string clangCC;
+  std::string clangCXX;
   std::string compileline;
   std::vector<std::string> clangCCArgs;
   std::vector<std::string> clangLDArgs;
@@ -106,8 +107,6 @@ struct GenInfo {
   CCodeGenAction *cgAction;
 
   llvm::MDNode* tbaaRootNode;
-  llvm::MDNode* tbaaFtableNode;
-  llvm::MDNode* tbaaVmtableNode;
 
   // We stash the layout that Clang would like to use here.
   // With fLLVMWideOpt, this will be the layout that we
@@ -132,7 +131,8 @@ struct GenInfo {
   //
   //
   // defined in passes/codegen.cpp
-  GenInfo(std::string clangInstallDirIn,
+  GenInfo(std::string clangCC,
+          std::string clangCXX,
           std::string compilelineIn,
           std::vector<std::string> clangCCArgs,
           std::vector<std::string> clangLDArgs,
@@ -147,6 +147,10 @@ struct GenInfo {
 extern GenInfo* gGenInfo;
 extern int      gMaxVMT;
 extern int      gStmtCount;
+
+// Map from filename to an integer that will represent an unique ID for each
+// generated GET/PUT
+extern std::map<std::string, int> commIDMap;
 
 #ifdef HAVE_LLVM
 void setupClang(GenInfo* info, std::string rtmain);

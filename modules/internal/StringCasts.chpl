@@ -1,15 +1,15 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
- * 
+ *
  * The entirety of this work is licensed under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License.
- * 
+ *
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,6 +18,8 @@
  */
 
 module StringCasts {
+  use ChapelStandard;
+
   // TODO: I want to break all of these casts from string to T out into
   // T.parse(string), but we dont support methods on types yet. Ideally they
   // would use a tagged union return val as well.
@@ -89,7 +91,7 @@ module StringCasts {
     pragma "insert line file info"
     extern proc c_string_to_uint64_t(x:c_string) : uint(64);
 
-    const localX = x.strip().localize();
+    const localX = x.localize();
     if isIntType(t) {
       select numBits(t) {
         when 8  do return c_string_to_int8_t(localX.c_str());
@@ -145,7 +147,7 @@ module StringCasts {
     pragma "insert line file info"
     extern proc c_string_to_real64(x: c_string) : real(64);
 
-    const localX = x.strip().localize();
+    const localX = x.localize();
     select numBits(t) {
       when 32 do return c_string_to_real32(localX.c_str());
       when 64 do return c_string_to_real64(localX.c_str());
@@ -159,7 +161,7 @@ module StringCasts {
     pragma "insert line file info"
     extern proc c_string_to_imag64(x: c_string) : imag(64);
 
-    const localX = x.strip().localize();
+    const localX = x.localize();
     select numBits(t) {
       when 32 do return c_string_to_imag32(localX.c_str());
       when 64 do return c_string_to_imag64(localX.c_str());
@@ -200,7 +202,7 @@ module StringCasts {
     pragma "insert line file info"
     extern proc c_string_to_complex128(x:c_string) : complex(128);
 
-    const localX = x.strip().localize();
+    const localX = x.localize();
     select numBits(t) {
       when 64 do return c_string_to_complex64(localX.c_str());
       when 128 do return c_string_to_complex128(localX.c_str());

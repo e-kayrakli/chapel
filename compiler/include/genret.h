@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -131,6 +131,10 @@ public:
     *this = baseASTCodegenString(str);
   }
 
+  // Return true if this GenRet is empty
+  bool isEmpty() const {
+    return c.empty() && val == NULL && type == NULL;
+  }
 };
 
 

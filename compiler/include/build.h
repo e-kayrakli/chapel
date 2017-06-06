@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -61,11 +61,19 @@ Expr* buildDotExpr(const char* base, const char* member);
 BlockStmt* buildChapelStmt(Expr* expr = NULL);
 BlockStmt* buildUseStmt(CallExpr* modules);
 BlockStmt* buildUseStmt(Expr* mod, std::vector<OnlyRename*>* names, bool except);
+bool processStringInRequireStmt(const char* str, bool parseTime);
 BlockStmt* buildRequireStmt(CallExpr* args);
 BlockStmt* buildTupleVarDeclStmt(BlockStmt* tupleBlock, Expr* type, Expr* init);
 BlockStmt* buildLabelStmt(const char* name, Expr* stmt);
 BlockStmt* buildIfStmt(Expr* condExpr, Expr* thenExpr, Expr* elseExpr = NULL);
-ModuleSymbol* buildModule(const char* name, BlockStmt* block, const char* filename, bool priv, const char* docs);
+
+ModuleSymbol* buildModule(const char* name,
+                          ModTag      modTag,
+                          BlockStmt*  block,
+                          const char* filename,
+                          bool        priv,
+                          const char* docs);
+
 CallExpr* buildPrimitiveExpr(CallExpr* exprs);
 
 FnSymbol* buildIfExpr(Expr* e, Expr* e1, Expr* e2 = NULL);
@@ -83,9 +91,10 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
                                  bool zippered = false);
 BlockStmt* buildGotoStmt(GotoTag tag, const char* name);
 BlockStmt* buildPrimitiveStmt(PrimitiveTag tag, Expr* e1 = NULL, Expr* e2 = NULL);
+CallExpr* zipToTuple(CallExpr* zipExpr);
 BlockStmt* buildForallLoopStmt(Expr* indices,
                                Expr* iterator,
-                               CallExpr* byref_vars,
+                               ForallIntents* forall_intents,
                                BlockStmt* body,
                                bool zippered = false,
                                VarSymbol* useThisGlobalOp = NULL);
@@ -105,7 +114,8 @@ void convertForallExpressions();
 Expr* buildForallLoopExprFromArrayType(CallExpr* buildArrRTTypeCall,
                                            bool recursiveCall = false);
 BlockStmt* buildParamForLoopStmt(const char* index, Expr* range, BlockStmt* block);
-BlockStmt* buildAssignment(Expr* lhs, Expr* rhs, const char* op = NULL);
+BlockStmt* buildAssignment(Expr* lhs, Expr* rhs, const char* op);
+BlockStmt* buildAssignment(Expr* lhs, Expr* rhs, PrimitiveTag op);
 BlockStmt* buildLAndAssignment(Expr* lhs, Expr* rhs);
 BlockStmt* buildLOrAssignment(Expr* lhs, Expr* rhs);
 BlockStmt* buildSelectStmt(Expr* s, BlockStmt* whenstmts);
@@ -116,14 +126,16 @@ CallExpr* buildScanExpr(Expr* op, Expr* data, bool zippered = false);
 
 BlockStmt* buildVarDecls(BlockStmt* stmts, std::set<Flag> flags, const char* docs);
 
-DefExpr*  buildClassDefExpr(const char* name,
-                            const char* cname,
-                            Type*       type,
-                            Expr*       inherit,
-                            BlockStmt*  decls,
-                            Flag        isExtern,
-                            const char* docs);
+DefExpr*  buildClassDefExpr(const char*   name,
+                            const char*   cname,
+                            AggregateTag  tag,
+                            Expr*         inherit,
+                            BlockStmt*    decls,
+                            Flag          isExtern,
+                            const char*   docs);
+
 void setupTypeIntentArg(ArgSymbol* arg);
+
 DefExpr*  buildArgDefExpr(IntentTag tag, const char* ident, Expr* type, Expr* init, Expr* variable);
 DefExpr*  buildTupleArgDefExpr(IntentTag tag, BlockStmt* tuple, Expr* type, Expr* init);
 FnSymbol* buildFunctionFormal(FnSymbol* fn, DefExpr* def);
@@ -131,14 +143,18 @@ FnSymbol* buildLambda(FnSymbol* fn);
 FnSymbol* buildFunctionSymbol(FnSymbol*   fn,
                               const char* name,
                               IntentTag   thisTag,
-                              const char* class_name);
+                              Expr*       receiver);
 BlockStmt* buildFunctionDecl(FnSymbol*   fn,
                              RetTag      optRetTag,
                              Expr*       optRetType,
+                             bool        optThrowsError,
                              Expr*       optWhere,
                              BlockStmt*  optFnBody,
                              const char* docs);
 void applyPrivateToBlock(BlockStmt* block);
+BlockStmt* buildForwardingStmt(Expr* expr);
+BlockStmt* buildForwardingStmt(Expr* expr, std::vector<OnlyRename*>* names, bool except);
+BlockStmt* buildForwardingDeclStmt(BlockStmt*);
 BlockStmt* buildLocalStmt(Expr* stmt);
 BlockStmt* buildOnStmt(Expr* expr, Expr* stmt);
 BlockStmt* buildBeginStmt(CallExpr* byref_vars, Expr* stmt);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -33,8 +33,10 @@
 #include "files.h"
 #include "ipe.h"
 #include "log.h"
+#include "ModuleSymbol.h"
 #include "misc.h"
 #include "mysystem.h"
+#include "parser.h"
 #include "PhaseTracker.h"
 #include "primitive.h"
 #include "runpasses.h"
@@ -52,6 +54,12 @@
 std::map<std::string, const char*> envMap;
 
 char CHPL_HOME[FILENAME_MAX+1] = "";
+
+// These are more specific that CHPL_HOME, to work in
+// settings where Chapel is installed.
+char CHPL_RUNTIME_LIB[FILENAME_MAX+1] = "";
+char CHPL_RUNTIME_INCL[FILENAME_MAX+1] = "";
+char CHPL_THIRD_PARTY[FILENAME_MAX+1] = "";
 
 const char* CHPL_HOST_PLATFORM = NULL;
 const char* CHPL_HOST_COMPILER = NULL;
@@ -109,14 +117,18 @@ bool fNoFastFollowers = false;
 bool fNoInlineIterators = false;
 bool fNoLiveAnalysis = false;
 bool fNoBoundsChecks = false;
+bool fNoDivZeroChecks = false;
 bool fNoFormalDomainChecks = false;
 bool fNoLocalChecks = false;
 bool fNoNilChecks = false;
 bool fNoStackChecks = false;
+bool fNoInferLocalFields = false;
+bool fReplaceArrayAccessesWithRefTemps = false;
 bool fUserSetStackChecks = false;
 bool fNoCastChecks = false;
 bool fMungeUserIdents = true;
 bool fEnableTaskTracking = false;
+bool fStrictErrorHandling = false;
 
 bool  printPasses     = false;
 FILE* printPassesFile = NULL;
@@ -160,6 +172,7 @@ bool fDenormalize = true;
 char fExplainInstantiation[256] = "";
 bool fExplainVerbose = false;
 bool fParseOnly = false;
+bool fPrintCallGraph = false;
 bool fPrintCallStackOnError = false;
 bool fPrintIDonError = false;
 bool fPrintModuleResolution = false;
@@ -178,7 +191,6 @@ bool userSetCppLineno = false;
 int num_constants_per_variable = 1;
 char defaultDist[256] = "DefaultDist";
 int instantiation_limit = 256;
-char mainModuleName[256] = "";
 bool printSearchDirs = false;
 bool printModuleFiles = false;
 bool llvmCodegen = false;
@@ -201,6 +213,8 @@ bool preserveInlinedLineNumbers = false;
 const char* compileCommand = NULL;
 char compileVersion[64];
 
+static
+bool fPrintChplSettings = false;
 
 /* Note -- LLVM provides a way to get the path to the executable...
 // This function isn't referenced outside its translation unit, but it
@@ -232,6 +246,11 @@ static bool isMaybeChplHome(const char* path)
 static void setupChplHome(const char* argv0) {
   const char* chpl_home = getenv("CHPL_HOME");
   char*       guess     = NULL;
+  bool        installed = false;
+  char        majMinorVers[64];
+
+  // Get major.minor version string (used below)
+  get_major_minor_version(majMinorVers);
 
   // Get the executable path.
   guess = findProgramPath(argv0);
@@ -284,6 +303,27 @@ static void setupChplHome(const char* argv0) {
       strncpy(CHPL_HOME, chpl_home, FILENAME_MAX);
     }
   } else {
+
+    // Check in a default location too
+    if( guess == NULL ) {
+      char TEST_HOME[FILENAME_MAX+1] = "";
+
+      // Check for Chapel libraries at installed prefix
+      // e.g. /usr/share/chapel/<vers>
+      int rc;
+      rc = snprintf(TEST_HOME, FILENAME_MAX, "%s/%s/%s",
+                  get_configured_prefix(), // e.g. /usr
+                  "/share/chapel",
+                  majMinorVers);
+      if ( rc >= FILENAME_MAX ) USR_FATAL("Installed pathname too long");
+
+      if( isMaybeChplHome(TEST_HOME) ) {
+        guess = strdup(TEST_HOME);
+
+        installed = true;
+      }
+    }
+
     if( guess == NULL ) {
       // Could not find enviro var, and could not
       // guess at exe's path name.
@@ -310,6 +350,70 @@ static void setupChplHome(const char* argv0) {
 
   if( guess )
     free(guess);
+
+
+
+  if( installed ) {
+    int rc;
+    // E.g. /usr/lib/chapel/1.16/runtime/lib
+    rc = snprintf(CHPL_RUNTIME_LIB, FILENAME_MAX, "%s/%s/%s/%s",
+                  get_configured_prefix(), // e.g. /usr
+                  "/lib/chapel",
+                  majMinorVers,
+                  "runtime/lib");
+    if ( rc >= FILENAME_MAX ) USR_FATAL("Installed pathname too long");
+    rc = snprintf(CHPL_RUNTIME_INCL, FILENAME_MAX, "%s/%s/%s/%s",
+                  get_configured_prefix(), // e.g. /usr
+                  "/lib/chapel",
+                  majMinorVers,
+                  "runtime/include");
+    if ( rc >= FILENAME_MAX ) USR_FATAL("Installed pathname too long");
+    rc = snprintf(CHPL_THIRD_PARTY, FILENAME_MAX, "%s/%s/%s/%s",
+                  get_configured_prefix(), // e.g. /usr
+                  "/lib/chapel",
+                  majMinorVers,
+                  "third-party");
+    if ( rc >= FILENAME_MAX ) USR_FATAL("Installed pathname too long");
+
+  } else {
+    int rc;
+    rc = snprintf(CHPL_RUNTIME_LIB, FILENAME_MAX, "%s/%s",
+                  CHPL_HOME, "lib");
+    if ( rc >= FILENAME_MAX ) USR_FATAL("CHPL_HOME pathname too long");
+    rc = snprintf(CHPL_RUNTIME_INCL, FILENAME_MAX, "%s/%s",
+                  CHPL_HOME, "runtime/include");
+    if ( rc >= FILENAME_MAX ) USR_FATAL("CHPL_HOME pathname too long");
+    rc = snprintf(CHPL_THIRD_PARTY, FILENAME_MAX, "%s/%s",
+                  CHPL_HOME, "third-party");
+    if ( rc >= FILENAME_MAX ) USR_FATAL("CHPL_HOME pathname too long");
+
+  }
+
+  // and setenv the derived enviro vars for use by called scripts/Makefiles
+  {
+    int rc;
+    rc = setenv("CHPL_RUNTIME_LIB", CHPL_RUNTIME_LIB, 1);
+    if( rc ) USR_FATAL("Could not setenv CHPL_RUNTIME_LIB");
+    rc = setenv("CHPL_RUNTIME_INCL", CHPL_RUNTIME_INCL, 1);
+    if( rc ) USR_FATAL("Could not setenv CHPL_RUNTIME_INCL");
+    rc = setenv("CHPL_THIRD_PARTY", CHPL_THIRD_PARTY, 1);
+    if( rc ) USR_FATAL("Could not setenv CHPL_THIRD_PARTY");
+
+    if (installed) {
+      char CHPL_CONFIG[FILENAME_MAX+1] = "";
+      // Set an extra default CHPL_CONFIG directory
+      rc = snprintf(CHPL_CONFIG, FILENAME_MAX, "%s/%s/%s",
+                    get_configured_prefix(), // e.g. /usr
+                    "/lib/chapel",
+                    majMinorVers);
+      if ( rc >= FILENAME_MAX ) USR_FATAL("Installed pathname too long");
+
+      // Don't overwrite CHPL_CONFIG so that a user-specified
+      // one would be left alone.
+      rc = setenv("CHPL_CONFIG", CHPL_CONFIG, 0);
+      if( rc ) USR_FATAL("Could not setenv CHPL_CONFIG");
+    }
+  }
 }
 
 // NOTE: We are leaking memory here by dropping astr() results on the ground.
@@ -370,6 +474,15 @@ static void setDynamicLink(const ArgumentDescription* desc, const char* arg_unus
 
 static void setChapelDebug(const ArgumentDescription* desc, const char* arg_unused) {
   printCppLineno = true;
+}
+
+static void verifyStageAndSetStageNum(const ArgumentDescription* desc, const char* arg_unused)
+{
+  llvmStageNum_t stageNum = llvmStageNumFromLlvmStageName(llvmPrintIrStage);
+  if(stageNum == llvmStageNum::NOPRINT)
+    USR_FATAL("Unknown llvm-print-ir-stage argument");
+
+  llvmPrintIrStageNum = stageNum;
 }
 
 // In order to handle accumulating ccflags arguments, the argument
@@ -477,6 +590,7 @@ static void turnOffChecks(const ArgumentDescription* desc, const char* unused) {
   fNoLocalChecks  = true;
   fNoStackChecks  = true;
   fNoCastChecks = true;
+  fNoDivZeroChecks = true;
 }
 
 static void setFastFlag(const ArgumentDescription* desc, const char* unused) {
@@ -501,8 +615,10 @@ static void setFastFlag(const ArgumentDescription* desc, const char* unused) {
   fNoTupleCopyOpt = false;
   fNoPrivatization = false;
   fNoChecks = true;
+  fNoInferLocalFields = false;
   fIgnoreLocalClasses = false;
   fNoOptimizeOnClauses = false;
+  //fReplaceArrayAccessesWithRefTemps = true; // don't tie this to --fast yet
   optimizeCCode = true;
   specializeCCode = true;
   turnOffChecks(desc, unused);
@@ -527,24 +643,27 @@ static void setBaselineFlag(const ArgumentDescription* desc, const char* unused)
   //
   // disable all chapel compiler optimizations
   //
-  fBaseline = true;
-  fNoCopyPropagation = true;
-  fNoDeadCodeElimination = true;
-  fNoFastFollowers = true;
-  fNoloopInvariantCodeMotion = true;
-  fNoInline = true;
-  fNoInlineIterators = true;
-  fNoLiveAnalysis = true;
-  fNoOptimizeLoopIterators = true;
-  fNoVectorize = true;
-  fNoRemoteValueForwarding = true;
-  fNoRemoveCopyCalls = true;
-  fNoScalarReplacement = true;
-  fNoTupleCopyOpt = true;
-  fNoPrivatization = true;
-  fNoOptimizeOnClauses = true;
-  fIgnoreLocalClasses = true;
-  fDenormalize = false;
+  fBaseline = true;                   // --baseline
+
+  fNoCopyPropagation = true;          // --no-copy-propagation
+  fNoDeadCodeElimination = true;      // --no-dead-code-elimination
+  fNoFastFollowers = true;            // --no-fast-followers
+  fNoloopInvariantCodeMotion = true;  // --no-loop-invariant-code-motion
+  fNoInline = true;                   // --no-inline
+  fNoInlineIterators = true;          // --no-inline-iterators
+  fNoLiveAnalysis = true;             // --no-live-analysis
+  fNoOptimizeLoopIterators = true;    // --no-optimize-loop-iterators
+  fNoVectorize = true;                // --no-vectorize
+  fNoRemoteValueForwarding = true;    // --no-remote-value-forwarding
+  fNoRemoveCopyCalls = true;          // --no-remove-copy-calls
+  fNoScalarReplacement = true;        // --no-scalar-replacement
+  fNoTupleCopyOpt = true;             // --no-tuple-copy-opt
+  fNoPrivatization = true;            // --no-privatization
+  fNoOptimizeOnClauses = true;        // --no-optimize-on-clauses
+  fIgnoreLocalClasses = true;         // --ignore-local-classes
+  fNoInferLocalFields = true;         // --no-infer-local-fields
+  //fReplaceArrayAccessesWithRefTemps = false; // don't tie this to --baseline yet
+  fDenormalize = false;               // --no-denormalize
   fConditionalDynamicDispatchLimit = 0;
 }
 
@@ -552,7 +671,6 @@ static void setCacheEnable(const ArgumentDescription* desc, const char* unused) 
   const char *val = fCacheRemote ? "true" : "false";
   parseCmdLineConfig("CHPL_CACHE_REMOTE", val);
 }
-
 
 static void setHtmlUser(const ArgumentDescription* desc, const char* unused) {
   fdump_html = true;
@@ -623,7 +741,7 @@ Record components:
 static ArgumentDescription arg_desc[] = {
  {"", ' ', NULL, "Module Processing Options", NULL, NULL, NULL, NULL},
  {"count-tokens", ' ', NULL, "[Don't] count tokens in main modules", "N", &countTokens, "CHPL_COUNT_TOKENS", NULL},
- {"main-module", ' ', "<module>", "Specify entry point module", "S256", mainModuleName, NULL, NULL},
+ {"main-module", ' ', "<module>", "Specify entry point module", "S256", NULL, NULL, ModuleSymbol::mainModuleNameSet },
  {"module-dir", 'M', "<directory>", "Add directory to module search path", "P", moduleSearchPath, NULL, addModulePath},
  {"print-code-size", ' ', NULL, "[Don't] print code size of main modules", "N", &printTokens, "CHPL_PRINT_TOKENS", NULL},
  {"print-module-files", ' ', NULL, "Print module file locations", "F", &printModuleFiles, NULL, NULL},
@@ -657,16 +775,18 @@ static ArgumentDescription arg_desc[] = {
  {"tuple-copy-opt", ' ', NULL, "Enable [disable] tuple (memcpy) optimization", "n", &fNoTupleCopyOpt, "CHPL_DISABLE_TUPLE_COPY_OPT", NULL},
  {"tuple-copy-limit", ' ', "<limit>", "Limit on the size of tuples considered for optimization", "I", &tuple_copy_limit, "CHPL_TUPLE_COPY_LIMIT", NULL},
  {"use-noinit", ' ', NULL, "Enable [disable] ability to skip default initialization through the keyword noinit", "N", &fUseNoinit, NULL, NULL},
+ {"infer-local-fields", ' ', NULL, "Enable [disable] analysis to infer local fields in classes and records (experimental)", "n", &fNoInferLocalFields, "CHPL_DISABLE_INFER_LOCAL_FIELDS", NULL},
  {"vectorize", ' ', NULL, "Enable [disable] generation of vectorization hints", "n", &fNoVectorize, "CHPL_DISABLE_VECTORIZATION", NULL},
 
  {"", ' ', NULL, "Run-time Semantic Check Options", NULL, NULL, NULL, NULL},
  {"no-checks", ' ', NULL, "Disable all following run-time checks", "F", &fNoChecks, "CHPL_NO_CHECKS", turnOffChecks},
  {"bounds-checks", ' ', NULL, "Enable [disable] bounds checking", "n", &fNoBoundsChecks, "CHPL_NO_BOUNDS_CHECKING", NULL},
+ {"cast-checks", ' ', NULL, "Enable [disable] safeCast() value checks", "n", &fNoCastChecks, NULL, NULL},
+ {"div-by-zero-checks", ' ', NULL, "Enable [disable] divide-by-zero checks", "n", &fNoDivZeroChecks, NULL, NULL},
  {"formal-domain-checks", ' ', NULL, "Enable [disable] formal domain checking", "n", &fNoFormalDomainChecks, NULL, NULL},
  {"local-checks", ' ', NULL, "Enable [disable] local block checking", "n", &fNoLocalChecks, NULL, NULL},
  {"nil-checks", ' ', NULL, "Enable [disable] nil checking", "n", &fNoNilChecks, "CHPL_NO_NIL_CHECKS", NULL},
  {"stack-checks", ' ', NULL, "Enable [disable] stack overflow checking", "n", &fNoStackChecks, "CHPL_STACK_CHECKS", setStackChecks},
- {"cast-checks", ' ', NULL, "Enable [disable] checks in safeCast calls", "n", &fNoCastChecks, NULL, NULL},
 
  {"", ' ', NULL, "C Code Generation Options", NULL, NULL, NULL, NULL},
  {"codegen", ' ', NULL, "[Don't] Do code generation", "n", &no_codegen, "CHPL_NO_CODEGEN", NULL},
@@ -691,6 +811,8 @@ static ArgumentDescription arg_desc[] = {
  {"", ' ', NULL, "LLVM Code Generation Options", NULL, NULL, NULL, NULL},
  {"llvm", ' ', NULL, "[Don't] use the LLVM code generator", "N", &llvmCodegen, "CHPL_LLVM_CODEGEN", NULL},
  {"llvm-wide-opt", ' ', NULL, "Enable [disable] LLVM wide pointer optimizations", "N", &fLLVMWideOpt, "CHPL_LLVM_WIDE_OPTS", NULL},
+ {"llvm-print-ir", ' ', "<name>", "Dump LLVM Intermediate Representation of given function to stdout", "S256", llvmPrintIrName, "CHPL_LLVM_PRINT_IR", NULL},
+ {"llvm-print-ir-stage", ' ', "<stage>", "Specifies from which LLVM optimization stage to print function: none, basic, full", "S256", llvmPrintIrStage, "CHPL_LLVM_PRINT_IR_STAGE", &verifyStageAndSetStageNum},
 
  {"", ' ', NULL, "Compilation Trace Options", NULL, NULL, NULL, NULL},
  {"print-commands", ' ', NULL, "[Don't] print system commands", "N", &printSystemCommands, "CHPL_PRINT_COMMANDS", NULL},
@@ -706,8 +828,10 @@ static ArgumentDescription arg_desc[] = {
  {"explain-instantiation", ' ', "<function|type>[:<module>][:<line>]", "Explain instantiation of type", "S256", fExplainInstantiation, NULL, NULL},
  {"explain-verbose", ' ', NULL, "Enable [disable] tracing of disambiguation with 'explain' options", "N", &fExplainVerbose, "CHPL_EXPLAIN_VERBOSE", NULL},
  {"instantiate-max", ' ', "<max>", "Limit number of instantiations", "I", &instantiation_limit, "CHPL_INSTANTIATION_LIMIT", NULL},
+ {"print-callgraph", ' ', NULL, "Print a representation of the callgraph for the program", "N", &fPrintCallGraph, "CHPL_PRINT_CALLGRAPH", NULL},
  {"print-callstack-on-error", ' ', NULL, "print the Chapel call stack leading to each error or warning", "N", &fPrintCallStackOnError, "CHPL_PRINT_CALLSTACK_ON_ERROR", NULL},
  {"set", 's', "<name>[=<value>]", "Set config param value", "S", NULL, NULL, readConfig},
+ {"strict-errors", ' ', NULL, "Enable [disable] strict mode for error handling", "N", &fStrictErrorHandling, NULL, NULL},
  {"task-tracking", ' ', NULL, "Enable [disable] runtime task tracking", "N", &fEnableTaskTracking, "CHPL_TASK_TRACKING", NULL},
  {"warn-const-loops", ' ', NULL, "Enable [disable] warnings for some 'while' loops with constant conditions", "N", &fWarnConstLoops, "CHPL_WARN_CONST_LOOPS", NULL},
  {"warn-special", ' ', NULL, "Enable [disable] special warnings", "n", &fNoWarnSpecial, "CHPL_WARN_SPECIAL", setWarnSpecial},
@@ -797,8 +921,10 @@ static ArgumentDescription arg_desc[] = {
  {"print-id-on-error", ' ', NULL, "[Don't] print AST id in error messages", "N", &fPrintIDonError, "CHPL_PRINT_ID_ON_ERROR", NULL},
  {"remove-empty-records", ' ', NULL, "Enable [disable] empty record removal", "n", &fNoRemoveEmptyRecords, "CHPL_DISABLE_REMOVE_EMPTY_RECORDS", NULL},
  {"remove-unreachable-blocks", ' ', NULL, "[Don't] remove unreachable blocks after resolution", "N", &fRemoveUnreachableBlocks, "CHPL_REMOVE_UNREACHABLE_BLOCKS", NULL},
+ {"replace-array-accesses-with-ref-temps", ' ', NULL, "Enable [disable] replacing array accesses with reference temps (experimental)", "N", &fReplaceArrayAccessesWithRefTemps, NULL, NULL },
  {"incremental", ' ', NULL, "Enable [disable] using incremental compilation", "N", &fIncrementalCompilation, "CHPL_INCREMENTAL_COMP", NULL},
  {"minimal-modules", ' ', NULL, "Enable [disable] using minimal modules",               "N", &fMinimalModules, "CHPL_MINIMAL_MODULES", NULL},
+ {"print-chpl-settings", ' ', NULL, "Print current chapel settings and exit", "F", &fPrintChplSettings, NULL,NULL},
  DRIVER_ARG_PRINT_CHPL_HOME,
  DRIVER_ARG_LAST
 };
@@ -845,10 +971,25 @@ static void printStuff(const char* argv0) {
     char* guess = findProgramPath(argv0);
 
     printf("%s\t%s\n", CHPL_HOME, guess);
+    const char* prefix = get_configured_prefix();
+    if (prefix != NULL && prefix[0] != '\0' )
+      printf("# configured prefix  %s\n", prefix);
 
     free(guess);
 
     printedSomething = true;
+  }
+
+  if( fPrintChplSettings ) {
+    char buf[FILENAME_MAX+1] = "";
+    printf("CHPL_HOME: %s\n", CHPL_HOME);
+    printf("CHPL_RUNTIME_LIB: %s\n", CHPL_RUNTIME_LIB);
+    printf("CHPL_RUNTIME_INCL: %s\n", CHPL_RUNTIME_INCL);
+    printf("CHPL_THIRD_PARTY: %s\n", CHPL_THIRD_PARTY);
+    printf("\n");
+    snprintf(buf, FILENAME_MAX, "%s/util/printchplenv", CHPL_HOME);
+    int status = mysystem(buf, "running printchplenv", false);
+    clean_exit(status);
   }
 
   if (fPrintHelp || (!printedSomething && sArgState.nfile_arguments < 1)) {

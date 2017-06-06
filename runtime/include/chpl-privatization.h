@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -23,12 +23,20 @@
 #include <stdint.h>
 #include "chpltypes.h"
 
-extern void** chpl_privateObjects; // privatized array and domain objects
+void chpl_privatization_init(void);
 
-extern void chpl_privatization_init(void);
+void chpl_newPrivatizedClass(void*, int64_t);
 
-extern void chpl_newPrivatizedClass(void*, int64_t);
-extern void* chpl_getPrivatizedClass(int64_t);
+// Implementation is here for performance: getPrivatizedClass can be called
+// frequently, so putting it in a header allows the backend to fully optimize.
+extern void** chpl_privateObjects;
+static inline void* chpl_getPrivatizedClass(int64_t i) {
+  return chpl_privateObjects[i];
+}
+
+void chpl_clearPrivatizedClass(int64_t);
+
+int64_t chpl_numPrivatizedClasses(void);
 
 #endif // LAUNCHER
 #endif // _chpl_privatization_h_

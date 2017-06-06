@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -117,6 +117,10 @@ typedef int64_t c_localeid_t;
 static const c_sublocid_t c_sublocid_none = c_sublocid_none_val;
 static const c_sublocid_t c_sublocid_any  = c_sublocid_any_val;
 
+static inline int isActualSublocID(c_sublocid_t subloc) {
+  return subloc >= 0;
+}
+
 #ifndef LAUNCHER
 
 // The type for wide-pointer-to-void. This is used in the runtime in order to
@@ -182,6 +186,8 @@ typedef void* chpl_opaque;
 #define UINT32( i) ((uint32_t)(UINT32_C(i)))
 #define UINT64( i) ((uint64_t)(UINT64_C(i)))
 
+#define COMMID( i)  ((int64_t)(INT64_C(i)))
+
 
 typedef int8_t chpl_bool8;
 typedef int16_t chpl_bool16;
@@ -200,11 +206,13 @@ typedef struct _chpl_fn_info {
 
 // It is tempting to #undef true and false and then #define them just to be sure
 // they expand correctly, but future versions of the C standard may not allow this!
+#ifndef __cplusplus
 #ifndef false
 #define false 0
 #endif
 #ifndef  true
 #define  true 1
+#endif
 #endif
 
 typedef float               _real32;

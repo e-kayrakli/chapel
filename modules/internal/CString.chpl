@@ -1,15 +1,15 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
- * 
+ *
  * The entirety of this work is licensed under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License.
- * 
+ *
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -39,6 +39,7 @@
 // rules, but still makes use of the distinction between unowned c_strings and
 // owned c_string_copies.
 module CString {
+  use ChapelStandard;
 
   // The following method is called by the compiler to determine the default
   // value of a given type.
@@ -72,10 +73,6 @@ module CString {
     return x;
   }
 
-  inline proc ==(param s0: c_string, param s1: c_string) param {
-    return __primitive("string_compare", s0, s1) == 0;
-  }
-
   inline proc ==(s0: c_string, s1: c_string) {
     return __primitive("string_compare", s0, s1) == 0;
   }
@@ -87,10 +84,6 @@ module CString {
 //  inline proc ==(s0: c_string, s1: string) {
 //    return __primitive("string_compare", s0, s1.c_str()) == 0;
 //  }
-
-  inline proc !=(param s0: c_string, param s1: c_string) param {
-    return __primitive("string_compare", s0, s1) != 0;
-  }
 
   inline proc !=(s0: c_string, s1: c_string) {
     return __primitive("string_compare", s0, s1) != 0;
@@ -108,15 +101,7 @@ module CString {
     return (__primitive("string_compare", a, b) <= 0);
   }
 
-  inline proc <=(param a: c_string, param b: c_string) param {
-    return (__primitive("string_compare", a, b) <= 0);
-  }
-
   inline proc >=(a: c_string, b: c_string) {
-    return (__primitive("string_compare", a, b) >= 0);
-  }
-
-  inline proc >=(param a: c_string, param b: c_string) param {
     return (__primitive("string_compare", a, b) >= 0);
   }
 
@@ -124,15 +109,7 @@ module CString {
     return (__primitive("string_compare", a, b) < 0);
   }
 
-  inline proc <(param a: c_string, param b: c_string) param {
-    return (__primitive("string_compare", a, b) < 0);
-  }
-
   inline proc >(a: c_string, b: c_string) {
-    return (__primitive("string_compare", a, b) > 0);
-  }
-
-  inline proc >(param a: c_string, param b: c_string) param {
     return (__primitive("string_compare", a, b) > 0);
   }
 
@@ -189,6 +166,12 @@ module CString {
   // casts from c_string to c_void_ptr
   //
   inline proc _cast(type t, x: c_string) where t == c_void_ptr {
+    return __primitive("cast", t, x);
+  }
+  //
+  // casts from c_void_ptr to c_string
+  //
+  inline proc _cast(type t, x: c_void_ptr) where t == c_string {
     return __primitive("cast", t, x);
   }
 
@@ -340,33 +323,6 @@ module CString {
   inline proc _cast(type t, x:imag(?w)) where t == c_string
     return _cast(c_string_copy, x);
 
-  // Only support param c_string concatenation (for now)
-  inline proc +(param a: c_string, param b: c_string) param
-    return __primitive("string_concat", a, b);
-
-  inline proc +(param s: c_string, param x: integral) param
-    return __primitive("string_concat", s, x:c_string);
-
-  inline proc +(param x: integral, param s: c_string) param
-    return __primitive("string_concat", x:c_string, s);
-
-  inline proc +(param s: c_string, param x: enumerated) param
-    return __primitive("string_concat", s, x:c_string);
-
-  inline proc +(param x: enumerated, param s: c_string) param
-    return __primitive("string_concat", x:c_string, s);
-
-  inline proc +(param s: c_string, param x: bool) param
-    return __primitive("string_concat", s, x:c_string);
-
-  inline proc +(param x: bool, param s: c_string) param
-    return __primitive("string_concat", x:c_string, s);
-
-  // Looks like we still need c_str + c_str unless I want to change even more
-  // module code code. TODO: Change the module code.
-  inline proc +(a: c_string, b: c_string) {
-    return __primitive("string_concat", a, b);
-  }
   /*
   inline proc +(a:c_string, b:c_string_copy) {
     return __primitive("string_concat", a, b);
@@ -382,7 +338,6 @@ module CString {
   //
   // primitive c_string functions and methods
   //
-  inline proc ascii(param a: c_string) param return __primitive("ascii", a);
   inline proc ascii(a: c_string) return __primitive("ascii", a);
   inline proc c_string.length return __primitive("string_length", this);
   inline proc c_string.size return this.length;
@@ -396,8 +351,10 @@ module CString {
     return __primitive("string_select", this, lo, hi, r2.stride);
   }
 
+  pragma "compiler generated" // avoids param string to c_string coercion
   inline proc param c_string.length param
     return __primitive("string_length", this);
+  pragma "compiler generated" // avoids param string to c_string coercion
   inline proc _string_contains(param a: c_string, param b: c_string) param
     return __primitive("string_contains", a, b);
 

@@ -1,15 +1,15 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
- * 
+ *
  * The entirety of this work is licensed under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License.
- * 
+ *
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,8 +20,9 @@
 #include "passes.h"
 
 #include "astutil.h"
-#include "stlUtil.h"
+#include "driver.h"
 #include "expr.h"
+#include "stlUtil.h"
 #include "stmt.h"
 #include "stringutil.h"
 
@@ -43,10 +44,11 @@ void localizeGlobals() {
     collect_asts(fn->body, asts);
     for_vector(BaseAST, ast, asts) {
       if (SymExpr* se = toSymExpr(ast)) {
-        Symbol* var = se->var;
+        Symbol* var = se->symbol();
         ModuleSymbol* parentmod = toModuleSymbol(var->defPoint->parentSymbol);
         CallExpr* parentExpr = toCallExpr(se->parentExpr);
         bool inAddrOf = parentExpr && parentExpr->isPrimitive(PRIM_ADDR_OF);
+        bool lhsOfMove = parentExpr && isMoveOrAssign(parentExpr) && (parentExpr->get(1) == se);
 
         // Is var a global constant?
         // Don't replace the var name in its init function since that's
@@ -59,6 +61,7 @@ void localizeGlobals() {
             fn != parentmod->initFn &&
             fn != initStringLiterals &&
             !inAddrOf &&
+            !lhsOfMove &&
             var->hasFlag(FLAG_CONST) &&
             var->defPoint->parentSymbol != rootModule) {
           VarSymbol* local_global = globals.get(var);

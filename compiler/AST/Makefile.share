@@ -1,4 +1,4 @@
-# Copyright 2004-2016 Cray Inc.
+# Copyright 2004-2017 Cray Inc.
 # Other additional copyright holders may be indicated within.
 #
 # The entirety of this work is licensed under the Apache License,
@@ -16,19 +16,26 @@
 # limitations under the License.
 
 AST_SRCS =                                          \
+           AggregateType.cpp                        \
            alist.cpp                                \
            astutil.cpp                              \
            baseAST.cpp                              \
            bb.cpp                                   \
            build.cpp                                \
+           CatchStmt.cpp                            \
            checkAST.cpp                             \
            dominator.cpp                            \
            expr.cpp                                 \
            iterator.cpp                             \
+           foralls.cpp                              \
            flags.cpp                                \
+           ModuleSymbol.cpp                         \
+           PartialCopyData.cpp                      \
            primitive.cpp                            \
            stmt.cpp                                 \
            symbol.cpp                               \
+           TryStmt.cpp                              \
+           UseStmt.cpp                              \
            type.cpp                                 \
            view.cpp                                 \
                                                     \

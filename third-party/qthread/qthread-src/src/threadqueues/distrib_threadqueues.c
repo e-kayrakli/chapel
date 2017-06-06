@@ -29,7 +29,7 @@
 #include "qt_subsystems.h"
 
 // Non portable
-typedef uint8_t cacheline[64];
+typedef uint8_t cacheline[CACHELINE_WIDTH];
 
 /* Cutoff variables */
 int max_backoff; 
@@ -79,14 +79,15 @@ qt_threadqueue_pools_t generic_threadqueue_pools;
 static qt_threadqueue_t* alloc_threadqueue(){
   qt_threadqueue_t* t = (qt_threadqueue_t *)qt_mpool_alloc(generic_threadqueue_pools.queues);
   t->num_queues = qlib->nworkerspershep; // Assumption built into api of constant number of workers per shepherd
-  t->t = malloc(sizeof(qt_threadqueue_internal) * t->num_queues);
-  t->w_inds = calloc(qlib->nshepherds * qlib->nworkerspershep,  sizeof(w_ind));  
+  t->t = qt_malloc(sizeof(qt_threadqueue_internal) * t->num_queues);
+  t->w_inds = qt_calloc(qlib->nshepherds * qlib->nworkerspershep,
+                        sizeof(w_ind));  
   return t;
 }
 
 static void free_threadqueue(qt_threadqueue_t* t){
-  free(t->t);
-  free(t->w_inds);
+  qt_free(t->t);
+  qt_free(t->w_inds);
   qt_mpool_free(generic_threadqueue_pools.queues, t);
 }
 

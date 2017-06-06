@@ -7,7 +7,7 @@
 
 use Sort;
 
-config param tableSize = 1 << 16,
+config param tableSize = 2**16,
              columns = 61;
 
 
@@ -130,7 +130,7 @@ inline proc hash(str, beg, param size) {
 proc string.toBytes() {
   var bytes: [1..this.length] uint(8);
   for (b, i) in zip(bytes, 1..) do
-    b = ascii(this[i]):uint(8);
+    b = ascii(this[i]);
   return bytes;
 }
 

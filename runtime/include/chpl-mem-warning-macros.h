@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -21,17 +21,6 @@
 // NOTE: there is no include guard. This is so that the mem-warning and
 // mem-no-warning headers can be included an arbitrary number of times to
 // disable and then re-enable the macros
-
-
-// this function gets its own ifdef so that it's not redefined
-#ifndef _chpl_mem_warning_macros_really_h_
-#define _chpl_mem_warning_macros_really_h_
-// MPF - I needed to call the system free to pair with system valloc
-// (these are for I/O buffers that don't belong on the Chapel sharable
-// heap anyway because they could be mmap'd - and then are only
-// sharable when everything is sharable)
-static inline void sys_free(void *ptr) { free(ptr); }
-#endif
 
 #define malloc  dont_use_malloc_use_chpl_mem_allocMany_instead
 #define calloc  dont_use_calloc_use_chpl_mem_allocMany_instead

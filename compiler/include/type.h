@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -29,6 +29,8 @@
 
 #include <cstdio>
 #include <map>
+#include <set>
+#include <vector>
 
 /*
   Things which must be changed if instance variables are added
@@ -83,11 +85,6 @@ public:
   bool             hasGenericDefaults; // all generic fields have defaults
 
   Symbol*          defaultValue;
-  FnSymbol*        defaultInitializer; // This is the compiler-supplied
-                                       // default-initializer.
-                                       // It provides initial values for the
-                                       // fields in an aggregate type.
-  FnSymbol*        defaultTypeConstructor;
   FnSymbol*        destructor;
 
   // Used only in PrimitiveType; replace with flag?
@@ -119,10 +116,11 @@ private:
 // without changing its type to a ref or wide ref type.
 enum Qualifier {
   // The abstract qualifiers
-  QUAL_BLANK,
+  QUAL_UNKNOWN,
   QUAL_CONST,
   QUAL_REF,
   QUAL_CONST_REF,
+  QUAL_PARAM,
 
   // The concrete qualifiers
 
@@ -154,13 +152,56 @@ enum Qualifier {
 //   ref aRef = aVar;
 //
 //   SymExpr(aVar) and Symbol(aVar) have QualifiedType(int, QUAL_VAL)
-//   SymExpr(aRef) and Symbol(aVar) have QualifiedType(int, QUAL_REF)
+//   SymExpr(aRef) and Symbol(aRef) have QualifiedType(int, QUAL_REF)
 //
 class QualifiedType {
 public:
 
+  // Static methods for working with Qualifier
+  static bool qualifierIsConst(Qualifier q)
+  {
+    return (q == QUAL_CONST ||
+            q == QUAL_CONST_REF ||
+            q == QUAL_CONST_VAL ||
+            q == QUAL_CONST_NARROW_REF ||
+            q == QUAL_CONST_WIDE_REF);
+  }
+
+  static Qualifier qualifierToConst(Qualifier q)
+  {
+    switch (q) {
+      case QUAL_CONST:
+      case QUAL_CONST_REF:
+      case QUAL_CONST_NARROW_REF:
+      case QUAL_CONST_WIDE_REF:
+      case QUAL_CONST_VAL:
+      case QUAL_PARAM:
+        // already const
+        return q;
+      case QUAL_UNKNOWN:
+        return QUAL_CONST;
+      case QUAL_REF:
+        return QUAL_CONST_REF;
+      case QUAL_VAL:
+        return QUAL_CONST_VAL;
+      case QUAL_NARROW_REF:
+        return QUAL_CONST_NARROW_REF;
+      case QUAL_WIDE_REF:
+        return QUAL_CONST_WIDE_REF;
+      // no default: update as Qualifier is updated
+    }
+    return QUAL_UNKNOWN;
+  }
+
+  // QualifiedType methods
+
   explicit QualifiedType(Type* type)
-    : _type(type), _qual(QUAL_BLANK)
+    : _type(type), _qual(QUAL_UNKNOWN)
+  {
+  }
+
+  QualifiedType(Qualifier qual, Type* type)
+    : _type(type), _qual(qual)
   {
   }
 
@@ -170,7 +211,7 @@ public:
   }
 
   bool isAbstract() const {
-    return (_qual == QUAL_BLANK || _qual == QUAL_CONST ||
+    return (_qual == QUAL_UNKNOWN || _qual == QUAL_CONST ||
             _qual == QUAL_REF || _qual == QUAL_CONST_REF);
   }
   bool isVal() const {
@@ -178,15 +219,83 @@ public:
   }
   bool isRef() const {
     return (_qual == QUAL_REF || _qual == QUAL_CONST_REF ||
-            _qual == QUAL_NARROW_REF || _qual == QUAL_CONST_NARROW_REF);
+            _qual == QUAL_NARROW_REF || _qual == QUAL_CONST_NARROW_REF ||
+            isRefType());
   }
   bool isWideRef() const {
-    return (_qual == QUAL_WIDE_REF || _qual == QUAL_CONST_WIDE_REF);
+    return (_qual == QUAL_WIDE_REF || _qual == QUAL_CONST_WIDE_REF ||
+            isWideRefType());
+  }
+  bool isRefOrWideRef() const {
+    return isRef() || isWideRef();
+  }
+  bool isConst() const {
+    return qualifierIsConst(_qual);
+  }
+  // TODO: isImmutable
+
+  bool isRefType() const;
+  bool isWideRefType() const;
+
+  QualifiedType toRef() {
+    return QualifiedType(QUAL_REF, _type->getValType());
+  }
+
+  QualifiedType toVal() {
+    return QualifiedType(QUAL_VAL, _type->getValType());
+  }
+
+
+
+  QualifiedType toConst() {
+    return QualifiedType(qualifierToConst(_qual), _type);
   }
 
   Type* type() const {
     return _type;
   }
+  Qualifier getQual() const {
+    return _qual;
+  }
+
+  const char* qualStr() const {
+    Qualifier q = _qual;
+
+    if (isRefType()) {
+      q = QUAL_REF;
+    } else if (isWideRefType()) {
+      q = QUAL_WIDE_REF;
+    }
+
+    switch (q) {
+      case QUAL_UNKNOWN:
+        return "unknown";
+      case QUAL_CONST:
+        return "const";
+      case QUAL_REF:
+        return "ref";
+      case QUAL_CONST_REF:
+        return "const-ref";
+      case QUAL_PARAM:
+        return "param";
+      case QUAL_VAL:
+        return "val";
+      case QUAL_NARROW_REF:
+        return "narrow-ref";
+      case QUAL_WIDE_REF:
+        return "wide-ref";
+
+      case QUAL_CONST_VAL:
+        return "const-val";
+      case QUAL_CONST_NARROW_REF:
+        return "const-narrow-ref";
+      case QUAL_CONST_WIDE_REF:
+        return "const-wide-ref";
+    }
+    INT_FATAL("Unhandled Qualifier");
+    return "UNKNOWN-QUAL";
+  }
+
 
 private:
   Type*      _type;
@@ -226,61 +335,19 @@ private:
 };
 
 
-enum AggregateTag {
-  AGGREGATE_CLASS,
-  AGGREGATE_RECORD,
-  AGGREGATE_UNION
-};
+/************************************* | **************************************
+*                                                                             *
+* A base type for union, class, and record.                                   *
+*                                                                             *
+************************************** | *************************************/
 
-enum InitializerStyle {
-  DEFINES_CONSTRUCTOR,
-  DEFINES_INITIALIZER,
-  DEFINES_NONE_USE_DEFAULT
-};
+#include "AggregateType.h"
 
-class AggregateType : public Type {
- public:
-  AggregateTag aggregateTag;
-  InitializerStyle initializerStyle;
-  AList fields;
-  AList inherits; // used from parsing, sets dispatchParents
-  Symbol* outer;  // pointer to an outer class if this is an inner class
-
-  IteratorInfo* iteratorInfo; // Attached only to iterator class/records
-
-  const char *doc;
-
-  AggregateType(AggregateTag initTag);
-  ~AggregateType();
-  void verify();
-  virtual void    accept(AstVisitor* visitor);
-  DECLARE_COPY(AggregateType);
-  void replaceChild(BaseAST* old_ast, BaseAST* new_ast);
-  void addDeclarations(Expr* expr, bool tail = true);
-
-  GenRet codegenClassStructType();
-  void codegenDef();
-  void codegenPrototype();
-  const char* classStructName(bool standalone);
-  int codegenStructure(FILE* outfile, const char* baseoffset);
-  int codegenFieldStructure(FILE* outfile, bool nested, const char* baseoffset);
-
-  int getMemberGEP(const char *name);
-
-  int getFieldPosition(const char* name, bool fatal = true);
-  Symbol* getField(const char* name, bool fatal = true);
-  Symbol* getField(int i);
-  bool isClass() { return aggregateTag == AGGREGATE_CLASS; }
-  bool isRecord() { return aggregateTag == AGGREGATE_RECORD; }
-  bool isUnion() { return aggregateTag == AGGREGATE_UNION; }
-
-  virtual void printDocs(std::ostream *file, unsigned int tabs);
-
-private:
-  virtual std::string docsDirective();
-  std::string docsSuperClass();
-};
-
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
 
 class PrimitiveType : public Type {
  public:
@@ -298,6 +365,12 @@ private:
   virtual std::string docsDirective();
 };
 
+
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
 
 #ifndef TYPE_EXTERN
 #define TYPE_EXTERN extern
@@ -336,17 +409,6 @@ TYPE_EXTERN PrimitiveType* dtTaskID;
 TYPE_EXTERN PrimitiveType* dtSyncVarAuxFields;
 TYPE_EXTERN PrimitiveType* dtSingleVarAuxFields;
 
-// Well-known types
-TYPE_EXTERN AggregateType* dtString;
-TYPE_EXTERN AggregateType* dtArray;
-TYPE_EXTERN AggregateType* dtBaseArr;
-TYPE_EXTERN AggregateType* dtBaseDom;
-TYPE_EXTERN AggregateType* dtDist;
-TYPE_EXTERN AggregateType* dtTuple;
-TYPE_EXTERN AggregateType* dtLocale;
-TYPE_EXTERN AggregateType* dtLocaleID;
-TYPE_EXTERN AggregateType* dtMainArgument;
-
 TYPE_EXTERN PrimitiveType* dtStringC; // the type of a C string (unowned)
 TYPE_EXTERN PrimitiveType* dtStringCopy; // the type of a C string (owned)
 TYPE_EXTERN PrimitiveType* dtCVoidPtr; // the type of a C void* (unowned)
@@ -355,11 +417,10 @@ TYPE_EXTERN PrimitiveType* dtCFnPtr;   // a C function pointer (unowned)
 // base object type (for all classes)
 TYPE_EXTERN Type* dtObject;
 
+
 TYPE_EXTERN Map<Type*,Type*> wideClassMap; // class -> wide class
 TYPE_EXTERN Map<Type*,Type*> wideRefMap;   // reference -> wide reference
 
-void     initRootModule();
-void     initStringLiteralModule();
 void     initPrimitiveTypes();
 DefExpr* defineObjectClass();
 void     initChplProgram(DefExpr* objectDef);
@@ -375,6 +436,7 @@ bool is_imag_type(Type*);
 bool is_complex_type(Type*);
 bool is_enum_type(Type*);
 #define is_arithmetic_type(t) (is_int_type(t) || is_uint_type(t) || is_real_type(t) || is_imag_type(t) || is_complex_type(t))
+bool isLegalParamType(Type*);
 int  get_width(Type*);
 bool isClass(Type* t);
 bool isRecord(Type* t);
@@ -399,6 +461,23 @@ bool isArrayClass(Type* type);
 
 bool isString(Type* type);
 bool isUserDefinedRecord(Type* type);
+
+bool isPrimitiveScalar(Type* type);
+
+bool isNonGenericClass (Type* type);
+bool isNonGenericRecord(Type* type);
+
+bool isNonGenericClassWithInitializers (Type* type);
+bool isNonGenericRecordWithInitializers(Type* type);
+
+bool isGenericClass (Type* type);
+bool isGenericRecord(Type* type);
+
+bool isGenericClassWithInitializers (Type* type);
+bool isGenericRecordWithInitializers(Type* type);
+
+bool isClassWithInitializers (Type* type);
+bool isRecordWithInitializers(Type* type);
 
 void registerTypeToStructurallyCodegen(TypeSymbol* type);
 GenRet genTypeStructureIndex(TypeSymbol* typesym);

@@ -19,32 +19,30 @@ config param distType: DistType = if CHPL_COMM=="none" then DistType.default
 
 proc setupDistributions() {
   if distType == DistType.default then
-    return new DefaultDist();
+    return defaultDist;
 
   else if distType == DistType.block then
-    return new Block(rank=2, boundingBox={1..d, 1..d});
+    return new dmap(new Block(rank=2, boundingBox={1..d, 1..d}));
 
   else if distType == DistType.cyclic then
-    return new Cyclic(startIdx=(0,0));
+    return new dmap(new Cyclic(startIdx=(0,0)));
 
   else if distType == DistType.blockcyclic then
-    return new BlockCyclic(startIdx=(0,0), blocksize=(3,3));
+    return new dmap(new BlockCyclic(startIdx=(0,0), blocksize=(3,3)));
 
   else if distType == DistType.replicated then
-    return new ReplicatedDist();
+    return new dmap(new Replicated());
 
   else compilerError("unexpected 'distType': ", distType:c_string);
 }
 
-const Dist2D = new dmap(setupDistributions());
+const Dist2D = setupDistributions();
 
 var
   D1 = {1..d, 1..d} dmapped Dist2D,
   D2 = {0..d-1, 0..d-1} dmapped Dist2D,
   A1: [D1] int,
   A2: [D2] real;
-
-const mult = if distType == DistType.replicated then numLocales else 1;
 
 proc main {
   writeConfig("starting"); writeln();
@@ -152,7 +150,7 @@ proc sum0(l) return l * (l-1) / 2;  // sum(0..l-1)
 proc sum1(l) return l * (l+1) / 2;  // sum(1..l)
 
 proc check(actual, expected, ri, name) {
-  if actual == expected * mult then return; // OK!
+  if actual == expected then return; // OK!
   nErr += 1;
   writeln("ERROR: onetest(", ri, ", ", name, ")  expected ", expected,
           "  actual ", actual);

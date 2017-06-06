@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -19,6 +19,7 @@
 
 #include "AstDumpToNode.h"
 
+#include "CatchStmt.h"
 #include "CForLoop.h"
 #include "DoWhileStmt.h"
 #include "driver.h"
@@ -32,6 +33,7 @@
 #include "stringutil.h"
 #include "symbol.h"
 #include "type.h"
+#include "TryStmt.h"
 #include "WhileDoStmt.h"
 
 bool        AstDumpToNode::compact      = false;
@@ -181,7 +183,8 @@ void AstDumpToNode::enterNode(BaseAST* node) const
   {
     if (FnSymbol* fn = toFnSymbol(node))
     {
-      fprintf(mFP, "%s%-10s", delimitEnter, node->astTagAsString());
+      fprintf(mFP, "%s%-12s", delimitEnter, node->astTagAsString());
+
       writeNodeID(node, true, false);
 
       if (fn->hasFlag(FLAG_GENERIC) == true)
@@ -189,9 +192,16 @@ void AstDumpToNode::enterNode(BaseAST* node) const
         fprintf(mFP, " (Generic)");
       }
     }
+
+    else if (isUnresolvedSymExpr(node) == true)
+    {
+      fprintf(mFP, "%s%-12s", delimitEnter, "UsymExpr");
+      writeNodeID(node, true, false);
+    }
+
     else
     {
-      fprintf(mFP, "%s%-10s", delimitEnter, node->astTagAsString());
+      fprintf(mFP, "%s%-12s", delimitEnter, node->astTagAsString());
       writeNodeID(node, true, false);
     }
   }
@@ -229,9 +239,10 @@ bool AstDumpToNode::enterModSym(ModuleSymbol* node)
   }
   else
   {
-    const char* tag = modTagDescrString(node->modTag);
+    const char* tag = ModuleSymbol::modTagToString(node->modTag);
 
     enterNode(node);
+
     fprintf(mFP, " %s", node->name);
 
     mOffset = mOffset + 2;
@@ -321,7 +332,7 @@ bool AstDumpToNode::enterBlockStmt(BlockStmt* node)
     next_ast->accept(this);
   }
 
-  if (node->modUses)
+  if (node->useList)
   {
     fprintf(mFP, "\n");
 
@@ -330,7 +341,7 @@ bool AstDumpToNode::enterBlockStmt(BlockStmt* node)
     write(false, "ModUses:", false);
     mOffset = mOffset + 2;
     newline();
-    node->modUses->accept(this);
+    node->useList->accept(this);
     mOffset = mOffset - 2;
   }
 
@@ -341,6 +352,32 @@ bool AstDumpToNode::enterBlockStmt(BlockStmt* node)
     mOffset = mOffset + 2;
     newline();
     node->byrefVars->accept(this);
+    mOffset = mOffset - 2;
+  }
+
+  if (ForallIntents* fi = node->forallIntents)
+  {
+    newline();
+
+    write(false, "ForallIntents:", false);
+
+    mOffset = mOffset + 2;
+
+    newline();
+
+    for (int i = 0; i < fi->numVars(); i++)
+    {
+      if (i > 0)
+        fprintf(mFP, ", ");
+
+      if (fi->isReduce(i))
+        fi->riSpecs[i]->accept(this);
+
+      write(true, tfiTagDescrString(fi->fIntents[i]), true);
+
+      fi->fiVars[i]->accept(this);
+    }
+
     mOffset = mOffset - 2;
   }
 
@@ -458,9 +495,9 @@ bool AstDumpToNode::enterCForLoop(CForLoop* node)
 
     newline();
     fputs("Init: ", mFP);
-    mOffset = mOffset + 5;
+    mOffset = mOffset + 6;
     node->initBlockGet()->accept(this);
-    mOffset = mOffset - 5;
+    mOffset = mOffset - 6;
 
     mOffset = mOffset - 2;
     fputc('\n', mFP);
@@ -472,9 +509,9 @@ bool AstDumpToNode::enterCForLoop(CForLoop* node)
 
     newline();
     fputs("Test: ", mFP);
-    mOffset = mOffset + 5;
+    mOffset = mOffset + 6;
     node->testBlockGet()->accept(this);
-    mOffset = mOffset - 5;
+    mOffset = mOffset - 6;
 
     mOffset = mOffset - 2;
     fputc('\n', mFP);
@@ -486,9 +523,9 @@ bool AstDumpToNode::enterCForLoop(CForLoop* node)
 
     newline();
     fputs("Incr: ", mFP);
-    mOffset = mOffset + 5;
+    mOffset = mOffset + 6;
     node->incrBlockGet()->accept(this);
-    mOffset = mOffset - 5;
+    mOffset = mOffset - 6;
 
     mOffset = mOffset - 2;
     fputc('\n', mFP);
@@ -505,6 +542,7 @@ bool AstDumpToNode::enterCForLoop(CForLoop* node)
       newline();
 
     next_ast->accept(this);
+    fputc('\n', mFP);
   }
 
   mOffset = mOffset - 2;
@@ -673,8 +711,6 @@ bool AstDumpToNode::enterParamForLoop(ParamForLoop* node)
 
 bool AstDumpToNode::enterDefExpr(DefExpr* node)
 {
-  bool isSimple = true;
-
   enterNode(node);
 
   if (node->sym                 != 0 &&
@@ -693,9 +729,6 @@ bool AstDumpToNode::enterDefExpr(DefExpr* node)
 
     if (compact == false)
       mOffset = mOffset - 39;
-
-    // NOAKES 2015/02/16 Need better logic for this
-    //    isSimple = false;
   }
   else
   {
@@ -732,12 +765,7 @@ bool AstDumpToNode::enterDefExpr(DefExpr* node)
     }
 
     mOffset  = mOffset - 2;
-
-    isSimple = false;
   }
-
-  if (isSimple == false)
-    newline();
 
   exitNode(node);
 
@@ -900,17 +928,17 @@ bool AstDumpToNode::enterFnSym(FnSymbol* node)
 bool AstDumpToNode::enterCallExpr(CallExpr* node)
 {
   if (node->primitive == 0)
-    fprintf(mFP, "#<%-12s", "Call");
+    fprintf(mFP, "#<%-13s", "Call");
 
   else if (node->isPrimitive(PRIM_RETURN))
-    fprintf(mFP, "#<%-12s", "Return");
+    fprintf(mFP, "#<%-13s", "Return");
 
   else
   {
     char name[128];
 
     sprintf(name, "PrimOp %s", node->primitive->name);
-    fprintf(mFP, "#<%-12s", name);
+    fprintf(mFP, "#<%-25s", name);
   }
 
   writeNodeID(node, false, false);
@@ -1003,7 +1031,7 @@ void AstDumpToNode::exitNamedExpr(NamedExpr* node)
 
 void AstDumpToNode::visitSymExpr(SymExpr* node)
 {
-  Symbol* sym = node->var;
+  Symbol* sym = node->symbol();
 
   enterNode(node);
 
@@ -1110,7 +1138,14 @@ bool AstDumpToNode::enterCondStmt(CondStmt* node)
 void AstDumpToNode::visitEblockStmt(ExternBlockStmt* node)
 {
   enterNode(node);
-  fprintf(mFP, "(%s", node->astTagAsString());
+
+  mOffset = mOffset + 2;
+  newline();
+
+  fputs(node->c_code, mFP);
+
+  mOffset = mOffset - 2;
+  newline();
   exitNode(node);
 }
 
@@ -1154,16 +1189,20 @@ bool AstDumpToNode::enterGotoStmt(GotoStmt* node)
     case GOTO_ITER_END:
       fprintf(mFP, "tag:   gotoIterEnd");
       break;
+
+    case GOTO_ERROR_HANDLING:
+      fprintf(mFP, "tag:   gotoErrorHandling");
+      break;
   }
 
   if (SymExpr* label = toSymExpr(node->label))
   {
-    if (label->var != gNil)
+    if (label->symbol() != gNil)
     {
       newline();
       fprintf(mFP, "label: ");
       mOffset = mOffset + 2;
-      ast_symbol(label->var, true);
+      ast_symbol(label->symbol(), true);
       mOffset = mOffset - 2;
     }
   }
@@ -1175,9 +1214,55 @@ bool AstDumpToNode::enterGotoStmt(GotoStmt* node)
   return false;
 }
 
-void AstDumpToNode::exitGotoStmt(GotoStmt* node)
+bool AstDumpToNode::enterTryStmt(TryStmt* node)
 {
+  enterNode(node);
 
+  if (node->tryBang() == true)
+  {
+    fprintf(mFP, "   Try!");
+  }
+
+
+  mOffset = mOffset + 2;
+  newline();
+
+  if (node->_body != NULL)
+  {
+    node->_body->accept(this);
+  }
+
+  for_alist(catchStmt, node->_catches) {
+    newline();
+    catchStmt->accept(this);
+  }
+
+  mOffset = mOffset - 2;
+  newline();
+  exitNode(node);
+
+  return false;
+}
+
+bool AstDumpToNode::enterCatchStmt(CatchStmt* node)
+{
+  enterNode(node);
+
+  mOffset = mOffset + 2;
+  newline();
+
+  if (node->_body != NULL)
+  {
+    mOffset = mOffset + 2;
+    node->_body->accept(this);
+    mOffset = mOffset - 2;
+  }
+
+  mOffset = mOffset - 2;
+  newline();
+  exitNode(node);
+
+  return false;
 }
 
 //
@@ -1239,16 +1324,28 @@ void AstDumpToNode::exitAggrType(AggregateType* node)
 
 bool AstDumpToNode::enterEnumType(EnumType* node)
 {
-  enterNode(node);
-  mOffset = mOffset + 2;
-  return true;
-}
+  bool firstTime = true;
 
-void AstDumpToNode::exitEnumType(EnumType* node)
-{
+  enterNode(node);
+
+  mOffset = mOffset + 2;
+  newline();
+
+  for_alist(field, node->constants)
+  {
+    if (firstTime == true)
+      firstTime = false;
+    else
+      newline();
+
+    field->accept(this);
+  }
+
   mOffset = mOffset - 2;
   newline();
   exitNode(node);
+
+  return false;
 }
 
 //
@@ -1330,7 +1427,8 @@ bool AstDumpToNode::enterArgSym(ArgSymbol* node)
 void AstDumpToNode::visitEnumSym(EnumSymbol* node)
 {
   enterNode(node);
-  exitNode(node, true);
+  fprintf(mFP, " name: %s", node->name);
+  exitNode(node, false);
 }
 
 //
@@ -1578,7 +1676,9 @@ void AstDumpToNode::writeSymbol(Symbol* sym) const
       else
       {
         writeLongString("name: ", name);
-        len = writeType(sym->type);
+
+        len = 0   + writeQual(sym->qualType());
+        len = len + writeType(sym->type);
       }
 
       if (compact == false && var->depth() >= 0)
@@ -1725,6 +1825,11 @@ void AstDumpToNode::ast_symbol(Symbol* sym, bool def)
           newline();
           break;
 
+        case INTENT_REF_MAYBE_CONST:
+          fprintf(mFP, "intent:       const? ref");
+          newline();
+          break;
+
         case INTENT_PARAM:
           fprintf(mFP, "intent:       param");
           newline();
@@ -1781,6 +1886,15 @@ void AstDumpToNode::ast_symbol(Symbol* sym, bool def)
 #endif
 
   mNeedSpace = true;
+}
+
+int AstDumpToNode::writeQual(QualifiedType qual) const
+{
+  const char* name = qual.qualStr();
+
+  fprintf(mFP, "qual: %-16s", name);
+
+  return 6 + ((int) strlen(name));
 }
 
 int AstDumpToNode::writeType(Type* type, bool announce) const

@@ -21,11 +21,11 @@ const Space2D32 = {n5-o5:int(32)..n5, n5..n5+o5:int(32)};
 proc setupDistributions() {
   if distType == DistType.default {
     return (
-            new dmap(new DefaultDist()),
-            new dmap(new DefaultDist()),
-            new dmap(new DefaultDist()),
-            new dmap(new DefaultDist()),
-            new dmap(new DefaultDist())
+            defaultDist,
+            defaultDist,
+            defaultDist,
+            defaultDist,
+            defaultDist,
            );
   }
   if distType == DistType.block {
@@ -57,11 +57,11 @@ proc setupDistributions() {
   }
   if distType == DistType.replicated {
     return (
-            new dmap(new ReplicatedDist()),
-            new dmap(new ReplicatedDist()),
-            new dmap(new ReplicatedDist()),
-            new dmap(new ReplicatedDist()),
-            new dmap(new ReplicatedDist())
+            new dmap(new Replicated()),
+            new dmap(new Replicated()),
+            new dmap(new Replicated()),
+            new dmap(new Replicated()),
+            new dmap(new Replicated())
            );
   }
   halt("unexpected 'distType': ", distType);

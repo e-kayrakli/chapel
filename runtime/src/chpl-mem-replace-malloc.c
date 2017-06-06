@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -231,7 +231,7 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
     *memptr = NULL;
     ret = chpl_posix_memalign_check_valid(alignment);
     if( ret ) return ret;
-    *memptr = memalign(alignment, size);
+    *memptr = __libc_memalign(alignment, size);
     if( ! *memptr ) return ENOMEM;
     if( DEBUG_REPLACE_MALLOC ) 
       printf("in early posix_memalign %p = system posix_memalign(%#x)\n",

@@ -11,7 +11,7 @@ use VisualDebug;
 use StencilDist;
 
 /* Version kept in sync with PRK repository */
-param PRKVERSION = "2.16";
+param PRKVERSION = "2.17";
 
 /* Numerical type for matrix elements */
 config type dtype = real;
@@ -90,9 +90,9 @@ proc main() {
   tiledLocalDom = {R.. # order-2*R by tileSize, R.. # order-2*R by tileSize};
 
   /* Flavors of parallelism, by distribution */
-  const blockDist = new Block(localDom),
-      stencilDist = new Stencil(innerLocalDom, fluff=(R,R)),
-           noDist = new DefaultDist();
+  const blockDist = new dmap(new Block(localDom)),
+      stencilDist = new dmap(new Stencil(innerLocalDom, fluff=(R,R))),
+           noDist = defaultDist;
 
   /* Set distribution based on configs */
   const Dist =  if useBlockDist then blockDist
@@ -104,11 +104,11 @@ proc main() {
                       else noDist;
 
   /* Map domains to selected distribution */
-  const Dom = localDom dmapped new dmap(Dist),
-   innerDom = innerLocalDom dmapped new dmap(Dist),
-   tiledDom = tiledLocalDom dmapped new dmap(Dist);
+  const Dom = localDom dmapped Dist,
+   innerDom = innerLocalDom dmapped Dist,
+   tiledDom = tiledLocalDom dmapped Dist;
 
-  const outputDom = localDom dmapped new dmap(outputDist);
+  const outputDom = localDom dmapped outputDist;
 
   /* Input and Output matrices represented as arrays over a 2D domain */
   var input: [Dom] dtype = 0.0,
@@ -117,12 +117,27 @@ proc main() {
   /* Weight matrix represented as tuple of tuples*/
   var weight: Wsize*(Wsize*(dtype));
 
-  for i in 1..R {
-    const element : dtype = 1 / (2*i*R) : dtype;
-    weight[R1][R1+i]  =  element;
-    weight[R1+i][R1]  =  element;
-    weight[R1-i][R1] = -element;
-    weight[R1][R1-i] = -element;
+  if !compact {
+    for i in 1..R {
+      const element : dtype = 1 / (2*i*R) : dtype;
+      weight[R1][R1+i]  =  element;
+      weight[R1+i][R1]  =  element;
+      weight[R1-i][R1] = -element;
+      weight[R1][R1-i] = -element;
+    }
+  }
+  else {
+    for jj in 1..R {
+      const element = (1.0/(4.0*jj*(2.0*jj-1)*R)):dtype;
+      for ii in R1+(-jj+1)..R1+jj-1 {
+        weight[ ii][R1+jj] = element;
+        weight[ ii][R1-jj] = -element;
+        weight[R1+jj][ ii] = element;
+        weight[R1-jj][ ii] = -element;
+      }
+      weight[R1+jj][R1+jj] = (1.0/(4.0*jj*R));
+      weight[R1-jj][R1-jj] = -(1.0/(4.0*jj*R));
+    }
   }
 
   /* Initialize Input matrix */
@@ -150,6 +165,9 @@ proc main() {
     else                        writeln("Distribution         = None");
   }
 
+  var stenTime, incTime, commTime : real;
+  var subTimer : Timer;
+
   //
   // Main loop of Stencil
   //
@@ -161,6 +179,8 @@ proc main() {
       timer.start();
     }
 
+    if iteration >= 1 then subTimer.start();
+
     if debug then diagnostics('stencil');
     if (!tiling) {
       forall (i,j) in innerDom with (in weight) {
@@ -171,8 +191,8 @@ proc main() {
           for param ii in -R..-1 do tmpout += weight[R1+ii][R1] * input[i+ii, j];
           for param ii in 1..R   do tmpout += weight[R1+ii][R1] * input[i+ii, j];
         } else {
-          for ii in -R..R do
-            for jj in -R..R do
+          for param ii in -R..R do
+            for param jj in -R..R do
               tmpout += weight[R1+ii][R1+jj] * input[i+ii, j+jj];
         }
         output[i, j] += tmpout;
@@ -188,8 +208,8 @@ proc main() {
               for param ii in -R..-1 do tmpout += weight[R1+ii][R1] * input[i+ii, j];
               for param ii in 1..R   do tmpout += weight[R1+ii][R1] * input[i+ii, j];
             } else {
-              for ii in -R..R do
-                for jj in -R..R do
+              for param ii in -R..R do
+                for param jj in -R..R do
                   tmpout += weight[R1+ii][R1+jj] * input[i+ii, j+jj];
             }
             output[i, j] += tmpout;
@@ -198,16 +218,35 @@ proc main() {
       }
     }
 
+    if iteration >= 1 {
+      subTimer.stop();
+      stenTime += subTimer.elapsed();
+      subTimer.clear(); subTimer.start();
+    }
+
     /* Add constant to solution to force refresh of neighbor data */
     if debug then diagnostics('input += 1');
     forall (i,j) in Dom {
       input[i, j] += 1.0;
     }
 
+    if iteration >= 1 {
+      subTimer.stop();
+      incTime += subTimer.elapsed();
+      subTimer.clear(); subTimer.start();
+    }
+
     /* Update ghost cells for each locales, for StencilDist */
     if useStencilDist then {
       if debug then diagnostics('input.updateFluff()');
       input.updateFluff();
+    }
+
+    if iteration >= 1 {
+      subTimer.stop();
+      commTime += subTimer.elapsed();
+      subTimer.clear(); subTimer.start();
+      subTimer.stop();
     }
 
 
@@ -245,8 +284,10 @@ proc main() {
     }
 
     if (!validate) {
-      writeln("Rate (MFlops/s): ", 1.0E-06 * flops/avgTime, "  Avg time (s): ",
-              avgTime);
+      writef("Rate (MFlops/s): %dr  Avg time (s): %r\n", 1.0E-06 * flops/avgTime, avgTime);
+      writeln("stencil time = ", stenTime/iterations);
+      writeln("increment time = ", incTime / iterations);
+      writeln("comm time = ", commTime / iterations);
     }
   }
 }

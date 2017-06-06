@@ -28,6 +28,15 @@ if( defined $ENV{"CHPL_HOME"} ) {
 }
 
 $ENV{"CHPL_MAKE_HOME"} = $chpl_home_dir;
+if( defined $ENV{"CHPL_RUNTIME_LIB"} ) {
+  $ENV{"CHPL_MAKE_RUNTIME_LIB"} = $ENV{"CHPL_RUNTIME_LIB"}
+}
+if( defined $ENV{"CHPL_RUNTIME_INCL"} ) {
+  $ENV{"CHPL_MAKE_RUNTIME_INCL"} = $ENV{"CHPL_RUNTIME_INCL"}
+}
+if( defined $ENV{"CHPL_THIRD_PARTY"} ) {
+  $ENV{"CHPL_MAKE_THIRD_PARTY"} = $ENV{"CHPL_THIRD_PARTY"}
+}
 
 $make = `$chpl_home_dir/util/chplenv/chpl_make.py`;
 chomp($make);
@@ -37,6 +46,15 @@ $make = "$make --no-print-directory";
 
 sub mysystem {
   my $cmd = shift;
+
+  # Uncomment for debug output
+  #print "About to run $cmd\n";
+  #for my $k (keys %ENV) {
+  #  if ($k =~ /CHPL/) {
+  #    print "$k=$ENV{$k}\n";
+  #  }
+  #}
+
   # Run $cmd but filter out e.g. make[2]: lines
   # (about which directory we are in)
   open(CMD, "$cmd |") or die "Cannot run $cmd: $!";
@@ -83,6 +101,8 @@ for my $arg (@ARGV) {
     mysystem("$make -f $chpl_home_dir/runtime/etc/Makefile.include printmaino");
   } elsif( $arg eq "--llvm-install-dir" ) {
     mysystem("$make -f $chpl_home_dir/runtime/etc/Makefile.include printllvminstall");
+  } elsif( $arg eq "--clang" ) {
+    mysystem("$make -f $chpl_home_dir/runtime/etc/Makefile.include printclangcc printclangcxx");
   } elsif( $arg eq "--clang-sysroot-arguments" ) {
     $llvminstall=`$make -f $chpl_home_dir/runtime/etc/Makefile.include printllvminstall`;
     chomp $llvminstall;
@@ -113,6 +133,7 @@ for my $arg (@ARGV) {
     print " --libraries print out any -L and -l options to\n";
     print "             link with the Chapel runtime\n";
     print " --main.o print out the path to the main.o file\n";
+    print " --clang print out the path to clang and clang++\n";
     print " --clang-sysroot-arguments print out any saved clang arguments\n";
     print "                           that specify the system root\n";
   }

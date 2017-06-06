@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -158,11 +158,10 @@ module ChapelLocale {
       stack for any task on the current locale, including the
       caller.
     */
-    const callStackSize: size_t;
+    var callStackSize: size_t;
 
     /*
-      Get the integer identifier for the top-level locale the
-      current task is running on.
+      Get the integer identifier for this locale.
 
       :returns: locale number, in the range ``0..numLocales-1``
       :rtype: int
@@ -173,8 +172,7 @@ module ChapelLocale {
     proc localeid : chpl_localeID_t return chpl_localeid(); // full locale id
 
     /*
-      Get the name of the top-level locale the current task is
-      running on.
+      Get the name of this locale.
 
       :returns: locale name
       :rtype: string
@@ -247,6 +245,34 @@ module ChapelLocale {
       return "";
     }
 
+    //
+    // Support for different types of memory:
+    // large, low latency, and high bandwidth
+    //
+    pragma "no doc"
+    proc defaultMemory() : locale {
+      _throwPVFCError();
+      return this;
+    }
+
+    pragma "no doc"
+    proc largeMemory() : locale {
+      _throwPVFCError();
+      return this;
+    }
+
+    pragma "no doc"
+    proc lowLatencyMemory() : locale {
+      _throwPVFCError();
+      return this;
+    }
+
+    pragma "no doc"
+    proc highBandwidthMemory() : locale {
+      _throwPVFCError();
+      return this;
+    }
+
     // A useful default definition is provided (not pure virtual).
     pragma "no doc"
     proc writeThis(f) {
@@ -257,7 +283,7 @@ module ChapelLocale {
     proc getChildCount() : int {
       _throwPVFCError();
       return 0;
-    }      
+    }
   
 // Part of the required locale interface.
 // Commented out because presently iterators are statically bound.
@@ -287,6 +313,33 @@ module ChapelLocale {
 
     //------------------------------------------------------------------------}
   }
+
+  /* This class is used during initialization and is returned when
+     'here' is used before the locale hierarchy is initialized.
+   */
+  pragma "no doc"
+  class DummyLocale : locale {
+    proc chpl_id() : int {
+      return -1;
+    }
+    proc chpl_localeid() : chpl_localeID_t {
+      return chpl_buildLocaleID(-1:chpl_nodeID_t, c_sublocid_none);
+    }
+    proc chpl_name() : string {
+      return "dummy-locale";
+    }
+    proc getChildCount() : int {
+      return 0;
+    }
+    proc getChild(idx:int) : locale {
+      return this;
+    }
+    proc addChild(loc:locale)
+    {
+      halt("addChild on DummyLocale");
+    }
+  }
+
 
   pragma "no doc"
   class AbstractLocaleModel : locale {
@@ -330,17 +383,14 @@ module ChapelLocale {
     // LocaleSpace -- an array of locales and its corresponding domain
     // which are used as the default set of targetLocales in many
     // distributions.
-    proc getDefaultLocaleSpace() {
+    proc getDefaultLocaleSpace() const ref {
       _throwPVFCError();
-      const emptyLocaleSpace: domain(1) = {1..0};
-      return emptyLocaleSpace;
+      return chpl_emptyLocaleSpace;
     }
 
-    proc getDefaultLocaleArray() {
+    proc getDefaultLocaleArray() const ref {
       _throwPVFCError();
-      const emptyLocaleSpace: domain(1) = {1..0};
-      const emptyLocales: [emptyLocaleSpace] locale;
-      return emptyLocales;
+      return chpl_emptyLocales;
     }
 
     proc localeIDtoLocale(id : chpl_localeID_t) : locale {
@@ -470,12 +520,14 @@ module ChapelLocale {
       // as they require additional tasks.  We know we don't need them
       // so tell the compiler to not insert them.
       pragma "no copy" pragma "no auto destroy"
-      const origLocales => (origRootLocale:RootLocale).getDefaultLocaleArray();
-      var origRL = origLocales._value.theData;
-      var newRL = newRootLocale.getDefaultLocaleArray()._value.theData;
+      const ref origLocales = (origRootLocale:RootLocale).getDefaultLocaleArray();
+      assert(origLocales._value.oneDData
+             && newRootLocale.getDefaultLocaleArray()._value.oneDData);
+      var origRL = origLocales._value.theDataChunk(0);
+      var newRL = newRootLocale.getDefaultLocaleArray()._value.theDataChunk(0);
       // We must directly implement a bulk copy here, as the mechanisms
       // for doing so via a whole array assignment are not initialized
-      // yet and copying element-by-element via a for loop is is costly.
+      // yet and copying element-by-element via a for loop is costly.
       __primitive("chpl_comm_array_get",
                   __primitive("array_get", newRL, 0),
                   0 /* locale 0 */,
@@ -487,8 +539,9 @@ module ChapelLocale {
     if locIdx!=0 {
       // We mimic a private Locales array alias by using the move
       // primitive.
-      __primitive("move", Locales,
-                  (rootLocale:RootLocale).getDefaultLocaleArray());
+      pragma "no auto destroy"
+      const ref tmp = (rootLocale:RootLocale).getDefaultLocaleArray();
+      __primitive("move", Locales, tmp);
     }
   }
 
@@ -499,7 +552,7 @@ module ChapelLocale {
   // representative.
   // The dummy locale provides system-default tasking and memory management.
   pragma "no doc"
-  const dummyLocale = new locale();
+  const dummyLocale = new DummyLocale();
 
   pragma "no doc"
   extern proc chpl_task_getRequestedSubloc(): chpl_sublocID_t;
@@ -514,7 +567,7 @@ module ChapelLocale {
   // Return the locale ID of the current locale
   pragma "no doc"
   inline proc here_id {
-     if localeModelHasSublocales then
+    if localeModelHasSublocales then
       return chpl_rt_buildLocaleID(chpl_nodeID, chpl_task_getRequestedSubloc());
     else
       return chpl_rt_buildLocaleID(chpl_nodeID, c_sublocid_any);
@@ -607,5 +660,16 @@ module ChapelLocale {
   export
   proc chpl_taskRunningCntDec() {
     here.runningTaskCntSub(1);
+  }
+
+  //
+  // Free the original root locale when the program is being torn down
+  //
+  // Be careful to free only origRootLocale, and never the copy in
+  // rootLocale, or the same locales will be torn down twice.
+  //
+  pragma "no doc"
+  proc deinit() {
+    delete origRootLocale;
   }
 }

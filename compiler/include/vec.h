@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -124,8 +124,14 @@ class Vec {
 // _p -- loop variable to be declared by the macro
 // _v -- vector to be iterated over
 //
-#define forv_Vec(_c, _p, _v) if ((_v).size()) for (_c *qq__##_p = (_c*)0, *_p = (_v).begin()[0]; \
-                    ((intptr_t)(qq__##_p) < (int)(_v).size()) && ((_p = (_v).begin()[(intptr_t)qq__##_p]) || 1); qq__##_p = (_c*)(((intptr_t)qq__##_p) + 1))
+// note: loop variable is declared as type _c* in order
+// to fit into a loop declaration.
+#define forv_Vec(_c, _p, _v) \
+  if ((_v).size()) \
+    for (_c *qq__##_p = (_c*)0, *_p = (_v).begin()[0]; \
+         ((intptr_t)(qq__##_p) < (int)(_v).size()) && \
+          ((_p = (_v).begin()[(intptr_t)qq__##_p]) || 1); \
+         qq__##_p = (_c*)(((intptr_t)qq__##_p) + 1))
 
 template <class C, int S = VEC_INTEGRAL_SIZE> class Accum { public:
   Vec<C,S> asset;

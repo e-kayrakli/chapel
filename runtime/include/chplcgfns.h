@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -39,6 +39,9 @@
 /* defined in chpl_compilation_config.c: */
 extern const char* chpl_compileCommand;
 extern const char* chpl_compileVersion;
+extern const char* chpl_compileDirectory;
+extern const char* chpl_saveCDir;
+
 extern const char* CHPL_HOME;
 extern const char* CHPL_HOST_PLATFORM;
 extern const char* CHPL_HOST_COMPILER;
@@ -68,21 +71,20 @@ extern const int CHPL_CACHE_REMOTE;
 
 // Sorted lookup table of filenames used with insertLineNumbers for error
 // messages and logging. Defined in chpl_compilation_config.c (needed by launchers)
-extern c_string chpl_filenameTable[];
+extern const c_string chpl_filenameTable[];
 extern const int32_t chpl_filenameTableSize;
 
 // Lookup tables used as a symbol table by the stack unwinder for translating
 // C symbols into Chapel symbols. Defined in chpl_compilation_config.c
-extern c_string chpl_funSymTable[];
-extern int chpl_filenumSymTable[];
+extern const c_string chpl_funSymTable[];
+extern const int chpl_filenumSymTable[];
 extern const int32_t chpl_sizeSymTable;
 
-/* defined in main.c */
 extern char* chpl_executionCommand;
 
 /* generated */
-extern chpl_fn_p chpl_ftable[];
-extern chpl_fn_info chpl_finfo[];
+extern const chpl_fn_p chpl_ftable[];
+extern const chpl_fn_info chpl_finfo[];
 
 extern void chpl__initStringLiterals(void);
 

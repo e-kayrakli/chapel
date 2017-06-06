@@ -74,6 +74,14 @@ var branchInfo = [
                   { "release" : "1.13",
                     "releaseDate": "2016-04-07",
                     "branchDate" : "2016-03-29",
+                    "revision" : -1},
+                  { "release" : "1.14",
+                    "releaseDate": "2016-10-06",
+                    "branchDate" : "2016-09-27",
+                    "revision" : -1},
+                  { "release" : "1.15",
+                    "releaseDate": "2017-04-06",
+                    "branchDate" : "2017-03-27",
                     "revision" : -1}
                   ];
 
@@ -89,6 +97,8 @@ var rebootDates = [
     "2015-02-21",
     "2015-03-21",
 ];
+
+var indexMap = {};
 
 // NOTE: I wonder if it makes sense to calculate these rebootDates using
 //       something like Datejs. (thomasvandoren, 2015-04-08)
@@ -129,6 +139,67 @@ var defaultConfiguration = configurations[0];
 // Experimental: used to toggle how stroke pattern and line colors are used for
 // multi-configs. Default to using it for 16 node xc in a hacky way
 var diffColorForEachConfig = pageTitle.indexOf("16 node XC") >= 0;
+
+var lastFilterVal = "";
+
+var filterBox = $("[name='filterBox']")[0];
+
+// If 'val' is true, disable typing into the filterBox and set the background
+// color to grey. If false, allow typing and set background to white.
+function disableFilterBox(val) {
+  $(filterBox).prop('disabled', val);
+  var color = "#FFFFFF";
+  if (val) {
+    color = "#e6e6e6";
+  }
+  filterBox.style.backgroundColor = color;
+}
+
+// Search the lower-case titles of graphs for any substring that matches the
+// current value of the filter box. Hide the HTML and checkbox of any graph
+// whose title does not match.
+function doFilter() {
+  lastFilterVal = filterBox.value;
+  searchVal = lastFilterVal.toLowerCase();
+  for (var i = 0; i < allGraphs.length; i++) {
+    var checkbox = document.getElementById('graph' + i);
+
+    // Not all graphs have corresponding checkboxes
+    var checkLabel = undefined;
+    if (checkbox) {
+      checkLabel = checkbox.parentElement;
+    }
+
+    var idx = indexMap[allGraphs[i].title];
+    if (allGraphs[i].title.toLowerCase().indexOf(searchVal) != -1) {
+      // Found
+      if (checkLabel) {
+        $(checkLabel).show();
+      }
+      if (idx >= 0 && idx < gs.length) {
+        showGraph(gs[idx]);
+      }
+    } else {
+      // Not found
+      if (checkLabel) {
+        $(checkLabel).hide();
+      }
+      if (idx >= 0 && idx < gs.length) {
+        hideGraph(gs[idx]);
+      }
+    }
+  }
+}
+
+function filterFn() {
+  if (filterBox.value != lastFilterVal) {
+    doFilter();
+  }
+}
+
+$(document).ready(function() {
+  $("[name='filterBox']").on("change keyup paste", filterFn);
+});
 
 // This is used to get the next div for the graph and legend. This is important
 // for graph expansion because we need to be able to add the expanded graphs
@@ -191,6 +262,12 @@ function getNextDivs(afterDiv, afterLDiv) {
 }
 
 
+
+// Format of the date when hovering over a series
+function xAxisFormatter(val, opts, series_name, graph) {
+  return dateFormatter(new Date(val), '/');
+}
+
 // Gen a new dygraph, if an existing graph is being expanded then expandInfo
 // will contain the expansion information, else it is null
 function genDygraph(graphInfo, graphDivs, graphData, graphLabels, expandInfo) {
@@ -206,7 +283,8 @@ function genDygraph(graphInfo, graphDivs, graphData, graphLabels, expandInfo) {
     ylabel: graphInfo.ylabel,
     axes: {
       x: {
-        drawGrid: false
+        drawGrid: false,
+        valueFormatter: xAxisFormatter,
       },
       y: {
         drawGrid: true,
@@ -288,6 +366,7 @@ function genDygraph(graphInfo, graphDivs, graphData, graphLabels, expandInfo) {
   });
 
   gs.push(g);
+  indexMap[g.graphInfo.title] = gs.length-1;
 }
 
 // Function to expand an existing graph. This leaves the original graph
@@ -303,6 +382,8 @@ function expandGraphs(graph, graphInfo, graphDivs, graphData, graphLabels) {
 
   // get a transposed version of the data, so we can easily grab series from it
   var transposedData = transpose(graphData);
+
+  disableFilterBox(true);
 
   // expand graphs in reverse order. Allows us to  keep expanding after the
   // original graph's div instead of updating the div to place this graph after
@@ -342,6 +423,8 @@ function expandGraphs(graph, graphInfo, graphDivs, graphData, graphLabels) {
     expandInfo = { colors: newColors }
     genDygraph(newInfo, newDivs, newData, newLabels, expandInfo);
   }
+
+  disableFilterBox(false);
 }
 
 
@@ -382,17 +465,34 @@ function setupScreenshotToggle(g, graphInfo, screenshotToggle) {
   }
 }
 
+// g: A DyGraph object
+function hideGraph(g) {
+  $(g.maindiv_).hide();
+  $(g.divs.ldiv).hide();
+  $(g.divs.gspacer).hide();
+  $(g.divs.lspacer).hide();
+}
+
+function showGraph(g) {
+  if (g.removed) {
+    return;
+  }
+  $(g.maindiv_).show();
+  $(g.divs.ldiv).show();
+  $(g.divs.gspacer).show();
+  $(g.divs.lspacer).show();
+}
+
 // Setup the close graph button
 function setupCloseGraphToggle(g, graphInfo, closeGraphToggle) {
   closeGraphToggle.style.visibility = 'visible';
 
   closeGraphToggle.onclick = function() {
     var checkBox = getCheckboxForGraph(g);
-    checkBox.checked = false;
-    $(g.divs.div).hide();
-    $(g.divs.ldiv).hide();
-    $(g.divs.gspacer).hide();
-    $(g.divs.lspacer).hide();
+    if (typeof checkBox !== "undefined") {
+      checkBox.checked = false;
+    }
+    hideGraph(g);
     setURLFromGraphs(normalizeForURL(findSelectedSuite()));
     // set the dropdown box selection
     document.getElementsByName('jumpmenu')[0].value = findSelectedSuite();
@@ -547,6 +647,45 @@ function genPerSeriesStrokePattern(graphSeries, configs) {
   return seriesOptions;
 }
 
+//
+// Dygraphs 1.x used to export this function, but 2.0 does not.
+// TODO: consider using another JS library to do this for us.
+//
+function hsvToRGB(hue, saturation, value) {
+  var red;
+  var green;
+  var blue;
+  if (saturation === 0) {
+    red = value;
+    green = value;
+    blue = value;
+  } else {
+    var i = Math.floor(hue * 6);
+    var f = hue * 6 - i;
+    var p = value * (1 - saturation);
+    var q = value * (1 - saturation * f);
+    var t = value * (1 - saturation * (1 - f));
+    switch (i) {
+      case 1:
+        red = q;green = value;blue = p;break;
+      case 2:
+        red = p;green = value;blue = t;break;
+      case 3:
+        red = p;green = q;blue = value;break;
+      case 4:
+        red = t;green = p;blue = value;break;
+      case 5:
+        red = value;green = p;blue = q;break;
+      case 6: // fall through
+      case 0:
+        red = value;green = t;blue = p;break;
+    }
+  }
+  red = Math.floor(255 * red + 0.5);
+  green = Math.floor(255 * green + 0.5);
+  blue = Math.floor(255 * blue + 0.5);
+  return 'rgb(' + red + ',' + green + ',' + blue + ')';
+}
 
 // generate a list of colors to use for multi-conf graphs. Takes graphsSeries
 // which is the list of series for the graph and should not contain the 'Date'.
@@ -567,7 +706,7 @@ function genSeriesColors(graphSeries) {
     var hue = (1.0 * idx / (1 + numSeries));
 
     // convert to an rgb value
-    var colorStr = Dygraph.hsvToRGB(hue, sat, val);
+    var colorStr = hsvToRGB(hue, sat, val);
     return colorStr;
   }
 
@@ -643,7 +782,15 @@ function customValueFormatter(val, opts, series_name, dygraph) {
 
   // update digits, but do NOT redraw. Then use the default value formatter
   dygraph.updateOptions({digitsAfterDecimal: digits}, true);
-  return Dygraph.numberValueFormatter(val, opts);
+  var maxWidth = dygraph.getOption('maxNumberWidth');
+
+  if (val != 0.0 && (Math.abs(val) >= Math.pow(10, maxWidth) || Math.abs(val) < Math.pow(10, -digits))) {
+    return val.toExponential(digits);
+  } else {
+    // "3" should display as "3" and not "3.00"
+    var shift = Math.pow(10, digits);
+    return Math.round(val * shift) / shift;
+  }
 }
 
 // custom formatter for the y axis labels, calls the legend value formatter
@@ -744,7 +891,7 @@ function perfGraphInit() {
   var dateElem= document.getElementById('dateElem');
   if(parseDate(runDate) < parseDate(todayDate)) {
     dateElem.innerHTML = 'Graphs Last Updated on ' + runDate;
-    dateElem.style.color = "RED";
+    dateElem.style.color = "red";
   }
 
   // generate the multi configuration menu and toggle options
@@ -827,6 +974,7 @@ function perfGraphInit() {
   // generate the graph list
   var graphlist = document.getElementById('graphlist');
   for (var i = 0; i < allGraphs.length; i++) {
+    indexMap[allGraphs[i].title] = -1;
     var elem = document.createElement('div');
     elem.className = 'graph';
     elem.innerHTML = '<input id="graph' + i + '" type="checkbox">' + allGraphs[i].title;
@@ -837,6 +985,8 @@ function perfGraphInit() {
 
   setGraphsFromURL();
   displaySelectedGraphs();
+
+  disableFilterBox(false);
 }
 
 
@@ -1078,7 +1228,12 @@ function unselectAllGraphs() {
 function checkAll(val) {
   for (var i = 0; i < allGraphs.length; i++) {
     var elem = document.getElementById('graph' + i);
-    elem.checked = val;
+    // Only tick the checkboxes that are visible. This allows users to
+    // filter for a string, hit 'select all', and only have that subset
+    // selected.
+    if ($(elem.parentElement).is(":visible")) {
+      elem.checked = val;
+    }
   }
 }
 
@@ -1105,6 +1260,7 @@ function getSuites() {
 
 
 function selectSuite(suite) {
+  filterBox.value = "";
   for (var i = 0; i < allGraphs.length; i++) {
     var elem = document.getElementById('graph' + i);
     if (allGraphs[i].suites.indexOf(suite) >= 0) {
@@ -1125,16 +1281,30 @@ function displaySelectedGraphs() {
 
   // clean up all the dygraphs
   while (gs.length > 0) {
-    gs.pop().destroy();
+    var temp = gs.pop();
+    indexMap = {};
+    temp.destroy();
   }
+
+  var jsons = [];
+
+
+  // Disable filtering until the jsons are done
+  disableFilterBox(true);
 
   // generate the dygraph(s) for the currently selected graphs
   for (var i = 0; i < allGraphs.length; i++) {
     var checkbox = document.getElementById('graph' + i);
     if (checkbox.checked) {
-      getDataAndGenGraph(allGraphs[i]);
+      jsons.push(getDataAndGenGraph(allGraphs[i]));
     }
   }
+
+  $.when.apply($, jsons).done(function() {
+      console.log("done generating graphs");
+      doFilter();
+      disableFilterBox(false);
+  });
 
   // update the url for the displayed graphs
   setURLFromGraphs(normalizeForURL(findSelectedSuite()));
@@ -1176,6 +1346,8 @@ function getDataAndGenGraph(graphInfo) {
       var err = textStatus + ', ' + error;
       console.log( 'Request for ' + dataFile + ' Failed: ' + err );
     });
+
+  return json;
 }
 
 
@@ -1378,21 +1550,28 @@ function roundDate(date, roundUp) {
 
 // helper function to parse a date (either use dygraph date parser, or do
 // nothing for numericX)
+//
+// numericX may be set from graphdata.js
 function parseDate(date) {
   if (numericX) {
     return date;
   } else {
-    return Dygraph.dateParser(date);
+    return moment(date, "YYYY*MM*DD").toDate().getTime();
   }
 }
 
+function dateFormatter(d, delimiter) {
+  var month = ("0" + (d.getMonth() + 1)).slice(-2); // only keep last two characters
+  var day   = ("0" + d.getDate()).slice(-2);
+  return  d.getFullYear() + delimiter + month + delimiter + day;
+}
 
 // returns todays date formatted as 'YYYY<delimiter>MM<delimiter>DD'. Defaults
 // to 'YYYY-MM-DD' if a delimiter isn't specified.
 function getTodaysDate(delimiter) {
   delimiter = defaultFor(delimiter, '-');
   var d = new Date();
-  return  d.getFullYear() + delimiter + (d.getMonth()+1) + delimiter + d.getDate();
+  return dateFormatter(d, delimiter);
 }
 
 
@@ -1477,7 +1656,7 @@ function addExperimentalButtons(toggleConf) {
   if (configurations.length >= 3) {
     var strokePatternToggle = document.createElement('input');
     strokePatternToggle.type = 'button';
-    strokePatternToggle.value = 'Reset Stoke Patterns';
+    strokePatternToggle.value = 'Reset Stroke Patterns';
     toggleConf.appendChild(strokePatternToggle);
     strokePatternToggle.onclick = function() {
       resetStrokePattern();

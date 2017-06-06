@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -20,9 +20,21 @@
 #ifndef _SCOPE_RESOLVE_H_
 #define _SCOPE_RESOLVE_H_
 
-class AggregateType;
+class BaseAST;
+class FnSymbol;
+class Symbol;
 
-void build_constructors(AggregateType* ct);
-void add_root_type(AggregateType* ct);
+#include <vector>
+
+void     addToSymbolTable(FnSymbol* fn);
+
+Symbol*  lookup(const char*           name,
+                BaseAST*              context);
+
+void     lookup(const char*           name,
+                BaseAST*              context,
+                std::vector<Symbol*>& symbols);
+
+BaseAST* getScope(BaseAST* ast);
 
 #endif

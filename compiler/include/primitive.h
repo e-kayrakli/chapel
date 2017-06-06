@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2016 Cray Inc.
+ * Copyright 2004-2017 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -23,6 +23,7 @@
 #include "chpl.h"
 
 class CallExpr;
+class Expr;
 class Type;
 class VarSymbol;
 class QualifiedType;
@@ -33,13 +34,18 @@ enum PrimitiveTag {
   PRIM_ACTUALS_LIST,
   PRIM_NOOP,
   PRIM_MOVE,
+
   PRIM_INIT,
+  PRIM_INIT_FIELD,
+  PRIM_INIT_VAR,
   PRIM_NO_INIT,
   PRIM_TYPE_INIT,       // Used in a context where only a type is needed.
                         // Establishes the type of the result without
                         // generating code.
+
   PRIM_REF_TO_STRING,
   PRIM_RETURN,
+  PRIM_THROW,
   PRIM_YIELD,
   PRIM_UNARY_MINUS,
   PRIM_UNARY_PLUS,
@@ -74,6 +80,7 @@ enum PrimitiveTag {
   PRIM_AND_ASSIGN,
   PRIM_OR_ASSIGN,
   PRIM_XOR_ASSIGN,
+  PRIM_REDUCE_ASSIGN,
 
   PRIM_MIN,
   PRIM_MAX,
@@ -96,6 +103,7 @@ enum PrimitiveTag {
 
   PRIM_ADDR_OF,             // set a reference to a value
   PRIM_DEREF,               // dereference a reference
+  PRIM_SET_REFERENCE,       // set a reference
 
   PRIM_LOCAL_CHECK,         // assert that a wide ref is on this locale
 
@@ -159,7 +167,6 @@ enum PrimitiveTag {
   PRIM_BLOCK_LOCAL,             // BlockStmt::blockInfo - local block
   PRIM_BLOCK_UNLOCAL,           // BlockStmt::blockInfo - unlocal local block
 
-  PRIM_FORALL_LOOP,             // BlockStmt::byrefVars - forall loop body
   PRIM_TO_LEADER,
   PRIM_TO_FOLLOWER,
   PRIM_TO_STANDALONE,
@@ -217,6 +224,7 @@ enum PrimitiveTag {
   PRIM_FIELD_NUM_TO_NAME,
   PRIM_FIELD_NAME_TO_NUM,
   PRIM_FIELD_BY_NUM,
+  PRIM_ITERATOR_RECORD_FIELD_VALUE_BY_FORMAL,
   PRIM_IS_UNION_TYPE,
   PRIM_IS_ATOMIC_TYPE,
   PRIM_IS_REF_ITER_TYPE,
@@ -238,6 +246,10 @@ enum PrimitiveTag {
 
   PRIM_GET_COMPILER_VAR,
 
+  PRIM_STACK_ALLOCATE_CLASS,
+  PRIM_ZIP,
+  PRIM_REQUIRE,
+
   NUM_KNOWN_PRIMS
 };
 
@@ -258,9 +270,13 @@ extern PrimitiveOp* primitives[NUM_KNOWN_PRIMS];
 void printPrimitiveCounts(const char* passName);
 void initPrimitive();
 
-extern Map<const char*, VarSymbol*> memDescsMap;
 extern Vec<const char*> memDescsVec;
-
 VarSymbol* newMemDesc(const char* str);
+VarSymbol* newMemDesc(Type* type);
+
+
+bool getSettingPrimitiveDstSrc(CallExpr* call, Expr** dest, Expr** src);
+
+void makeNoop(CallExpr* call);
 
 #endif
