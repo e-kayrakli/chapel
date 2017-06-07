@@ -1,3 +1,28 @@
+/*
+   Overall TODO notes after cleanup
+
+- Consider externing the entry type as a record/class to have more
+  direct control over its fields. Things that can be removed with the
+  help of this:
+
+  getData()
+
+- Rename initialize_opt_fields -> it seems to be initializing metadata
+  for strided get API
+
+- Unpacked data can be stored within the handle
+
+- Think about how to create PrefetchHook objects. Currently DSI objects
+  directly create the full-blown object.
+
+- Remove unnecessary methods
+
+- There are bunch of special casing for rank <= 3. Generalize
+
+- Having -or not having- a prefetch slice should be handled more
+  elegantly
+*/
+
 module PrefetchHooks {
   use BlockDist;
   use Time;
@@ -8,68 +33,44 @@ module PrefetchHooks {
   config param debugPrefetch = false;
   config param prefetchTiming = false;
 
-  extern type c_nodeid_t;
-  /*extern class prefetch_entry_t {*/
-    /*var data: c_void_ptr;*/
-  /*}*/
   extern type prefetch_entry_t;
-  extern proc
-    chpl_comm_request_prefetch(node, robjaddr: c_void_ptr,
-        slice_desc, slice_desc_size, consistent): prefetch_entry_t;
-
-  /*extern proc */
-    /*chpl_comm_prefetch(node, raddr, size,*/
-      /*serialized_base_idx): prefetch_entry_t;*/
 
   extern proc prefetch_strided_entry(entry);
 
-  extern proc initialize_opt_fields(handle, strided_remote_data,
-    consec_remote_data, stridelevel, dstStrides, srcStrides, counts);
-  extern proc
-    entry_has_data(handle): bool;
-  extern proc
-    get_entry_data(handle): c_void_ptr;
-  extern proc
-    get_entry_data_start(handle): c_void_ptr;
-  extern proc
-    get_entry_remote_data_start(handle): c_void_ptr;
-  extern proc
-    set_entry_remote_data_start(handle, start);
-  extern proc
-    get_entry_size(handle): size_t;
-  extern proc
-    get_entry_data_actual_size(handle): size_t;
-  /*extern proc */
-    /*get_prefetched_data(handle, offset, size, ref dest): c_int;*/
+  extern proc get_entry_data(handle): c_void_ptr; // for debugging
 
-  extern proc
-    get_prefetched_data(accessor: c_void_ptr, handle, size, ref idx,
-        ref isPrefetched, ref data);
+  // for several optimizations
+  extern proc get_entry_data_start(handle): c_void_ptr;
+  extern proc get_entry_remote_data_start(handle): c_void_ptr;
+  extern proc set_entry_remote_data_start(handle, start);
+  extern proc get_entry_data_actual_size(handle): size_t;
 
-  extern proc
-    get_prefetched_data_addr(accessor: c_void_ptr, handle, size, ref idx,
-        ref isPrefetched): c_void_ptr;
-  extern proc 
-    reprefetch_single_entry(handle);
+  extern proc get_entry_size(handle): size_t; // for fixed size opt
 
-  extern proc
-    get_data_from_prefetch_entry(handle): c_void_ptr;
-  extern proc
-    prefetch_entry_init_seqn_n(handle, offset);
+  // Prefetch Hook generators
+  inline proc getNewPrefetchHook(obj, type unpackType, param
+      unpackAccess, localeContainer) {
+    return new GenericPrefetchHook(obj, unpackType, unpackAccess,
+        localeContainer);
+  }
 
-  extern proc create_prefetch_handle(ref handle);
+  inline proc getNewPrefetchHook(obj, type unpackType, localeContainer) {
+    return new GenericPrefetchHook(obj, unpackType, true,
+        localeContainer);
+  }
 
-  extern proc initialize_prefetch_handle(owner_obj, origin_node,
-      robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
-      consistent, fixed_size, data_start_offset, elemsize): c_void_ptr;
+  inline proc getNewPrefetchHook(obj) {
+    return new GenericPrefetchHook(obj, int, false); //int is dummy
+  }
 
-  extern proc update_prefetch_handle(owner_obj, origin_node,
-      robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
-      consistent): c_void_ptr;
+  inline proc getNewPrefetchHook(obj, localeContainer) {
+    return new GenericPrefetchHook(obj, int, false,
+        localeContainer);
+  }
 
-  extern proc get_lock_offset(handle, addr): int(32);
-
+  // Helpers
   inline proc getData(handle) {
+    extern proc get_data_from_prefetch_entry(handle): c_void_ptr;
     return get_data_from_prefetch_entry(handle);
   }
 
@@ -175,11 +176,6 @@ module PrefetchHooks {
         slice_desc_size: size_t, consistent, staticDomain) {
       halt("This shouldn't have been called");
     }
-    /*inline proc getUnpackedData(localeIdx) {*/
-      /*halt("This shouldn't have been called");*/
-      /*var c: c_void_ptr;*/
-      /*return c;*/
-    /*}*/
 
     proc test() {
       writeln("Superclass", x);
@@ -193,25 +189,6 @@ module PrefetchHooks {
     }
   }
 
-  inline proc getNewPrefetchHook(obj, type unpackType, param
-      unpackAccess, localeContainer) {
-    return new GenericPrefetchHook(obj, unpackType, unpackAccess,
-        localeContainer);
-  }
-
-  inline proc getNewPrefetchHook(obj, type unpackType, localeContainer) {
-    return new GenericPrefetchHook(obj, unpackType, true,
-        localeContainer);
-  }
-
-  inline proc getNewPrefetchHook(obj) {
-    return new GenericPrefetchHook(obj, int, false); //int is dummy
-  }
-
-  inline proc getNewPrefetchHook(obj, localeContainer) {
-    return new GenericPrefetchHook(obj, int, false,
-        localeContainer);
-  }
 
   class GenericPrefetchHook:PrefetchHook {
     var obj;
@@ -236,20 +213,16 @@ module PrefetchHooks {
 
     var reprefetchCount = 0;
 
-    /*var handles: c_ptr(prefetch_entry_t);*/
-    /*var handles: [localeDom] prefetch_entry_t;*/
     var handles: c_ptr(prefetch_entry_t);
     var localeDomDimSize: localeDom.rank*int;
     var localeDomSize: int;
 
-    /*var unpackedData: [localeDom] unpackType;*/
     var unpackedData: c_ptr(unpackType);
+
     //FIXME this is a dangerous field now, since we can evict data with
     //no callback to change this array
+    // Update: set this to false when evictPrefetch is implemented
     var hasData: [localeDom] bool = false; // only to be use for reprefetch
-    
-    var commInProgress: [localeDom] sync bool;
-
 
     /*proc GenericPrefetchHook(obj, type unpackType, param unpackAccess) {*/
       /*handles = c_calloc(prefetch_entry_t, numLocales);*/
@@ -260,6 +233,9 @@ module PrefetchHooks {
 
     proc GenericPrefetchHook(obj, type unpackType, param unpackAccess,
         localeContainer: [?D] locale) {
+
+      extern proc create_prefetch_handle(ref handle);
+
       localeDomSize = D.numIndices;
       handles = c_calloc(prefetch_entry_t, localeDomSize);
       unpackedData = c_calloc(unpackType, localeDomSize);
@@ -278,44 +254,44 @@ module PrefetchHooks {
       return obj.getMetadataSize();
     }
 
-    inline proc is_ud_nil(locIdx) {
-      const flatIdx = flattenLocaleIdx(locIdx);
-      return is_c_nil(__primitive("+", unpackedData, flatIdx));
-    }
-
     pragma "no local return"
     inline proc unifiedAccessPrefetchedData(locIdx, i,
         out prefetched: bool) ref {
+
+      extern proc get_lock_offset(handle, addr): int(32);
+
       local {
         if prefetchTiming then accessTimer.start();
+
         if unpackAccess {
-          /*writeln(here, " unpacked access");*/
+
+          debug_writeln(here, " unpacked access");
+
           if hasPrefetchedFrom(locIdx) {
             const flatIdx = flattenLocaleIdx(locIdx);
             ref unpackedDataTmp = unpackedData[flatIdx];
 
-            if isSparseArr(unpackedDataTmp) {
+            if isSparseArr(unpackedDataTmp) then
               prefetched = unpackedDataTmp.domain._value.parentDom.member(i);
-            }
-            else {
+            else
               prefetched = unpackedDataTmp.domain.member(i);
-            }
 
-            /*writeln(here, " has prefetched from ", locIdx,*/
-                /*" and the domain is ",*/
-                /*unpackedDataTmp.domain._value.parentDom);*/
             if prefetched {
-              /*writeln(here, " has prefetched ", i, " from ", locIdx);*/
+
+              debug_writeln(here, " has prefetched ", i, " from ",
+                  locIdx);
+
+              // TODO check this logic in this if
               if isSparseArr(unpackedDataTmp) &&
                 !unpackedDataTmp.domain.member(i) {
                   return unpackedDataTmp.IRV;
               }
               ref retTmp = unpackedDataTmp[i];
-              /*prefetched = true;*/
               const lockOffset = get_lock_offset(
-                  handles[flatIdx],
-                  __primitive("_wide_get_addr", retTmp));
+                  handles[flatIdx], __primitive("_wide_get_addr", retTmp));
+
               if prefetchTiming then accessTimer.stop();
+
               return __primitive("gen prefetch ptr", retTmp, lockOffset);
             }
           }
@@ -324,12 +300,17 @@ module PrefetchHooks {
           const h = handleFromLocaleIdx(locIdx);
           var (data, backLinkOffset) = accessPrefetchedDataRef(h, i);
           prefetched = !is_c_nil(data);
+
           if prefetchTiming then accessTimer.stop();
+
           return __primitive("gen prefetch ptr", data, backLinkOffset);
         }
         prefetched = false;
         var dummyPtr: c_ptr(obj.eltType);
+
         if prefetchTiming then accessTimer.stop();
+
+        // TODO return a pre-generated dummy for performance?
         return __primitive("gen prefetch ptr", dummyPtr, -1);
       }
     }
@@ -344,8 +325,7 @@ module PrefetchHooks {
 
     proc dsiGetSerializedObjectSize(slice_desc): size_t {
       var size = 0: size_t;
-      for v in 
-          obj.dsiGetSerializedObjectSize(slice_desc:c_ptr(obj.idxType)) {
+      for v in obj.dsiGetSerializedObjectSize(slice_desc:c_ptr(obj.idxType)) {
         size += v;
       }
       return size;
@@ -356,6 +336,7 @@ module PrefetchHooks {
       if !metadataOnly then
         for val in obj.dsiSerializeData() do yield val;
     }
+
     proc dsiGetSerializedObjectSize(): size_t {
       debug_writeln("getting size on ", here);
       var size = 0: size_t;
@@ -403,6 +384,10 @@ module PrefetchHooks {
       return (size, dataStartByteOffset);
     }
 
+    // TODO actually data start is part of metadata, this method name
+    // was probably used to avoid overload confusions
+    // At the very least, this and next method can be refactored into a
+    // single one.
     pragma "no remote memory fence"
     proc __getSerializedMetadataAndStart(destLocaleId, srcLocaleId, srcObj,
         slice_desc, slice_desc_size: size_t, data,
@@ -435,14 +420,11 @@ module PrefetchHooks {
 
         __serialize_wrapper(this.type, srcObj, local_buffer, size_local,
             slice_desc_local, slice_desc_size, metadataOnly=true);
-        /*writeln("Putting ", size_local, " to ", srcLocaleId);*/
+
+        debug_writeln("Putting ", size_local, " to ", srcLocaleId);
+
         /*__primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,*/
             /*data[0], size_local);*/
-        /*var tmp = local_buffer:c_ptr(int);*/
-        /*for i in 0..#(size_local/8) {*/
-          /*writeln(here, " local buffer[", i, "]", tmp[i]);*/
-        /*}*/
-        /*writeln(here, " putting ", size_local, " bytes");*/
 
         chpl_comm_put(local_buffer[0], destLocaleId, data[0],
             size_local, -1, 0, 0);
@@ -452,7 +434,9 @@ module PrefetchHooks {
           else
             __get_data_start_ptr_wrapper(srcObj);
       }
+
       if prefetchTiming then subreprefetchTimer.stop();
+
       if is_c_nil(dataStartPtr) then halt("Received null pointer");
       return dataStartPtr;
     }
@@ -486,14 +470,11 @@ module PrefetchHooks {
 
         __serialize_wrapper(this.type, srcObj, local_buffer, size_local,
             slice_desc_local, slice_desc_size, metadataOnly);
-        /*writeln("Putting ", size_local, " to ", srcLocaleId);*/
+
+        debug_writeln("Putting ", size_local, " to ", srcLocaleId);
+
         /*__primitive("chpl_comm_array_put", local_buffer[0], destLocaleId,*/
             /*data[0], size_local);*/
-        /*var tmp = local_buffer:c_ptr(int);*/
-        /*for i in 0..#(size_local/8) {*/
-          /*writeln(here, " local buffer[", i, "]", tmp[i]);*/
-        /*}*/
-        /*writeln(here, " putting ", size_local, " bytes");*/
 
         chpl_comm_put(local_buffer[0], destLocaleId, data[0],
             size_local, -1, 0, 0);
@@ -513,6 +494,10 @@ module PrefetchHooks {
       return dummy;
     }
 
+    // TODO this is used only for accessing unpackedData array. If we
+    // are using an extern struct for handles with explicit unpackedData
+    // fields, this probably will no longer be relevant
+    // Alternatively, use this in handleFromLocaleIdx methods
     inline proc flattenLocaleIdx(idx) {
       var _idx = -1;
       if isTuple(idx) {
@@ -533,10 +518,11 @@ module PrefetchHooks {
       else {
         return idx;
       }
-      halt("not ready for this - handleFromLocaleIdx");
+      halt("not ready for this - flattenLocaleIdx");
       return 0;
     }
 
+    // Why not a single ref version
     inline proc handleFromLocaleIdx(idx) {
       var _idx = -1;
       if isTuple(idx) {
@@ -581,18 +567,22 @@ module PrefetchHooks {
       return handles[0];
     }
 
-    // this is now the last resort for reprefetching
+    // this is now the last resort for reprefetching (for static domains
+    // this is not called?)
     pragma "no remote memory fence"
     proc reprefetch(destLocaleId, srcLocaleId, srcObj, slice_desc,
         slice_desc_size: size_t, consistent, staticDomain) {
 
+      extern proc update_prefetch_handle(owner_obj, origin_node,
+          robjaddr, new_entry, prefetch_size, slice_desc,
+          slice_desc_size, consistent): c_void_ptr;
+
       if prefetchTiming then reprefetchTimer.start();
       if prefetchTiming then reprefetchCount += 1;
 
-      if destLocaleId != here.id {
+      if destLocaleId != here.id then
         halt("reprefetch can only be called from the prefetching \
             locale");
-      }
 
       var handle = handleFromLocaleID(srcLocaleId);
 
@@ -600,28 +590,19 @@ module PrefetchHooks {
       var (size, dummyOffset) = __getSerializedSize(destLocaleId,
           srcLocaleId, srcObj, slice_desc, slice_desc_size);
 
-      /*if fixedSize then*/
-      /*var size = get_entry_size(handle);*/
-
       data = __primitive("cast", _ddata(uint(8)),
           update_prefetch_handle(this, srcLocaleId, srcObj,
             c_ptrTo(handle), size, slice_desc:c_void_ptr,
             slice_desc_size, consistent));
 
 
-      /*if prefetchTiming then subreprefetchTimer.start();*/
       __getSerializedData(destLocaleId, srcLocaleId, srcObj,
           slice_desc, slice_desc_size, data, size);
-      /*if prefetchTiming then subreprefetchTimer.stop();*/
-      /*writeln("Copied");*/
-      /*for i in 0..3 do {*/
-      /*write((get_entry_data(handle):c_ptr(int(64)))[i], " ");*/
-      /*}*/
-      /*writeln();*/
 
       if prefetchTiming then reprefetchTimer.stop();
     }
 
+    // TODO refactor this and following 3
     proc __getRemoteDataStartAddr(srcLocaleId, srcObj) {
 
       var dataStartPtr: c_void_ptr;
@@ -654,26 +635,28 @@ module PrefetchHooks {
       return obj.getBaseDataStartAddr(startIdx);
     }
 
+
     //srcObj is the remote PrefetchHook
     proc doPrefetch(destLocaleId, srcLocaleId, srcObj, sliceDesc,
         wholeDesc, out dataStartIndex, consistent, staticDomain, param
         prefetchSlice) {
 
-      extern proc  chpl_comm_get(addr, node, raddr,
-          size, typeIndex: int(32),
-          ln, fn:int(32));
+      extern proc chpl_comm_get(addr, node, raddr, size,
+          typeIndex: int(32), ln, fn:int(32));
+      extern proc initialize_prefetch_handle(owner_obj, origin_node,
+          robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
+          consistent, fixed_size, data_start_offset, elemsize): c_void_ptr;
 
-      if destLocaleId != here.id {
+      if destLocaleId != here.id then
         halt("doPrefetch can only be called from the prefetching \
             locale");
-      }
 
       var new_handle_ptr: prefetch_entry_t;
       var data: _ddata(uint(8));
 
-      /*writeln(here, " ", sliceDesc);*/
-      var (slice_desc, slice_desc_size, dummyBool) =
-          (c_nil, 0:size_t, false);
+      var (slice_desc, slice_desc_size, dummyBool) = (c_nil, 0:size_t,
+          false);
+
       if prefetchSlice then
         (slice_desc, slice_desc_size, dummyBool) =
           convertToSerialChunk(domToArray(sliceDesc));
@@ -697,7 +680,7 @@ module PrefetchHooks {
             obj.eltType, srcLocaleId); //srcLocaleId is for dbg
 
 
-      /*writeln(here, " Analysis : ", staticDomain, " ", consData, " ", stridedData);*/
+      // TODO branches of this decision tree should be refactored
       // if data is being prefetched consistently, don't bring in the
       // data right away
       if !consistent {
@@ -741,6 +724,7 @@ module PrefetchHooks {
               /*get_entry_remote_data_start(new_handle_ptr):c_ptr(uint(8)),*/
               /*get_entry_data_actual_size(new_handle_ptr));*/
 
+            // TODO don't we have consec prefetch function in runtime?
             chpl_comm_get(
                 get_entry_data_start( new_handle_ptr),
                 srcLocaleId,
@@ -813,6 +797,9 @@ module PrefetchHooks {
       return size;
     }
 
+    // TODO these two user-facing methods seem to defer checking if the
+    // slice empty or not to `doPrefetch`. Probably refactor this pair
+    // into a single method with default arguments for slice
     // here obj needs to be a wide class refernece to another hook
     proc requestPrefetch(localeIdx, otherObj, consistent=true,
         staticDomain=false) {
@@ -906,54 +893,22 @@ module PrefetchHooks {
     }
 
     proc updatePrefetch() {
+      extern proc reprefetch_single_entry(handle);
       local forall i in localeDom {
         if hasData[i] {
           reprefetch_single_entry(handleFromLocaleIdx(i));
         }
       }
     }
-/*
-    inline proc accessPrefetchedData(localeId, idx) {
-      var localIdx = idx;
-      const handle = handles[localeId];
-      /*start_read(handles[localeId]);*/
-      /*if is_c_nil(handles[localeId]) || !hasData[localeId] {*/
-      if(!entry_has_data(handle)) {
-        /*writeln(here, " doesn't have prefetched data from ", */
-            /*localeId, " with index ", idx);*/
-        /*stop_read(handles[localeId]);*/
-        var dummy: obj.eltType;
-        return (false, dummy);
-      }
 
-      // TODO here data must be accessed only once therefore
-      // getByteIndex must be called from runtime from insde
-      // get_prefetched_data_addr
-
-      /*const __data = getData(handle);*/
-      /*const deserialIdx = obj.getByteIndex(getData(handle), idx);*/
-      var data: obj.eltType;
-      if !unpackAccess {
-        var isPrefetched: int;
-        var thisaddr = __primitive("_wide_get_addr", this);
-        get_prefetched_data(thisaddr, handle, getSize(1,obj.eltType),
-            localIdx, isPrefetched, data);
-
-        debug_writeln("accessing packed data");
-        return (isPrefetched!=0, data);
-      }
-      else {
-        /*return (true, data);*/
-        debug_writeln("accessing unpacked data");
-        return (true, unpackData[localeId].dsiAccess(idx));
-      }
-    }
-*/
     inline proc hasPrefetchedFrom(localeIdx) {
+      extern proc entry_has_data(handle): bool;
       return entry_has_data(handleFromLocaleIdx[localeIdx]);
     }
 
     inline proc accessPrefetchedDataRef(handle, idx) {
+      extern proc get_prefetched_data_addr(accessor: c_void_ptr,
+          handle, size, ref idx, ref isPrefetched): c_void_ptr;
       local{
         var localIdx = idx;
         var backLinkOffset: int;
@@ -964,40 +919,14 @@ module PrefetchHooks {
       }
     }
 
-    proc hasPrefetchedFrom(locIdx, i) {
-      if unpackAccess {
-        return unpackedData[flattenLocaleIdx(locIdx)].domain.member(i);
-      }
-      halt("Not ready for this yet");
-      return false;
-    }
-
-/*
-    proc accessUnpackedData(locIdx, i) ref {
-      // start_read
-      /*start_read(handles(locIdx));*/
-      ref data = unpackedData[locIdx][i];
-      /*stop_read(handles(locIdx));*/
-      return data;
-      /*return unpackedData[locIdx][i];*/
-      // stop_read
-    }
-*/
-    inline proc getUnpackedData(localeIdx) {
-      return unpackedData[flattenLocaleIdx(localeIdx)];
-    }
-
     proc printTimeStats() {
       writeln("Hook access prep time : ", accessPrepTime);
       writeln("Hook access real time : ", accessRealTime);
       writeln("Hook access out time : ", accessOutTime);
     }
+
     proc finalizePrefetch() {
-      /*for h in handles {*/
-        // 2 acquires are added by the current finalization logic
-        // this may not be necessary
-        /*prefetch_entry_init_seqn_n(h, 0);*/
-      /*}*/
+      // TODO keeping this in the interface to avoid compilation issues
     }
 
     inline proc getByteIndex(data: c_void_ptr, __idx: c_void_ptr) {
@@ -1179,7 +1108,8 @@ module PrefetchHooks {
   proc generateStridedGetData(handle, slice, whole, type eltType,
       srcLocaleId) {
 
-    /*writeln("Generate called with slice: ", slice, " whole ", whole);*/
+    extern proc initialize_opt_fields(handle, strided_remote_data,
+        consec_remote_data, stridelevel, dstStrides, srcStrides, counts);
 
     if whole.rank != slice.rank then
       compilerError("Slice with different rank than whole is not " +
@@ -1261,14 +1191,13 @@ module PrefetchHooks {
       }
     }
 
-    // TODO thise writelns can be debug writelns
-    /*writeln(here, " from ", srcLocaleId, " Counts :", counts[0], " ",*/
-        /*counts[1], " flags: ", incompatSlice, ", ", nonstrConsData);*/
-    /*writeln(here, " from ", srcLocaleId, " SrcStrides:", srcStrides[0],*/
-        /*" flags: ", incompatSlice, ", ", nonstrConsData);*/
-    /*writeln(here, " from ", srcLocaleId, " DestStrides:",*/
-        /*dstStrides[0], " flags: ", incompatSlice, ", ",*/
-        /*nonstrConsData);*/
+    debug_writeln(here, " from ", srcLocaleId, " Counts :", counts[0],
+        " ", counts[1], " flags: ", incompatSlice, ", ",
+        nonstrConsData);
+    debug_writeln(here, " from ", srcLocaleId, " SrcStrides:",
+        srcStrides[0], " flags: ", incompatSlice, ", ", nonstrConsData);
+    debug_writeln(here, " from ", srcLocaleId, " DestStrides:",
+        dstStrides[0], " flags: ", incompatSlice, ", ", nonstrConsData);
 
     initialize_opt_fields(handle,
         !incompatSlice, nonstrConsData, // flags
