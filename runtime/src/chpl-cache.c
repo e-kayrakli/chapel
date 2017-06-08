@@ -279,6 +279,7 @@ use.
 #include "chpl-atomics.h"
 #include "chpl-thread-local-storage.h" // CHPL_TLS_DECL etc
 #include "chpl-cache.h"
+#include "chpl-al-prefetch.h"
 #include "chpl-linefile-support.h"
 #include "sys.h" // sys_page_size()
 #include "chpl-comm-no-warning-macros.h" // No warnings for chpl_comm_get etc.
@@ -2742,41 +2743,6 @@ bool entry_has_data(struct __prefetch_entry_t *entry) {
   }
   return false;
 }
-void* get_data_from_prefetch_entry(struct __prefetch_entry_t *entry) {
-  assert(entry);
-  if(entry)
-    return entry->data;
-  else
-    return NULL;
-}
-
-/*static*/
-/*void dump_prefetch_buffer(struct __prefetch_entry_t *buffer) {*/
-  /*struct __prefetch_entry_t *cur = buffer;*/
-
-  /*printf("Prefetched data on node %d:\n", chpl_nodeID);*/
-
-  /*while(cur) {*/
-    /*printf("\tEntry from node %d, raddr=%p, size=%zu\n",*/
-        /*cur->origin_node, cur->raddr, cur->size);*/
-    /*cur = cur->next;*/
-  /*}*/
-/*}*/
-
-/*static*/
-/*struct prefetch_buffer_s* tls_prefetch_remote_data(void) {*/
-  /*struct prefetch_buffer_s *pbuf = CHPL_TLS_GET(prefetch_remote_data);*/
-  /*if( ! pbuf && chpl_cache_enabled() ) {*/
-    /*[>cache = cache_create();<]*/
-    /*// TODO when we have prefetch data store creation it should be*/
-    /*// called here*/
-    /*pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));*/
-    /*pbuf->head = NULL;*/
-    /*CHPL_TLS_SET(prefetch_remote_data, pbuf);*/
-    /*pthread_setspecific(pthread_prefetch_info_key, pbuf);*/
-  /*}*/
-  /*return pbuf;*/
-/*}*/
 
 static
 chpl_cache_taskPrvData_t* task_private_cache_data(void)
@@ -2799,44 +2765,6 @@ void destroy_pthread_local_cache(void* arg)
   cache_destroy(s);
 }
 
-
-static
-void prefetch_destroy(struct prefetch_buffer_s *pbuf) {
-
-  struct __prefetch_entry_t *cur = pbuf->head;
-  struct __prefetch_entry_t *next = NULL;
-
-  while(cur) {
-    next = cur->next;
-    /*printf("Hello!\n");*/
-    chpl_free(cur->data);
-    chpl_free(cur);
-    cur = next;
-  }
-  chpl_free(pbuf);
-}
-
-/*static*/
-/*void destroy_pthread_local_prefetch(void* arg)*/
-/*{*/
-  /*struct prefetch_buffer_s* s = (struct prefetch_buffer_s*) arg;*/
-  /*prefetch_destroy(s);*/
-/*}*/
-
-
-static
-void chpl_prefetch_do_init(void)
-{
-  static int inited = 0;
-  if( ! inited ) {
-    pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));
-    pbuf->head = NULL;
-    pbuf->min_task_seqn = 0;
-    chpl_sync_initAux(&(pbuf->update_lock));
-    pbuf->being_updated = false;
-    inited = 1;
-  }
-}
 static
 void chpl_cache_do_init(void)
 {
@@ -2861,11 +2789,6 @@ void chpl_cache_do_init(void)
 }
 
 // The implementation of functions in chpl-cache.h
-
-void chpl_prefetch_init(void) {
-
-  chpl_prefetch_do_init();
-}
 void chpl_cache_init(void) {
 
   // Take default CHPL_CACHE_REMOTE value from the environment if it is set.
@@ -2890,10 +2813,6 @@ void chpl_cache_init(void) {
   chpl_cache_do_init();
 }
 
-void chpl_prefetch_exit(void)
-{
-   prefetch_destroy(pbuf);
-}
 
 void chpl_cache_exit(void)
 {
@@ -3749,6 +3668,54 @@ void prefetch_strided_entry(struct __prefetch_entry_t *entry) {
                                              /*data_temp[3]);*/
 }
 
+
+void* get_data_from_prefetch_entry(struct __prefetch_entry_t *entry) { assert(entry);
+  if(entry)
+    return entry->data;
+  else
+    return NULL;
+}
+
+static
+void chpl_prefetch_do_init(void)
+{
+  static int inited = 0;
+  if( ! inited ) {
+    pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));
+    pbuf->head = NULL;
+    pbuf->min_task_seqn = 0;
+    chpl_sync_initAux(&(pbuf->update_lock));
+    pbuf->being_updated = false;
+    inited = 1;
+  }
+}
+
+static
+void prefetch_destroy(struct prefetch_buffer_s *pbuf) {
+
+  struct __prefetch_entry_t *cur = pbuf->head;
+  struct __prefetch_entry_t *next = NULL;
+
+  while(cur) {
+    next = cur->next;
+    /*printf("Hello!\n");*/
+    chpl_free(cur->data);
+    chpl_free(cur);
+    cur = next;
+  }
+  chpl_free(pbuf);
+}
+void chpl_prefetch_init(void) {
+
+  chpl_prefetch_do_init();
+}
+
+void chpl_prefetch_exit(void)
+{
+   prefetch_destroy(pbuf);
+}
+
+
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
     raddr, size_t size, int32_t typeIndex, int ln, int32_t fn) {
 
@@ -3759,7 +3726,6 @@ void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
 
   memcpy(addr, pbuf->fast_access_addr, size);
 }
-
 void chpl_cache_comm_prefetch(c_nodeid_t node, void* raddr,
                               size_t size, int32_t typeIndex,
                               int ln, int32_t fn)

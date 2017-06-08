@@ -29,6 +29,7 @@
 
 #include "chpl-prefetch.h" // for chpl_prefetch
 #include "chpl-cache.h" // chpl_cache_enabled, chpl_cache_comm_get etc
+#include "chpl-al-prefetch.h" // application-level prefetching
 
 // Don't warn about chpl_comm_get e.g. in this file.
 #include "chpl-comm-no-warning-macros.h"
