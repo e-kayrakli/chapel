@@ -1,3 +1,11 @@
+#ifndef _chpl_al_prefetch_h_
+#define _chpl_al_prefetch_h_
+
+#include <stdbool.h>
+#include "chpltypes.h"
+#include "chpl-atomics.h"
+#include "chpl-comm.h" // to get HAS_CHPL_CACHE_FNS via chpl-comm-task-decls.h
+#include "chpl-tasks.h"
 
 #define PF_PAGE_SIZE 4096
 #define CHECK_PFENTRY_INTEGRITY 0
@@ -11,8 +19,27 @@
 #define PF_INCONSISTENT 0
 #define PF_INIT 0
 
+struct prefetch_buffer_s* pbuf;
+
 // TODO I am not sure if we need this
 typedef int64_t cache_seqn_t;
+
+chpl_prefetch_taskPrvData_t* task_private_prefetch_data(void);
+
+struct prefetch_buffer_s {
+  void *fast_access_addr;
+  struct __prefetch_entry_t *head;
+
+  // incremented with acquire fence
+  cache_seqn_t prefetch_sequence_number;
+
+  //minimum task sequence number
+  cache_seqn_t min_task_seqn;
+  chpl_sync_aux_t min_task_seqn_lock;
+
+  bool being_updated;
+  chpl_sync_aux_t update_lock;
+};
 
 // Note on throttling: Currently I am choosing to keep a big monolithic
 // chunk of data where active messages fill up gradually.
@@ -106,26 +133,23 @@ typedef struct __prefetch_entry_t{
 void* get_data_from_prefetch_entry(prefetch_entry_t entry);
 void chpl_prefetch_init(void);
 void chpl_prefetch_exit(void);
+
+// TODO are we using these?
 void chpl_prefetch_comm_get_fast(void *addr, c_nodeid_t node, void*
     raddr, size_t size, int32_t typeIndex, int ln, int32_t fn);
-int64_t is_prefetched(c_nodeid_t node, void* raddr, size_t size);
-int64_t is_prefetched_in_entry(struct __prefetch_entry_t* entry,
-    c_nodeid_t node, void* raddr, size_t size);
-int64_t get_data_offset(struct __prefetch_entry_t* prefetch_entry,
-    size_t size, size_t serialized_idx);
-//int64_t get_prefetched_data(struct __prefetch_entry_t* prefetch_entry,
-    //size_t size, size_t serialized_idx, void* dest);
 void get_prefetched_data(void *accessor,
     struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
     int64_t* found, void *dest);
+void chpl_comm_pbuf_acq(void);
+void prefetch_update(void);
+
+
 void *get_prefetched_data_addr(void *accessor,
     struct __prefetch_entry_t* prefetch_entry, size_t size, void* idx,
     int64_t* found);
-void chpl_comm_pbuf_acq(void);
 void chpl_comm_reprefetch(struct __prefetch_entry_t *entry);
 void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
     cache_seqn_t offset);
-void prefetch_update(void);
 bool entry_has_data(struct __prefetch_entry_t *entry);
 void reprefetch_single_entry(struct __prefetch_entry_t *entry);
 void *initialize_prefetch_handle(void* owner_obj, c_nodeid_t
@@ -156,3 +180,5 @@ void initialize_opt_fields(struct __prefetch_entry_t *entry,
     size_t *counts);
 void prefetch_consec_entry(struct __prefetch_entry_t *entry);
 void prefetch_strided_entry(struct __prefetch_entry_t *entry);
+
+#endif

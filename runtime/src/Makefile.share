@@ -29,6 +29,7 @@ COMMON_NOGEN_SRCS = \
 	$(COMMON_LAUNCHER_SRCS) \
 	chpl-bitops.c \
 	chpl-cache.c \
+	chpl-al-prefetch.c \
 	chpl-comm.c \
         chpl-comm-callbacks.c \
 	chpl-env.c \

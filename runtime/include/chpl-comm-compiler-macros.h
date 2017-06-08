@@ -40,8 +40,6 @@
 // Note: Macros starting with CHPL_COMM involve some kind of communication
 //
 
-#undef HAS_DIRECT_PREFETCH
-
 static inline
 void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
                        size_t size, int32_t typeIndex,
@@ -52,11 +50,6 @@ void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
   } else if (node < 0) { // prefetch pointer special case
     //chpl_memcpy(addr, raddr, size);
     prefetch_get(addr, node, raddr, size, typeIndex, ln, fn);
-#ifdef HAS_DIRECT_PREFETCH
-  } else if(is_prefetched(node, raddr, size) == 1) {
-    chpl_prefetch_comm_get_fast(addr, node, raddr, size, typeIndex, ln, fn);
-    //printf("Satisfied from prefetch buffer\n");
-#endif
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
     //printf("%d getting into %p, with size %zd\n", chpl_nodeID, addr, size);
@@ -88,11 +81,6 @@ void chpl_gen_comm_prefetch(c_nodeid_t node, void* raddr,
          offset += 64 ) {
       chpl_prefetch((unsigned char*)raddr + offset);
     }
-#ifdef HAS_DIRECT_PREFETCH
-  } else if (direct) {
-    printf("PREFETCH CALLED");
-    chpl_comm_prefetch(node, raddr, size, typeIndex, ln, fn);
-#endif
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
     chpl_cache_comm_prefetch(node, raddr, size, typeIndex, ln, fn);
