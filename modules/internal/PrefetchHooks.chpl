@@ -6,6 +6,7 @@
   help of this:
 
   getData()
+  bunch of other functions used in support of some optimizations
 
 - Rename initialize_opt_fields -> it seems to be initializing metadata
   for strided get API
