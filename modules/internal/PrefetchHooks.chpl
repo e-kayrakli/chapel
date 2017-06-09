@@ -36,6 +36,10 @@ module PrefetchHooks {
 
   extern type prefetch_entry_t;
 
+
+      extern proc  chpl_comm_put(ref addr, node, ref raddr,
+          size, typeIndex: int(32),
+          commID, ln, fn:int(32));
   extern proc prefetch_strided_entry(entry);
 
   extern proc get_entry_data(handle): c_void_ptr; // for debugging
@@ -394,10 +398,6 @@ module PrefetchHooks {
         slice_desc, slice_desc_size: size_t, data,
         startIdx, param prefetchSlice=false) {
 
-      extern proc  chpl_comm_put(ref addr, node, ref raddr,
-          size, typeIndex: int(32),
-          ln, fn:int(32));
-
       var dataStartPtr: c_void_ptr;
         if prefetchTiming then subreprefetchTimer.start();
       on Locales[srcLocaleId] {
@@ -428,7 +428,7 @@ module PrefetchHooks {
             /*data[0], size_local);*/
 
         chpl_comm_put(local_buffer[0], destLocaleId, data[0],
-            size_local, -1, 0, 0);
+            size_local, -1, 0, 0, 0);
         dataStartPtr = if prefetchSlice
           then
             __get_data_start_ptr_wrapper(srcObj, startIdx)
@@ -446,10 +446,6 @@ module PrefetchHooks {
     proc __getSerializedData(destLocaleId, srcLocaleId, srcObj,
         slice_desc, slice_desc_size: size_t, data, size,
         metadataOnly=false) {
-
-      extern proc  chpl_comm_put(ref addr, node, ref raddr,
-          size, typeIndex: int(32),
-          ln, fn:int(32));
 
         if prefetchTiming then subreprefetchTimer.start();
       on Locales[srcLocaleId] {
@@ -478,7 +474,7 @@ module PrefetchHooks {
             /*data[0], size_local);*/
 
         chpl_comm_put(local_buffer[0], destLocaleId, data[0],
-            size_local, -1, 0, 0);
+            size_local, -1, 0, 0, 0);
       }
       if prefetchTiming then subreprefetchTimer.stop();
     }
@@ -643,7 +639,7 @@ module PrefetchHooks {
         prefetchSlice) {
 
       extern proc chpl_comm_get(addr, node, raddr, size,
-          typeIndex: int(32), ln, fn:int(32));
+          typeIndex: int(32), commID, ln, fn:int(32));
       extern proc initialize_prefetch_handle(owner_obj, origin_node,
           robjaddr, new_entry, prefetch_size, slice_desc, slice_desc_size,
           consistent, fixed_size, data_start_offset, elemsize): c_void_ptr;
@@ -731,7 +727,7 @@ module PrefetchHooks {
                 srcLocaleId,
                 get_entry_remote_data_start(new_handle_ptr),
                 get_entry_data_actual_size(new_handle_ptr),
-                -1,0,0);
+                -1,0, 0,0);
           }
           else { //strided data
             /*writeln(here, " doing strided prefetch");*/

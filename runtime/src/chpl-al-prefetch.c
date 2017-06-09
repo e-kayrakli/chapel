@@ -746,7 +746,7 @@ void prefetch_consec_entry(struct __prefetch_entry_t *entry) {
   }
 
   chpl_comm_get(entry->data_start, entry->origin_node,
-      entry->remote_data_start, entry->actual_data_size, -1, 0, 0);
+      entry->remote_data_start, entry->actual_data_size, -1, 0, 0, 0);
 }
 
 void prefetch_strided_entry(struct __prefetch_entry_t *entry) {
@@ -773,7 +773,7 @@ void prefetch_strided_entry(struct __prefetch_entry_t *entry) {
            /*entry->srcstrides[0], entry->dststrides[0]);*/
   chpl_comm_get_strd(entry->data_start, entry->dststrides,
       entry->origin_node, entry->remote_data_start, entry->srcstrides,
-      entry->counts, entry->stridelevels, entry->elemsize, -1, 0, 0);
+      entry->counts, entry->stridelevels, entry->elemsize, -1, 0, 0, 0);
   /*printf("\t\t%d pre-strd pref: %d %d %d %d\n", chpl_nodeID, data_temp[0],*/
                                              /*data_temp[1],*/
                                              /*data_temp[2],*/
