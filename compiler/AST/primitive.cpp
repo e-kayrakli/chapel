@@ -151,7 +151,10 @@ returnInfoFirstDeref(CallExpr* call) {
   Type* type = tmp.type()->getValType();
   // if it's a tuple, also remove references in the elements
   if (type->symbol->hasFlag(FLAG_TUPLE)) {
-    type = computeNonRefTuple(type);
+    AggregateType* tupleType = toAggregateType(type);
+    INT_ASSERT(tupleType);
+
+    type = computeNonRefTuple(tupleType);
   }
   return QualifiedType(type, QUAL_VAL);
 }
@@ -757,3 +760,15 @@ bool getSettingPrimitiveDstSrc(CallExpr* call, Expr** dest, Expr** src)
 
   return false;
 }
+
+void makeNoop(CallExpr* call) {
+  if (call->baseExpr)
+    call->baseExpr->remove();
+
+  while (call->numActuals())
+    call->get(1)->remove();
+
+  call->primitive = primitives[PRIM_NOOP];
+}
+
+

@@ -435,7 +435,9 @@ mpool_idx_base_t mpool_idx_finc(mpool_idx_t* pvar) {
 
 #define CD_ACTIVE_TRANS_MAX 128     // Max transactions in flight, per cd
 
-typedef atomic_uint_least32_t cq_cnt_t;
+typedef uint32_t cq_cnt_t;
+typedef atomic_uint_least32_t cq_cnt_atomic_t;
+
 #define CQ_CNT_STORE(cd, val) \
         atomic_store_uint_least32_t(&(cd)->cq_cnt_curr, val)
 #define CQ_CNT_LOAD(cd)       \
@@ -451,8 +453,8 @@ typedef struct {
   gni_nic_handle_t   nih;
   gni_ep_handle_t*   remote_eps;
   gni_cq_handle_t    cqh;
-  uint32_t           cq_cnt_max;
-  cq_cnt_t           cq_cnt_curr;
+  cq_cnt_t           cq_cnt_max;
+  cq_cnt_atomic_t    cq_cnt_curr;
   mem_map_t          mem_map;
 #ifdef DEBUG_STATS
   uint64_t           acqs;
@@ -522,7 +524,7 @@ static __thread int cd_idx = -1;
 //     comm domain, so we don't need more pools than we have comm
 //     domains.  An Aries NIC supports 128 comm domains (FMA windows),
 //     so that is our maximum.
-//   - We cannot have more than CD_ACTIVE_TRANS_MAX NB transacations
+//   - We cannot have more than CD_ACTIVE_TRANS_MAX NB transactions
 //     outstanding at the same time, per comm domain, so we don't need
 //     more that per pool.
 //   - We emulate an unsigned mod by NB_DESC_NUM_POOLS by means of
@@ -779,7 +781,7 @@ typedef struct {
   // unlike xfer/large call, need comm_on_bundle here for two reasons:
   //  1) the generated code puts a comm_on_bundle_t as the first field
   //     in any argument bundle for an on-statement
-  //  2) we need somewehre to store information to indicate completion.
+  //  2) we need somewhere to store information to indicate completion.
   chpl_comm_on_bundle_t bundle;
   unsigned char buf[MAX_SMALL_CALL_PAYLOAD];
 } fork_small_call_task_t;
@@ -2188,7 +2190,7 @@ void polling_task(void* ignore)
 static
 void set_up_for_polling(void)
 {
-  uint32_t     cq_cnt;
+  cq_cnt_t     cq_cnt;
   gni_return_t gni_rc;
   uint32_t     flags;
   uint32_t     i;
@@ -3741,7 +3743,7 @@ void consume_all_outstanding_cq_events(int cdi)
 
 void chpl_comm_put(void* addr, int32_t locale, void* raddr,
                    size_t size, int32_t typeIndex,
-                   int ln, int32_t fn)
+                   int32_t commID, int ln, int32_t fn)
 {
   DBG_P_LP(DBGF_IFACE|DBGF_GETPUT, "IFACE chpl_comm_put(%p, %d, %p, %zd)",
            addr, (int) locale, raddr, size);
@@ -3760,7 +3762,7 @@ void chpl_comm_put(void* addr, int32_t locale, void* raddr,
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put)) {
       chpl_comm_cb_info_t cb_data =
         {chpl_comm_cb_event_kind_put, chpl_nodeID, locale,
-         .iu.comm={addr, raddr, size, typeIndex, ln, fn}};
+         .iu.comm={addr, raddr, size, typeIndex, commID, ln, fn}};
       chpl_comm_do_callbacks (&cb_data);
   }
 
@@ -3881,7 +3883,7 @@ void do_remote_put(void* src_addr, int32_t locale, void* tgt_addr, size_t size,
 
 void chpl_comm_get(void* addr, int32_t locale, void* raddr,
                    size_t size, int32_t typeIndex,
-                   int ln, int32_t fn)
+                   int32_t commID, int ln, int32_t fn)
 {
   DBG_P_LP(DBGF_IFACE|DBGF_GETPUT, "IFACE chpl_comm_get(%p, %d, %p, %zd)",
            addr, (int) locale, raddr, size);
@@ -3900,7 +3902,7 @@ void chpl_comm_get(void* addr, int32_t locale, void* raddr,
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get)) {
       chpl_comm_cb_info_t cb_data = 
         {chpl_comm_cb_event_kind_get, chpl_nodeID, locale,
-         .iu.comm={addr, raddr, size, typeIndex, ln, fn}};
+         .iu.comm={addr, raddr, size, typeIndex, commID, ln, fn}};
       chpl_comm_do_callbacks (&cb_data);
   }
 
@@ -4068,11 +4070,74 @@ void do_remote_get(void* tgt_addr, int32_t locale, void* src_addr, size_t size,
 //
 // Strided bulk put/get, adapted from comm-none.c
 //
+
+
+//
+// We use non-blocking transactions for the multiple GETs/PUTs of a
+// strided transfer.  We can only track so many of these in flight at
+// once, obviously.  In practice based on quick experimentation, the
+// XC network is only about 10 transactions "wide" at the rate we can
+// initiate them in serial code here.  For simplicity, set ourselves
+// a static limit a bit larger than that and support up to 20 GETs or
+// PUTs in flight at once, subject also to any per-CD limit.
+//
+// Prefer initiating transactions to retiring them, in order to get
+// them started earlier.  Once we have as many transactions in flight
+// as we can track and are thus forced to retire some in order to
+// initiate more, only retire ones that have already completed.  Don't
+// wait for any more to finish.  Then at the end, wait for everything
+// to complete.
+//
+static const size_t strd_maxHandles
+                    = (20 < CD_ACTIVE_TRANS_MAX) ? 20 : CD_ACTIVE_TRANS_MAX;
+
+static inline
+void strd_nb_helper(chpl_comm_nb_handle_t (*xferFn)(void*, int32_t, void*,
+                                                    size_t,
+                                                    int32_t, int32_t,
+                                                    int, int32_t),
+                    void* localAddr, int32_t remoteLocale, void* remoteAddr,
+                    size_t cnt,
+                    chpl_comm_nb_handle_t* handles, size_t* pCurrHandles,
+                    int32_t typeIndex, int32_t commID, int ln, int32_t fn)
+{
+  size_t currHandles = *pCurrHandles;
+
+  if (currHandles >= strd_maxHandles) {
+    // reached max in flight -- retire some to make room
+    while (!chpl_comm_try_nb_some(handles, currHandles)) {
+      local_yield();
+    }
+
+    // compress retired transactions out of the list
+    {
+      size_t iOut, iIn;
+
+      for (iOut = iIn = 0; iIn < currHandles; ) {
+        if (handles[iIn] == NULL)
+          iIn++;
+        else
+          handles[iOut++] = handles[iIn++];
+      }
+
+      currHandles = iOut;
+    }
+  }
+
+  handles[currHandles] = (*xferFn)(localAddr, remoteLocale, remoteAddr, cnt,
+                                   typeIndex, commID, ln, fn);
+  if (handles[currHandles] != NULL)
+    currHandles++;
+
+  *pCurrHandles = currHandles;
+}
+
+
 void  chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
                          int32_t dstlocale,
                          void* srcaddr_arg, size_t* srcstrides,
                          size_t* count, int32_t stridelevels, size_t elemSize,
-                         int32_t typeIndex, int ln, int32_t fn)
+                         int32_t typeIndex, int32_t commID, int ln, int32_t fn)
 {
   const size_t strlvls=(size_t)stridelevels;
   size_t i,j,k,t,total,off,x,carry;
@@ -4086,6 +4151,9 @@ void  chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
   size_t srcstr[strlvls];
   size_t cnt[strlvls+1];
 
+  chpl_comm_nb_handle_t handles[strd_maxHandles];
+  size_t currHandles = 0;
+
   PERFSTATS_INC(put_strd_cnt);
 
   // Communications callback support
@@ -4093,11 +4161,11 @@ void  chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
       chpl_comm_cb_info_t cb_data =
         {chpl_comm_cb_event_kind_put_strd, chpl_nodeID, dstlocale,
          .iu.comm_strd={srcaddr_arg, srcstrides, dstaddr_arg, dststrides, count,
-                        stridelevels, elemSize, typeIndex, ln, fn}};
+                        stridelevels, elemSize, typeIndex, commID, ln, fn}};
       chpl_comm_do_callbacks (&cb_data);
   }
 
-  //Only count[0] and strides are meassured in number of bytes.
+  //Only count[0] and strides are measured in number of bytes.
   cnt[0]= count[0] * elemSize;
   if (strlvls>0) {
     srcstr[0] = srcstrides[0] * elemSize;
@@ -4115,32 +4183,39 @@ void  chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
   case 0:
     PERFSTATS_ADD(put_strd_byte_cnt, cnt[0]);
     chpl_comm_put(srcaddr_arg, dstlocale, dstaddr_arg, cnt[0],
-                  typeIndex, ln, fn);
+                  typeIndex, commID, ln, fn);
     break;
+
   case 1:
     dstaddr=(int8_t*)dstaddr_arg;
     srcaddr=(int8_t*)srcaddr_arg;
     for(i=0; i<cnt[1]; i++) {
       PERFSTATS_ADD(put_strd_byte_cnt, cnt[0]);
-      chpl_comm_put(srcaddr, dstlocale, dstaddr, cnt[0],
-                    typeIndex, ln, fn);
+      strd_nb_helper(chpl_comm_put_nb,
+                     srcaddr, dstlocale, dstaddr, cnt[0],
+                     handles, &currHandles,
+                     typeIndex, commID, ln, fn);
       srcaddr+=srcstr[0];
       dstaddr+=dststr[0];
     }
     break;
+
   case 2:
     for(i=0; i<cnt[2]; i++) {
       srcaddr = (int8_t*)srcaddr_arg + srcstr[1]*i;
       dstaddr = (int8_t*)dstaddr_arg + dststr[1]*i;
       for(j=0; j<cnt[1]; j++) {
         PERFSTATS_ADD(put_strd_byte_cnt, cnt[0]);
-        chpl_comm_put(srcaddr, dstlocale, dstaddr, cnt[0],
-                      typeIndex, ln, fn);
+        strd_nb_helper(chpl_comm_put_nb,
+                       srcaddr, dstlocale, dstaddr, cnt[0],
+                       handles, &currHandles,
+                       typeIndex, commID, ln, fn);
         srcaddr+=srcstr[0];
         dstaddr+=dststr[0];
       }
     }
     break;
+
   case 3:
     for(i=0; i<cnt[3]; i++) {
       srcaddr1 = (int8_t*)srcaddr_arg + srcstr[2]*i;
@@ -4150,14 +4225,17 @@ void  chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
         dstaddr = dstaddr1 + dststr[1]*j;
         for(k=0; k<cnt[1]; k++) {
           PERFSTATS_ADD(put_strd_byte_cnt, cnt[0]);
-          chpl_comm_put(srcaddr, dstlocale, dstaddr, cnt[0],
-                        typeIndex, ln, fn);
+          strd_nb_helper(chpl_comm_put_nb,
+                         srcaddr, dstlocale, dstaddr, cnt[0],
+                         handles, &currHandles,
+                         typeIndex, commID, ln, fn);
           srcaddr+=srcstr[0];
           dstaddr+=dststr[0];
         }
       }
     }
     break;
+
   default:
     dstaddr=(int8_t*)dstaddr_arg;
     srcaddr=(int8_t*)srcaddr_arg;
@@ -4188,8 +4266,11 @@ void  chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
             dstdisp[j]=dststr[t-1]*x;
           }
           PERFSTATS_ADD(put_strd_byte_cnt, cnt[0]);
-          chpl_comm_put(srcaddr+srcdisp[j], dstlocale, dstaddr+dstdisp[j],
-                        cnt[0], typeIndex, ln, fn);
+          strd_nb_helper(chpl_comm_put_nb,
+                         srcaddr+srcdisp[j], dstlocale, dstaddr+dstdisp[j],
+                         cnt[0],
+                         handles, &currHandles,
+                         typeIndex, commID, ln, fn);
           break;
 
         } else { //ELSE 1
@@ -4201,13 +4282,18 @@ void  chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
     chpl_mem_free(dstdisp,0,0);
     break;
   }
+
+  if (currHandles > 0) {
+    (void) chpl_comm_wait_nb_some(handles, currHandles);
+  }
 }
+
 
 void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
                          int32_t srclocale,
                          void* srcaddr_arg, size_t* srcstrides,
                          size_t* count, int32_t stridelevels, size_t elemSize,
-                         int32_t typeIndex, int ln, int32_t fn)
+                         int32_t typeIndex, int32_t commID, int ln, int32_t fn)
 {
   const size_t strlvls=(size_t)stridelevels;
   size_t i,j,k,t,total,off,x,carry;
@@ -4220,6 +4306,9 @@ void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
   size_t srcstr[strlvls];
   size_t cnt[strlvls+1];
 
+  chpl_comm_nb_handle_t handles[strd_maxHandles];
+  size_t currHandles = 0;
+
   PERFSTATS_INC(get_strd_cnt);
 
   // Communications callback support
@@ -4227,11 +4316,11 @@ void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
     chpl_comm_cb_info_t cb_data =
       {chpl_comm_cb_event_kind_get_strd, chpl_nodeID, srclocale,
        .iu.comm_strd={srcaddr_arg, srcstrides, dstaddr_arg, dststrides, count,
-                      stridelevels, elemSize, typeIndex, ln, fn}};
+                      stridelevels, elemSize, typeIndex, commID, ln, fn}};
     chpl_comm_do_callbacks (&cb_data);
   }
 
-  //Only count[0] and strides are meassured in number of bytes.
+  //Only count[0] and strides are measured in number of bytes.
   cnt[0]=count[0] * elemSize;
   if(strlvls>0){
     srcstr[0] = srcstrides[0] * elemSize;
@@ -4251,32 +4340,39 @@ void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
     srcaddr=(int8_t*)srcaddr_arg;
     PERFSTATS_ADD(get_strd_byte_cnt, cnt[0]);
     chpl_comm_get(dstaddr, srclocale, srcaddr, cnt[0],
-                  typeIndex, ln, fn);
+                  typeIndex, commID, ln, fn);
     break;
+
   case 1:
     dstaddr=(int8_t*)dstaddr_arg;
     srcaddr=(int8_t*)srcaddr_arg;
     for(i=0; i<cnt[1]; i++) {
       PERFSTATS_ADD(get_strd_byte_cnt, cnt[0]);
-      chpl_comm_get(dstaddr, srclocale, srcaddr, cnt[0],
-                    typeIndex, ln, fn);
+      strd_nb_helper(chpl_comm_get_nb,
+                     dstaddr, srclocale, srcaddr, cnt[0],
+                     handles, &currHandles,
+                     typeIndex, commID, ln, fn);
       srcaddr+=srcstr[0];
       dstaddr+=dststr[0];
     }
     break;
+
   case 2:
     for(i=0; i<cnt[2]; i++) {
       srcaddr = (int8_t*)srcaddr_arg + srcstr[1]*i;
       dstaddr = (int8_t*)dstaddr_arg + dststr[1]*i;
       for(j=0; j<cnt[1]; j++) {
         PERFSTATS_ADD(get_strd_byte_cnt, cnt[0]);
-        chpl_comm_get(dstaddr, srclocale, srcaddr, cnt[0],
-                      typeIndex, ln, fn);
+        strd_nb_helper(chpl_comm_get_nb,
+                       dstaddr, srclocale, srcaddr, cnt[0],
+                       handles, &currHandles,
+                       typeIndex, commID, ln, fn);
         srcaddr+=srcstr[0];
         dstaddr+=dststr[0];
       }
     }
     break;
+
   case 3:
     for(i=0; i<cnt[3]; i++) {
       srcaddr1 = (int8_t*)srcaddr_arg + srcstr[2]*i;
@@ -4286,14 +4382,17 @@ void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
         dstaddr = dstaddr1 + dststr[1]*j;
         for(k=0; k<cnt[1]; k++) {
           PERFSTATS_ADD(get_strd_byte_cnt, cnt[0]);
-          chpl_comm_get(dstaddr, srclocale, srcaddr, cnt[0],
-                        typeIndex, ln, fn);
+          strd_nb_helper(chpl_comm_get_nb,
+                         dstaddr, srclocale, srcaddr, cnt[0],
+                         handles, &currHandles,
+                         typeIndex, commID, ln, fn);
           srcaddr+=srcstr[0];
           dstaddr+=dststr[0];
         }
       }
     }
     break;
+
   default:
     dstaddr=(int8_t*)dstaddr_arg;
     srcaddr=(int8_t*)srcaddr_arg;
@@ -4324,8 +4423,11 @@ void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
             dstdisp[j]=dststr[t-1]*x;
           }
           PERFSTATS_ADD(get_strd_byte_cnt, cnt[0]);
-          chpl_comm_get(dstaddr+dstdisp[j], srclocale, srcaddr+srcdisp[j],
-                        cnt[0], typeIndex, ln, fn);
+          strd_nb_helper(chpl_comm_get_nb,
+                         dstaddr+dstdisp[j], srclocale, srcaddr+srcdisp[j],
+                         cnt[0],
+                         handles, &currHandles,
+                         typeIndex, commID, ln, fn);
           break;
 
         } else {  //ELSE 1
@@ -4337,6 +4439,10 @@ void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
     chpl_mem_free(dstdisp,0,0);
     break;
   }
+
+  if (currHandles > 0) {
+    (void) chpl_comm_wait_nb_some(handles, currHandles);
+  }
 }
 
 
@@ -4345,7 +4451,7 @@ void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
 //
 chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, int32_t locale, void* raddr,
                                        size_t size, int32_t typeIndex,
-                                       int ln, int32_t fn)
+                                       int32_t commID, int ln, int32_t fn)
 {
   mem_region_t*          local_mr;
   mem_region_t*          remote_mr;
@@ -4373,7 +4479,7 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, int32_t locale, void* raddr,
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_nb)) {
     chpl_comm_cb_info_t cb_data = 
       {chpl_comm_cb_event_kind_get_nb, chpl_nodeID, locale,
-       .iu.comm={addr, raddr, size, typeIndex, ln, fn}};
+       .iu.comm={addr, raddr, size, typeIndex, commID, ln, fn}};
     chpl_comm_do_callbacks (&cb_data);
   }
 
@@ -4446,7 +4552,7 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, int32_t locale, void* raddr,
 
 chpl_comm_nb_handle_t chpl_comm_put_nb(void* addr, int32_t locale, void* raddr,
                                        size_t size, int32_t typeIndex,
-                                       int ln, int32_t fn)
+                                       int32_t commID, int ln, int32_t fn)
 {
   DBG_P_LP(DBGF_IFACE|DBGF_GETPUT, "IFACE chpl_comm_put_nb(%p, %d, %p, %zd)",
            addr, (int) locale, raddr, size);
@@ -4456,7 +4562,7 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void* addr, int32_t locale, void* raddr,
   // it do a real nonblocking implementation, but right now we don't
   // have time.
   //
-  chpl_comm_put(addr, locale, raddr, size, typeIndex, ln, fn);
+  chpl_comm_put(addr, locale, raddr, size, typeIndex, commID, ln, fn);
   return NULL;
 
 #if 0
@@ -4468,7 +4574,7 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void* addr, int32_t locale, void* raddr,
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_nb)) {
     chpl_comm_cb_info_t cb_data = 
       {chpl_comm_cb_event_kind_put_nb, chpl_nodeID, locale,
-       .iu.comm={addr, raddr, size, typeIndex, ln, fn}};
+       .iu.comm={addr, raddr, size, typeIndex, commID, ln, fn}};
     chpl_comm_do_callbacks (&cb_data);
   }
 #endif
@@ -5702,9 +5808,7 @@ void do_fork_post(int locale,
     // it's mapped, and give the target locale that instead of the one
     // on our stack.
     //
-    // This happens when comm=ugni is used with tasks=fifo.  Tasks use
-    // the pthread stack, which is allocated by the pthreads library
-    // directly from malloc(), and thus isn't mapped.
+    // This can happen if task stacks aren't in the registered heap.
     //
     mem_region_t* rf_done_mr;
 
@@ -6230,7 +6334,7 @@ void chpl_comm_statsReport(chpl_bool32 sum_over_locales)
     sum = chpl_comm_pstats;
     for (int li = 0; li < chpl_numNodes; li++) {
       if (li != chpl_nodeID) {
-        chpl_comm_get(&ps, li, &chpl_comm_pstats, sizeof(ps), -1, 0, -1);
+        chpl_comm_get(&ps, li, &chpl_comm_pstats, sizeof(ps), -1, CHPL_COMM_UNKNOWN_ID, 0, -1);
 #define _PSV_SUM(psv) sum.psv += ps.psv;
         PERFSTATS_DO_ALL(_PSV_SUM);
 #undef _PSV_SUM

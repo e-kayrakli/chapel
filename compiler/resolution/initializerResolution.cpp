@@ -22,6 +22,8 @@
 #include "astutil.h"
 #include "caches.h"
 #include "callInfo.h"
+#include "driver.h"
+#include "expandVarArgs.h"
 #include "expr.h"
 #include "initializerRules.h"
 #include "passes.h"
@@ -32,10 +34,8 @@
 #include "symbol.h"
 #include "type.h"
 #include "view.h"
-
-
-static
-void resolveInitializer(CallExpr* call);
+#include "visibleCandidates.h"
+#include "visibleFunctions.h"
 
 static
 void resolveInitCall(CallExpr* call);
@@ -56,6 +56,13 @@ filterInitCandidate(Vec<ResolutionCandidate*>& candidates,
 
 static FnSymbol*
 instantiateInitSig(FnSymbol* fn, SymbolMap& subs, CallExpr* call);
+
+static void makeRecordInitWrappers(CallExpr* call);
+static void makeActualsVector(const CallExpr* call,
+                              const CallInfo& info,
+                              Vec<ArgSymbol*>& actualIdxToFormal);
+
+static bool isRefWrapperForNonGenericRecord(AggregateType* at);
 
 // Rewrite of instantiateSignature, for initializers.  Removed some bits,
 // modified others.
@@ -155,7 +162,7 @@ static void
 filterInitConcreteCandidate(Vec<ResolutionCandidate*>& candidates,
                             ResolutionCandidate* currCandidate,
                             CallInfo& info) {
-  currCandidate->fn = expandVarArgs(currCandidate->fn, info.actuals.n);
+  currCandidate->fn = expandIfVarArgs(currCandidate->fn, info);
 
   if (!currCandidate->fn) return;
 
@@ -184,7 +191,7 @@ static void
 filterInitGenericCandidate(Vec<ResolutionCandidate*>& candidates,
                            ResolutionCandidate* currCandidate,
                            CallInfo& info) {
-  currCandidate->fn = expandVarArgs(currCandidate->fn, info.actuals.n);
+  currCandidate->fn = expandIfVarArgs(currCandidate->fn, info);
 
   if (!currCandidate->fn) return;
 
@@ -343,7 +350,7 @@ void modAndResolveInitCall (CallExpr* call, AggregateType* typeToNew) {
   // execution of Phase 1, if the type is generic we will need to update the
   // type of the actual we are sending in for the this arg
   if (typeToNew->symbol->hasFlag(FLAG_GENERIC) == true) {
-    new_temp->type = call->isResolved()->_this->type;
+    new_temp->type = call->resolvedFunction()->_this->type;
 
     if (isClass(typeToNew) == true) {
       // use the allocator instead of directly calling the init method
@@ -353,14 +360,13 @@ void modAndResolveInitCall (CallExpr* call, AggregateType* typeToNew) {
       call->get(2)->remove();
       // Need to resolve the allocator
       resolveCall(call);
-      resolveFns(call->isResolved());
+      resolveFns(call->resolvedFunction());
 
       def->remove();
     }
   }
 }
 
-static
 void resolveInitializer(CallExpr* call) {
   // From resolveExpr() (removed the tryStack stuff)
   callStack.add(call);
@@ -369,7 +375,17 @@ void resolveInitializer(CallExpr* call) {
 
   INT_ASSERT(call->isResolved());
 
-  resolveMatch(call->isResolved());
+  resolveMatch(call->resolvedFunction());
+
+  if (isGenericRecord(call->get(2)->typeInfo())) {
+    NamedExpr* named = toNamedExpr(call->get(2));
+    INT_ASSERT(named);
+    SymExpr* namedSe = toSymExpr(named->actual);
+    INT_ASSERT(namedSe);
+    namedSe->symbol()->type = call->resolvedFunction()->_this->type;
+
+    makeRecordInitWrappers(call);
+  }
 
   callStack.pop();
 }
@@ -394,7 +410,7 @@ void resolveInitCall(CallExpr* call) {
 
   Vec<FnSymbol*> visibleFns; // visible functions
 
-  fillVisibleFuncVec(call, info, visibleFns);
+  findVisibleFunctions(info, visibleFns);
 
 
   // Modified narrowing down the candidates to operate in an
@@ -539,6 +555,118 @@ void resolveMatch(FnSymbol* fn) {
   ensureInMethodList(fn);
 }
 
+// This creates wrapper functions for calls to record initializers with default
+// values, out of order named arguments, etc.  That effort was skipped during
+// the call match stage because the "this" argument to the initializer was
+// still generic until the body had been resolved.  After we have determined
+// the concrete type for the "this" argument, then we are capable of creating
+// valid wrappers.
+//
+// Note that this action is not necessary for class initializers, because such
+// calls are wrapped by the "_new" function, and appropriate wrappers will
+// be created for it, so we don't need to wrap the initializer itself.
+static void makeRecordInitWrappers(CallExpr* call) {
+  CallInfo info(call, false, false);
+
+  Vec<ArgSymbol*> actualIdxToFormal;
+  makeActualsVector(call, info, actualIdxToFormal);
+
+
+  FnSymbol* wrap = call->resolvedFunction();
+
+  // Taken from wrapAndCleanUpActuals (modified to not need a
+  // ResolutionCandidate by recreating the necessary pieces)
+  wrap = defaultWrap(wrap, &actualIdxToFormal, &info);
+  reorderActuals(wrap, &actualIdxToFormal, &info);
+  coerceActuals(wrap, &info);
+  wrap = promotionWrap(wrap, &info, true);
+
+  call->baseExpr->replace(new SymExpr(wrap));
+
+  resolveFns(wrap);
+}
+
+// Modified version of computeActualFormalAlignment to only populate the
+// actualIdxToFormal Vec.  Substitutes the formalIdxToActual Vec with one
+// that stores booleans, because I do still need that information in order to
+// correctly populate the actuals
+//
+// This work was already performed when we found the right resolution candidate
+// so the "failure" modes should never get triggered.  The information we need
+// was cleaned up, though, so we are just going to recreate the parts we need.
+static void makeActualsVector(const CallExpr* call,
+                              const CallInfo& info,
+                              Vec<ArgSymbol*>& actualIdxToFormal) {
+  Vec<bool> formalIdxToActual;
+  FnSymbol* fn = call->resolvedFunction();
+
+  formalIdxToActual.fill(fn->numFormals());
+
+  actualIdxToFormal.fill(info.actuals.n);
+
+  for (int i = 0; i < actualIdxToFormal.n; i++) {
+    if (info.actualNames.v[i]) {
+      bool match = false;
+      int j = 0;
+      for_formals(formal, fn) {
+        if (!strcmp(info.actualNames.v[i], formal->name)) {
+          match = true;
+          actualIdxToFormal.v[i] = formal;
+          formalIdxToActual.v[j] = true;
+          break;
+        }
+        j++;
+      }
+      // Fail if no matching formal is found.
+      if (!match) {
+        INT_FATAL(call, "Compilation should have already ensured this action ",
+                  " would be valid");
+      }
+    }
+  }
+
+  // Fill in unmatched formals in sequence with the remaining actuals.
+  // Record successful substitutions.
+  int j = 0;
+  ArgSymbol* formal = (fn->numFormals()) ? fn->getFormal(1) : NULL;
+  for (int i = 0; i < actualIdxToFormal.n; i++) {
+    if (!info.actualNames.v[i]) {
+      bool match = false;
+      while (formal) {
+        if (formal->variableExpr)
+          return;
+        if (!formalIdxToActual.v[j]) {
+          match = true;
+          actualIdxToFormal.v[i] = formal;
+          formalIdxToActual.v[j] = true;
+          formal = next_formal(formal);
+          j++;
+          break;
+        }
+        formal = next_formal(formal);
+        j++;
+      }
+      // Fail if there are too many unnamed actuals.
+      if (!match && !(fn->hasFlag(FLAG_GENERIC) && fn->hasFlag(FLAG_TUPLE))) {
+        INT_FATAL(call, "Compilation should have verified this action was ",
+                  "valid");
+      }
+    }
+  }
+
+  // Make sure that any remaining formals are matched by name
+  // or have a default value.
+  while (formal) {
+    if (!formalIdxToActual.v[j] && !formal->defaultExpr) {
+      // Fail if not.
+      INT_FATAL(call, "Compilation should have verified this action was ",
+                "valid");
+    }
+    formal = next_formal(formal);
+    j++;
+  }
+}
+
 void temporaryInitializerFixup(CallExpr* call) {
   if (UnresolvedSymExpr* usym = toUnresolvedSymExpr(call->baseExpr)) {
     // Support super.init() calls (for instance) when the super type does not
@@ -556,7 +684,9 @@ void temporaryInitializerFixup(CallExpr* call) {
       INT_ASSERT(sym != NULL);
 
       if (AggregateType* ct = toAggregateType(sym->symbol()->type)) {
-        if (ct->initializerStyle == DEFINES_NONE_USE_DEFAULT) {
+
+        if (isRefWrapperForNonGenericRecord(ct) == false &&
+            ct->initializerStyle                == DEFINES_NONE_USE_DEFAULT) {
 
           // This code should be removed when the compiler generates
           // initializers as the default method of construction and
@@ -569,6 +699,52 @@ void temporaryInitializerFixup(CallExpr* call) {
     }
   }
 }
+
+
+//
+// Noakes 2017/03/26
+//   The function temporaryInitializerFixup is designed to update
+//   certain calls to init() while the initializer update matures.
+//
+//   Unfortunately this transformation is triggered incorrectly for uses of
+//           this.init(...);
+//
+//   inside initializers for non-generic records.
+//
+//   For those uses of init() the "this" argument has currently has type
+//   _ref(<Record>) rather than <Record>
+//
+//  This rather unfortunate function catches this case and enables the
+//  transformation to be skipped.
+//
+static bool isRefWrapperForNonGenericRecord(AggregateType* at) {
+  bool retval = false;
+
+  if (isClass(at)                           == true &&
+      strncmp(at->symbol->name, "_ref(", 5) == 0    &&
+      at->fields.length                     == 1) {
+    Symbol* sym = toDefExpr(at->fields.head)->sym;
+
+    if (strcmp(sym->name, "_val") == 0) {
+      retval = isNonGenericRecordWithInitializers(sym->type);
+    }
+  }
+
+  return retval;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void removeAggTypeFieldInfo() {
   forv_Vec(AggregateType, at, gAggregateTypes) {

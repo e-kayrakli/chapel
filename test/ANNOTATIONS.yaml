@@ -237,6 +237,8 @@ all:
     - Allow fields and vars to be 'void', make range.stride void if not stridable (#5681)
   03/20/17:
     - Make the multi-ddata specific fields in DR arrays 'void' when not using them (#5723)
+  05/03/17:
+    - Flag some compiler temps as const (#6154)
 
 
 AllCompTime:
@@ -307,6 +309,8 @@ binary-trees:
     - Brad's fix of off-by-one error in checksum (#4734)
   01/31/17:
     - upgrade jemalloc to 4.4.0 (#5278)
+  04/03/17:
+    - Updated to n=21 problem size and new rules (#5907)
 
 binarytrees-submitted:
   09/21/16:
@@ -315,6 +319,8 @@ binarytrees-submitted:
     - simplify init()-based implementation (#4609)
   10/10/16:
     - Brad's fix of off-by-one error in checksum (#4734)
+  04/03/17:
+    - Updated to n=21 problem size and new rules (#5907)
 
 blackscholes:
   10/21/16:
@@ -371,6 +377,10 @@ ep-b:
     - added -E to tests which would benefit from it
   11/22/14:
     - revert -E use for nightly on 21st (which failed, unrelatedly)
+
+ep.ml-perf:
+  06/08/17:
+    - Mothball multi-ddata (#6390)
 
 fannkuch-redux:
   07/22/14:
@@ -656,6 +666,12 @@ meteor:
   08/10/16:
     - Updated meteor's lock to yield less frequently (#4300)
 
+mg-b:
+  05/11/17:
+    - Move chpl_getPrivatizedClass() into chpl-privatization.h (#6212)
+  05/23/17:
+    - Fix NPB MG (#6284)
+
 miniMD:
   12/21/13:
     - clean up of noRefCount related code in modules/internal (22473)
@@ -729,6 +745,22 @@ prk-stencil.ml-perf:
     - Problem size increased from --order=1000 to --order=32000 (#3813)
   08/12/16:
     - Improve and enable strided bulk transfer optimization as default (#4318)
+  05/11/17:
+    - Move chpl_getPrivatizedClass() into chpl-privatization.h (#6212)
+  05/18/17:
+    - Use nonblocking transactions for strided transfers (#6262)
+  06/06/17:
+    - Increase the PRK stencil problem size (#6380)
+
+prk-stencil-time:
+  05/11/17:
+    - Move chpl_getPrivatizedClass() into chpl-privatization.h (#6212)
+
+prk-transpose: &transpose-base
+  05/04/17:
+    - Update benchmark to track latest reference version (#6152)
+prk-transpose-time:
+  <<: *transpose-base
 
 ptrans: &ptrans-base
   01/11/17:
@@ -762,6 +794,12 @@ regexdna:
     - Fixed string memory leak resulting from redundant autoCopies (#3023)
   03/12/16:
     - implemented good_alloc_size for jemalloc(#3446)
+  04/20/17:
+    - Update RE2 (#6024)
+
+regexdna-redux:
+  04/20/17:
+    - Update RE2 (#6024)
 
 return-array-8: &return-array-base
   03/04/17:
@@ -859,6 +897,12 @@ taskSpawn:
 temporary-copies:
   01/14/17:
     - Likely cache effects
+  04/20/17:
+    - Update RE2 (#6024)
+
+search:
+  04/20/17:
+    - Update RE2 (#6024)
 
 testSerialReductions:
   08/16/14:

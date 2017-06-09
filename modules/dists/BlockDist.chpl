@@ -388,6 +388,7 @@ class BlockArr: BaseArr {
   var doRADOpt: bool = defaultDoRADOpt;
   var dom: BlockDom(rank, idxType, stridable, sparseLayoutType);
   var locArr: [dom.dist.targetLocDom] LocBlockArr(eltType, rank, idxType, stridable);
+  pragma "local field"
   var myLocArr: LocBlockArr(eltType, rank, idxType, stridable);
   const SENTINEL = max(rank*idxType);
 }
@@ -409,6 +410,7 @@ class LocBlockArr {
   param stridable: bool;
   const locDom: LocBlockDom(rank, idxType, stridable);
   var locRAD: LocRADCache(eltType, rank, idxType, stridable); // non-nil if doRADOpt=true
+  pragma "local field"
   var myElems: [locDom.myBlock] eltType;
   var locRADLock: atomicbool; // This will only be accessed locally
                               // force the use of processor atomics
@@ -1254,6 +1256,10 @@ iter BlockArr.these(param tag: iterKind, followThis, param fast: bool = false) r
   }
 }
 
+proc BlockArr.dsiSerialRead(f) {
+  chpl_serialReadWriteRectangular(f, this);
+}
+
 //
 // output array
 //
@@ -1353,7 +1359,7 @@ proc BlockArr.setRADOpt(val=true) {
 //
 // TODO: Should this be inlined?
 //
-proc LocBlockArr.this(i) ref {
+inline proc LocBlockArr.this(i) ref {
   return myElems(i);
 }
 
