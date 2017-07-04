@@ -1,6 +1,6 @@
 use Random;
 use BlockDist;
-use commMethods;
+use PrefetchPatterns;
 use Barrier;
 
 if numLocales <= 1 then

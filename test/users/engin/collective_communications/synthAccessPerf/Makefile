@@ -1,4 +1,4 @@
-FLAGS=--fast --cache-remote -M $(CHPL_HOME)/test/users/engin/collective_communications
+FLAGS=--fast --cache-remote
 MISCFLAGS=
 
 MAIN=syntheticPerfTest

@@ -1,5 +1,5 @@
 use BlockDist;
-use commMethods;
+use PrefetchPatterns;
 use Barrier;
 
 config const prefetch = false;

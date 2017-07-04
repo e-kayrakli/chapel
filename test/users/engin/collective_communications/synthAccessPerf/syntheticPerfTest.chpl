@@ -1,6 +1,6 @@
 use Time;
 use BlockDist;
-use commMethods;
+use PrefetchPatterns;
 
 
 config const N = 1000000;
