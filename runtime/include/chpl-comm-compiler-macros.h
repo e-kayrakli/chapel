@@ -101,7 +101,7 @@ void chpl_gen_comm_put(void* addr, c_nodeid_t node, void* raddr,
   if (chpl_nodeID == node) {
     chpl_memcpy(raddr, addr, size);
   } else if(node < 0) { // prefetch pointer special case
-    chpl_error("Cannot write to prefetched data", ln, fn);
+    prefetch_put(addr, node, raddr, size, typeIndex, ln, fn);
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
     chpl_cache_comm_put(addr, node, raddr, size, typeIndex, commID, ln, fn);

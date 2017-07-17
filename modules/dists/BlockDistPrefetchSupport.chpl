@@ -1,3 +1,19 @@
+proc LocBlockArr.getIdxFromOffset(offset) {
+
+  writeln("In reverse calc");
+  writeln("offset: ", offset);
+  const offsetInData = offset - (getMetadataSize():int);
+  writeln("offsetInData: ", offsetInData);
+
+  if rank == 1 then return (offsetInData/(getSize(1, eltType):int)-1);
+  else halt("No WT yet for multidimensional arrays");
+}
+
+proc LocBlockArr.accessByLocalIdx(localIdx) ref {
+  /*writeln(localIdx, " ", myElems.domain.low);*/
+  return myElems[localIdx+myElems.domain.low];
+}
+
 // a prototype for now
 inline proc LocBlockArr.getMetadataSize() : uint(64) {
   return rank*2*getSize(1, idxType);

@@ -387,9 +387,11 @@ class BlockArr: BaseArr {
   type sparseLayoutType;
   var doRADOpt: bool = defaultDoRADOpt;
   var dom: BlockDom(rank, idxType, stridable, sparseLayoutType);
-  var locArr: [dom.dist.targetLocDom] LocBlockArr(eltType, rank, idxType, stridable);
+  var locArr: [dom.dist.targetLocDom] LocBlockArr(eltType, rank,
+      idxType, stridable, sparseLayoutType);
   pragma "local field"
-  var myLocArr: LocBlockArr(eltType, rank, idxType, stridable);
+  var myLocArr: LocBlockArr(eltType, rank, idxType, stridable,
+      sparseLayoutType);
   const SENTINEL = max(rank*idxType);
 }
 
@@ -408,6 +410,7 @@ class LocBlockArr {
   param rank: int;
   type idxType;
   param stridable: bool;
+  type sparseLayoutType;
   const locDom: LocBlockDom(rank, idxType, stridable);
   var locRAD: LocRADCache(eltType, rank, idxType, stridable); // non-nil if doRADOpt=true
   pragma "local field"
@@ -417,9 +420,12 @@ class LocBlockArr {
 
   /*var prefetchHook: PrefetchHook;*/
   var prefetchHook: GenericPrefetchHook(
-      LocBlockArr(eltType, rank, idxType, stridable),
+      LocBlockArr(eltType, rank, idxType, stridable, sparseLayoutType),
       myElems.type,
       allowPrefetchUnpacking);
+  const globalDesc: BlockArr(eltType, rank, idxType, stridable,
+      sparseLayoutType);
+
   // These functions will always be called on this.locale, and so we do
   // not have an on statement around the while loop below (to avoid
   // the repeated on's from calling testAndSet()).
@@ -1040,7 +1046,8 @@ proc BlockArr.setup() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       const locDom = dom.getLocDom(localeIdx);
-      locArr(localeIdx) = new LocBlockArr(eltType, rank, idxType, stridable, locDom);
+      locArr(localeIdx) = new LocBlockArr(eltType, rank, idxType,
+          stridable, sparseLayoutType, locDom, globalDesc=this);
       locArr(localeIdx).setup(dom.dist.targetLocales);
       if thisid == here.id then
         myLocArr = locArr(localeIdx);

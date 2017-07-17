@@ -165,6 +165,8 @@ void create_prefetch_handle(struct __prefetch_entry_t **entry);
 int32_t get_lock_offset(struct __prefetch_entry_t *entry, void * addr);
 void prefetch_get(void *dst, int32_t lock_offset, void *src,
     size_t size, int32_t typeIndex, int ln, int32_t fn);
+void prefetch_put(void *dst, int32_t lock_offset, void *src,
+    size_t size, int32_t typeIndex, int ln, int32_t fn);
 
 void *get_entry_data(struct __prefetch_entry_t *entry);
 void *get_entry_data_start(struct __prefetch_entry_t *entry);

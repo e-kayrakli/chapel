@@ -9,10 +9,27 @@
 #include "chpl-linefile-support.h"
 #include "sys.h" // sys_page_size()
 #include "chpl-comm-no-warning-macros.h" // No warnings for chpl_comm_get etc.
-#include "chpl-cache-support.c"
+/*#include "chpl-cache-support.c"*/
 
 #include <string.h> // memcpy, memset, etc.
 #include <assert.h>
+
+// ----------  SUPPORT FUNCTIONS 
+// directly taken from chpl-cache-support.c to avoid including a whole c
+// file
+#define NO_SEQUENCE_NUMBER 0
+static inline
+cache_seqn_t seqn_min(cache_seqn_t a, cache_seqn_t b)
+{
+  if( a != NO_SEQUENCE_NUMBER && a < b ) return a;
+  return b;
+}
+static inline
+cache_seqn_t seqn_max(cache_seqn_t a, cache_seqn_t b)
+{
+  if( a != NO_SEQUENCE_NUMBER && a > b ) return a;
+  return b;
+}
 
 chpl_prefetch_taskPrvData_t* task_private_prefetch_data(void)
 {
@@ -588,8 +605,8 @@ void prefetch_get_consistent(struct __prefetch_entry_t* prefetch_entry,
     // it's still stale
     if(task_local->last_acquire > prefetch_entry->sn) {
       /*printf("\t>\t");*/
-      int i;
-      double * tmp_data = (double *)get_entry_data_start(prefetch_entry);
+      /*int i;*/
+      /*double * tmp_data = (double *)get_entry_data_start(prefetch_entry);*/
       /*for(i = 0 ; i < 8 ; i++) {*/
         /*printf("%f ", tmp_data[i]);*/
       /*}*/
@@ -675,6 +692,7 @@ void prefetch_get_inconsistent(void *dst, void *src, size_t size) {
   chpl_memcpy(dst,src,size);
 }
 
+// TODO dst->addr, src->raddr
 void prefetch_get(void *dst, int32_t lock_offset, void *src,
     size_t size, int32_t typeIndex, int ln, int32_t fn) {
 
@@ -689,6 +707,18 @@ void prefetch_get(void *dst, int32_t lock_offset, void *src,
   else {
     prefetch_get_inconsistent(dst,src,size);
   }
+}
+
+extern void __writethrough_wrapper(c_nodeid_t node, void *entry,
+    void* data, int64_t offset);
+void prefetch_put(void *addr, int32_t lock_offset, void *raddr,
+    size_t size, int32_t typeIndex, int ln, int32_t fn) {
+
+  struct __prefetch_entry_t* prefetch_entry =
+    *((struct __prefetch_entry_t **)((char *)raddr+lock_offset));
+
+  __writethrough_wrapper(prefetch_entry->origin_node, 
+      prefetch_entry->owner_obj, addr, (-1*lock_offset));
 }
 
 void *get_entry_data(struct __prefetch_entry_t *entry) {
