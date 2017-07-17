@@ -7,9 +7,14 @@ proc LocBlockArr.getIdxFromData(data: c_void_ptr, offset) {
 
   writeln("Offset in data : ", offsetInData);
   writeln("metadata[1] : ", metadata[0]);
-  if rank == 1 then return offsetInData/(getSize(1,
-        eltType):int)+metadata[0];
-  else halt("No WT yet for multidimensional arrays");
+  const eltSize = getSize(1, eltType):int;
+  const eltCount = offsetInData/eltSize;
+  if rank == 1 then
+    return eltCount+metadata[0];
+  if rank == 2 then
+    return ((eltCount/metadata[3])+metadata[0],
+            (eltCount%metadata[3])+metadata[1]);
+  else halt("No WT yet for 3D arrays");
 }
 
 inline proc LocBlockArr.accessByLocalIdx(localIdx) ref {

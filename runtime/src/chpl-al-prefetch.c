@@ -370,9 +370,12 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
 
   new_entry->origin_node = origin_node;
   new_entry->robjaddr = robjaddr;
-  new_entry->slice_desc = chpl_malloc(slice_desc_size);
-  chpl_memcpy(new_entry->slice_desc, slice_desc, slice_desc_size);
+
+  // Prefetch hook already allocates memory for this so no need to
+  // duplicate again
+  new_entry->slice_desc = slice_desc;
   new_entry->slice_desc_size = slice_desc_size;
+
   new_entry->pf_type = PF_INIT;
   new_entry->elemsize = elemsize;
 
