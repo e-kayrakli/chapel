@@ -12,8 +12,7 @@ proc LocBlockArr.getIdxFromData(data: c_void_ptr, offset) {
   else halt("No WT yet for multidimensional arrays");
 }
 
-proc LocBlockArr.accessByLocalIdx(localIdx) ref {
-  /*writeln(localIdx, " ", myElems.domain.low);*/
+inline proc LocBlockArr.accessByLocalIdx(localIdx) ref {
   return myElems[localIdx];
 }
 

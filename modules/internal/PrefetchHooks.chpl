@@ -267,10 +267,11 @@ module PrefetchHooks {
     proc writeThrough(node, serialData: c_void_ptr, 
         offset, data: c_void_ptr) {
       const multiDIdx = obj.getIdxFromData(serialData, offset);
+      const globalDesc = obj.globalDesc;
       const localeIdx =
-        obj.globalDesc.dom.dist.targetLocaleIDs[node:int];
-      writeln("Write through to calculated index : ", multiDIdx);
-      obj.globalDesc.locArr[localeIdx].accessByLocalIdx(multiDIdx) = (data:c_ptr(obj.eltType)).deref();
+        globalDesc.dom.dist.targetLocaleIDs[node:int];
+      /*writeln("Write through to calculated index : ", multiDIdx);*/
+      globalDesc.locArr[localeIdx].accessByLocalIdx(multiDIdx) = (data:c_ptr(obj.eltType)).deref();
     }
 
     /*proc writeThrough(data, offset) {*/
