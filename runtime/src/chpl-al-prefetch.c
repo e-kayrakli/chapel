@@ -709,16 +709,17 @@ void prefetch_get(void *dst, int32_t lock_offset, void *src,
   }
 }
 
-extern void __writethrough_wrapper(c_nodeid_t node, void *entry,
-    void* data, int64_t offset);
-void prefetch_put(void *addr, int32_t lock_offset, void *raddr,
+extern void __writethrough_wrapper(c_nodeid_t node, void *serial_data,
+    void* owner_obj, void* data, int64_t offset);
+void prefetch_put(void *addr, int32_t lock_offset, void *paddr,
     size_t size, int32_t typeIndex, int ln, int32_t fn) {
 
   struct __prefetch_entry_t* prefetch_entry =
-    *((struct __prefetch_entry_t **)((char *)raddr+lock_offset));
+    *((struct __prefetch_entry_t **)((char *)paddr+lock_offset));
 
   __writethrough_wrapper(prefetch_entry->origin_node, 
-      prefetch_entry->owner_obj, addr, (-1*lock_offset));
+      prefetch_entry->data, prefetch_entry->owner_obj, addr,
+      (-1*lock_offset));
 }
 
 void *get_entry_data(struct __prefetch_entry_t *entry) {

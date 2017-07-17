@@ -87,7 +87,8 @@ module PrefetchHooks {
   class PrefetchHook {
     var x = 10;
 
-    proc writeThrough(node, data: c_void_ptr, offset) {
+    proc writeThrough(node, serialData: c_void_ptr, 
+        offset, data: c_void_ptr) {
       halt("writeThrough called on PrefetchHook");
     }
 
@@ -263,10 +264,13 @@ module PrefetchHooks {
       for i in 0..#localeDomSize do create_prefetch_handle(handles[i]);
     }
 
-    proc writeThrough(node, data: c_void_ptr, offset) {
-      const idx = obj.getIdxFromOffset(offset);
-      writeln("Write through to calculated index : ", idx);
-      obj.globalDesc.locArr[obj.globalDesc.dom.dist.targetLocaleIDs[node:int]].accessByLocalIdx(idx) = (data:c_ptr(obj.eltType)).deref();
+    proc writeThrough(node, serialData: c_void_ptr, 
+        offset, data: c_void_ptr) {
+      const multiDIdx = obj.getIdxFromData(serialData, offset);
+      const localeIdx =
+        obj.globalDesc.dom.dist.targetLocaleIDs[node:int];
+      writeln("Write through to calculated index : ", multiDIdx);
+      obj.globalDesc.locArr[localeIdx].accessByLocalIdx(multiDIdx) = (data:c_ptr(obj.eltType)).deref();
     }
 
     /*proc writeThrough(data, offset) {*/
@@ -981,13 +985,15 @@ module PrefetchHooks {
   }
 
   export proc __writethrough_wrapper(__node: int(32), 
-      __obj: c_void_ptr, data: c_void_ptr, offset: int) {
+      serialData: c_void_ptr, __obj: c_void_ptr, data: c_void_ptr,
+      offset: int) {
 
     var obj = __obj:PrefetchHook;
     /*var obj = __primitive("gen prefetch ptr", */
         /*__obj, __node) :PrefetchHook;*/
 
-    obj.writeThrough(__node, data, offset); // pass args
+    writeln("In wrapper");
+    obj.writeThrough(__node, serialData, offset, data); // pass args
   }
 
   /*export*/ proc __serialized_obj_size_wrapper(__obj: c_void_ptr,

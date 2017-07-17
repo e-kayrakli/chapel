@@ -1,17 +1,20 @@
-proc LocBlockArr.getIdxFromOffset(offset) {
+proc LocBlockArr.getIdxFromData(data: c_void_ptr, offset) {
 
-  writeln("In reverse calc");
-  writeln("offset: ", offset);
-  const offsetInData = offset - (getMetadataSize():int);
-  writeln("offsetInData: ", offsetInData);
+  //-8 for the backlink offset
+  const offsetInData = (offset-8) - (getMetadataSize():int);
 
-  if rank == 1 then return (offsetInData/(getSize(1, eltType):int)-1);
+  var metadata = getElementArrayAtOffset(data, 0, idxType);
+
+  writeln("Offset in data : ", offsetInData);
+  writeln("metadata[1] : ", metadata[0]);
+  if rank == 1 then return offsetInData/(getSize(1,
+        eltType):int)+metadata[0];
   else halt("No WT yet for multidimensional arrays");
 }
 
 proc LocBlockArr.accessByLocalIdx(localIdx) ref {
   /*writeln(localIdx, " ", myElems.domain.low);*/
-  return myElems[localIdx+myElems.domain.low];
+  return myElems[localIdx];
 }
 
 // a prototype for now
