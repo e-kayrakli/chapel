@@ -161,7 +161,7 @@ void stop_update(struct __prefetch_entry_t *entry, int page_idx) {
 #endif
 }
 
-extern uint64_t __get_byte_idx_wrapper(void*, void*, void*);
+extern int64_t __get_byte_idx_wrapper(void*, void*, void*);
 // FIXME how de store pbuf, global or pass as argument
 static
 void remove_from_prefetch_buffer(struct prefetch_buffer_s* pbuf,
@@ -262,8 +262,7 @@ void *get_prefetched_data_addr(void *accessor,
     return NULL;
   }
 
-  offset = (int64_t)(__get_byte_idx_wrapper(accessor,
-        prefetch_entry->data, idx));
+  offset = __get_byte_idx_wrapper(accessor, prefetch_entry->data, idx);
 
   // NULL check for prefetch entry has been handled by PrefethcHooks
   if(offset < 0 ||

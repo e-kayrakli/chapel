@@ -120,7 +120,11 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
   /*writeln(here, " > Byte index for ", idx, " ",*/
       /*getMetadataSize() + getSize(elemCount, eltType), " elemCount: ",*/
       /*elemCount);*/
-  return getMetadataSize() + getSize(elemCount, eltType);
+
+  if elemCount < 0 then
+    return elemCount * (getSize(1, eltType)):int;
+  else
+    return (getMetadataSize() + getSize(elemCount, eltType)):int;
 }
 
 iter BlockArr.dsiGetSerializedObjectSize() {
