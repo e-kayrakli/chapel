@@ -271,7 +271,7 @@ module PrefetchHooks {
       const localeIdx =
         globalDesc.dom.dist.targetLocaleIDs[node:int];
       /*writeln("Write through to calculated index : ", multiDIdx);*/
-      globalDesc.nonLocalAccess(multiDIdx) = (data:c_ptr(obj.eltType)).deref();
+      globalDesc.nonLocalAccess(chpl__tuplify(multiDIdx)) = (data:c_ptr(obj.eltType)).deref();
     }
 
     /*proc writeThrough(data, offset) {*/
