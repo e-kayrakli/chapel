@@ -713,15 +713,43 @@ void prefetch_get(void *dst, int32_t lock_offset, void *src,
 
 extern void __writethrough_wrapper(c_nodeid_t node, void *serial_data,
     void* owner_obj, void* data, int64_t offset);
+
+static
+void prefetch_put_consistent(struct __prefetch_entry_t* prefetch_entry,
+    void *addr, int32_t lock_offset, void *paddr, size_t size,
+    int page_idx) {
+  start_update(prefetch_entry, page_idx);
+  __writethrough_wrapper(prefetch_entry->origin_node, 
+      prefetch_entry->data, prefetch_entry->owner_obj, addr,
+      (-1*lock_offset));
+  chpl_memcpy(paddr, addr, size);
+  stop_update(prefetch_entry, page_idx);
+}
+
+static
+void prefetch_put_inconsistent(struct __prefetch_entry_t* prefetch_entry,
+    void *addr, int32_t lock_offset, void *paddr, size_t size) {
+  __writethrough_wrapper(prefetch_entry->origin_node, 
+      prefetch_entry->data, prefetch_entry->owner_obj, addr,
+      (-1*lock_offset));
+  chpl_memcpy(paddr, addr, size);
+}
+
 void prefetch_put(void *addr, int32_t lock_offset, void *paddr,
     size_t size, int32_t typeIndex, int ln, int32_t fn) {
 
   struct __prefetch_entry_t* prefetch_entry =
     *((struct __prefetch_entry_t **)((char *)paddr+lock_offset));
 
-  __writethrough_wrapper(prefetch_entry->origin_node, 
-      prefetch_entry->data, prefetch_entry->owner_obj, addr,
-      (-1*lock_offset));
+  if(prefetch_entry->should_lock) {
+    int page_idx = (-1*lock_offset)/PF_PAGE_SIZE;
+    prefetch_put_consistent(prefetch_entry, addr, lock_offset, paddr,
+        size, page_idx);
+  }
+  else {
+    prefetch_put_inconsistent(prefetch_entry, addr, lock_offset, paddr,
+        size);
+  }
 }
 
 void *get_entry_data(struct __prefetch_entry_t *entry) {
