@@ -156,7 +156,7 @@ module PrefetchHooks {
 
     proc getByteIndex(data: c_void_ptr, __idx: c_void_ptr) {
       halt("This shouldn't have been called");
-      var dummy: uint(64);
+      var dummy: int(64);
       return dummy;
     }
     
@@ -936,7 +936,7 @@ module PrefetchHooks {
         halt("getByteIndex is called on an object that doesn't " +
             "support it");
 
-        return 0:uint;
+        return 0;
       }
     }
 
