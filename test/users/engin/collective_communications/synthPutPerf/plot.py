@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import subprocess
 
-numtypes = 10
+numtypes = 3
 strides = ('01', '02', '04', '08', '16', '32', '64')
 
 times = [[] for i in range(numtypes)]
