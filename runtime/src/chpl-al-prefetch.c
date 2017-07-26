@@ -267,14 +267,10 @@ void *get_prefetched_data_addr(void *accessor,
   // NULL check for prefetch entry has been handled by PrefethcHooks
   if(offset < 0 ||
       (intptr_t)size > ((intptr_t)prefetch_entry->size)-offset) {
-    /*DEBUG_PRINT(("\t offset=%ld, size=%zd, origin=%d, entry_size=%zd\n",*/
+    /*printf("\t offset=%ld, size=%zd, origin=%d, entry_size=%zd\n",*/
         /*offset, size, prefetch_entry->origin_node,*/
-        /*prefetch_entry->size));*/
-    /**found = 0;*/
-  }
-  else {
-    *back_link_offset = -offset-sizeof(struct __prefetch_entry_t *);
-    /*DEBUG_PRINT(("%ld %ld %ld FOUND > offset=%ld, entry_size=%zd, \*/
+        /*prefetch_entry->size);*/
+    /*printf("%ld %ld %ld NOT FOUND > offset=%ld, entry_size=%zd, \*/
         /*metadata=%ld %ld %ld %ld %ld %ld\n",*/
         /*((int64_t*)idx)[0],((int64_t*)idx)[1],((int64_t*)idx)[2],*/
         /*offset, prefetch_entry->size,*/
@@ -283,7 +279,21 @@ void *get_prefetched_data_addr(void *accessor,
         /*((int64_t*)prefetch_entry->data)[2],*/
         /*((int64_t*)prefetch_entry->data)[3],*/
         /*((int64_t*)prefetch_entry->data)[4],*/
-        /*((int64_t*)prefetch_entry->data)[5]));*/
+        /*((int64_t*)prefetch_entry->data)[5]);*/
+    /**found = 0;*/
+  }
+  else {
+    *back_link_offset = -offset-sizeof(struct __prefetch_entry_t *);
+    /*printf("%ld %ld %ld FOUND > offset=%ld, entry_size=%zd, \*/
+        /*metadata=%ld %ld %ld %ld %ld %ld\n",*/
+        /*((int64_t*)idx)[0],((int64_t*)idx)[1],((int64_t*)idx)[2],*/
+        /*offset, prefetch_entry->size,*/
+        /*((int64_t*)prefetch_entry->data)[0],*/
+        /*((int64_t*)prefetch_entry->data)[1],*/
+        /*((int64_t*)prefetch_entry->data)[2],*/
+        /*((int64_t*)prefetch_entry->data)[3],*/
+        /*((int64_t*)prefetch_entry->data)[4],*/
+        /*((int64_t*)prefetch_entry->data)[5]);*/
     retaddr = (void *)((uintptr_t)prefetch_entry->data+offset);
   }
   return retaddr;
@@ -374,6 +384,9 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   // duplicate again
   new_entry->slice_desc = slice_desc;
   new_entry->slice_desc_size = slice_desc_size;
+
+  /*new_entry->slice_desc = chpl_malloc(slice_desc_size);*/
+  /*memcpy(new_entry->slice_desc, slice_desc, slice_desc_size);*/
 
   new_entry->pf_type = PF_INIT;
   new_entry->elemsize = elemsize;

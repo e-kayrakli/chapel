@@ -329,6 +329,10 @@ module PrefetchHooks {
           var (data, backLinkOffset) = accessPrefetchedDataRef(h, i);
           prefetched = !is_c_nil(data);
 
+          /*if prefetched then*/
+            /*writeln(here, " has prefetched ", i, " from ",*/
+                /*locIdx);*/
+
           if prefetchTiming then accessTimer.stop();
 
           return __primitive("gen prefetch ptr", data, backLinkOffset);
@@ -679,7 +683,15 @@ module PrefetchHooks {
 
       if prefetchSlice then
         (slice_desc, slice_desc_size, dummyBool) =
-          convertToSerialChunk(domToArray(sliceDesc));
+          convertToSerialChunk(sliceDesc);
+
+      /*const slice_desc_ptr = slice_desc:c_ptr(int);*/
+      /*writeln(here, " sliceDesc ", sliceDesc);*/
+  /*writeln(here, " slice_desc ", slice_desc_ptr[0], " ",*/
+                                            /*slice_desc_ptr[1], " ",*/
+                                            /*slice_desc_ptr[2], " ",*/
+                                            /*slice_desc_ptr[3]);*/
+      /*writeln(here, " domToarray sliceDesc ", domToArray(sliceDesc));*/
 
       var (size, dataStartOffset) = __getSerializedSize(destLocaleId,
           srcLocaleId, srcObj, slice_desc, slice_desc_size);
@@ -1088,6 +1100,19 @@ module PrefetchHooks {
         getSize(count, a._value.eltType),
         false); //buffer needs to be freed?
 
+  }
+
+  inline proc convertToSerialChunk(a: domain) {
+    const size = a.size;
+    type t = a.idxType;
+    var dyn_mem = c_malloc(t, size);
+    for param r in 1..a.rank {
+      dyn_mem[r-1] = a.dim(r).low;
+      dyn_mem[r-1+a.rank] = a.dim(r).high;
+    }
+    return (dyn_mem, 
+            getSize(size, t),
+            true);
   }
 
   inline proc convertToSerialChunk(a: c_ptr, count, type t) {

@@ -247,7 +247,15 @@ iter LocBlockArr.dsiSerializeMetadata(slice_desc) {
         slice_desc[i-1+rank])-max(myDom.dim(i).low, slice_desc[i-1])+1;
   }
 
-  yield convertToSerialChunk(metaDataArr);
+  /*writeln(here, " serializing slice_desc ", slice_desc[0], " ",*/
+                                            /*slice_desc[1], " ",*/
+                                            /*slice_desc[2], " ",*/
+                                            /*slice_desc[3]);*/
+
+  /*writeln(here, " serializing metadata ", metaDataArr);*/
+
+  for d in metaDataArr do yield convertToSerialChunk(d);
+  /*yield convertToSerialChunk(metaDataArr);*/
 }
 
 iter LocBlockArr.dsiSerializeData(slice_desc) {

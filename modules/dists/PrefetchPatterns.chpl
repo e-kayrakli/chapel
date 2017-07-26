@@ -90,14 +90,47 @@ proc BlockArr.transposePrefetch(consistent=true, staticDomain=false) {
   const tld = dom.dist.targetLocDom;
   if tld.rank != 2 then
     halt("Only 2D array s can be transpose-prefetched");
-  if tld.dim(1).length != tld.dim(2).length then
-    halt("Number of locales can only be a full square");
 
-  coforall localeIdx in dom.dist.targetLocDom {
-    on dom.dist.targetLocales(localeIdx) {
-      const sourceIdx = (localeIdx[2], localeIdx[1]);
-      __prefetchFrom(localeIdx, sourceIdx, consistent,
-          staticDomain=staticDomain);
+  inline proc checkFastPrefetch() {
+    if dom.whole.dim(1).length ==  dom.whole.dim(2).length {
+      if tld.dim(1).length == tld.dim(2).length {
+        if dom.whole.dim(1).length % tld.dim(1).length == 0 {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // perfect divisibility and full-square distribution avoids some of
+  // the computation during the initialization
+  if checkFastPrefetch() {
+    coforall localeIdx in dom.dist.targetLocDom {
+      on dom.dist.targetLocales(localeIdx) {
+        const sourceIdx = (localeIdx[2], localeIdx[1]);
+        __prefetchFrom(localeIdx, sourceIdx, consistent,
+            staticDomain=staticDomain);
+      }
+    }
+  }
+  // there are some divisibility "issue", be pessimistic and assume
+  // everyone can have something to prefetch from everyone
+  else {     
+    coforall localeIdx in dom.dist.targetLocDom {
+      on dom.dist.targetLocales(localeIdx) {
+
+        const locSubDom = dom.dsiLocalSubdomain();
+        const locSubDomT = {locSubDom.dim(2), locSubDom.dim(1)};
+        /*writeln(this.locale, " ", here, "locSubDom=", locSubDom);*/
+        /*writeln(this.locale, " ", here, "locSubDomT=", locSubDomT);*/
+        for sourceIdx in dom.dist.targetLocDom {
+          const intersectDom =  dom.locDoms[sourceIdx].myBlock[locSubDomT];
+          if intersectDom.size != 0 {
+            __prefetchFrom(localeIdx, sourceIdx, intersectDom,
+                consistent, staticDomain=staticDomain);
+          }
+        }
+      }
     }
   }
   /*writeln("Finalizing prefetch");*/
