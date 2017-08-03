@@ -370,10 +370,10 @@ class SparseBlockArr: BaseSparseArr {
   // superclass' fields cannot be used in child class' field initializers. See
   // the constructor for the workaround.
   var locArrDom: domain(rank,idxType);
-  var locArr: [locArrDom] LocSparseBlockArr(eltType, rank, idxType, stridable,
-      sparseLayoutType);
+  var locArr: [locArrDom] LocSparseBlockArr(eltType, rank, idxType,
+      stridable, sparseLayoutType, dom.type);
   var myLocArr: LocSparseBlockArr(eltType, rank, idxType, stridable,
-      sparseLayoutType);
+      sparseLayoutType, dom.type);
 
   proc SparseBlockArr(type eltType, param rank, type idxType, param stridable,
       type sparseLayoutType ,dom) {
@@ -385,8 +385,10 @@ class SparseBlockArr: BaseSparseArr {
     coforall localeIdx in dom.dist.targetLocDom {
       on dom.dist.targetLocales(localeIdx) {
         const locDom = dom.getLocDom(localeIdx);
-        locArr(localeIdx) = new LocSparseBlockArr(eltType, rank, idxType,
-            stridable, sparseLayoutType, locDom);
+        locArr(localeIdx) = new LocSparseBlockArr(eltType=eltType,
+            rank=rank, idxType=idxType, stridable=stridable,
+            sparseLayoutType=sparseLayoutType, locDom=locDom,
+            wholeDomType=dom.type, globalDesc=this);
         locArr(localeIdx).setup(dom.dist.targetLocales);
         /*if thisid == here.id then*/
           /*myLocArr = locArr(localeIdx);*/
@@ -492,6 +494,10 @@ class SparseBlockArr: BaseSparseArr {
     return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
   }
 
+  proc nonLocalAccess(i: rank*idxType) ref {
+    return locArr[dom.dist.targetLocsIdx(i)].dsiAccess(i);
+  }
+
 
 
 
@@ -529,12 +535,24 @@ class LocSparseBlockArr {
   const locDom: LocSparseBlockDom(rank, idxType, stridable, sparseLayoutType);
   var myElems: [locDom.mySparseBlock] eltType;
 
+  type wholeDomType;
+
   var prefetchHook: GenericPrefetchHook(
       LocSparseBlockArr(eltType, rank, idxType, stridable,
-        sparseLayoutType),
+        sparseLayoutType, wholeDomType),
       myElems.type,
       true);
+  /*var parentWholeDom;*/
+  var globalDesc: SparseBlockArr(eltType, rank, idxType, wholeDomType,
+      stridable, sparseLayoutType);
 
+  /*proc LocSparseBlockArr(type eltType, param rank, type idxType,*/
+      /*param stridable, type sparseLayoutType, locDom, */
+      /*type wholeDomType, globalDesc) {*/
+    /*this.locDom = locDom;*/
+    /*[>this.wholeDomType = wholeDomType;<]*/
+    /*this.globalDesc = globalDesc;*/
+  /*}*/
   proc setup(targetLocales) {
     prefetchHook = getNewPrefetchHook(this, myElems.type,
         true, targetLocales);
@@ -635,6 +653,11 @@ class LocSparseBlockArr {
     /*}*/
   /*}*/
 
+  proc getIdxFromData(data: c_void_ptr, offset) {
+    halt("No write through for sparse arrays yet");
+    if rank == 1 then return 0;
+    if rank == 2 then return (0,0);
+  }
 
   //.why is this an iterator? FIXME
   iter dsiGetSerializedObjectSize() {
