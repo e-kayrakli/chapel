@@ -410,6 +410,7 @@ module PrefetchHooks {
         (size, dataStartByteOffset) =
           __serialized_obj_size_wrapper(srcObj, slice_desc_local,
               slice_desc_size);
+        c_free(slice_desc_local);
       }
         /*if prefetchTiming then subreprefetchTimer.stop();*/
 
@@ -461,9 +462,13 @@ module PrefetchHooks {
             __get_data_start_ptr_wrapper(srcObj, startIdx)
           else
             __get_data_start_ptr_wrapper(srcObj);
+
+          c_free(slice_desc_local);
+          c_free(local_buffer);
       }
 
       if prefetchTiming then subreprefetchTimer.stop();
+
 
       if is_c_nil(dataStartPtr) then halt("Received null pointer");
       return dataStartPtr;
@@ -502,6 +507,9 @@ module PrefetchHooks {
 
         chpl_comm_put(local_buffer[0], destLocaleId, data[0],
             size_local, -1, 0, 0, 0);
+
+        c_free(local_buffer);
+        c_free(slice_desc_local);
       }
       if prefetchTiming then subreprefetchTimer.stop();
     }
@@ -1031,6 +1039,7 @@ module PrefetchHooks {
       metadataOnly: bool) {
 
     local {
+      /*startVerboseMem();*/
       type bufferEltType = uint(8);
       var obj = __obj:objType;
       /*writeln(here, " reads obj ", __primitive("cast", uint, obj));*/
@@ -1071,6 +1080,7 @@ module PrefetchHooks {
           curBufferSize += chunkSize;
         }
       }
+      /*stopVerboseMem();*/
     }
   }
 

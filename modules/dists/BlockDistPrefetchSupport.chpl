@@ -276,6 +276,7 @@ iter LocBlockArr.dsiSerializeData(slice_desc) {
     yield convertToSerialChunk(myElems[i], sp);
   /*yield convertToSerialChunk(c_ptrTo(myElems[sliceDom.low]),*/
       /*sliceDom.size, eltType);*/
+  c_free(sp);
 }
 
 iter LocBlockArr.dsiSerialize(slice_desc) {
