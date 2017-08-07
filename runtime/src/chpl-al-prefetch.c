@@ -14,6 +14,10 @@
 #include <string.h> // memcpy, memset, etc.
 #include <assert.h>
 
+static inline
+void *pf_malloc(size_t size) {
+  return chpl_mem_alloc(size, 0, 0, 0);
+}
 // ----------  SUPPORT FUNCTIONS 
 // directly taken from chpl-cache-support.c to avoid including a whole c
 // file
@@ -209,7 +213,7 @@ void chpl_prefetch_do_init(void)
 {
   static int inited = 0;
   if( ! inited ) {
-    pbuf = chpl_malloc(sizeof(struct prefetch_buffer_s));
+    pbuf = pf_malloc(sizeof(struct prefetch_buffer_s));
     pbuf->head = NULL;
     pbuf->min_task_seqn = 0;
     chpl_sync_initAux(&(pbuf->update_lock));
@@ -357,6 +361,7 @@ void prefetch_entry_init_seqn_n(struct __prefetch_entry_t *entry,
   }
 }
 
+
 static
 struct __prefetch_entry_t *add_to_prefetch_buffer(
     struct prefetch_buffer_s* pbuf, c_nodeid_t origin_node,
@@ -375,7 +380,7 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   head = pbuf->head;
 
   //currently just add to the head
-  new_entry = chpl_malloc(sizeof(struct __prefetch_entry_t)*1);
+  new_entry = pf_malloc(sizeof(struct __prefetch_entry_t)*1);
 
   new_entry->origin_node = origin_node;
   new_entry->robjaddr = robjaddr;
@@ -385,13 +390,13 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   new_entry->slice_desc = slice_desc;
   new_entry->slice_desc_size = slice_desc_size;
 
-  /*new_entry->slice_desc = chpl_malloc(slice_desc_size);*/
+  /*new_entry->slice_desc = pf_malloc(slice_desc_size);*/
   /*memcpy(new_entry->slice_desc, slice_desc, slice_desc_size);*/
 
   new_entry->pf_type = PF_INIT;
   new_entry->elemsize = elemsize;
 
-  data_bundle = chpl_malloc(
+  data_bundle = pf_malloc(
       sizeof(struct __prefetch_entry *) +
       prefetch_size);
 
@@ -434,12 +439,12 @@ struct __prefetch_entry_t *add_to_prefetch_buffer(
   
   if(consistent) {
     new_entry->state_counter = 0;
-    new_entry->state_lock = chpl_malloc(sizeof(chpl_sync_aux_t));
+    new_entry->state_lock = pf_malloc(sizeof(chpl_sync_aux_t));
     chpl_sync_initAux(new_entry->state_lock);
 
     new_entry->page_count = prefetch_size/PF_PAGE_SIZE+1;
 
-    new_entry->rwl = chpl_malloc(sizeof(pthread_rwlock_t) *
+    new_entry->rwl = pf_malloc(sizeof(pthread_rwlock_t) *
         (new_entry->page_count));
 
     for(i = 0 ; i < new_entry->page_count ; i++) {
@@ -684,7 +689,7 @@ void *update_prefetch_handle(void* owner_obj, c_nodeid_t
     //reallocate space
     /*chpl_free((*new_entry)->data);*/
     (*new_entry)->size = prefetch_size;
-    (*new_entry)->data = chpl_malloc(prefetch_size);
+    (*new_entry)->data = pf_malloc(prefetch_size);
   }
   else {
     /*printf("%d reusing old handle\n", chpl_nodeID);*/
