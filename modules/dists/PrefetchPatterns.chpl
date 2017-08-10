@@ -13,6 +13,10 @@ inline proc BlockArr.updatePrefetchHere() {
     myLocArr.getPrefetchHook().updatePrefetch();
 }
 
+inline proc BlockArr.spmdUpdatePrefetch(tid) {
+  myLocArr.getPrefetchHook().spmdUpdatePrefetch(tid);
+}
+
 proc BlockArr.reportPrefetch() {
   for localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {

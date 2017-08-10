@@ -27,6 +27,8 @@
 module PrefetchHooks {
   use BlockDist;
   use Time;
+  use BarrierModule;
+
   // this is currently a totatlly random value
   config param initSerializeBufSize = 1024;
   config param serializeBufferGrowthFactor = 1.5;
@@ -86,6 +88,10 @@ module PrefetchHooks {
 
   class PrefetchHook {
     var x = 10;
+
+    proc spmdUpdatePrefetch(tid) {
+      halt("spmdUpdatePrefetch called on PrefetchHook");
+    }
 
     proc writeThrough(node, serialData: c_void_ptr, 
         offset, data: c_void_ptr) {
@@ -939,6 +945,25 @@ module PrefetchHooks {
           reprefetch_single_entry(handleFromLocaleIdx(i));
         }
       }
+    }
+
+    inline proc updatePrefetchFrom(localeId) {
+      extern proc reprefetch_single_entry(handle);
+      reprefetch_single_entry(handles[localeId]);
+    }
+
+    var spmdUpdateBarrier = new Barrier(here.maxTaskPar);
+
+    // assumes all the locales have same maxTaskPar
+    // and all the parallel tasks in the region calls this
+    proc spmdUpdatePrefetch(tid) {
+      const numTasks = here.maxTaskPar;
+      var updateFromId = tid;
+      while updateFromId <= numLocales-1 {
+        updatePrefetchFrom(updateFromId);
+        updateFromId += numTasks;
+      }
+      /*spmdUpdateBarrier.barrier();*/
     }
 
     inline proc hasPrefetchedFrom(localeIdx) {

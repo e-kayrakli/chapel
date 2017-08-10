@@ -67,7 +67,7 @@ $(SYS_CTYPES_MODULE_DOC): $(MAKE_SYS_BASIC_TYPES)
 
 MODULES_TO_DOCUMENT = \
 	standard/Assert.chpl \
-	standard/Barrier.chpl \
+	standard/BarrierModule.chpl \
 	standard/BigInteger.chpl \
 	standard/BitOps.chpl \
 	standard/Buffers.chpl \
