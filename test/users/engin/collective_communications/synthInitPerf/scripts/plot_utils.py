@@ -62,7 +62,7 @@ def create_plots(versions, plot_name_prefix):
             max_y = max(d[v.abbrev])
 
     #legend
-    d_ax.legend(loc=0, fontsize=12)
+    d_ax.legend(loc=0, fontsize=22)
     #grid
     d_ax.grid(b=True, axis='x')
     # x axis settings
