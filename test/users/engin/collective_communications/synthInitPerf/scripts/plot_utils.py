@@ -37,8 +37,12 @@ def parse(versions):
     return(ss_means, ws_means)
 
 def create_plots(versions, plot_name_prefix):
+    import matplotlib as mpl
     import matplotlib.pyplot as plt
     datasets = parse(versions)
+
+    mpl.rcParams['lines.markersize'] = 12
+    mpl.rcParams['lines.linewidth'] = 3
 
     rect = 0.1,0.1,0.8,0.8
     # for d,suffix in zip(datasets, ["_ss", "_ws"]):
@@ -46,13 +50,14 @@ def create_plots(versions, plot_name_prefix):
     suffix = "_ss"
     filename = (plot_path + "/" +
         plot_name_prefix + suffix)
-    d_fig = plt.figure(figsize=(10,10))
+    d_fig = plt.figure(figsize=(10,6))
     d_ax = d_fig.add_axes(rect)
     max_y = 0
     for v in versions:
         d_ax.plot(locales_int, d[v.abbrev],
                 label=v.abbrev, color=v.color, marker=v.marker,
-                linestyle=v.linestyle)
+                linestyle=v.linestyle, markerfacecolor='none',
+                markeredgewidth=2)
         if max(d[v.abbrev]) > max_y:
             max_y = max(d[v.abbrev])
 
