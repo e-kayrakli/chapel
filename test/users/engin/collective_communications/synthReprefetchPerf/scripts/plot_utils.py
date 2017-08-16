@@ -73,5 +73,6 @@ def create_plots(versions, plot_name_prefix):
     d_ax.set_ylabel("Execution Time (s)")
     d_ax.set_ylim((0,max_y*1.1))
     print("Plot saved: " + filename)
-    plt.savefig(filename)
+    plt.savefig(filename)  # just as an alternative
+    plt.savefig(filename+".eps", format='eps', dpi=1000) 
     plt.close()

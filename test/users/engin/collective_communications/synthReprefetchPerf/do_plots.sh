@@ -11,4 +11,5 @@ do
   cd ..
   make plotslurm SIZE=100 NUMTRIES=1
   cp synthReprefetchPerf_ss.png ~/papers/prefetch_v3/plots_new/synth/synthReprefetchPerf_ss_$h.png
+  cp synthReprefetchPerf_ss.eps ~/papers/prefetch_v3/plots_new/synth/synthReprefetchPerf_ss_$h.eps
 done
