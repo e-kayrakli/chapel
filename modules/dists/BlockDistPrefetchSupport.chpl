@@ -14,7 +14,10 @@ proc LocBlockArr.getIdxFromData(data: c_void_ptr, offset) {
   if rank == 2 then
     return ((eltCount/metadata[3])+metadata[0],
             (eltCount%metadata[3])+metadata[1]);
-  else halt("No WT yet for 3D arrays");
+  if rank == 3 {
+    return (0,0,0);
+    halt("No WT yet for 3D arrays");
+  }
 }
 
 inline proc LocBlockArr.accessByLocalIdx(localIdx) ref {
