@@ -338,6 +338,9 @@ module PrefetchHooks {
           /*if prefetched then*/
             /*writeln(here, " has prefetched ", i, " from ",*/
                 /*locIdx);*/
+          /*else*/
+            /*writeln(here, " has not prefetched ", i, " from ",*/
+                /*locIdx);*/
 
           if prefetchTiming then accessTimer.stop();
 
@@ -412,6 +415,12 @@ module PrefetchHooks {
               destLocaleId, (slice_desc:c_ptr(uint(8)))[0],
               slice_desc_size);
         }
+        var slice_desc_tmp = slice_desc_local:c_ptr(int);
+        /*writeln(here, " slice desc (size=", slice_desc_size, " received from (inGetSerializedSize)", destLocaleId, " : ",*/
+            /*slice_desc_tmp[0], " ",*/
+            /*slice_desc_tmp[1], " ",*/
+            /*slice_desc_tmp[2], " ",*/
+            /*slice_desc_tmp[3], " ");*/
 
         (size, dataStartByteOffset) =
           __serialized_obj_size_wrapper(srcObj, slice_desc_local,
@@ -498,6 +507,12 @@ module PrefetchHooks {
               slice_desc_size);
         }
 
+        var slice_desc_tmp = slice_desc_local:c_ptr(int);
+        /*writeln(here, " slice desc received from ", destLocaleId, " : ",*/
+            /*slice_desc_tmp[0], " ",*/
+            /*slice_desc_tmp[1], " ",*/
+            /*slice_desc_tmp[2], " ",*/
+            /*slice_desc_tmp[3], " ");*/
         //NOTE for now we are serializing the data ad hoc. previously,
         //when we relied on AM's data serialization used to start right
         //after responding to size query. This is a TODO for now
@@ -634,6 +649,8 @@ module PrefetchHooks {
             slice_desc_size, consistent));
 
 
+        /*writeln(here, " repref starting __getSerializedData from ",*/
+            /*srcLocaleId);*/
       __getSerializedData(destLocaleId, srcLocaleId, srcObj,
           slice_desc, slice_desc_size, data, size);
 
@@ -692,24 +709,33 @@ module PrefetchHooks {
       var new_handle_ptr: prefetch_entry_t;
       var data: _ddata(uint(8));
 
-      var (slice_desc, slice_desc_size, dummyBool) = (c_nil, 0:size_t,
-          false);
+      /*var (slice_desc_size, dummyBool) = (0:size_t,*/
+          /*false);*/
+
+      var slice_desc_size = getSize(sliceDesc.rank*2, int);
+      var slice_desc = c_malloc(uint(8), slice_desc_size):c_ptr(int);
 
       if prefetchSlice then
-        (slice_desc, slice_desc_size, dummyBool) =
-          convertToSerialChunk(sliceDesc);
+        convertToSerialChunk(sliceDesc, slice_desc);
 
-      /*const slice_desc_ptr = slice_desc:c_ptr(int);*/
+      const slice_desc_ptr = slice_desc:c_ptr(int);
       /*writeln(here, " sliceDesc ", sliceDesc);*/
-  /*writeln(here, " slice_desc ", slice_desc_ptr[0], " ",*/
-                                            /*slice_desc_ptr[1], " ",*/
-                                            /*slice_desc_ptr[2], " ",*/
-                                            /*slice_desc_ptr[3]);*/
+  /*writeln(here, " sending slice desc (size=, ", slice_desc_size, ") to ", srcLocaleId, ": ", slice_desc[0], " ",*/
+                                            /*slice_desc[1], " ",*/
+                                            /*slice_desc[2], " ",*/
+                                            /*slice_desc[3],*/
+                          /*" slice_desc=", __primitive("cast", int, slice_desc));*/
       /*writeln(here, " domToarray sliceDesc ", domToArray(sliceDesc));*/
 
       var (size, dataStartOffset) = __getSerializedSize(destLocaleId,
           srcLocaleId, srcObj, slice_desc, slice_desc_size);
       dataStartIndex = dataStartOffset:int; // yikes
+
+  /*writeln(here, " post size slice desc to ", srcLocaleId, ": ", slice_desc[0], " ",*/
+                                            /*slice_desc[1], " ",*/
+                                            /*slice_desc[2], " ",*/
+                                            /*slice_desc[3],*/
+                          /*" slice_desc=", __primitive("cast", int, slice_desc));*/
 
       /*writeln(here, " received serial size=",size, " from ",*/
           /*srcLocaleId);*/
@@ -785,6 +811,12 @@ module PrefetchHooks {
         }
         else {
           /*writeln(here, " doing full prefetch");*/
+        /*writeln(here, " 1starting __getSerializedData from ",*/
+            /*srcLocaleId);*/
+  /*writeln(here, " pre getSerializedData sending slice desc to ", srcLocaleId, ": ", slice_desc_ptr[0], " ",*/
+                                            /*slice_desc_ptr[1], " ",*/
+                                            /*slice_desc_ptr[2], " ",*/
+                                            /*slice_desc_ptr[3]);*/
           __getSerializedData(destLocaleId, srcLocaleId, srcObj,
               slice_desc, slice_desc_size, data, size);
         }
@@ -801,6 +833,8 @@ module PrefetchHooks {
         const metadataSize = __getSerializedMetadataSize(destLocaleId,
             srcLocaleId, srcObj, slice_desc, slice_desc_size): size_t;
 
+        /*writeln(here, " starting __getSerializedData from ",*/
+            /*srcLocaleId);*/
         __getSerializedData(destLocaleId, srcLocaleId, srcObj,
             slice_desc, slice_desc_size, data, metadataSize,
             metadataOnly=true);
@@ -896,7 +930,8 @@ module PrefetchHooks {
       const nodeId = localeIDs[localeIdx];
 
       if nodeId!=here.id {
-        debug_writeln(here, " prefetching ", sliceDesc);
+        /*debug_writeln(here, " prefetching ", sliceDesc);*/
+        /*writeln(here, " prefetching ", sliceDesc, " from ", nodeId);*/
         var dataStartIndex = -1;
         handleFromLocaleIdx(localeIdx) = doPrefetch(here.id, nodeId,
             robjaddr, sliceDesc, wholeDesc, dataStartIndex, consistent,
@@ -1063,7 +1098,7 @@ module PrefetchHooks {
       bufsize: size_t, slice_desc, slice_desc_size: size_t,
       metadataOnly: bool) {
 
-    local {
+    /*local*/ {
       /*startVerboseMem();*/
       type bufferEltType = uint(8);
       var obj = __obj:objType;
@@ -1146,10 +1181,22 @@ module PrefetchHooks {
       dyn_mem[r-1+a.rank] = a.dim(r).high;
     }
     return (dyn_mem, 
-            getSize(size, t),
+            getSize(size, t), // TODO this is wrong
             true);
   }
 
+  proc convertToSerialChunk(a: domain, ref sp) {
+    /*writeln(here, " converting ", a);*/
+    const size = a.size;
+    type t = a.idxType;
+    for param r in 1..a.rank {
+      sp[r-1] = a.dim(r).low;
+      sp[r-1+a.rank] = a.dim(r).high;
+    }
+    /*return (sp, */
+            /*getSize(size, t),*/
+            /*true);*/
+  }
   inline proc convertToSerialChunk(a: c_ptr, count, type t) {
     return (a:c_void_ptr,
         getSize(count, t),

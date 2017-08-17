@@ -247,7 +247,7 @@ iter LocBlockArr.dsiSerializeMetadata(slice_desc) {
         slice_desc[i-1+rank])-max(myDom.dim(i).low, slice_desc[i-1])+1;
   }
 
-  /*writeln(here, " serializing slice_desc ", slice_desc[0], " ",*/
+  /*writeln(here, " serializing metedata slice_desc ", slice_desc[0], " ",*/
                                             /*slice_desc[1], " ",*/
                                             /*slice_desc[2], " ",*/
                                             /*slice_desc[3]);*/
