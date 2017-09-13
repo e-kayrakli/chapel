@@ -714,11 +714,16 @@ module PrefetchHooks {
       /*var (slice_desc_size, dummyBool) = (0:size_t,*/
           /*false);*/
 
-      var slice_desc_size = getSize(sliceDesc.rank*2, int);
-      var slice_desc = c_malloc(uint(8), slice_desc_size):c_ptr(int);
+      var slice_desc_size = 0:size_t;
+      var slice_desc: c_ptr(int);
+      /*var slice_desc_size = getSize(sliceDesc.rank*2, int);*/
+      /*var slice_desc = c_malloc(uint(8), slice_desc_size):c_ptr(int);*/
 
-      if prefetchSlice then
+      if prefetchSlice {
+        slice_desc_size = getSize(sliceDesc.rank*2, int);
+        slice_desc = c_malloc(uint(8), slice_desc_size):c_ptr(int);
         convertToSerialChunk(sliceDesc, slice_desc);
+      }
 
       const slice_desc_ptr = slice_desc:c_ptr(int);
       /*writeln(here, " sliceDesc ", sliceDesc);*/
