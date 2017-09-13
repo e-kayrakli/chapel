@@ -692,9 +692,11 @@ module PrefetchHooks {
 
 
     //srcObj is the remote PrefetchHook
+    // deferDataMove only applies to strided prefetches for now. This is
+    // a workaround for the weird issue in Transpose in IBV
     proc doPrefetch(destLocaleId, srcLocaleId, srcObj, sliceDesc,
         wholeDesc, out dataStartIndex, consistent, staticDomain, param
-        prefetchSlice) {
+        prefetchSlice, deferDataMove=false) {
 
       extern proc chpl_comm_get(addr, node, raddr, size,
           typeIndex: int(32), commID, ln, fn:int(32));
@@ -806,7 +808,8 @@ module PrefetchHooks {
           }
           else { //strided data
             /*writeln(here, " doing strided prefetch");*/
-            prefetch_strided_entry(new_handle_ptr);
+            if !deferDataMove then
+              prefetch_strided_entry(new_handle_ptr);
           }
         }
         else {
