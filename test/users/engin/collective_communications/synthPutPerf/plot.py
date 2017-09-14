@@ -46,7 +46,8 @@ for t in range(numtypes):
 # rects2 = ax.bar(ind + width, women_means, width, color='y')
 
 # # add some text for labels, title and axes ticks
-ax.set_ylabel('Access Latency(s)')
+# TODO make sure that the unit of the y axis is correct
+ax.set_ylabel('Access Latency(us)')
 ax.set_xlabel('Stride Length')
 
 
@@ -55,7 +56,7 @@ ax.set_xticks(ind + 0.5)
 ax.set_xticklabels([int(s) for s in strides])
 
 # ax.set_ylim((0,scaleupfactor*max_time*1.1))
-ax.set_yscale('log')
+# ax.set_yscale('log')
 
 # ax.legend(handles=bars)
 # ax.legend(tuple([b[0] for b in bars]), ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), ncol=10)
