@@ -1,6 +1,6 @@
 use BlockDist;
 use PrefetchPatterns;
-use Barrier;
+use BarrierModule;
 
 config const prefetch = false;
 config const staticDomain = false;

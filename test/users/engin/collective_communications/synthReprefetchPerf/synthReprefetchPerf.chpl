@@ -1,7 +1,7 @@
 use Random;
 use BlockDist;
 use PrefetchPatterns;
-use Barrier;
+use BarrierModule;
 
 if numLocales <= 1 then
   halt("This test needs at least 2 locales");
