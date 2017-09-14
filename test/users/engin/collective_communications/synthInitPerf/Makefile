@@ -10,7 +10,7 @@ $(MAIN)_u: $(MAIN).chpl
 	chpl $(FLAGS) -sallowPrefetchUnpacking=true $(MISCFLAGS) -o ./bin/$@ $^
 
 cleanout:
-	rm -f ./out/*.out
+	rm -f ./out/*.out ./err/*.err
 
 clean:
 	rm -f ./bin/$(MAIN)*
