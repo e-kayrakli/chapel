@@ -2063,7 +2063,7 @@ module ChapelArray {
 
     inline proc enableAccessLogging(fileName) {
       coforall l in Locales do on l {
-        _value.enableAccessLogging(fileName);
+        _value.enableAccessLogging(fileName, this.domain);
       }
     }
 

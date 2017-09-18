@@ -652,11 +652,19 @@ module ChapelDistribution {
                                   kind=iokind.dynamic,
                                   locking=true);
 
-    inline proc enableAccessLogging(fileName) {
+    inline proc enableAccessLogging(fileName, d) {
       try {
         accessLogging = true;
         accessLogChannel = open(fileName+"locale_"+here.id,
             iomode.cw).writer();
+
+        //log some metadata regarding the domain
+        accessLogChannel.writeln(d.rank);
+        if d.hasSingleLocalSubdomain() then
+          accessLogChannel.writeln(d.localSubdomain());
+        else
+          for localSubDom in d.localSubdomains() do
+            accessLogChannel.writeln(localSubDom);
       }
       catch {
         //TODO
@@ -664,7 +672,7 @@ module ChapelDistribution {
     }
     
     inline proc logAccess(i) {
-      accessLogChannel.writeln(here.id, i, error=ENOERR:syserr);
+      accessLogChannel.writeln(i, error=ENOERR:syserr);
     }
 
     proc isSliceArrayView() param {
