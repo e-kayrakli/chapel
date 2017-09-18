@@ -2068,6 +2068,16 @@ module ChapelArray {
       }
     }
 
+    inline proc logAccess(i) {
+      var hid = (here.id):int;
+      access_log_writeln(hid, " ", i);
+
+      proc access_log_writeln(args...) {
+        extern proc printf(fmt:c_string, f:c_string);
+        var str = chpl_debug_stringify((...args));
+        printf("%s\n", str.c_str());
+      }
+    }
     // array element access
     // When 'this' is 'const', so is the returned l-value.
     pragma "no doc" // ref version
@@ -2099,17 +2109,6 @@ module ChapelArray {
         return _value.dsiAccess(i);
       else
         return _value.dsiAccess(i(1));
-    }
-
-    inline proc logAccess(i) {
-      var hid = (here.id):int;
-      access_log_writeln(hid, " ", i);
-
-      proc access_log_writeln(args...) {
-        extern proc printf(fmt:c_string, f:c_string);
-        var str = chpl_debug_stringify((...args));
-        printf("%s\n", str.c_str());
-      }
     }
 
 
