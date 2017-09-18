@@ -2061,12 +2061,20 @@ module ChapelArray {
     /* The number of dimensions in the array */
     proc rank param return this.domain.rank;
 
+    inline proc enableAccessLogging() {
+      chpl_debug_writeln("Access logging enabled");
+      coforall l in Locales do on l {
+        _value.accessLogging = true;
+      }
+    }
+
     // array element access
     // When 'this' is 'const', so is the returned l-value.
     pragma "no doc" // ref version
     pragma "reference to const when const this"
     pragma "removable array access"
     inline proc ref this(i: rank*_value.dom.idxType) ref {
+      if _value.accessLogging then logAccess(i);
       if isRectangularArr(this) || isSparseArr(this) then
         return _value.dsiAccess(i);
       else
@@ -2076,6 +2084,7 @@ module ChapelArray {
     inline proc const this(i: rank*_value.dom.idxType)
     where shouldReturnRvalueByValue(_value.eltType)
     {
+      if _value.accessLogging then logAccess(i);
       if isRectangularArr(this) || isSparseArr(this) then
         return _value.dsiAccess(i);
       else
@@ -2085,12 +2094,23 @@ module ChapelArray {
     inline proc const this(i: rank*_value.dom.idxType) const ref
     where shouldReturnRvalueByConstRef(_value.eltType)
     {
+      if _value.accessLogging then logAccess(i);
       if isRectangularArr(this) || isSparseArr(this) then
         return _value.dsiAccess(i);
       else
         return _value.dsiAccess(i(1));
     }
 
+    inline proc logAccess(i) {
+      var hid = (here.id):int;
+      access_log_writeln(hid, " ", i);
+
+      proc access_log_writeln(args...) {
+        extern proc printf(fmt:c_string, f:c_string);
+        var str = chpl_debug_stringify((...args));
+        printf("%s\n", str.c_str());
+      }
+    }
 
 
     pragma "no doc" // ref version

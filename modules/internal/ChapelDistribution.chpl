@@ -646,6 +646,7 @@ module ChapelDistribution {
     // atomics are available
     var pid:int = nullPid; // privatized ID, if privatization is supported
     var _decEltRefCounts : bool = false;
+    var accessLogging = false;
 
     proc isSliceArrayView() param {
       return false;
