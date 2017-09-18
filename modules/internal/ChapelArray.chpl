@@ -2061,23 +2061,16 @@ module ChapelArray {
     /* The number of dimensions in the array */
     proc rank param return this.domain.rank;
 
-    inline proc enableAccessLogging() {
-      chpl_debug_writeln("Access logging enabled");
+    inline proc enableAccessLogging(fileName) {
       coforall l in Locales do on l {
-        _value.accessLogging = true;
+        _value.enableAccessLogging(fileName);
       }
     }
 
     inline proc logAccess(i) {
-      var hid = (here.id):int;
-      access_log_writeln(hid, " ", i);
-
-      proc access_log_writeln(args...) {
-        extern proc printf(fmt:c_string, f:c_string);
-        var str = chpl_debug_stringify((...args));
-        printf("%s\n", str.c_str());
-      }
+      _value.logAccess(i);
     }
+
     // array element access
     // When 'this' is 'const', so is the returned l-value.
     pragma "no doc" // ref version

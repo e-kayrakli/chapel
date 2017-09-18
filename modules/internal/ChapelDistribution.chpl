@@ -20,6 +20,7 @@
 module ChapelDistribution {
 
   use List;
+  use IO;
 
   extern proc chpl_task_yield();
 
@@ -647,6 +648,24 @@ module ChapelDistribution {
     var pid:int = nullPid; // privatized ID, if privatization is supported
     var _decEltRefCounts : bool = false;
     var accessLogging = false;
+    var accessLogChannel: channel(writing=true,
+                                  kind=iokind.dynamic,
+                                  locking=true);
+
+    inline proc enableAccessLogging(fileName) {
+      try {
+        accessLogging = true;
+        accessLogChannel = open(fileName+"locale_"+here.id,
+            iomode.cw).writer();
+      }
+      catch {
+        //TODO
+      }
+    }
+    
+    inline proc logAccess(i) {
+      accessLogChannel.writeln(here.id, i, error=ENOERR:syserr);
+    }
 
     proc isSliceArrayView() param {
       return false;
