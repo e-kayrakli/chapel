@@ -660,6 +660,7 @@ module ChapelDistribution {
 
         //log some metadata regarding the domain
         accessLogChannel.writeln(d.rank);
+        accessLogChannel.writeln(d);
         if d.hasSingleLocalSubdomain() then
           accessLogChannel.writeln(d.localSubdomain());
         else
