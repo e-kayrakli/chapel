@@ -13,6 +13,8 @@ from log_parser import parse_log
         # self.set_bounds(*ax.viewLim.bounds)
         # ax.figure.canvas.draw_idle()
 
+# FIXME get rid of this by figuring out where the padding comes from
+pad_comp = 0.15
 
 def inc_color(cur, inc):
     return (cur[0], cur[1]-inc, cur[2]-inc)
@@ -27,6 +29,20 @@ class Display(object):
 
         self.height = h
         self.width = w
+
+    def get_locsubdom_rect(self):
+        x = self.subdom_lims[0][0] - pad_comp
+        width = self.subdom_lims[0][1] - x + 1
+
+        y = self.subdom_lims[1][0] - pad_comp
+        height = self.subdom_lims[1][1] - y + 1
+
+        x *= self.ratio
+        y *= self.ratio
+        width *= self.ratio
+        height *= self.ratio
+
+        return Rectangle((x,y), width, height, fill=False)
 
     def get_image(self):
 
@@ -43,8 +59,7 @@ class Display(object):
                 rem = self.height%access_mat_h;
                 self.height -= rem
                 self.width = self.height
-                print(self.height)
-                ratio = int(self.height/access_mat_h)
+                self.ratio = int(self.height/access_mat_h)
                 binning=False
                 scaleup=True
             else:
@@ -63,12 +78,13 @@ class Display(object):
 
         per_access_delta = 1.0/self.max_access
 
+        r = self.ratio
         for row in range(access_mat_h):
             for col in range(access_mat_w):
                 access_count = self.access_mat[row][col]
                 if access_count > 0:
-                    for i in range(row*ratio, (row+1)*ratio):
-                        for j in range(col*ratio, (col+1)*ratio):
+                    for i in range(row*r, (row+1)*r):
+                        for j in range(col*r, (col+1)*r):
                             # if image[i][j] == (1.0, 1.0, 1.0):
                                 # image[i][j] = (0.0, 1.0, 0.0)
                             image[i][j] = inc_color(image[i][j],
@@ -117,14 +133,17 @@ for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
     img_shape = (d.x.min(), d.x.max(),
         d.y.min(), d.y.max())
 
+    a.set_xlim(0.0, d.x.max());
+    a.set_ylim(0., d.y.max());
 
     a.imshow(Z, origin='lower', extent=img_shape)
+    a.add_patch(d.get_locsubdom_rect())
     a.set_ylim(a.get_ylim()[::-1])
     a.set_xticks([d.x.max()*r for r in tick_locs])
-    a.set_xticklabels(d.tick_labels)
+    a.set_xticklabels(d.tick_labels, fontsize=14)
     a.set_yticks([d.y.max()*r for r in tick_locs])
-    a.set_yticklabels(d.tick_labels)
-    a.grid()
+    a.set_yticklabels(d.tick_labels, fontsize=14)
+    a.grid(linestyle='dotted')
 
 # rect = UpdatingRect([0, 0], 0, 0, facecolor='None', edgecolor='black', linewidth=1.0)
 # rect.set_bounds(*ax2.viewLim.bounds)
@@ -138,4 +157,6 @@ for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
 # ax2.callbacks.connect('ylim_changed', d1.ax_update)
 # ax2.set_title("Zoom here")
 
+plt.margins(0,0)
 plt.show()
+plt.tight_layout()
