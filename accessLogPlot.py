@@ -112,21 +112,7 @@ class Display(object):
         # im.set_extent((xstart, xend, ystart, yend))
         # ax.figure.canvas.draw_idle()
 
-factors_dict = {1: (1,1),
-                2: (2,1),
-                4: (2,2),
-                8: (4,2),
-                16: (4,4),
-                32: (8,4)}
-
-num_locs = int(sys.argv[1])
-plot_dist = factors_dict[num_locs]
-
-fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
-
-# tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
-tick_locs = [0., 0.25, 0.5, 0.75, 1.]
-for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
+def do_plot(i, a):
     d = Display(filename='sobel_inlocale_' + str(i))
     Z = d.get_image()
     
@@ -145,6 +131,30 @@ for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
     a.set_yticklabels(d.tick_labels, fontsize=14)
     a.grid(linestyle='dotted')
 
+factors_dict = {1: (1,1),
+                2: (2,1),
+                4: (2,2),
+                8: (4,2),
+                16: (4,4),
+                32: (8,4)}
+
+num_locs = int(sys.argv[1])
+plot_dist = factors_dict[num_locs]
+
+
+# tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
+tick_locs = [0., 0.25, 0.5, 0.75, 1.]
+
+only_locale = -1
+if len(sys.argv) == 3:
+    fig1, ax = plt.subplots(1,1)
+    only_locale = int(sys.argv[2])
+    do_plot(only_locale, ax)
+else:
+    fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
+    for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
+        do_plot(i, a)
+
 # rect = UpdatingRect([0, 0], 0, 0, facecolor='None', edgecolor='black', linewidth=1.0)
 # rect.set_bounds(*ax2.viewLim.bounds)
 # ax1.add_patch(rect)
@@ -159,4 +169,3 @@ for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
 
 plt.margins(0,0)
 plt.show()
-plt.tight_layout()
