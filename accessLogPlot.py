@@ -131,6 +131,7 @@ def do_plot(i, a):
     a.set_yticklabels(d.tick_labels, fontsize=14)
     a.grid(linestyle='dotted')
 
+# this should be done mathematically or through target locales FIXME
 factors_dict = {1: (1,1),
                 2: (2,1),
                 4: (2,2),
@@ -143,6 +144,7 @@ plot_dist = factors_dict[num_locs]
 
 
 # tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
+# TODO parametrize this
 tick_locs = [0., 0.25, 0.5, 0.75, 1.]
 
 only_locale = -1
