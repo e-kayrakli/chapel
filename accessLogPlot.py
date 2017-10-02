@@ -1,9 +1,18 @@
 import sys
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from log_parser import parse_log
 
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument('-nl', type=int)
+arg_parser.add_argument('--only-locale')
+arg_parser.add_argument('--draw-local-subdomains', action='store_true')
+
+args = arg_parser.parse_args()
+num_locs = args.nl
+only_locale = args.only_locale
 
 # We just subclass Rectangle so that it can be called with an Axes
 # instance, causing the rectangle to update its shape to match the
@@ -139,7 +148,6 @@ factors_dict = {1: (1,1),
                 16: (4,4),
                 32: (8,4)}
 
-num_locs = int(sys.argv[1])
 plot_dist = factors_dict[num_locs]
 
 
@@ -147,10 +155,8 @@ plot_dist = factors_dict[num_locs]
 # TODO parametrize this
 tick_locs = [0., 0.25, 0.5, 0.75, 1.]
 
-only_locale = -1
-if len(sys.argv) == 3:
+if only_locale != None:
     fig1, ax = plt.subplots(1,1)
-    only_locale = int(sys.argv[2])
     do_plot(only_locale, ax)
 else:
     fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
