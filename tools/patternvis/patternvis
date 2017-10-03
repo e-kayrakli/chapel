@@ -28,7 +28,8 @@ locale_log_prefix = dirname+'/'+filename+'locale_'
         # ax.figure.canvas.draw_idle()
 
 # FIXME get rid of this by figuring out where the padding comes from
-pad_comp = 0.15
+pad_comp = 0.5
+size_comp = 0.5
 
 def inc_color(cur, inc):
     return (cur[0], cur[1]-inc, cur[2]-inc)
@@ -50,11 +51,11 @@ class Display(object):
     def get_locsubdom_rect(self):
         for sdl in self.subdom_lims:
             x = sdl[0][0] - pad_comp
-            width = sdl[0][1] - x + 1
+            width = sdl[0][1] - x + 1 - size_comp
             x -= self.x_offset
 
             y = sdl[1][0] - pad_comp
-            height = sdl[1][1] - y + 1
+            height = sdl[1][1] - y + 1 - size_comp
             y -= self.y_offset
 
             x *= self.ratio
@@ -142,7 +143,8 @@ def do_plot(i, a):
     a.set_xlim(0.0, d.x.max());
     a.set_ylim(0., d.y.max());
 
-    a.imshow(Z, origin='lower', extent=img_shape)
+    # a.imshow(Z, origin='lower', extent=img_shape)
+    a.imshow(Z, origin='lower')
     for r in d.get_locsubdom_rect():
         a.add_patch(r)
     a.set_ylim(a.get_ylim()[::-1])
