@@ -653,6 +653,16 @@ module ChapelDistribution {
                                   locking=true);
 
     inline proc enableAccessLogging(fileName, d) {
+      if here.id == 0 {
+        try {
+          var metaChannel = open(fileName+"meta", iomode.cw).writer();
+          metaChannel.writeln(d.dist._value.targetLocDom.shape);
+          metaChannel.close();
+        }
+        catch {
+          // TODO
+        }
+      }
       try {
         accessLogging = true;
         accessLogChannel = open(fileName+"locale_"+here.id,
