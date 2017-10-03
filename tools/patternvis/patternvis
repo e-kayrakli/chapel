@@ -10,10 +10,11 @@ arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
 arg_parser.add_argument('-nl', type=int)
 arg_parser.add_argument('--only-locale')
-arg_parser.add_argument('--draw-local-subdomains', action='store_true')
+arg_parser.add_argument('--no-local-subdomains', action='store_true')
 
 args = arg_parser.parse_args()
 only_locale = args.only_locale
+no_local_subdomains = args.no_local_subdomains
 filename = args.filename
 dirname = '__aal/'+filename
 meta_log_name= dirname+'/'+filename+'meta'
@@ -145,8 +146,9 @@ def do_plot(i, a):
 
     # a.imshow(Z, origin='lower', extent=img_shape)
     a.imshow(Z, origin='lower')
-    for r in d.get_locsubdom_rect():
-        a.add_patch(r)
+    if not no_local_subdomains:
+        for r in d.get_locsubdom_rect():
+            a.add_patch(r)
     a.set_ylim(a.get_ylim()[::-1])
     a.set_xticks([d.x.max()*r for r in tick_locs])
     a.set_xticklabels(d.tick_labels, fontsize=14)
