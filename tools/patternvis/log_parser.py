@@ -27,6 +27,7 @@ def get_dom(line):
         # print('Invalid dom: ', line)
         return None
 
+# TODO maybe change to get_tuple ?
 def get_index(line):
     match = re.match(index_pattern, line)
     if match:
@@ -37,6 +38,11 @@ def get_index(line):
 def print_access_mat(mat):
     for i in range(len(mat)):
         print(mat[i])
+
+def parse_meta_log(filename):
+    with open(filename) as f:
+         target_loc_shape = get_index(f.readline())
+    return target_loc_shape
 
 def parse_log(filename, debug=False):
     with open(filename) as f:

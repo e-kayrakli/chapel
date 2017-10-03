@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-from log_parser import parse_log
+from log_parser import parse_log, parse_meta_log
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
@@ -17,6 +17,7 @@ num_locs = args.nl
 only_locale = args.only_locale
 filename = args.filename
 dirname = '__aal/'+filename
+meta_log_name= dirname+'/'+filename+'meta'
 locale_log_prefix = dirname+'/'+filename+'locale_'
 
 # We just subclass Rectangle so that it can be called with an Axes
@@ -154,16 +155,8 @@ def do_plot(i, a):
     a.set_yticklabels(d.tick_labels, fontsize=14)
     a.grid(linestyle='dotted')
 
-# this should be done mathematically or through target locales FIXME
-factors_dict = {1: (1,1),
-                2: (2,1),
-                4: (2,2),
-                8: (4,2),
-                16: (4,4),
-                32: (8,4)}
-
-plot_dist = factors_dict[num_locs]
-
+target_loc_shape = parse_metalog(meta_log_name)
+plot_dist = target_loc_shape
 
 # tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
 # TODO parametrize this
