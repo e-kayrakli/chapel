@@ -647,25 +647,44 @@ module ChapelDistribution {
     // atomics are available
     var pid:int = nullPid; // privatized ID, if privatization is supported
     var _decEltRefCounts : bool = false;
+
+    // these are privatized?
     var accessLogging = false;
     var accessLogChannel: channel(writing=true,
                                   kind=iokind.dynamic,
                                   locking=true);
 
-    inline proc enableAccessLogging(fileName, d) {
+    proc initAccessLoggingMeta(fileName) {
+      use FileSystem;
+      var accessLogDir = "";
+      try {
+        accessLogDir = "__aal/"+fileName;
+        mkdir(accessLogDir, parents=true);
+      }
+      catch {
+        // TODO
+        halt("Exception");
+      }
+      return accessLogDir;
+    }
+
+    inline proc enableAccessLogging(fileName, d, const ref accessLogDir) {
+
+      var fullFileName = accessLogDir+"/"+fileName;
       if here.id == 0 {
         try {
-          var metaChannel = open(fileName+"meta", iomode.cw).writer();
+          var metaChannel = open(fullFileName+"meta", iomode.cw).writer();
           metaChannel.writeln(d.dist._value.targetLocDom.shape);
           metaChannel.close();
         }
         catch {
           // TODO
+          halt("Exception");
         }
       }
       try {
         accessLogging = true;
-        accessLogChannel = open(fileName+"locale_"+here.id,
+        accessLogChannel = open(fullFileName+"locale_"+here.id,
             iomode.cw).writer();
 
         //log some metadata regarding the domain
@@ -679,6 +698,9 @@ module ChapelDistribution {
       }
       catch {
         //TODO
+        writeln("Couldn't open channel : ",
+            fullFileName+"locale_"+here.id);
+        halt("Exception");
       }
     }
     

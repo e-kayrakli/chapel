@@ -2062,8 +2062,9 @@ module ChapelArray {
     proc rank param return this.domain.rank;
 
     inline proc enableAccessLogging(fileName) {
+      var accessLogDir = _value.initAccessLoggingMeta(fileName);
       coforall l in Locales do on l {
-        _value.enableAccessLogging(fileName, this.domain);
+        _value.enableAccessLogging(fileName, this.domain, accessLogDir);
       }
     }
 
