@@ -46,18 +46,19 @@ class Display(object):
         self.height = h
         self.width = w
 
-        self.y_offset = self.whole_lims[0][0]
-        self.x_offset = self.whole_lims[1][0]
+        self.d1_offset = self.whole_lims[0][0]
+        if self.rank == 2:
+            self.d2_offset = self.whole_lims[1][0]
 
     def get_locsubdom_rect(self):
         for sdl in self.subdom_lims:
             x = sdl[0][0] - pad_comp
             width = sdl[0][1] - x + 1 - size_comp
-            x -= self.x_offset
+            x -= self.d2_offset
 
             y = sdl[1][0] - pad_comp
             height = sdl[1][1] - y + 1 - size_comp
-            y -= self.y_offset
+            y -= self.d1_offset
 
             x *= self.ratio
             y *= self.ratio
@@ -71,29 +72,42 @@ class Display(object):
         # self.x = np.linspace(xstart, xend, self.width)
         # self.y = np.linspace(ystart, yend, self.height)
 
-        access_mat_h = len(self.access_mat)
-        access_mat_w = len(self.access_mat[0])
-        if access_mat_h == access_mat_w:
-            if access_mat_h < self.height:
-                # good we are going to scale-up access data onto image
-
+        access_mat_d1_size = len(self.access_mat)
+        access_mat_d2_size = len(self.access_mat[0])
+        if self.rank == 1:
+            if access_mat_d1_size < self.width:
                 # find the nearest multiple to 500
-                rem = self.height%access_mat_h;
-                self.height -= rem
-                self.width = self.height
-                self.ratio = int(self.height/access_mat_h)
+                rem = self.width%access_mat_d1_size;
+                self.width -= rem
+                self.height = 25
+                self.ratio = int(self.width/access_mat_d1_size)
                 binning=False
                 scaleup=True
             else:
-                # data is larger than the image we'll do binning
-                binning=True
-                scaleup=False
-                ratio = access_mat_h/self.height
+                print("Not ready for this yet")
+
+        elif self.rank == 2:
+            if access_mat_d1_size == access_mat_d2_size:
+                if access_mat_d1_size < self.height:
+                    # good we are going to scale-up access data onto image
+
+                    # find the nearest multiple to 500
+                    rem = self.height%access_mat_d1_size;
+                    self.height -= rem
+                    self.width = self.height
+                    self.ratio = int(self.height/access_mat_d1_size)
+                    binning=False
+                    scaleup=True
+                else:
+                    # data is larger than the image we'll do binning
+                    binning=True
+                    scaleup=False
+                    ratio = access_mat_d1_size/self.height
 
         self.x = np.linspace(0, self.width-1, self.width)
         self.y = np.linspace(0, self.height-1, self.height)
 
-        self.tick_labels = [int(access_mat_h*r) for r in [0., 0.25, 0.5, 0.75, 1.]] 
+        self.tick_labels = [int(access_mat_d1_size*r) for r in [0., 0.25, 0.5, 0.75, 1.]] 
 
         image = [[(1.0, 1.0, 1.0) for x in range(self.width)] for y in
             range(self.height)]
@@ -101,16 +115,21 @@ class Display(object):
         per_access_delta = 1.0/self.max_access
 
         r = self.ratio
-        for row in range(access_mat_h):
-            for col in range(access_mat_w):
+        for row in range(access_mat_d1_size):
+            for col in range(access_mat_d2_size):
                 access_count = self.access_mat[row][col]
                 if access_count > 0:
                     for i in range(row*r, (row+1)*r):
-                        for j in range(col*r, (col+1)*r):
-                            # if image[i][j] == (1.0, 1.0, 1.0):
-                                # image[i][j] = (0.0, 1.0, 0.0)
-                            image[i][j] = inc_color(image[i][j],
-                                    per_access_delta*access_count)
+                        if self.rank == 1:
+                            for j in range(self.height):
+                                image[j][i] = inc_color(image[j][i],
+                                        per_access_delta*access_count)
+                        if self.rank == 2:
+                            for j in range(col*r, (col+1)*r):
+                                # if image[i][j] == (1.0, 1.0, 1.0):
+                                    # image[i][j] = (0.0, 1.0, 0.0)
+                                image[i][j] = inc_color(image[i][j],
+                                        per_access_delta*access_count)
         
 
         return image
@@ -157,8 +176,14 @@ def do_plot(i, a):
     a.grid(linestyle='dotted')
 
 target_loc_shape = parse_meta_log(meta_log_name)
-num_locs = target_loc_shape[0] * target_loc_shape[1]
-plot_dist = target_loc_shape
+num_locs = 1
+for t in target_loc_shape:
+    num_locs *= t
+
+if len(target_loc_shape) == 1:
+    plot_dist = (target_loc_shape[0], 1)
+elif len(target_loc_shape) == 2:
+    plot_dist = target_loc_shape
 
 # tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
 # TODO parametrize this

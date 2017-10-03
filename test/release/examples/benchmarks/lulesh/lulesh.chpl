@@ -144,6 +144,9 @@ const Elems = if useBlockDist then ElemSpace dmapped Block(ElemSpace)
 
 var x, y, z: [Nodes] real;
                               
+config const accessLog = false;
+if accessLog then
+  x.enableAccessLogging("x");
 
 /* The number of nodes per element.  In a rank-independent version,
    this could be written 2**rank */

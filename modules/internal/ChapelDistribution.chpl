@@ -674,6 +674,7 @@ module ChapelDistribution {
       if here.id == 0 {
         try {
           var metaChannel = open(fullFileName+"meta", iomode.cw).writer();
+          metaChannel.writeln(d.rank);
           metaChannel.writeln(d.dist._value.targetLocDom.shape);
           metaChannel.close();
         }
@@ -688,7 +689,7 @@ module ChapelDistribution {
             iomode.cw).writer();
 
         //log some metadata regarding the domain
-        accessLogChannel.writeln(d.rank);
+        /*accessLogChannel.writeln(d.rank);*/
         accessLogChannel.writeln(d);
         if d.hasSingleLocalSubdomain() then
           accessLogChannel.writeln(d.localSubdomain());
