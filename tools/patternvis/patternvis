@@ -44,13 +44,18 @@ class Display(object):
         self.height = h
         self.width = w
 
+        self.y_offset = self.whole_lims[0][0]
+        self.x_offset = self.whole_lims[1][0]
+
     def get_locsubdom_rect(self):
         for sdl in self.subdom_lims:
             x = sdl[0][0] - pad_comp
             width = sdl[0][1] - x + 1
+            x -= self.x_offset
 
             y = sdl[1][0] - pad_comp
             height = sdl[1][1] - y + 1
+            y -= self.y_offset
 
             x *= self.ratio
             y *= self.ratio

@@ -60,9 +60,10 @@ def parse_log(filename, debug=False):
         # first index
         f.seek(last_pos)
 
-        #TODO here I assume everything is 0-based
-        access_mat_w = whole_lims[0][1]+1
-        access_mat_h = whole_lims[1][1]+1
+        y_offset = whole_lims[0][0]
+        x_offset = whole_lims[1][0]
+        access_mat_h = whole_lims[0][1]-whole_lims[0][0]+1
+        access_mat_w = whole_lims[1][1]-whole_lims[1][0]+1
         access_mat = [[0 for x in range(access_mat_w)] for y in
                 range(access_mat_h)]
 
@@ -72,7 +73,8 @@ def parse_log(filename, debug=False):
 
         max_access = 0
         for line in f:
-            index = get_index(line)
+            real_index = get_index(line)
+            index = (real_index[0]-y_offset, real_index[1]-x_offset)
             access_mat[index[0]][index[1]] += 1
             if access_mat[index[0]][index[1]] > max_access:
                 max_access = access_mat[index[0]][index[1]] 
