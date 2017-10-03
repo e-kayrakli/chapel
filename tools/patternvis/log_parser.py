@@ -24,7 +24,8 @@ def get_dom(line):
     if match:
         return generate_limit_tuple(match.groups())
     else:
-        print('Invalid dom: ', line)
+        # print('Invalid dom: ', line)
+        return None
 
 def get_index(line):
     match = re.match(index_pattern, line)
@@ -41,7 +42,23 @@ def parse_log(filename, debug=False):
     with open(filename) as f:
         rank =  get_rank(f.readline())
         whole_lims= get_dom(f.readline())
-        subdom_lims = get_dom(f.readline())
+
+        # now start reading subdomain(s). At this point we do not know
+        # how many there are, so we do some regexp checking for each
+        # line we read to determine whether it is a domain or an index
+        subdom_lims = []
+        tmp_line = f.readline()
+        dom = get_dom(tmp_line)
+
+        while dom != None:
+            subdom_lims.append(dom)
+            last_pos = f.tell()
+            tmp_line = f.readline()
+            dom = get_dom(tmp_line)
+
+        # revert back to the last domain position so as not to miss the
+        # first index
+        f.seek(last_pos)
 
         #TODO here I assume everything is 0-based
         access_mat_w = whole_lims[0][1]+1

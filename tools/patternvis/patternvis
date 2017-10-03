@@ -45,18 +45,19 @@ class Display(object):
         self.width = w
 
     def get_locsubdom_rect(self):
-        x = self.subdom_lims[0][0] - pad_comp
-        width = self.subdom_lims[0][1] - x + 1
+        for sdl in self.subdom_lims:
+            x = sdl[0][0] - pad_comp
+            width = sdl[0][1] - x + 1
 
-        y = self.subdom_lims[1][0] - pad_comp
-        height = self.subdom_lims[1][1] - y + 1
+            y = sdl[1][0] - pad_comp
+            height = sdl[1][1] - y + 1
 
-        x *= self.ratio
-        y *= self.ratio
-        width *= self.ratio
-        height *= self.ratio
+            x *= self.ratio
+            y *= self.ratio
+            width *= self.ratio
+            height *= self.ratio
 
-        return Rectangle((x,y), width, height, fill=False)
+            yield Rectangle((x,y), width, height, fill=False)
 
     def get_image(self):
 
@@ -137,7 +138,8 @@ def do_plot(i, a):
     a.set_ylim(0., d.y.max());
 
     a.imshow(Z, origin='lower', extent=img_shape)
-    a.add_patch(d.get_locsubdom_rect())
+    for r in d.get_locsubdom_rect():
+        a.add_patch(r)
     a.set_ylim(a.get_ylim()[::-1])
     a.set_xticks([d.x.max()*r for r in tick_locs])
     a.set_xticklabels(d.tick_labels, fontsize=14)
