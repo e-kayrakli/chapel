@@ -7,6 +7,7 @@ from matplotlib.patches import Rectangle
 from log_parser import parse_log
 
 arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument('filename')
 arg_parser.add_argument('-nl', type=int)
 arg_parser.add_argument('--only-locale')
 arg_parser.add_argument('--draw-local-subdomains', action='store_true')
@@ -14,6 +15,9 @@ arg_parser.add_argument('--draw-local-subdomains', action='store_true')
 args = arg_parser.parse_args()
 num_locs = args.nl
 only_locale = args.only_locale
+filename = args.filename
+dirname = '__aal/'+filename
+locale_log_prefix = dirname+'/'+filename+'locale_'
 
 # We just subclass Rectangle so that it can be called with an Axes
 # instance, causing the rectangle to update its shape to match the
@@ -123,7 +127,7 @@ class Display(object):
         # ax.figure.canvas.draw_idle()
 
 def do_plot(i, a):
-    d = Display(filename='sobel_inlocale_' + str(i))
+    d = Display(filename=locale_log_prefix+str(i))
     Z = d.get_image()
     
     img_shape = (d.x.min(), d.x.max(),
