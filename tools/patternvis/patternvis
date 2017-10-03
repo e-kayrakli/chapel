@@ -13,7 +13,6 @@ arg_parser.add_argument('--only-locale')
 arg_parser.add_argument('--draw-local-subdomains', action='store_true')
 
 args = arg_parser.parse_args()
-num_locs = args.nl
 only_locale = args.only_locale
 filename = args.filename
 dirname = '__aal/'+filename
@@ -155,7 +154,8 @@ def do_plot(i, a):
     a.set_yticklabels(d.tick_labels, fontsize=14)
     a.grid(linestyle='dotted')
 
-target_loc_shape = parse_metalog(meta_log_name)
+target_loc_shape = parse_meta_log(meta_log_name)
+num_locs = target_loc_shape[0] * target_loc_shape[1]
 plot_dist = target_loc_shape
 
 # tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
