@@ -35,6 +35,8 @@ config const iterations: int = 10,
              order: int = 1000,
              /* Enable debug output, including chplvis data */
              debug: bool = false,
+             /* Enable access logging */
+             accessLog: bool = false,
              /* Only print result of validation - used in correctness tests*/
              correctness: bool = false;
 
@@ -116,6 +118,9 @@ proc main() {
   /* Input and Output matrices represented as arrays over a 2D domain */
   var input: [Dom] dtype = 0.0,
       output: [outputDom] dtype = 0.0;
+
+  if accessLog then
+    input.enableAccessLogging("prk_stencil_input");
 
   /* Weight matrix represented as tuple of tuples*/
   var weight: Wsize*(Wsize*(dtype));
