@@ -51,6 +51,7 @@ config const printParams = true,
              printArrays = false,
              printStats = true;
 
+config const accessLog = false;
 
 //
 // Start here
@@ -83,6 +84,9 @@ proc main() {
   //
   var A                  : [MatrixDom   ] eltType, 
       C                  : [TransposeDom] eltType;
+
+  if accessLog then
+    A.enableAccessLogging("ptrans_A_input");
 
   const error_tolerance = initArrays(A, C);
 
