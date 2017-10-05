@@ -23,7 +23,7 @@ class chpl_domain(object):
             if match_groups[base+2] == None:
                 stride = 1
             else:
-                stride = match_groups[base+2]
+                stride = match_groups[base+2].split()[-1]
 
             self.ranges.append(chpl_range(int(match_groups[base]),
                                           int(match_groups[base+1]),
@@ -31,30 +31,35 @@ class chpl_domain(object):
 
 class LogHandler(object):
 
-    # TODO do these programmatically
     def __init__(self, rank):
-        rank_pattern = r"^([0-9])$"
-        index_pattern_2d = r"^\(([0-9]+), ([0-9]+)\)$"
-        index_pattern_1d = r"^\(([0-9]+)\)$"
-        index_pattern = r""
+
+        ## init helpers
+        def __gen_csv_pattern(start, item, end, count=-1):
+            if count == -1:
+                count = self.rank
+            pattern = r"^" + start
+            pattern += item
+            for r in range(count-1):
+                pattern += ", " + item
+            pattern += end+'$'
+            return pattern
+
+        def __gen_idx_pattern(rank):
+            return __gen_csv_pattern(
+                    start='\(',
+                    item ='([0-9]+)',
+                    end  ='\)')
+
+        def __gen_dom_pattern(rank):
+            return __gen_csv_pattern(
+                    start='\{',
+                    item ='([0-9]+)\.\.([0-9]+)( by [0-9]+)?',
+                    end  ='\}')
+
         self.rank = rank
-        self.domain_pattern = self.__gen_dom_pattern(self.rank)
-        if rank == 1:
-            self.index_pattern = index_pattern_1d
-        if rank == 2:
-            self.index_pattern = index_pattern_2d
-
-    def __gen_dom_pattern(self, rank):
-        range_pattern = '([0-9]+)\.\.([0-9]+)( by [0-9]+)?'
-        domain_pattern = r"^\{"
-
-        domain_pattern += range_pattern
-        for r in range(rank-1):
-            domain_pattern += ", " + range_pattern
-
-        domain_pattern += "\}$"
-        return domain_pattern
-
+        self.domain_pattern = __gen_dom_pattern(self.rank)
+        self.index_pattern = __gen_idx_pattern(self.rank)
+    # endof init
 
     # returns (xlimits, ylimits)
     def generate_limit_tuple(self, dom):

@@ -104,8 +104,11 @@ proc main() {
 
   initVectors(Twiddles, z);            // initialize twiddles and input vector z
 
-  if accessLog then
+  if accessLog {
+    z.enableAccessLogging("fft_z");
+    Zblk.enableAccessLogging("fft_Zblk");
     Zcyc.enableAccessLogging("fft_Zcyc");
+  }
 
   const startTime = getCurrentTime();  // capture the start time
 
