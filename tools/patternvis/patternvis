@@ -58,13 +58,23 @@ class Display(object):
 
     def get_locsubdom_rect(self):
         for sdl in self.subdom_lims:
+            subdom_rank = len(sdl)
             x = sdl[0][0] - pad_comp
             width = sdl[0][1] - x + 1 - size_comp
-            x -= self.d2_offset
 
-            y = sdl[1][0] - pad_comp
-            height = sdl[1][1] - y + 1 - size_comp
-            y -= self.d1_offset
+            if subdom_rank == 1:
+                x -= self.d1_offset
+            else:
+                x -= self.d2_offset
+
+            if subdom_rank == 2:
+                y = sdl[1][0] - pad_comp
+                height = sdl[1][1] - y + 1 - size_comp
+                y -= self.d1_offset
+            else: # rank == 1
+                y = 0
+                height = self.height
+
 
             x *= self.ratio
             y *= self.ratio
