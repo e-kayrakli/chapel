@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-from log_parser import parse_log, parse_meta_log
+from log_parser import LocaleLog, MetaLog
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
@@ -39,9 +39,15 @@ def inc_color(cur, inc):
 # can actually see the increasing detail.  A box in the left panel will show
 # the area to which we are zoomed.
 class Display(object):
-    def __init__(self, filename, h=500, w=500):
+    def __init__(self, filename, rank, h=500, w=500):
         self.filename = filename
-        self.rank, self.whole_lims, self.subdom_lims, self.access_mat, self.max_access = parse_log(filename)
+        self.__ll = LocaleLog(filename, rank)
+
+        self.rank = self.__ll.rank
+        self.whole_lims = self.__ll.whole_lims
+        self.subdom_lims = self.__ll.subdom_lims
+        self.access_mat = self.__ll.access_mat
+        self.max_access = self.__ll.max_access
 
         self.height = h
         self.width = w
@@ -153,8 +159,8 @@ class Display(object):
         # im.set_extent((xstart, xend, ystart, yend))
         # ax.figure.canvas.draw_idle()
 
-def do_plot(i, a):
-    d = Display(filename=locale_log_prefix+str(i))
+def do_plot(i, a, rank):
+    d = Display(filename=locale_log_prefix+str(i), rank=rank)
     Z = d.get_image()
     
     img_shape = (d.x.min(), d.x.max(),
@@ -175,14 +181,16 @@ def do_plot(i, a):
     a.set_yticklabels(d.tick_labels, fontsize=14)
     a.grid(linestyle='dotted')
 
-target_loc_shape = parse_meta_log(meta_log_name)
+metalog_handler = MetaLog(meta_log_name)
+target_loc_shape = metalog_handler.target_loc_shape
+rank = len(target_loc_shape)
 num_locs = 1
 for t in target_loc_shape:
     num_locs *= t
 
-if len(target_loc_shape) == 1:
+if rank == 1:
     plot_dist = (target_loc_shape[0], 1)
-elif len(target_loc_shape) == 2:
+elif rank == 2:
     plot_dist = target_loc_shape
 
 # tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
@@ -191,11 +199,11 @@ tick_locs = [0., 0.25, 0.5, 0.75, 1.]
 
 if only_locale != None:
     fig1, ax = plt.subplots(1,1)
-    do_plot(only_locale, ax)
+    do_plot(only_locale, ax, rank)
 else:
     fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
     for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
-        do_plot(i, a)
+        do_plot(i, a, rank)
 
 # rect = UpdatingRect([0, 0], 0, 0, facecolor='None', edgecolor='black', linewidth=1.0)
 # rect.set_bounds(*ax2.viewLim.bounds)
