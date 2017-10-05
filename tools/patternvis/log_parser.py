@@ -25,7 +25,6 @@ class chpl_domain(object):
             else:
                 stride = match_groups[base+2]
 
-            print('appended')
             self.ranges.append(chpl_range(int(match_groups[base]),
                                           int(match_groups[base+1]),
                                           int(stride)))
@@ -37,17 +36,25 @@ class LogHandler(object):
         rank_pattern = r"^([0-9])$"
         index_pattern_2d = r"^\(([0-9]+), ([0-9]+)\)$"
         index_pattern_1d = r"^\(([0-9]+)\)$"
-        domain_pattern_2d = r"^\{([0-9]+)\.\.([0-9]+), ([0-9]+)\.\.([0-9]+)\}$"
-        domain_pattern_1d = r"^\{([0-9]+)\.\.([0-9]+)( by [0-9]+)?\}$"
-        domain_pattern = r""
         index_pattern = r""
         self.rank = rank
+        self.domain_pattern = self.__gen_dom_pattern(self.rank)
         if rank == 1:
-            self.domain_pattern = domain_pattern_1d
             self.index_pattern = index_pattern_1d
         if rank == 2:
-            self.domain_pattern = domain_pattern_2d
             self.index_pattern = index_pattern_2d
+
+    def __gen_dom_pattern(self, rank):
+        range_pattern = '([0-9]+)\.\.([0-9]+)( by [0-9]+)?'
+        domain_pattern = r"^\{"
+
+        domain_pattern += range_pattern
+        for r in range(rank-1):
+            domain_pattern += ", " + range_pattern
+
+        domain_pattern += "\}$"
+        return domain_pattern
+
 
     # returns (xlimits, ylimits)
     def generate_limit_tuple(self, dom):
