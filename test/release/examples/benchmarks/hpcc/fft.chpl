@@ -18,6 +18,8 @@ use BitOps, Random, Time, BlockDist, CyclicDist;
 //
 use HPCCProblemSize;
 
+config const accessLog = false;
+
 const radix = 4;               // the radix of this FFT implementation
 
 const numVectors = 2;          // the number of vectors to be stored
@@ -101,6 +103,9 @@ proc main() {
   var Zcyc: [CycDom] elemType;
 
   initVectors(Twiddles, z);            // initialize twiddles and input vector z
+
+  if accessLog then
+    Zcyc.enableAccessLogging("fft_Zcyc");
 
   const startTime = getCurrentTime();  // capture the start time
 
