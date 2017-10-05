@@ -8,7 +8,6 @@ from log_parser import LocaleLog, MetaLog
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
-arg_parser.add_argument('-nl', type=int)
 arg_parser.add_argument('--only-locale')
 arg_parser.add_argument('--no-local-subdomains', action='store_true')
 
@@ -39,7 +38,7 @@ def inc_color(cur, inc):
 # can actually see the increasing detail.  A box in the left panel will show
 # the area to which we are zoomed.
 class Display(object):
-    def __init__(self, filename, rank, h=500, w=500):
+    def __init__(self, filename, rank, h=1000, w=1000):
         self.filename = filename
         self.__ll = LocaleLog(filename, rank)
 
