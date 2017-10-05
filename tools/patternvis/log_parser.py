@@ -1,5 +1,35 @@
 import re
 
+class chpl_range(object):
+    def __init__(self, low, high, stride):
+        self.low = low
+        self.high = high
+        self.stride = stride
+
+    def shape(self):
+        return (self.low, self.high)
+
+class chpl_domain(object):
+    def __init__(self, match_groups):
+        # match group must have multiple-of-3 ints
+        mgr_len = len(match_groups)
+        if mgr_len % 3 != 0:
+            print('Wrong match group length {}'.format(mgr_len))
+
+        rank = int(mgr_len/3)
+        self.ranges = []
+        for r in range(rank):
+            base = r*3
+            if match_groups[base+2] == None:
+                stride = 1
+            else:
+                stride = match_groups[base+2]
+
+            print('appended')
+            self.ranges.append(chpl_range(int(match_groups[base]),
+                                          int(match_groups[base+1]),
+                                          int(stride)))
+
 class LogHandler(object):
 
     # TODO do these programmatically
@@ -8,7 +38,7 @@ class LogHandler(object):
         index_pattern_2d = r"^\(([0-9]+), ([0-9]+)\)$"
         index_pattern_1d = r"^\(([0-9]+)\)$"
         domain_pattern_2d = r"^\{([0-9]+)\.\.([0-9]+), ([0-9]+)\.\.([0-9]+)\}$"
-        domain_pattern_1d = r"^\{([0-9]+)\.\.([0-9]+)\}$"
+        domain_pattern_1d = r"^\{([0-9]+)\.\.([0-9]+)( by [0-9]+)?\}$"
         domain_pattern = r""
         index_pattern = r""
         self.rank = rank
@@ -20,17 +50,18 @@ class LogHandler(object):
             self.index_pattern = index_pattern_2d
 
     # returns (xlimits, ylimits)
-    def generate_limit_tuple(self, dom_tuple):
+    def generate_limit_tuple(self, dom):
+        # print('called ' + int(self.rank))
         if self.rank == 1 :
-            return ( (int(dom_tuple[0]), int(dom_tuple[1])), )
+            return ( dom.ranges[0].shape(), )
         elif self.rank == 2:
-            return ((int(dom_tuple[2]), int(dom_tuple[3])), 
-                    (int(dom_tuple[0]), int(dom_tuple[1])))
+            return ( dom.ranges[1].shape(),
+                     dom.ranges[0].shape() )
 
     def get_dom(self, line):
         match = re.match(self.domain_pattern, line)
         if match:
-            return self.generate_limit_tuple(match.groups())
+            return self.generate_limit_tuple(chpl_domain(match.groups()))
         else:
             return None
 
