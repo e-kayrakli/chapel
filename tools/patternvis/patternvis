@@ -80,7 +80,8 @@ class Display(object):
             width *= self.ratio
             height *= self.ratio
 
-            yield Rectangle((x,y), width, height, fill=False)
+            yield Rectangle((x,y), width, height, fill=False,
+                    color='green', hatch='///')
 
     def get_image(self):
 
@@ -211,8 +212,8 @@ def do_plot(i, a, rank):
     a.set_ylim(a.get_ylim()[::-1])
     a.set_xticks(d.get_ticks('x'))
     a.set_yticks(d.get_ticks('y'))
-    a.set_xticklabels(d.get_tick_labels('x'), fontsize=14)
-    a.set_yticklabels(d.get_tick_labels('y'), fontsize=14)
+    a.set_xticklabels(d.get_tick_labels('x'), fontsize=8)
+    a.set_yticklabels(d.get_tick_labels('y'), fontsize=8)
     a.grid(linestyle='dotted')
 
 metalog_handler = MetaLog(meta_log_name)
