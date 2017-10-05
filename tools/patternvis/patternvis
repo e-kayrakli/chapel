@@ -113,7 +113,6 @@ class Display(object):
         self.x = np.linspace(0, self.width-1, self.width)
         self.y = np.linspace(0, self.height-1, self.height)
 
-        self.tick_labels = [int(access_mat_d1_size*r) for r in [0., 0.25, 0.5, 0.75, 1.]] 
 
         image = [[(1.0, 1.0, 1.0) for x in range(self.width)] for y in
             range(self.height)]
@@ -139,6 +138,32 @@ class Display(object):
         
 
         return image
+    
+    def get_ticks(self, axis):
+        if axis == 'x':
+            return [self.x.max()*r for r in tick_locs]
+        elif axis == 'y':
+            if rank == 1:
+                return []
+            elif rank == 2:
+                return [self.y.max()*r for r in tick_locs]
+
+
+    def get_tick_labels(self, axis):
+        if axis == 'x':
+            if rank == 1:
+                return [int(len(self.access_mat)*r) 
+                        for r in [0., 0.25, 0.5, 0.75, 1.]] 
+            elif rank == 2:
+                return [int(len(self.access_mat[0])*r) 
+                        for r in [0., 0.25, 0.5, 0.75, 1.]] 
+        if axis == 'y':
+            if rank == 1:
+                return []
+            elif rank == 2:
+                return [int(len(self.access_mat)*r) 
+                        for r in [0., 0.25, 0.5, 0.75, 1.]] 
+
 
     # def ax_update(self, ax):
         # ax.set_autoscale_on(False)  # Otherwise, infinite loop
@@ -175,10 +200,10 @@ def do_plot(i, a, rank):
         for r in d.get_locsubdom_rect():
             a.add_patch(r)
     a.set_ylim(a.get_ylim()[::-1])
-    a.set_xticks([d.x.max()*r for r in tick_locs])
-    a.set_xticklabels(d.tick_labels, fontsize=14)
-    a.set_yticks([d.y.max()*r for r in tick_locs])
-    a.set_yticklabels(d.tick_labels, fontsize=14)
+    a.set_xticks(d.get_ticks('x'))
+    a.set_yticks(d.get_ticks('y'))
+    a.set_xticklabels(d.get_tick_labels('x'), fontsize=14)
+    a.set_yticklabels(d.get_tick_labels('y'), fontsize=14)
     a.grid(linestyle='dotted')
 
 metalog_handler = MetaLog(meta_log_name)
