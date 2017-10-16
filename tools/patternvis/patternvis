@@ -10,6 +10,7 @@ arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
 arg_parser.add_argument('--only-locale')
 arg_parser.add_argument('--no-local-subdomains', action='store_true')
+arg_parser.add_argument('--plot', action='store_true')
 
 args = arg_parser.parse_args()
 only_locale = args.only_locale
@@ -18,6 +19,7 @@ filename = args.filename
 dirname = '__aal/'+filename
 meta_log_name= dirname+'/'+filename+'meta'
 locale_log_prefix = dirname+'/'+filename+'locale_'
+plot = args.plot
 
 # We just subclass Rectangle so that it can be called with an Axes
 # instance, causing the rectangle to update its shape to match the
@@ -176,7 +178,7 @@ class Display(object):
                 return [int(len(self.access_mat)*r) 
                         for r in [0., 0.25, 0.5, 0.75, 1.]] 
 
-def do_plot(i, a, rank):
+def gen_plot(i, a, rank):
     d = Display(filename=locale_log_prefix+str(i), rank=rank)
     Z = d.get_image()
     
@@ -198,7 +200,7 @@ def do_plot(i, a, rank):
     a.set_yticklabels(d.get_tick_labels('y'), fontsize=8)
     a.grid(linestyle='dotted')
 
-def plot():
+def do_plot():
     metalog_handler = MetaLog(meta_log_name)
     target_loc_shape = metalog_handler.target_loc_shape
     rank = len(target_loc_shape)
@@ -217,14 +219,15 @@ def plot():
 
     if only_locale != None:
         fig1, ax = plt.subplots(1,1)
-        do_plot(only_locale, ax, rank)
+        gen_plot(only_locale, ax, rank)
     else:
         fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
         for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
-            do_plot(i, a, rank)
+            gen_plot(i, a, rank)
 
     plt.margins(0,0)
     plt.show()
 
 if __name__=="__main__":
-    plot()
+    if plot:
+        do_plot()
