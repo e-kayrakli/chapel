@@ -1,4 +1,5 @@
 import re
+import numpy as np
 
 class chpl_range(object):
     def __init__(self, low, high, stride):
@@ -155,11 +156,24 @@ class LocaleLog(object):
             if debug:
                 print_access_mat(access_mat)
 
+        # TODO fix this
         self.rank = rank
         self.whole_lims = whole_lims
         self.subdom_lims = subdom_lims
         self.access_mat = access_mat
         self.max_access = max_access
+
+    def gen_access_bbox(self):
+        if self.rank == 1:
+            min_idx = -1  # only to mark that it hasn't been found yet
+            max_idx = -1  # only to mark that it hasn't been found yet
+            for (idx, acc_cnt) in enumerate(self.access_mat):
+                if acc_cnt > 0 and min_idx == -1:
+                    min_idx = idx
+                if acc_cnt > 0 and idx > max_idx:
+                    max_idx = idx
+
+        print('Access box: {},{}'.format(min_idx, max_idx))
 
     def print_access_mat(self, mat):
         for i in range(len(mat)):
