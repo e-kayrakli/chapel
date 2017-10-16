@@ -11,6 +11,7 @@ arg_parser.add_argument('filename')
 arg_parser.add_argument('--only-locale')
 arg_parser.add_argument('--no-local-subdomains', action='store_true')
 arg_parser.add_argument('--plot', action='store_true')
+arg_parser.add_argument('--no-analysis', action='store_true')
 
 args = arg_parser.parse_args()
 only_locale = args.only_locale
@@ -20,6 +21,7 @@ dirname = '__aal/'+filename
 meta_log_name= dirname+'/'+filename+'meta'
 locale_log_prefix = dirname+'/'+filename+'locale_'
 plot = args.plot
+analysis = not args.no_analysis
 
 # We just subclass Rectangle so that it can be called with an Axes
 # instance, causing the rectangle to update its shape to match the
@@ -40,9 +42,8 @@ def inc_color(cur, inc):
 # can actually see the increasing detail.  A box in the left panel will show
 # the area to which we are zoomed.
 class Display(object):
-    def __init__(self, filename, rank, h=1000, w=1000):
-        self.filename = filename
-        self.__ll = LocaleLog(filename, rank)
+    def __init__(self, locale_log, h=1000, w=1000):
+        self.__ll = locale_log
 
         self.rank = self.__ll.rank
         self.whole_lims = self.__ll.whole_lims
@@ -178,8 +179,9 @@ class Display(object):
                 return [int(len(self.access_mat)*r) 
                         for r in [0., 0.25, 0.5, 0.75, 1.]] 
 
-def gen_plot(i, a, rank):
-    d = Display(filename=locale_log_prefix+str(i), rank=rank)
+# TODO s/a/ax
+def gen_plot(a, locale_log):
+    d = Display(locale_log)
     Z = d.get_image()
     
     img_shape = (d.x.min(), d.x.max(),
@@ -200,8 +202,8 @@ def gen_plot(i, a, rank):
     a.set_yticklabels(d.get_tick_labels('y'), fontsize=8)
     a.grid(linestyle='dotted')
 
-def do_plot():
-    metalog_handler = MetaLog(meta_log_name)
+def do_plot(metalog_handler, ll_handlers):
+    # metalog_handler = MetaLog(meta_log_name)
     target_loc_shape = metalog_handler.target_loc_shape
     rank = len(target_loc_shape)
     num_locs = 1
@@ -219,15 +221,35 @@ def do_plot():
 
     if only_locale != None:
         fig1, ax = plt.subplots(1,1)
-        gen_plot(only_locale, ax, rank)
+        gen_plot(ax, ll_handlers[only_locale])
     else:
         fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
-        for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
-            gen_plot(i, a, rank)
+        # TODO maybe change the order of the iterands
+        for llh,(idx,a) in zip(ll_handlers, np.ndenumerate(axes)):
+            gen_plot(a, llh)
 
     plt.margins(0,0)
     plt.show()
 
+def init_log_handlers():
+    metalog_handler = MetaLog(meta_log_name)
+
+    target_loc_shape = metalog_handler.target_loc_shape
+    rank = len(target_loc_shape)
+    num_locs = 1
+    for t in target_loc_shape:
+        num_locs *= t
+
+    lls = []
+    for i in range(num_locs):
+        lls.append(LocaleLog(filename=locale_log_prefix+str(i),
+                             rank=metalog_handler.rank))
+
+    return (metalog_handler, lls)
+
 if __name__=="__main__":
+    mlh, llhs = init_log_handlers()
+    if analysis:
+        print("Doing a grabaggy analysis")
     if plot:
-        do_plot()
+        do_plot(mlh, llhs)
