@@ -55,6 +55,8 @@ class Display(object):
         if self.rank == 2:
             self.d2_offset = self.whole_lims[1][0]
 
+        self.tick_locs = [0., 0.25, 0.5, 0.75, 1.]
+
     def get_locsubdom_rect(self):
         for sdl in self.subdom_lims:
             subdom_rank = len(sdl)
@@ -151,26 +153,26 @@ class Display(object):
     
     def get_ticks(self, axis):
         if axis == 'x':
-            return [self.x.max()*r for r in tick_locs]
+            return [self.x.max()*r for r in self.tick_locs]
         elif axis == 'y':
-            if rank == 1:
+            if self.rank == 1:
                 return []
-            elif rank == 2:
-                return [self.y.max()*r for r in tick_locs]
+            elif self.rank == 2:
+                return [self.y.max()*r for r in self.tick_locs]
 
 
     def get_tick_labels(self, axis):
         if axis == 'x':
-            if rank == 1:
+            if self.rank == 1:
                 return [int(len(self.access_mat)*r) 
                         for r in [0., 0.25, 0.5, 0.75, 1.]] 
-            elif rank == 2:
+            elif self.rank == 2:
                 return [int(len(self.access_mat[0])*r) 
                         for r in [0., 0.25, 0.5, 0.75, 1.]] 
         if axis == 'y':
-            if rank == 1:
+            if self.rank == 1:
                 return []
-            elif rank == 2:
+            elif self.rank == 2:
                 return [int(len(self.access_mat)*r) 
                         for r in [0., 0.25, 0.5, 0.75, 1.]] 
 
@@ -196,29 +198,33 @@ def do_plot(i, a, rank):
     a.set_yticklabels(d.get_tick_labels('y'), fontsize=8)
     a.grid(linestyle='dotted')
 
-metalog_handler = MetaLog(meta_log_name)
-target_loc_shape = metalog_handler.target_loc_shape
-rank = len(target_loc_shape)
-num_locs = 1
-for t in target_loc_shape:
-    num_locs *= t
+def plot():
+    metalog_handler = MetaLog(meta_log_name)
+    target_loc_shape = metalog_handler.target_loc_shape
+    rank = len(target_loc_shape)
+    num_locs = 1
+    for t in target_loc_shape:
+        num_locs *= t
 
-if rank == 1:
-    plot_dist = (target_loc_shape[0], 1)
-elif rank == 2:
-    plot_dist = target_loc_shape
+    if rank == 1:
+        plot_dist = (target_loc_shape[0], 1)
+    elif rank == 2:
+        plot_dist = target_loc_shape
 
-# tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
-# TODO parametrize this
-tick_locs = [0., 0.25, 0.5, 0.75, 1.]
+    # tick_locs = [0., 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.]
+    # TODO parametrize this
+    # tick_locs = [0., 0.25, 0.5, 0.75, 1.]
 
-if only_locale != None:
-    fig1, ax = plt.subplots(1,1)
-    do_plot(only_locale, ax, rank)
-else:
-    fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
-    for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
-        do_plot(i, a, rank)
+    if only_locale != None:
+        fig1, ax = plt.subplots(1,1)
+        do_plot(only_locale, ax, rank)
+    else:
+        fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
+        for i,(idx,a) in zip(range(num_locs), np.ndenumerate(axes)):
+            do_plot(i, a, rank)
 
-plt.margins(0,0)
-plt.show()
+    plt.margins(0,0)
+    plt.show()
+
+if __name__=="__main__":
+    plot()
