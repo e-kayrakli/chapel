@@ -252,6 +252,5 @@ if __name__=="__main__":
     if analysis:
         for ll in llhs:
             ll.gen_access_bbox()
-        print("Doing a grabaggy analysis")
     if plot:
         do_plot(mlh, llhs)

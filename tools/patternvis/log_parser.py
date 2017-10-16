@@ -2,10 +2,18 @@ import re
 import numpy as np
 
 class chpl_range(object):
-    def __init__(self, low, high, stride):
+    def __init__(self, low, high, stride=1):
         self.low = low
         self.high = high
         self.stride = stride
+    
+    def __str__(self):
+        if self.stride == 1:
+            return '{}..{}'.format(self.low, self.high)
+        else:
+            return '{}..{} by {}'.format(self.low,
+                                         self.high,
+                                         self.stride)
 
     def shape(self):
         return (self.low, self.high)
@@ -135,6 +143,8 @@ class LocaleLog(object):
             elif rank == 2:
                 access_mat_d2_size = whole_lims[1][1]-whole_lims[1][0]+1
 
+            # TODO we probably want to use an ndarray here to be able to
+            # cover multidimensional data in a sane way
             access_mat = [[0 for x in range(access_mat_d2_size)] for y in
                     range(access_mat_d1_size)]
 
@@ -168,12 +178,12 @@ class LocaleLog(object):
             min_idx = -1  # only to mark that it hasn't been found yet
             max_idx = -1  # only to mark that it hasn't been found yet
             for (idx, acc_cnt) in enumerate(self.access_mat):
-                if acc_cnt > 0 and min_idx == -1:
+                if acc_cnt[0] > 0 and min_idx == -1:
                     min_idx = idx
-                if acc_cnt > 0 and idx > max_idx:
+                if acc_cnt[0] > 0 and idx > max_idx:
                     max_idx = idx
 
-        print('Access box: {},{}'.format(min_idx, max_idx))
+        print(chpl_range(min_idx, max_idx))
 
     def print_access_mat(self, mat):
         for i in range(len(mat)):
