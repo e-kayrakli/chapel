@@ -198,8 +198,20 @@ class LocaleLog(object):
                     min_idx = idx
                 if acc_cnt[0] > 0 and idx > max_idx:
                     max_idx = idx
-
-        return chpl_domain([chpl_range(min_idx, max_idx)])
+            return chpl_domain([chpl_range(min_idx, max_idx)])
+        elif self.rank == 2:
+            l,t,r,b = -1, -1, -1, -1
+            for (i, acc_cnts) in enumerate(self.access_mat):
+                for (j, acc_cnt) in enumerate(acc_cnts):
+                    if acc_cnt > 0:
+                        if t == -1:
+                            t = i
+                        b = i
+                        if l == -1 or l > j:
+                            l = j
+                        if r < j:
+                            r = j
+            return chpl_domain([chpl_range(t, b), chpl_range(l, r)])
 
     def print_access_mat(self, mat):
         for i in range(len(mat)):
