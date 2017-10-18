@@ -251,6 +251,6 @@ if __name__=="__main__":
     mlh, llhs = init_log_handlers()
     if analysis:
         for ll in llhs:
-            ll.gen_access_bbox()
+            print(ll.gen_access_bbox())
     if plot:
         do_plot(mlh, llhs)
