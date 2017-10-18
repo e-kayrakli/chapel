@@ -19,24 +19,10 @@ class chpl_range(object):
         return (self.low, self.high)
 
 class chpl_domain(object):
-    def __init__(self, match_groups):
-        # match group must have multiple-of-3 ints
-        mgr_len = len(match_groups)
-        if mgr_len % 3 != 0:
-            print('Wrong match group length {}'.format(mgr_len))
-
-        rank = int(mgr_len/3)
+    def __init__(self, ranges):
         self.ranges = []
-        for r in range(rank):
-            base = r*3
-            if match_groups[base+2] == None:
-                stride = 1
-            else:
-                stride = match_groups[base+2].split()[-1]
-
-            self.ranges.append(chpl_range(int(match_groups[base]),
-                                          int(match_groups[base+1]),
-                                          int(stride)))
+        for r in ranges:
+            self.ranges.append(r)
 
 class LogHandler(object):
 
@@ -80,9 +66,30 @@ class LogHandler(object):
                      dom.ranges[0].shape() )
 
     def get_dom(self, line):
+
+        def dom_from_mg(match_groups):
+            # match group must have multiple-of-3 ints
+            mgr_len = len(match_groups)
+            if mgr_len % 3 != 0:
+                print('Wrong match group length {}'.format(mgr_len))
+
+            rank = int(mgr_len/3)
+            ranges = []
+            for r in range(rank):
+                base = r*3
+                if match_groups[base+2] == None:
+                    stride = 1
+                else:
+                    stride = match_groups[base+2].split()[-1]
+
+                ranges.append(chpl_range(int(match_groups[base]),
+                                         int(match_groups[base+1]),
+                                         int(stride)))
+            return chpl_domain(ranges)
+
         match = re.match(self.domain_pattern, line)
         if match:
-            return self.generate_limit_tuple(chpl_domain(match.groups()))
+            return self.generate_limit_tuple(dom_from_mg(match.groups()))
         else:
             return None
 
