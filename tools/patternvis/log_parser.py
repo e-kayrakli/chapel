@@ -24,6 +24,15 @@ class chpl_domain(object):
         for r in ranges:
             self.ranges.append(r)
 
+
+    def __str__(self):
+        s = '{'
+        s += str(self.ranges[0])
+        for r in self.ranges[1:]:
+            s += ', ' + str(r)
+        s += '}'
+        return s
+
 class LogHandler(object):
 
     def __init__(self, rank):
@@ -190,7 +199,7 @@ class LocaleLog(object):
                 if acc_cnt[0] > 0 and idx > max_idx:
                     max_idx = idx
 
-        print(chpl_range(min_idx, max_idx))
+        print(chpl_domain([chpl_range(min_idx, max_idx)]))
 
     def print_access_mat(self, mat):
         for i in range(len(mat)):
