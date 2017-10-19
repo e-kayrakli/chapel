@@ -249,13 +249,15 @@ def init_log_handlers():
 
 def access_bbox(llhs):
     print('Overall access box')
-    for ll in llhs:
-        print(ll.gen_access_bbox())
+    for (i, ll) in enumerate(llhs):
+        print('LOCALE{}\t\t{}'.format(i, ll.gen_access_bbox()))
 
 def pairwise_access_bbox(llhs):
     print('Pairwise access box')
-    for ll in llhs:
-        print([str(ab) for ab in ll.gen_pairwise_access_bbox(llhs)])
+    for (i, ll) in enumerate(llhs):
+        print('LOCALE{}'.format(i))
+        for (j,bb) in enumerate(ll.gen_pairwise_access_bbox(llhs)):
+            print('\tLOCALE{}\t\t{}'.format(j, str(bb)))
 
 def main():
     mlh, llhs = init_log_handlers()

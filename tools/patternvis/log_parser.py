@@ -218,8 +218,7 @@ class LocaleLog(object):
         self.rank = rank
         self.whole_lims = whole_lims
         self.subdom_lims = subdom_lims
-        print(subdom_lims)
-        self.subdoms = [chpl_domain([range_from_shape(l) for l in asubdom]) for asubdom in subdom_lims]
+        self.subdoms = [chpl_domain([range_from_shape(l) for l in asubdom[::-1]]) for asubdom in subdom_lims]
         self.access_mat = access_mat
         self.max_access = max_access
 
@@ -280,8 +279,7 @@ class LocaleLog(object):
                 new_dom = chpl_domain([chpl_range(t, b),
                                        chpl_range(l, r)])
 
-                if new_dom.is_positive():
-                    pwise_bboxes.append(new_dom)
+                pwise_bboxes.append(new_dom)
 
             return pwise_bboxes
 
