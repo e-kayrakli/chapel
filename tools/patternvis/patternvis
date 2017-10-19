@@ -8,7 +8,7 @@ from log_parser import LocaleLog, MetaLog
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
-arg_parser.add_argument('--only-locale')
+arg_parser.add_argument('--only-locale', type=int)
 arg_parser.add_argument('--no-local-subdomains', action='store_true')
 arg_parser.add_argument('--plot', action='store_true')
 arg_parser.add_argument('--no-analysis', action='store_true')
@@ -32,8 +32,8 @@ analysis = not args.no_analysis
         # ax.figure.canvas.draw_idle()
 
 # FIXME get rid of this by figuring out where the padding comes from
-pad_comp = 0.5
-size_comp = 0.5
+pad_comp = 0.
+size_comp = 0.
 
 def inc_color(cur, inc):
     return (cur[0], cur[1]-inc, cur[2]-inc)
@@ -59,6 +59,39 @@ class Display(object):
             self.d2_offset = self.whole_lims[1][0]
 
         self.tick_locs = [0., 0.25, 0.5, 0.75, 1.]
+
+    def get_pwise_access_bbox_rect(self):
+        for ab in self.__ll.pwise_bboxes:
+            print(str(ab))
+            r = self.gen_rectangle_from_limits(ab.to_limit_tuple())
+            r.fill = False
+            yield r
+
+    def gen_rectangle_from_limits(self, lim):
+        subdom_rank = len(lim)
+        x = lim[0][0] - pad_comp
+        width = lim[0][1] - lim[0][0] + 1 - size_comp
+
+        if subdom_rank == 1:
+            x -= self.d1_offset
+        else:
+            x -= self.d2_offset
+
+        if subdom_rank == 2:
+            y = lim[1][0] - pad_comp
+            height = lim[1][1] - y + 1 - size_comp
+            y -= self.d1_offset
+        else: # rank == 1
+            y = 0
+            height = self.height
+
+
+        x *= self.ratio
+        y *= self.ratio
+        width *= self.ratio
+        height *= self.ratio
+
+        return Rectangle((x,y), width, height)
 
     def get_locsubdom_rect(self):
         for sdl in self.subdom_lims:
@@ -195,6 +228,8 @@ def gen_plot(a, locale_log):
     if not no_local_subdomains:
         for r in d.get_locsubdom_rect():
             a.add_patch(r)
+    for r in d.get_pwise_access_bbox_rect():
+        a.add_patch(r)
     a.set_ylim(a.get_ylim()[::-1])
     a.set_xticks(d.get_ticks('x'))
     a.set_yticks(d.get_ticks('y'))

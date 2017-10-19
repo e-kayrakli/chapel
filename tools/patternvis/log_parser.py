@@ -28,7 +28,16 @@ class chpl_domain(object):
         self.ranges = []
         for r in ranges:
             self.ranges.append(r)
+        self.rank = len(ranges)
 
+    # returns (xlimits, ylimits)
+    def to_limit_tuple(self):
+        # print('called ' + int(self.rank))
+        if self.rank == 1 :
+            return ( self.ranges[0].shape(), )
+        elif self.rank == 2:
+            return ( self.ranges[1].shape(),
+                     self.ranges[0].shape() )
 
     def __str__(self):
         s = '{'
@@ -89,15 +98,6 @@ class LogHandler(object):
         self.index_pattern = __gen_idx_pattern(self.rank)
     # endof init
 
-    # returns (xlimits, ylimits)
-    def generate_limit_tuple(self, dom):
-        # print('called ' + int(self.rank))
-        if self.rank == 1 :
-            return ( dom.ranges[0].shape(), )
-        elif self.rank == 2:
-            return ( dom.ranges[1].shape(),
-                     dom.ranges[0].shape() )
-
     def generate_domain(self, limit_tuple):
         if self.rank == 1 :
             return chpl_domain([range_from_shape(limit_tuple[0])])
@@ -130,7 +130,7 @@ class LogHandler(object):
 
         match = re.match(self.domain_pattern, line)
         if match:
-            return self.generate_limit_tuple(dom_from_mg(match.groups()))
+            return dom_from_mg(match.groups()).to_limit_tuple()
         else:
             return None
 
@@ -248,7 +248,7 @@ class LocaleLog(object):
 
     def gen_pairwise_access_bbox(self, llhs):
         if self.rank == 1:
-            pwise_bboxes = []
+            self.pwise_bboxes = []
             for ll in llhs:
                 min_idx = -1  # only to mark that it hasn't been found yet
                 max_idx = -1  # only to mark that it hasn't been found yet
@@ -258,11 +258,11 @@ class LocaleLog(object):
                             min_idx = i
                         if self.access_mat[i][0] > 0 and i > max_idx:
                             max_idx = i
-                pwise_bboxes.append(chpl_domain([chpl_range(min_idx,
+                self.pwise_bboxes.append(chpl_domain([chpl_range(min_idx,
                     max_idx)]))
-            return pwise_bboxes
+            return self.pwise_bboxes
         elif self.rank == 2:
-            pwise_bboxes = []
+            self.pwise_bboxes = []
             for ll in llhs:
                 l, t, r, b = -1, -1, -1, -1
                 for subdom in ll.subdoms:
@@ -279,9 +279,9 @@ class LocaleLog(object):
                 new_dom = chpl_domain([chpl_range(t, b),
                                        chpl_range(l, r)])
 
-                pwise_bboxes.append(new_dom)
+                self.pwise_bboxes.append(new_dom)
 
-            return pwise_bboxes
+            return self.pwise_bboxes
 
 
     def print_access_mat(self, mat):
