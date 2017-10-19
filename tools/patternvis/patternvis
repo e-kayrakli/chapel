@@ -42,8 +42,9 @@ def inc_color(cur, inc):
 # can actually see the increasing detail.  A box in the left panel will show
 # the area to which we are zoomed.
 class Display(object):
-    def __init__(self, locale_log, h=1000, w=1000):
+    def __init__(self, locale_log, lid, h=1000, w=1000):
         self.__ll = locale_log
+        self.lid = lid
 
         self.rank = self.__ll.rank
         self.whole_lims = self.__ll.whole_lims
@@ -60,11 +61,14 @@ class Display(object):
 
         self.tick_locs = [0., 0.25, 0.5, 0.75, 1.]
 
-    def get_pwise_access_bbox_rect(self):
-        for ab in self.__ll.pwise_bboxes:
-            print(str(ab))
+    def get_pwise_access_bbox_rect(self, remote_only=True):
+        for (i,ab) in enumerate(self.__ll.pwise_bboxes):
+            if remote_only and i == self.lid:
+                continue
             r = self.gen_rectangle_from_limits(ab.to_limit_tuple())
-            r.fill = False
+            r.set_fill(False)
+            r.set_color('blue')
+            r.set_hatch('\\\\\\')
             yield r
 
     def gen_rectangle_from_limits(self, lim):
@@ -95,31 +99,11 @@ class Display(object):
 
     def get_locsubdom_rect(self):
         for sdl in self.subdom_lims:
-            subdom_rank = len(sdl)
-            x = sdl[0][0] - pad_comp
-            width = sdl[0][1] - x + 1 - size_comp
-
-            if subdom_rank == 1:
-                x -= self.d1_offset
-            else:
-                x -= self.d2_offset
-
-            if subdom_rank == 2:
-                y = sdl[1][0] - pad_comp
-                height = sdl[1][1] - y + 1 - size_comp
-                y -= self.d1_offset
-            else: # rank == 1
-                y = 0
-                height = self.height
-
-
-            x *= self.ratio
-            y *= self.ratio
-            width *= self.ratio
-            height *= self.ratio
-
-            yield Rectangle((x,y), width, height, fill=False,
-                    color='green', hatch='///')
+            r = self.gen_rectangle_from_limits(sdl)
+            r.set_fill(False)
+            r.set_color('green')
+            r.set_hatch('///')
+            yield r
 
     def get_image(self):
 
@@ -213,8 +197,8 @@ class Display(object):
                         for r in [0., 0.25, 0.5, 0.75, 1.]] 
 
 # TODO s/a/ax
-def gen_plot(a, locale_log):
-    d = Display(locale_log)
+def gen_plot(a, locale_log, lid):
+    d = Display(locale_log, lid)
     Z = d.get_image()
     
     img_shape = (d.x.min(), d.x.max(),
@@ -256,12 +240,12 @@ def do_plot(metalog_handler, ll_handlers):
 
     if only_locale != None:
         fig1, ax = plt.subplots(1,1)
-        gen_plot(ax, ll_handlers[only_locale])
+        gen_plot(ax, ll_handlers[only_locale], only_locale)
     else:
         fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
         # TODO maybe change the order of the iterands
         for llh,(idx,a) in zip(ll_handlers, np.ndenumerate(axes)):
-            gen_plot(a, llh)
+            gen_plot(a, llh, idx)
 
     plt.margins(0,0)
     plt.show()
