@@ -247,7 +247,7 @@ def init_log_handlers():
 
     return (metalog_handler, lls)
 
-if __name__=="__main__":
+def main():
     mlh, llhs = init_log_handlers()
     if analysis:
         for ll in llhs:
@@ -257,3 +257,6 @@ if __name__=="__main__":
             print([str(ab) for ab in ll.gen_pairwise_access_bbox(llhs)])
     if plot:
         do_plot(mlh, llhs)
+
+if __name__=="__main__":
+    main()
