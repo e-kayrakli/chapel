@@ -1,4 +1,5 @@
 import re
+import itertools as it
 import numpy as np
 
 class chpl_range(object):
@@ -45,6 +46,12 @@ class chpl_domain(object):
             for i,j in it.product(self.ranges[0].iter(),
                                   self.ranges[1].iter()):
                 yield (i,j)
+
+    def is_positive(self):
+        for r in self.ranges:
+            if r.low < 0 or r.high < 0:
+                return False
+        return True
 
 def range_from_shape(shape):
     
@@ -254,6 +261,28 @@ class LocaleLog(object):
                             max_idx = i
                 pwise_bboxes.append(chpl_domain([chpl_range(min_idx,
                     max_idx)]))
+            return pwise_bboxes
+        elif self.rank == 2:
+            pwise_bboxes = []
+            for ll in llhs:
+                l, t, r, b = -1, -1, -1, -1
+                for subdom in ll.subdoms:
+                    for i,j in subdom.iter():
+                        if self.access_mat[i][j] > 0:
+                            if t == -1:
+                                t = i
+                            b = i
+                            if l == -1 or l > j:
+                                l = j
+                            if r < j:
+                                r = j
+
+                new_dom = chpl_domain([chpl_range(t, b),
+                                       chpl_range(l, r)])
+
+                if new_dom.is_positive():
+                    pwise_bboxes.append(new_dom)
+
             return pwise_bboxes
 
 
