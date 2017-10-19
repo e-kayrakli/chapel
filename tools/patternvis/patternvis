@@ -251,6 +251,9 @@ if __name__=="__main__":
     mlh, llhs = init_log_handlers()
     if analysis:
         for ll in llhs:
+            print('Overall access box')
             print(ll.gen_access_bbox())
+            print('Pairwise access box')
+            print([str(ab) for ab in ll.gen_pairwise_access_bbox(llhs)])
     if plot:
         do_plot(mlh, llhs)
