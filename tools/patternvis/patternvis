@@ -73,7 +73,17 @@ class Display(object):
             r.set_alpha(0.7)
             yield r
 
-    # creates a bounding box that contain the domain
+    def get_locsubdom_rect(self):
+        for sd in self.subdoms:
+            rs = self.gen_rectangle_from_dom(sd)
+            for r in rs:
+                r.set_fill(True)
+                r.set_color('green')
+                r.set_alpha(0.7)
+                # r.set_hatch('///')
+                yield r
+
+
     def gen_rectangle_from_dom(self, dom):
         assert dom.strided and dom.rank == 1 or not dom.strided
         subdom_rank = dom.rank
@@ -117,16 +127,6 @@ class Display(object):
 
             return [Rectangle((x+off,y),width,height)
                     for off in range(0, up_lim+1, stride)]
-
-    def get_locsubdom_rect(self):
-        for sd in self.subdoms:
-            rs = self.gen_rectangle_from_dom(sd)
-            for r in rs:
-                r.set_fill(True)
-                r.set_color('green')
-                r.set_alpha(0.7)
-                # r.set_hatch('///')
-                yield r
 
     def get_image(self):
 
