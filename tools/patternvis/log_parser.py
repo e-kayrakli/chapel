@@ -25,8 +25,11 @@ class chpl_range(object):
 
 class chpl_domain(object):
     def __init__(self, ranges):
+        self.strided = False
         self.ranges = []
         for r in ranges:
+            if r.stride != 1:
+                self.strided = True
             self.ranges.append(r)
         self.rank = len(ranges)
 
