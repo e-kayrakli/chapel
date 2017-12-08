@@ -37,7 +37,7 @@ config param debugCyclicDistBulkTransfer = false;
 // used or not.  This is used in regression testing to ensure that the
 // 'fast follower' optimization is working.
 //
-config param testFastFollowerOptimization = false;
+config param testFastFollowerOptimization = true;
 
 //
 // This flag is used to disable lazy initialization of the RAD cache.
@@ -767,6 +767,7 @@ inline proc _remoteAccessData.getDataIndex(
 }
 
 proc CyclicArr.dsiAccess(i:rank*idxType) ref {
+  if accessLogging then logAccess(i);
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);

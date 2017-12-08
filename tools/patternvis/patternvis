@@ -47,17 +47,17 @@ class Display(object):
         self.lid = lid
 
         self.rank = self.__ll.rank
-        self.whole_lims = self.__ll.whole_lims
-        self.subdom_lims = self.__ll.subdom_lims
+        self.whole = self.__ll.whole
+        self.subdoms = self.__ll.subdoms
         self.access_mat = self.__ll.access_mat
         self.max_access = self.__ll.max_access
 
         self.height = h
         self.width = w
 
-        self.d1_offset = self.whole_lims[0][0]
+        self.d1_offset = self.whole[0].low
         if self.rank == 2:
-            self.d2_offset = self.whole_lims[1][0]
+            self.d2_offset = self.whole[1][0]
 
         self.tick_locs = [0., 0.25, 0.5, 0.75, 1.]
 
@@ -65,16 +65,19 @@ class Display(object):
         for (i,ab) in enumerate(self.__ll.pwise_bboxes):
             if remote_only and i == self.lid:
                 continue
-            r = self.gen_rectangle_from_limits(ab.to_limit_tuple())
+            r = self.gen_rectangle_from_dom(ab)
             r.set_fill(False)
             r.set_color('blue')
             r.set_hatch('\\\\\\')
             yield r
 
-    def gen_rectangle_from_limits(self, lim):
-        subdom_rank = len(lim)
-        x = lim[0][0] - pad_comp
-        width = lim[0][1] - lim[0][0] + 1 - size_comp
+    # creates a bounding box that contain the domain
+    def gen_rectangle_from_dom(self, dom):
+        subdom_rank = dom.rank
+        x = dom[0].low - pad_comp
+
+        # FIXME this should account for cyclic domain
+        width = dom[0].high - dom[0].low + 1 - size_comp
 
         if subdom_rank == 1:
             x -= self.d1_offset
@@ -82,8 +85,8 @@ class Display(object):
             x -= self.d2_offset
 
         if subdom_rank == 2:
-            y = lim[1][0] - pad_comp
-            height = lim[1][1] - y + 1 - size_comp
+            y = dom[1].low - pad_comp
+            height = dom[1].high - y + 1 - size_comp
             y -= self.d1_offset
         else: # rank == 1
             y = 0
@@ -98,8 +101,8 @@ class Display(object):
         return Rectangle((x,y), width, height)
 
     def get_locsubdom_rect(self):
-        for sdl in self.subdom_lims:
-            r = self.gen_rectangle_from_limits(sdl)
+        for sd in self.subdoms:
+            r = self.gen_rectangle_from_dom(sd)
             r.set_fill(False)
             r.set_color('green')
             r.set_hatch('///')

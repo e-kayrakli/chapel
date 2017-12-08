@@ -62,6 +62,9 @@ class chpl_domain(object):
                 return False
         return True
 
+    def __getitem__(self, key):
+        return self.ranges[key]
+
 def range_from_shape(shape):
     
     return chpl_range(shape[0], shape[1])
@@ -130,7 +133,7 @@ class LogHandler(object):
 
         match = re.match(self.domain_pattern, line)
         if match:
-            return dom_from_mg(match.groups()).to_limit_tuple()
+            return dom_from_mg(match.groups())
         else:
             return None
 
@@ -162,17 +165,17 @@ class LocaleLog(object):
         self.__lh = LogHandler(rank)
 
         with open(filename) as f:
-            whole_lims = self.__lh.get_dom(f.readline())
+            whole = self.__lh.get_dom(f.readline())
 
             # now start reading subdomain(s). At this point we do not know
             # how many there are, so we do some regexp checking for each
             # line we read to determine whether it is a domain or an index
-            subdom_lims = []
+            subdoms = []
             tmp_line = f.readline()
             dom = self.__lh.get_dom(tmp_line)
 
             while dom != None:
-                subdom_lims.append(dom)
+                subdoms.append(dom)
                 last_pos = f.tell()
                 tmp_line = f.readline()
                 dom = self.__lh.get_dom(tmp_line)
@@ -181,15 +184,15 @@ class LocaleLog(object):
             # first index
             f.seek(last_pos)
 
-            d1_offset = whole_lims[0][0]
+            d1_offset = whole[0].low
             if rank == 2:
-                d2_offset = whole_lims[1][0]
+                d2_offset = whole[1].low
 
-            access_mat_d1_size = whole_lims[0][1]-whole_lims[0][0]+1
+            access_mat_d1_size = whole[0].high-whole[0].low+1
             if rank == 1:
                 access_mat_d2_size = 1
             elif rank == 2:
-                access_mat_d2_size = whole_lims[1][1]-whole_lims[1][0]+1
+                access_mat_d2_size = whole[1].high-whole[1].low+1
 
             # TODO we probably want to use an ndarray here to be able to
             # cover multidimensional data in a sane way
@@ -216,9 +219,8 @@ class LocaleLog(object):
 
         # TODO fix this
         self.rank = rank
-        self.whole_lims = whole_lims
-        self.subdom_lims = subdom_lims
-        self.subdoms = [chpl_domain([range_from_shape(l) for l in asubdom[::-1]]) for asubdom in subdom_lims]
+        self.whole = whole
+        self.subdoms = subdoms
         self.access_mat = access_mat
         self.max_access = max_access
 
