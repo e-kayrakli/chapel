@@ -108,7 +108,6 @@ class Display(object):
             y = 0
             height = self.height
 
-
         x *= self.ratio
         y *= self.ratio
         width *= self.ratio
