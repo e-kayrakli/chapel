@@ -11,12 +11,14 @@ arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
 arg_parser.add_argument('--only-locale', type=int)
 arg_parser.add_argument('--no-local-subdomains', action='store_true')
+arg_parser.add_argument('--no-pwise-access', action='store_true')
 arg_parser.add_argument('--plot', action='store_true')
 arg_parser.add_argument('--no-analysis', action='store_true')
 
 args = arg_parser.parse_args()
 only_locale = args.only_locale
 no_local_subdomains = args.no_local_subdomains
+no_pwise_access = args.no_pwise_access
 filename = args.filename
 dirname = '__aal/'+filename
 meta_log_name= dirname+'/'+filename+'meta'
@@ -234,8 +236,9 @@ def gen_plot(a, locale_log, lid):
     if not no_local_subdomains:
         for r in d.get_locsubdom_rect():
             a.add_patch(r)
-    for r in d.get_pwise_access_bbox_rect():
-        a.add_patch(r)
+    if not no_pwise_access:
+        for r in d.get_pwise_access_bbox_rect():
+            a.add_patch(r)
     a.set_ylim(a.get_ylim()[::-1])
     a.set_xticks(d.get_ticks('x'))
     a.set_yticks(d.get_ticks('y'))
