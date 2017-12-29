@@ -16,7 +16,7 @@ class chpl_range(object):
                                          self.high,
                                          self.stride)
 
-    def iter(self):
+    def __iter__(self):
         for i in range(self.low, self.high+1, self.stride):
             yield i
 
@@ -65,13 +65,13 @@ class chpl_domain(object):
         s += '}'
         return s
 
-    def iter(self):
+    def __iter__(self):
         if len(self.ranges) == 1:
-            for i in self.ranges[0].iter():
+            for i in self.ranges[0]:
                 yield i
         if len(self.ranges) == 2:
-            for i,j in it.product(self.ranges[0].iter(),
-                                  self.ranges[1].iter()):
+            for i,j in it.product(self.ranges[0],
+                                  self.ranges[1]):
                 yield (i,j)
 
     def is_positive(self):
@@ -333,6 +333,22 @@ class LocaleLog(object):
                         if r < j:
                             r = j
             return chpl_domain([chpl_range(t, b), chpl_range(l, r)])
+
+    def gen_access_bbox_efficiency(self):
+        bbox = self.gen_access_bbox()
+
+        accessed = 0
+        if self.rank == 1:
+            for idx in bbox:
+                if self.access_mat[idx][0] > 0:
+                    accessed += 1
+        elif self.rank == 2:
+            for i,j in bbox:
+                if self.access_mat[i][j] > 0:
+                    accessed += 1
+
+        return float(accessed)/bbox.size()
+            
 
     def gen_pairwise_access_bbox(self, llhs):
         if self.rank == 1:

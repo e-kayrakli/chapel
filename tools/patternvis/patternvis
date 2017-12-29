@@ -313,10 +313,16 @@ def access_mem_ratio(llhs):
     for (i, ll) in enumerate(llhs):
         print('LOCALE{}\t\t{}'.format(i, ll.gen_access_mem_ratio()))
 
+def access_bbox_efficiency(llhs):
+    print('Access bbox efficiency')
+    for (i, ll) in enumerate(llhs):
+        print('LOCALE{}\t\t{}'.format(i, ll.gen_access_bbox_efficiency()))
+
 def main():
     mlh, llhs = init_log_handlers()
     if analysis:
-        access_mem_ratio(llhs)
+        access_bbox_efficiency(llhs)
+        # access_mem_ratio(llhs)
         # rar(llhs)
         # access_bbox(llhs)
         # pairwise_access_bbox(llhs)
