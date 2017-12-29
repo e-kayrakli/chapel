@@ -23,6 +23,15 @@ class chpl_range(object):
     def shape(self):
         return (self.low, self.high)
 
+    def member(self, index):
+        if not isinstance(index, int):
+            print('ERROR: Arg to range.member must be int')
+            
+        if self.stride != 1:
+            print('ERROR: Strided domain.member not implemented')
+
+        return index >= self.low and index <= self.high
+
 class chpl_domain(object):
     def __init__(self, ranges):
         self.strided = False
@@ -67,6 +76,17 @@ class chpl_domain(object):
 
     def __getitem__(self, key):
         return self.ranges[key]
+
+    def member(self, index):
+        if len(index) != len(self.ranges):
+            print("ERROR: Rank mismatch")
+
+        
+        for (i,r) in zip(index, self.ranges):
+            if not r.member(i):
+                return False
+
+        return True
 
 def range_from_shape(shape):
     
@@ -226,6 +246,36 @@ class LocaleLog(object):
         self.subdoms = subdoms
         self.access_mat = access_mat
         self.max_access = max_access
+
+    def gen_rar(self):
+        num_loc = 0
+        num_rem = 0
+        for idx,acc_cnt in self.iter_idx_acc_cnt():
+            tmp_loc = False
+            for d in self.subdoms:
+                if d.member(idx):
+                    tmp_loc = True
+
+            if tmp_loc:
+                num_loc += acc_cnt
+            else:
+                num_rem += acc_cnt
+
+        return float(num_rem)/num_loc
+
+
+    def iter_idx_acc_cnt(self):
+        if self.rank == 1:
+            for (idx, acc_cnt) in enumerate(self.access_mat):
+                yield ((idx,), acc_cnt)
+
+        elif self.rank == 2:
+            for (i, acc_cnts) in enumerate(self.access_mat):
+                for (j, acc_cnt) in enumerate(acc_cnts):
+                    yield ((i,j),acc_cnt)
+
+        else:
+            print('ERROR: cannot iterate rank>2 yet')
 
     def gen_access_bbox(self):
         if self.rank == 1:

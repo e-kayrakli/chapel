@@ -291,6 +291,11 @@ def init_log_handlers():
 
     return (metalog_handler, lls)
 
+def rar(llhs):
+    print('Remote access ratios')
+    for (i, ll) in enumerate(llhs):
+        print('LOCALE{}\t\t{}'.format(i, ll.gen_rar()))
+
 def access_bbox(llhs):
     print('Overall access box')
     for (i, ll) in enumerate(llhs):
@@ -306,8 +311,9 @@ def pairwise_access_bbox(llhs):
 def main():
     mlh, llhs = init_log_handlers()
     if analysis:
-        access_bbox(llhs)
-        pairwise_access_bbox(llhs)
+        rar(llhs)
+        # access_bbox(llhs)
+        # pairwise_access_bbox(llhs)
     if plot:
         do_plot(mlh, llhs)
 
