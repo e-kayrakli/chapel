@@ -244,8 +244,6 @@ class Display(object):
                     if access_count > 0:
                         if self.rank == 1:
                             i = int(row/self.ratio)
-                            print('width: ', self.width)
-                            print(i)
                             for j in range(self.height):
                                 image[j][i] = inc_color(image[j][i],
                                                     -access_count)
