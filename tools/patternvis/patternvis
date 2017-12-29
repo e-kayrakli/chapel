@@ -4,6 +4,7 @@ import argparse
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools as it
 from matplotlib.patches import Rectangle
 from log_parser import LocaleLog, MetaLog
 
@@ -131,6 +132,31 @@ class Display(object):
 
     def get_image(self):
 
+        def largest_mul_smaller_then(num, limit):
+            # an ugly helper
+            for off in range(0, limit):
+                div = num/(limit-off)
+                if int(div) == div:
+                    return limit-off
+
+        def normalize_image(image):
+            h = len(image)
+            w = len(image[0])
+
+
+            largest = 0
+            for i,j in it.product(range(h), range(w)):
+                if image[i][j][2] > largest:
+                    largest = image[i][j][2]
+            
+            for i,j in it.product(range(h), range(w)):
+                image[i][j] = (1.0,
+                              image[i][j][1]/largest,
+                              image[i][j][2]/largest)
+
+            return image
+
+
         # self.x = np.linspace(xstart, xend, self.width)
         # self.y = np.linspace(ystart, yend, self.height)
 
@@ -146,7 +172,22 @@ class Display(object):
                 binning=False
                 scaleup=True
             else:
-                print("Not ready for this yet")
+
+                # wrong logic!!
+                # we need to find the largest number that is smaller
+                # then width and divides access_mat_d1_size
+                
+                # rem = access_mat_d1_size%self.width
+                self.width = largest_mul_smaller_then(
+                                    access_mat_d1_size,
+                                    self.width)
+                self.height = 25
+                self.ratio = int(access_mat_d1_size/self.width)
+
+                binning=True
+                scaleup=False
+
+                # print("Not ready for this yet")
 
         elif self.rank == 2:
             if access_mat_d1_size == access_mat_d2_size:
@@ -170,28 +211,53 @@ class Display(object):
         self.y = np.linspace(0, self.height-1, self.height)
 
 
-        image = [[(1.0, 1.0, 1.0) for x in range(self.width)] for y in
-            range(self.height)]
-
-        per_access_delta = 1.0/self.max_access
 
         r = self.ratio
-        for row in range(access_mat_d1_size):
-            for col in range(access_mat_d2_size):
-                access_count = self.access_mat[row][col]
-                if access_count > 0:
-                    for i in range(row*r, (row+1)*r):
+        if scaleup and not binning:
+            image = [[(1.0, 1.0, 1.0) for x in range(self.width)]
+                                      for y in range(self.height)]
+
+            per_access_delta = 1.0/self.max_access
+            for row in range(access_mat_d1_size):
+                for col in range(access_mat_d2_size):
+                    access_count = self.access_mat[row][col]
+                    if access_count > 0:
+                        for i in range(row*r, (row+1)*r):
+                            if self.rank == 1:
+                                for j in range(self.height):
+                                    image[j][i] = inc_color(image[j][i],
+                                            per_access_delta*access_count)
+                            if self.rank == 2:
+                                for j in range(col*r, (col+1)*r):
+                                    # if image[i][j] == (1.0, 1.0, 1.0):
+                                        # image[i][j] = (0.0, 1.0, 0.0)
+                                    image[i][j] = inc_color(image[i][j],
+                                            per_access_delta*access_count)
+        
+        elif binning and not scaleup:
+            image = [[(0.0, 0.0, 0.0) for x in range(self.width)]
+                                      for y in range(self.height)]
+
+            for row in range(access_mat_d1_size):
+                for col in range(access_mat_d2_size):
+                    access_count = self.access_mat[row][col]
+                    if access_count > 0:
                         if self.rank == 1:
+                            i = int(row/self.ratio)
+                            print('width: ', self.width)
+                            print(i)
                             for j in range(self.height):
                                 image[j][i] = inc_color(image[j][i],
-                                        per_access_delta*access_count)
-                        if self.rank == 2:
-                            for j in range(col*r, (col+1)*r):
-                                # if image[i][j] == (1.0, 1.0, 1.0):
-                                    # image[i][j] = (0.0, 1.0, 0.0)
-                                image[i][j] = inc_color(image[i][j],
-                                        per_access_delta*access_count)
-        
+                                                    -access_count)
+
+                        elif self.rank == 2:
+                            print('Not ready')
+
+            image = normalize_image(image)
+
+        else:
+            print('Unknown config')
+
 
         return image
     
