@@ -300,7 +300,7 @@ class LocaleLog(object):
     def iter_idx_acc_cnt(self):
         if self.rank == 1:
             for (idx, acc_cnt) in enumerate(self.access_mat):
-                yield ((idx,), acc_cnt)
+                yield ((idx,), acc_cnt[0])
 
         elif self.rank == 2:
             for (i, acc_cnts) in enumerate(self.access_mat):
@@ -357,7 +357,7 @@ class LocaleLog(object):
                 min_idx = -1  # only to mark that it hasn't been found yet
                 max_idx = -1  # only to mark that it hasn't been found yet
                 for subdom in ll.subdoms:
-                    for i in subdom.iter():
+                    for i in subdom:
                         if self.access_mat[i][0] > 0 and min_idx == -1:
                             min_idx = i
                         if self.access_mat[i][0] > 0 and i > max_idx:
