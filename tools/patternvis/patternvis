@@ -60,7 +60,7 @@ class Display(object):
 
         self.d1_offset = self.whole[0].low
         if self.rank == 2:
-            self.d2_offset = self.whole[1][0]
+            self.d2_offset = self.whole[1].low
 
         self.tick_locs = [0., 0.25, 0.5, 0.75, 1.]
 
