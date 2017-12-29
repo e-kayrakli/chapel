@@ -308,10 +308,16 @@ def pairwise_access_bbox(llhs):
         for (j,bb) in enumerate(ll.gen_pairwise_access_bbox(llhs)):
             print('\tLOCALE{}\t\t{}'.format(j, str(bb)))
 
+def access_mem_ratio(llhs):
+    print('Access memory ratios')
+    for (i, ll) in enumerate(llhs):
+        print('LOCALE{}\t\t{}'.format(i, ll.gen_access_mem_ratio()))
+
 def main():
     mlh, llhs = init_log_handlers()
     if analysis:
-        rar(llhs)
+        access_mem_ratio(llhs)
+        # rar(llhs)
         # access_bbox(llhs)
         # pairwise_access_bbox(llhs)
     if plot:

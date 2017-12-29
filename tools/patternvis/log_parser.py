@@ -22,6 +22,12 @@ class chpl_range(object):
 
     def shape(self):
         return (self.low, self.high)
+    
+    def size(self):
+        if self.stride != 1:
+            print('ERROR: Strided range.size not implemented')
+        return self.high-self.low+1
+
 
     def member(self, index):
         if not isinstance(index, int):
@@ -87,6 +93,15 @@ class chpl_domain(object):
                 return False
 
         return True
+
+    def size(self):
+        if self.strided is True:
+            print('ERROR: domain.size for strided domains is not impl')
+
+        size = 1
+        for r in self.ranges:
+            size *= r.size()
+        return size
 
 def range_from_shape(shape):
     
@@ -263,6 +278,24 @@ class LocaleLog(object):
 
         return float(num_rem)/num_loc
 
+    def get_num_loc_idxs(self):
+        return sum([d.size() for d in self.subdoms])
+
+    def gen_access_mem_ratio(self):
+        num_rem = 0
+        for idx,acc_cnt in self.iter_idx_acc_cnt():
+            if acc_cnt == 0:
+                continue
+
+            tmp_loc = False
+            for d in self.subdoms:
+                if d.member(idx):
+                    tmp_loc = True
+
+            if not tmp_loc:
+                num_rem += 1
+
+        return float(num_rem)/self.get_num_loc_idxs()
 
     def iter_idx_acc_cnt(self):
         if self.rank == 1:
