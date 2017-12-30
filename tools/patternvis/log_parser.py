@@ -276,7 +276,7 @@ class LocaleLog(object):
             else:
                 num_rem += acc_cnt
 
-        return float(num_rem)/num_loc
+        return float(num_rem)/(num_loc+num_rem)
 
     def get_num_loc_idxs(self):
         return sum([d.size() for d in self.subdoms])
@@ -370,7 +370,7 @@ class LocaleLog(object):
             for ll in llhs:
                 l, t, r, b = -1, -1, -1, -1
                 for subdom in ll.subdoms:
-                    for i,j in subdom.iter():
+                    for i,j in subdom:
                         if self.access_mat[i][j] > 0:
                             if t == -1:
                                 t = i
