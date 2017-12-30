@@ -927,6 +927,7 @@ proc BlockArr.dsiDestroyArr() {
 }
 
 inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
+  if accessLogging then logAccess(i);
   return myLocArr.this(i);
 }
 
@@ -943,6 +944,7 @@ inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
 //
 inline proc BlockArr.dsiAccess(idx: rank*idxType) ref {
   var i = idx;
+  if accessLogging then logAccess(i);
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);

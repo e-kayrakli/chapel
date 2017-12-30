@@ -2078,7 +2078,7 @@ module ChapelArray {
     pragma "reference to const when const this"
     pragma "removable array access"
     inline proc ref this(i: rank*_value.dom.idxType) ref {
-      if _value.accessLogging then logAccess(i);
+      /*if _value.accessLogging then logAccess(i);*/
       if isRectangularArr(this) || isSparseArr(this) then
         return _value.dsiAccess(i);
       else
@@ -2088,7 +2088,7 @@ module ChapelArray {
     inline proc const this(i: rank*_value.dom.idxType)
     where shouldReturnRvalueByValue(_value.eltType)
     {
-      if _value.accessLogging then logAccess(i);
+      /*if _value.accessLogging then logAccess(i);*/
       if isRectangularArr(this) || isSparseArr(this) then
         return _value.dsiAccess(i);
       else
@@ -2098,7 +2098,7 @@ module ChapelArray {
     inline proc const this(i: rank*_value.dom.idxType) const ref
     where shouldReturnRvalueByConstRef(_value.eltType)
     {
-      if _value.accessLogging then logAccess(i);
+      /*if _value.accessLogging then logAccess(i);*/
       if isRectangularArr(this) || isSparseArr(this) then
         return _value.dsiAccess(i);
       else
