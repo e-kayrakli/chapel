@@ -46,7 +46,7 @@ def inc_color(cur, inc):
 # can actually see the increasing detail.  A box in the left panel will show
 # the area to which we are zoomed.
 class Display(object):
-    def __init__(self, locale_log, lid, h=1000, w=1000):
+    def __init__(self, locale_log, lid, h=1000, w=1331):
         self.__ll = locale_log
         self.lid = lid
 
@@ -166,7 +166,7 @@ class Display(object):
         access_mat_d1_size = len(self.access_mat)
         access_mat_d2_size = len(self.access_mat[0])
         if self.rank == 1:
-            if access_mat_d1_size < self.width:
+            if access_mat_d1_size <= self.width:
                 # find the nearest multiple to 500
                 rem = self.width%access_mat_d1_size;
                 self.width -= rem
@@ -176,11 +176,6 @@ class Display(object):
                 scaleup=True
             else:
 
-                # wrong logic!!
-                # we need to find the largest number that is smaller
-                # then width and divides access_mat_d1_size
-                
-                # rem = access_mat_d1_size%self.width
                 self.width = largest_mul_smaller_then(
                                     access_mat_d1_size,
                                     self.width)
