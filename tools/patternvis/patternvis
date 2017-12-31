@@ -281,9 +281,6 @@ class Display(object):
                 dist = self.x.max()*(hi_ratio-lo_ratio)
                 return [start+dist*r for r in self.tick_locs]
                 
-            
-
-
     def get_tick_labels(self, axis, viewlims=None):
         if viewlims is None:
             if axis == 'x':
