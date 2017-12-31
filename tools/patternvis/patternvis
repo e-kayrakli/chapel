@@ -262,33 +262,58 @@ class Display(object):
 
         return image
     
-    def get_ticks(self, axis):
-        if axis == 'x':
-            return [self.x.max()*r for r in self.tick_locs]
-        elif axis == 'y':
-            if self.rank == 1:
-                return []
-            elif self.rank == 2:
-                return [self.y.max()*r for r in self.tick_locs]
+    def get_ticks(self, axis, viewlims=None):
+        if viewlims is None:
+            if axis == 'x':
+                return [self.x.max()*r for r in self.tick_locs]
+            elif axis == 'y':
+                if self.rank == 1:
+                    return []
+                elif self.rank == 2:
+                    return [self.y.max()*r for r in self.tick_locs]
+        else:
+            lo = viewlims[0]
+            hi = viewlims[1]
+            if axis == 'x':
+                lo_ratio = lo/self.width
+                hi_ratio = hi/self.width
+                start = self.x.max()*lo_ratio
+                dist = self.x.max()*(hi_ratio-lo_ratio)
+                return [start+dist*r for r in self.tick_locs]
+                
+            
 
 
-    def get_tick_labels(self, axis):
-        if axis == 'x':
-            if self.rank == 1:
-                return [int(len(self.access_mat)*r) 
-                        for r in [0., 0.25, 0.5, 0.75, 1.]] 
-            elif self.rank == 2:
-                return [int(len(self.access_mat[0])*r) 
-                        for r in [0., 0.25, 0.5, 0.75, 1.]] 
-        if axis == 'y':
-            if self.rank == 1:
-                return []
-            elif self.rank == 2:
-                return [int(len(self.access_mat)*r) 
-                        for r in [0., 0.25, 0.5, 0.75, 1.]] 
+    def get_tick_labels(self, axis, viewlims=None):
+        if viewlims is None:
+            if axis == 'x':
+                if self.rank == 1:
+                    return [int(len(self.access_mat)*r) 
+                            for r in [0., 0.25, 0.5, 0.75, 1.]] 
+                elif self.rank == 2:
+                    return [int(len(self.access_mat[0])*r) 
+                            for r in [0., 0.25, 0.5, 0.75, 1.]] 
+            if axis == 'y':
+                if self.rank == 1:
+                    return []
+                elif self.rank == 2:
+                    return [int(len(self.access_mat)*r) 
+                            for r in [0., 0.25, 0.5, 0.75, 1.]] 
+        else:
+            lo = viewlims[0]
+            hi = viewlims[1]
+            if axis == 'x':
+                lo_ratio = lo/self.width
+                hi_ratio = hi/self.width
+                start = len(self.access_mat)*lo_ratio
+                dist = len(self.access_mat)*(hi_ratio-lo_ratio)
+                return[int(start+dist*r) for r in self.tick_locs]
 
+
+d = None
 # TODO s/a/ax
 def gen_plot(a, locale_log, lid):
+    global d
     d = Display(locale_log, lid)
     Z = d.get_image()
     
@@ -338,6 +363,32 @@ def do_plot(metalog_handler, ll_handlers):
         # TODO maybe change the order of the iterands
         for llh,(idx,a) in zip(ll_handlers, np.ndenumerate(axes)):
             gen_plot(a, llh, idx)
+
+    # plt.figsize=(8,8)
+    ax.set_aspect('equal', adjustable='box', anchor='C')
+
+    def on_key(event):
+        if event.key == 'ctrl+d':
+            print('you pressed', event.key, event.xdata, event.ydata)
+
+    def on_resize(event):
+        print('you resized')
+        ax.set_autoscale_on(False)  # Otherwise, infinite loop
+
+        # Get the number of points from the number of
+        # pixels in the window
+        # dims = ax.axesPatch.get_window_extent().bounds
+        lim = ax.viewLim
+        # print(ax.images[0].get_extent())
+        # print('bottom left: ', (lim.x0, lim.y0),
+              # 'top right: ',   (lim.x1, lim.y1))
+        xlims = (lim.x0, lim.x1)
+        ax.set_xticks(d.get_ticks('x', viewlims=xlims))
+        ax.set_xticklabels(d.get_tick_labels('x', viewlims=xlims))
+
+    # cid = ax.mpl_connect('resize_event', on_resize)
+    ax.callbacks.connect('xlim_changed', on_resize)
+    ax.callbacks.connect('ylim_changed', on_resize)
 
     plt.margins(0,0)
     plt.show()
