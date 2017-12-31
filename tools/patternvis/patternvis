@@ -362,7 +362,7 @@ def do_plot(metalog_handler, ll_handlers):
             gen_plot(a, llh, idx)
 
     # plt.figsize=(8,8)
-    ax.set_aspect('equal', adjustable='box', anchor='C')
+    # ax.set_aspect('equal', adjustable='box', anchor='C')
 
     def on_key(event):
         if event.key == 'ctrl+d':
@@ -384,8 +384,8 @@ def do_plot(metalog_handler, ll_handlers):
         ax.set_xticklabels(d.get_tick_labels('x', viewlims=xlims))
 
     # cid = ax.mpl_connect('resize_event', on_resize)
-    ax.callbacks.connect('xlim_changed', on_resize)
-    ax.callbacks.connect('ylim_changed', on_resize)
+    # ax.callbacks.connect('xlim_changed', on_resize)
+    # ax.callbacks.connect('ylim_changed', on_resize)
 
     plt.margins(0,0)
     plt.show()
