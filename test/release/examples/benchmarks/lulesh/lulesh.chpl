@@ -30,7 +30,7 @@
   directory and (in some cases) in TODO comments in the code.
 
  */
-
+use CyclicDist;
 
 
 use Time,       // to get timing routines for benchmarking
@@ -137,12 +137,13 @@ const ElemSpace = if use3DRepresentation
 const Elems = if useBlockDist then ElemSpace dmapped Block(ElemSpace)
                               else ElemSpace,
       Nodes = if useBlockDist then NodeSpace dmapped Block(NodeSpace)
-                              else NodeSpace;
+                              else NodeSpace,
+      NodesCyclic = NodeSpace dmapped Cyclic(startIdx=NodeSpace.first);
 
 
 /* The coordinates */
 
-var x, y, z: [Nodes] real;
+var x, y, z: [NodesCyclic] real;
                               
 config const accessLog = false;
 if accessLog then
