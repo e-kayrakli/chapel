@@ -262,6 +262,9 @@ class LocaleLog(object):
         self.access_mat = access_mat
         self.max_access = max_access
 
+    def gen_total_access(self):
+        return sum([c for _,c in self.iter_idx_acc_cnt()])
+
     def gen_rar(self):
         num_loc = 0
         num_rem = 0
