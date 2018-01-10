@@ -421,7 +421,6 @@ class LocaleLog(object):
         num_accessed = 0.
         for pwb, llh in zip(self.pwise_bboxes, llhs):
             if pwb.is_empty():
-                print('empty')
                 pwae.append(0.0)
             else:
                 for idx in pwb:
