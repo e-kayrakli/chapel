@@ -35,6 +35,7 @@ var data : [Dom] OptionData;
 var prices : [Dom] fptype;
 var otype : [Dom] bool;
 
+
 // Cumulative Normal Distribution Function
 // See Hull, Section 11.8, P.243-244
 param inv_sqrt_2xPI = 0.39894228040143270286;
@@ -131,6 +132,10 @@ proc bs() {
 
 proc main() {
 	var infile = open(filename, iomode.r).reader();
+
+        data.enableAccessLogging("data");
+        prices.enableAccessLogging("prices");
+        otype.enableAccessLogging("otype");
 
 	// Given the input file, there are 1000 options. Manually read the input in.
 	for i in 0..#numOptions do {
