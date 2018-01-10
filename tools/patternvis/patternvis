@@ -163,8 +163,12 @@ class Display(object):
         # self.x = np.linspace(xstart, xend, self.width)
         # self.y = np.linspace(ystart, yend, self.height)
 
-        access_mat_d1_size = len(self.access_mat)
-        access_mat_d2_size = len(self.access_mat[0])
+        am_ndim = self.access_mat.ndim
+        assert am_ndim < 3
+        am_shape = self.access_mat.shape
+
+        access_mat_d1_size = am_shape[0]
+        access_mat_d2_size = 1 if am_ndim==1 else am_shape[1]
         if self.rank == 1:
             if access_mat_d1_size <= self.width:
                 # find the nearest multiple to 500
@@ -216,35 +220,31 @@ class Display(object):
                                       for y in range(self.height)]
 
             per_access_delta = 1.0/self.max_access
-            for row in range(access_mat_d1_size):
-                for col in range(access_mat_d2_size):
-                    access_count = self.access_mat[row][col]
-                    if access_count > 0:
-                        for i in range(row*r, (row+1)*r):
-                            if self.rank == 1:
-                                for j in range(self.height):
-                                    image[j][i] = inc_color(image[j][i],
-                                            per_access_delta*access_count)
-                            if self.rank == 2:
-                                for j in range(col*r, (col+1)*r):
-                                    # if image[i][j] == (1.0, 1.0, 1.0):
-                                        # image[i][j] = (0.0, 1.0, 0.0)
-                                    image[i][j] = inc_color(image[i][j],
-                                            per_access_delta*access_count)
+            for idx, acc_cnt in np.ndenumerate(self.access_mat):
+                if acc_cnt > 0:
+                    for i in range(idx[0]*r, (idx[0]+1)*r):
+                        if self.rank == 1:
+                            for j in range(self.height):
+                                image[j][i] = inc_color(image[j][i],
+                                        per_access_delta*acc_cnt)
+                        if self.rank == 2:
+                            for j in range(idx[1]*r, (idx[1]+1)*r):
+                                # if image[i][j] == (1.0, 1.0, 1.0):
+                                    # image[i][j] = (0.0, 1.0, 0.0)
+                                image[i][j] = inc_color(image[i][j],
+                                        per_access_delta*acc_cnt)
         
         elif binning and not scaleup:
             image = [[(0.0, 0.0, 0.0) for x in range(self.width)]
                                       for y in range(self.height)]
 
-            for row in range(access_mat_d1_size):
-                for col in range(access_mat_d2_size):
-                    access_count = self.access_mat[row][col]
-                    if access_count > 0:
+            for idx, acc_cnt in np.ndenumerate(self.access_mat):
+                    if acc_cnt > 0:
                         if self.rank == 1:
-                            i = int(row/self.ratio)
+                            i = int(idx[0]/self.ratio)
                             for j in range(self.height):
                                 image[j][i] = inc_color(image[j][i],
-                                                    -access_count)
+                                                        -acc_cnt)
 
                         elif self.rank == 2:
                             print('Not ready')
@@ -277,19 +277,20 @@ class Display(object):
                 return [start+dist*r for r in self.tick_locs]
                 
     def get_tick_labels(self, axis, viewlims=None):
+        am_shape = self.access_mat.shape
         if viewlims is None:
             if axis == 'x':
                 if self.rank == 1:
-                    return [int(len(self.access_mat)*r) 
+                    return [int(am_shape[0]*r) 
                             for r in [0., 0.25, 0.5, 0.75, 1.]] 
                 elif self.rank == 2:
-                    return [int(len(self.access_mat[0])*r) 
+                    return [int(am_shape[1]*r) 
                             for r in [0., 0.25, 0.5, 0.75, 1.]] 
             if axis == 'y':
                 if self.rank == 1:
                     return []
                 elif self.rank == 2:
-                    return [int(len(self.access_mat)*r) 
+                    return [int(am_shape[0]*r) 
                             for r in [0., 0.25, 0.5, 0.75, 1.]] 
         else:
             lo = viewlims[0]
@@ -297,8 +298,8 @@ class Display(object):
             if axis == 'x':
                 lo_ratio = lo/self.width
                 hi_ratio = hi/self.width
-                start = len(self.access_mat)*lo_ratio
-                dist = len(self.access_mat)*(hi_ratio-lo_ratio)
+                start = am_shape[0]*lo_ratio
+                dist = am_shape[0]*(hi_ratio-lo_ratio)
                 return[int(start+dist*r) for r in self.tick_locs]
 
 
@@ -443,13 +444,13 @@ def access_bbox_efficiency(llhs):
 def main():
     mlh, llhs = init_log_handlers()
     if analysis:
-        # access_bbox_efficiency(llhs)
-        # access_mem_ratio(llhs)
-        # rar(llhs)
+        access_bbox_efficiency(llhs)
+        access_mem_ratio(llhs)
+        rar(llhs)
         # access_bbox(llhs)
         pairwise_access_bbox(llhs)
         pwise_access_efficiency(llhs)
-        # total_access(llhs)
+        total_access(llhs)
     if plot:
         do_plot(mlh, llhs)
 

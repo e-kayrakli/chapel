@@ -88,11 +88,16 @@ class chpl_domain(object):
         return self.ranges[key]
 
     def member(self, index):
-        if len(index) != len(self.ranges):
+        if isinstance(index, tuple):
+            loc_index = index
+        else:
+            loc_index = (index, )
+
+        if len(loc_index) != len(self.ranges):
             print("ERROR: Rank mismatch")
 
         
-        for (i,r) in zip(index, self.ranges):
+        for (i,r) in zip(loc_index, self.ranges):
             if not r.member(i):
                 return False
 
@@ -109,6 +114,9 @@ class chpl_domain(object):
 
     def is_empty(self):
         return self.size() == 0
+
+    def shape(self):
+        return tuple([r.size() for r in self.ranges])
 
 
 def range_from_shape(shape):
@@ -202,10 +210,11 @@ class LogHandler(object):
     def get_index(self, line):
         match = re.match(self.index_pattern, line)
         if match:
-            if self.rank == 1:
-                return (int(match.group(1)), )
-            elif self.rank == 2:
-                return (int(match.group(1)), int(match.group(2)))
+            return tuple([int(g) for g in match.groups()])
+            # if self.rank == 1:
+                # return (int(match.group(1)), )
+            # elif self.rank == 2:
+                # return (int(match.group(1)), int(match.group(2)))
         else:
             print('Invalid index : ', line) 
 
@@ -245,20 +254,9 @@ class LocaleLog(object):
             # first index
             f.seek(last_pos)
 
-            d1_offset = whole[0].low
-            if rank == 2:
-                d2_offset = whole[1].low
-
-            access_mat_d1_size = whole[0].high-whole[0].low+1
-            if rank == 1:
-                access_mat_d2_size = 1
-            elif rank == 2:
-                access_mat_d2_size = whole[1].high-whole[1].low+1
-
-            # TODO we probably want to use an ndarray here to be able to
-            # cover multidimensional data in a sane way
-            access_mat = [[0 for x in range(access_mat_d2_size)] for y in
-                    range(access_mat_d1_size)]
+            offsets = [r.low for r in whole.ranges]
+            access_mat_shape = whole.shape()
+            access_mat = np.zeros(access_mat_shape)
 
             if debug:
                 print_access_mat(access_mat)
@@ -266,14 +264,16 @@ class LocaleLog(object):
 
             max_access = 0
             for line in f:
-                real_index = self.__lh.get_index(line)
-                if rank == 1:
-                    index = (real_index[0]-d1_offset, 0)
-                elif rank == 2:
-                    index = (real_index[0]-d1_offset, real_index[1]-d2_offset)
-                access_mat[index[0]][index[1]] += 1
-                if access_mat[index[0]][index[1]] > max_access:
-                    max_access = access_mat[index[0]][index[1]] 
+                index = self.__lh.get_index(line)
+                # if rank == 1:
+                    # index = (real_index[0]-offsets[0], 0)
+                # elif rank == 2:
+                    # index = (real_index[0]-offsets[0],
+                             # real_index[1]-offsets[1])
+
+                access_mat[index] += 1
+                if access_mat[index] > max_access:
+                    max_access = access_mat[index] 
 
             if debug:
                 print_access_mat(access_mat)
@@ -286,12 +286,12 @@ class LocaleLog(object):
         self.max_access = max_access
 
     def gen_total_access(self):
-        return sum([c for _,c in self.iter_idx_acc_cnt()])
+        return int(sum([c for _,c in np.ndenumerate(self.access_mat)]))
 
     def gen_rar(self):
         num_loc = 0
         num_rem = 0
-        for idx,acc_cnt in self.iter_idx_acc_cnt():
+        for idx,acc_cnt in np.ndenumerate(self.access_mat):
             tmp_loc = False
             for d in self.subdoms:
                 if d.member(idx):
@@ -309,7 +309,7 @@ class LocaleLog(object):
 
     def gen_access_mem_ratio(self):
         num_rem = 0
-        for idx,acc_cnt in self.iter_idx_acc_cnt():
+        for idx,acc_cnt in np.ndenumerate(self.access_mat):
             if acc_cnt == 0:
                 continue
 
@@ -323,55 +323,36 @@ class LocaleLog(object):
 
         return float(num_rem)/self.get_num_loc_idxs()
 
-    def iter_idx_acc_cnt(self):
-        if self.rank == 1:
-            for (idx, acc_cnt) in enumerate(self.access_mat):
-                yield ((idx,), acc_cnt[0])
-
-        elif self.rank == 2:
-            for (i, acc_cnts) in enumerate(self.access_mat):
-                for (j, acc_cnt) in enumerate(acc_cnts):
-                    yield ((i,j),acc_cnt)
-
-        else:
-            print('ERROR: cannot iterate rank>2 yet')
-
     def gen_access_bbox(self):
         if self.rank == 1:
             min_idx = -1  # only to mark that it hasn't been found yet
             max_idx = -1  # only to mark that it hasn't been found yet
-            for (idx, acc_cnt) in enumerate(self.access_mat):
-                if acc_cnt[0] > 0 and min_idx == -1:
+            for (idx,),acc_cnt in np.ndenumerate(self.access_mat):
+                if acc_cnt > 0 and min_idx == -1:
                     min_idx = idx
-                if acc_cnt[0] > 0 and idx > max_idx:
+                if acc_cnt > 0 and idx > max_idx:
                     max_idx = idx
             return chpl_domain([chpl_range(min_idx, max_idx)])
         elif self.rank == 2:
             l,t,r,b = -1, -1, -1, -1
-            for (i, acc_cnts) in enumerate(self.access_mat):
-                for (j, acc_cnt) in enumerate(acc_cnts):
-                    if acc_cnt > 0:
-                        if t == -1:
-                            t = i
-                        b = i
-                        if l == -1 or l > j:
-                            l = j
-                        if r < j:
-                            r = j
+            for (i,j),acc_cnt in np.ndenumerate(self.access_mat):
+                if acc_cnt > 0:
+                    if t == -1:
+                        t = i
+                    b = i
+                    if l == -1 or l > j:
+                        l = j
+                    if r < j:
+                        r = j
             return chpl_domain([chpl_range(t, b), chpl_range(l, r)])
 
     def gen_access_bbox_efficiency(self):
         bbox = self.gen_access_bbox()
 
         accessed = 0
-        if self.rank == 1:
-            for idx in bbox:
-                if self.access_mat[idx][0] > 0:
-                    accessed += 1
-        elif self.rank == 2:
-            for i,j in bbox:
-                if self.access_mat[i][j] > 0:
-                    accessed += 1
+        for idx in bbox:
+            if self.access_mat[idx] > 0:
+                accessed += 1
 
         return float(accessed)/bbox.size()
 
@@ -384,9 +365,9 @@ class LocaleLog(object):
                 for subdom in ll.subdoms:
                     for ii in subdom:
                         i = to_zero_based(ii, self.whole)
-                        if self.access_mat[i][0] > 0 and min_idx == -1:
+                        if self.access_mat[i] > 0 and min_idx == -1:
                             min_idx = i
-                        if self.access_mat[i][0] > 0 and i > max_idx:
+                        if self.access_mat[i] > 0 and i > max_idx:
                             max_idx = i
                 self.pwise_bboxes.append(chpl_domain([chpl_range(min_idx,
                     max_idx)]))
@@ -435,7 +416,7 @@ class LocaleLog(object):
                     # transfered, but the million-dollar question is
                     # whether it will be accessed
 
-                    if contained and self.access_mat[idx[0]][idx[1]] > 0:
+                    if contained and self.access_mat[idx] > 0:
                         num_accessed += 1
 
                 print(pwb, num_accessed, pwb.size(), num_contained)
@@ -444,8 +425,5 @@ class LocaleLog(object):
 
         return pwae
                     
-            
-
     def print_access_mat(self, mat):
-        for i in range(len(mat)):
-            print(mat[i])
+        print(self.access_mat)
