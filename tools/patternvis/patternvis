@@ -436,12 +436,12 @@ def access_bbox_efficiency(llhs):
 def main():
     mlh, llhs = init_log_handlers()
     if analysis:
-        access_bbox_efficiency(llhs)
-        access_mem_ratio(llhs)
-        rar(llhs)
-        access_bbox(llhs)
+        # access_bbox_efficiency(llhs)
+        # access_mem_ratio(llhs)
+        # rar(llhs)
+        # access_bbox(llhs)
         pairwise_access_bbox(llhs)
-        total_access(llhs)
+        # total_access(llhs)
     if plot:
         do_plot(mlh, llhs)
 

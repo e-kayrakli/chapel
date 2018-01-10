@@ -104,9 +104,24 @@ class chpl_domain(object):
         return size
 
 def range_from_shape(shape):
-    
     return chpl_range(shape[0], shape[1])
         
+def to_zero_based(index, domain):
+    if isinstance(index, tuple):
+        num = len(index)
+        assert num == domain.rank
+        loc_index = []
+
+        # for tup_idx, idx in enumerate(index):
+        for i,r in zip(index, domain.ranges):
+            loc_index.append(i-r.low)
+
+        return tuple(loc_index)
+    else:
+        assert domain.rank == 1
+        return index - domain.ranges[0].low
+
+
 class LogHandler(object):
 
     def __init__(self, rank):
@@ -351,7 +366,6 @@ class LocaleLog(object):
                     accessed += 1
 
         return float(accessed)/bbox.size()
-            
 
     def gen_pairwise_access_bbox(self, llhs):
         if self.rank == 1:
@@ -360,7 +374,8 @@ class LocaleLog(object):
                 min_idx = -1  # only to mark that it hasn't been found yet
                 max_idx = -1  # only to mark that it hasn't been found yet
                 for subdom in ll.subdoms:
-                    for i in subdom:
+                    for ii in subdom:
+                        i = to_zero_based(ii, self.whole)
                         if self.access_mat[i][0] > 0 and min_idx == -1:
                             min_idx = i
                         if self.access_mat[i][0] > 0 and i > max_idx:
@@ -373,7 +388,8 @@ class LocaleLog(object):
             for ll in llhs:
                 l, t, r, b = -1, -1, -1, -1
                 for subdom in ll.subdoms:
-                    for i,j in subdom:
+                    for ii,jj in subdom:
+                        i,j = to_zero_based((ii,jj), self.whole)
                         if self.access_mat[i][j] > 0:
                             if t == -1:
                                 t = i
