@@ -70,13 +70,15 @@ class chpl_domain(object):
         return s
 
     def __iter__(self):
-        if len(self.ranges) == 1:
-            for i in self.ranges[0]:
-                yield i
-        if len(self.ranges) == 2:
-            for i,j in it.product(self.ranges[0],
-                                  self.ranges[1]):
-                yield (i,j)
+        for idx in it.product(*self.ranges):
+            yield idx
+        # if len(self.ranges) == 1:
+            # for i in self.ranges[0]:
+                # yield i
+        # if len(self.ranges) == 2:
+            # for i,j in it.product(self.ranges[0],
+                                  # self.ranges[1]):
+                # yield (i,j)
 
     def is_positive(self):
         for r in self.ranges:
@@ -118,6 +120,18 @@ class chpl_domain(object):
     def shape(self):
         return tuple([r.size() for r in self.ranges])
 
+    def bbox_expansion(self, index):
+        loc_index = (index, ) if isinstance(index, int) else index
+
+        if self.is_empty():
+            return chpl_domain([chpl_range(i, i) for i in loc_index])
+
+        new_ranges = []
+        for i,r in zip(loc_index, self.ranges):
+            new_ranges.append(chpl_range(low=r.low if r.low<i else i,
+                                         high=r.high if r.high>i else i))
+
+        return chpl_domain(new_ranges)
 
 def range_from_shape(shape):
     return chpl_range(shape[0], shape[1])
@@ -324,30 +338,19 @@ class LocaleLog(object):
         return float(num_rem)/self.get_num_loc_idxs()
 
     def gen_access_bbox(self):
-        if self.rank == 1:
-            min_idx = -1  # only to mark that it hasn't been found yet
-            max_idx = -1  # only to mark that it hasn't been found yet
-            for (idx,),acc_cnt in np.ndenumerate(self.access_mat):
-                if acc_cnt > 0 and min_idx == -1:
-                    min_idx = idx
-                if acc_cnt > 0 and idx > max_idx:
-                    max_idx = idx
-            return chpl_domain([chpl_range(min_idx, max_idx)])
-        elif self.rank == 2:
-            l,t,r,b = -1, -1, -1, -1
-            for (i,j),acc_cnt in np.ndenumerate(self.access_mat):
-                if acc_cnt > 0:
-                    if t == -1:
-                        t = i
-                    b = i
-                    if l == -1 or l > j:
-                        l = j
-                    if r < j:
-                        r = j
-            return chpl_domain([chpl_range(t, b), chpl_range(l, r)])
+        acc_bbox = chpl_domain([chpl_range(-1,-1)
+                                for r in range(self.rank)])
+
+        for idx,acc_cnt in np.ndenumerate(self.access_mat):
+            if acc_cnt > 0:
+                acc_bbox = acc_bbox.bbox_expansion(idx)
+
+        self.acc_bbox = acc_bbox
+
+        return acc_bbox
 
     def gen_access_bbox_efficiency(self):
-        bbox = self.gen_access_bbox()
+        bbox = self.acc_bbox
 
         accessed = 0
         for idx in bbox:
@@ -357,43 +360,20 @@ class LocaleLog(object):
         return float(accessed)/bbox.size()
 
     def gen_pairwise_access_bbox(self, llhs):
-        if self.rank == 1:
-            self.pwise_bboxes = []
-            for ll in llhs:
-                min_idx = -1  # only to mark that it hasn't been found yet
-                max_idx = -1  # only to mark that it hasn't been found yet
-                for subdom in ll.subdoms:
-                    for ii in subdom:
-                        i = to_zero_based(ii, self.whole)
-                        if self.access_mat[i] > 0 and min_idx == -1:
-                            min_idx = i
-                        if self.access_mat[i] > 0 and i > max_idx:
-                            max_idx = i
-                self.pwise_bboxes.append(chpl_domain([chpl_range(min_idx,
-                    max_idx)]))
-            return self.pwise_bboxes
-        elif self.rank == 2:
-            self.pwise_bboxes = []
-            for ll in llhs:
-                l, t, r, b = -1, -1, -1, -1
-                for subdom in ll.subdoms:
-                    for ii,jj in subdom:
-                        i,j = to_zero_based((ii,jj), self.whole)
-                        if self.access_mat[i][j] > 0:
-                            if t == -1:
-                                t = i
-                            b = i
-                            if l == -1 or l > j:
-                                l = j
-                            if r < j:
-                                r = j
+        self.pwise_bboxes = []
+        for ll in llhs:
+            acc_bbox = chpl_domain([chpl_range(-1,-1)
+                                    for r in range(self.rank)])
 
-                new_dom = chpl_domain([chpl_range(t, b),
-                                       chpl_range(l, r)])
+            for subdom in ll.subdoms:
+                for idx_nz in subdom:
+                    idx = to_zero_based(idx_nz, self.whole)
+                    if self.access_mat[idx] > 0:
+                        acc_bbox = acc_bbox.bbox_expansion(idx)
 
-                self.pwise_bboxes.append(new_dom)
+            self.pwise_bboxes.append(acc_bbox)
 
-            return self.pwise_bboxes
+        return self.pwise_bboxes
 
     def gen_pwise_access_efficiency(self, llhs):
         pwae = []
@@ -419,7 +399,7 @@ class LocaleLog(object):
                     if contained and self.access_mat[idx] > 0:
                         num_accessed += 1
 
-                print(pwb, num_accessed, pwb.size(), num_contained)
+                # print(pwb, num_accessed, pwb.size(), num_contained)
 
                 pwae.append(num_accessed/num_contained)
 
