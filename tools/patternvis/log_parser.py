@@ -26,6 +26,10 @@ class chpl_range(object):
     def size(self):
         if self.stride != 1:
             print('ERROR: Strided range.size not implemented')
+        # I hate to do this but:
+        if self.high == self.low and self.high == -1:
+            return 0
+
         return self.high-self.low+1
 
 
@@ -102,6 +106,10 @@ class chpl_domain(object):
         for r in self.ranges:
             size *= r.size()
         return size
+
+    def is_empty(self):
+        return self.size() == 0
+
 
 def range_from_shape(shape):
     return chpl_range(shape[0], shape[1])
@@ -406,6 +414,38 @@ class LocaleLog(object):
 
             return self.pwise_bboxes
 
+    def gen_pwise_access_efficiency(self, llhs):
+        pwae = []
+
+        num_contained = 0.
+        num_accessed = 0.
+        for pwb, llh in zip(self.pwise_bboxes, llhs):
+            if pwb.is_empty():
+                print('empty')
+                pwae.append(0.0)
+            else:
+                for idx in pwb:
+                    # check if idx is contained in any of the subdomains
+                    contained = False
+                    for sd in llh.subdoms:
+                        if sd.member(idx):
+                            contained = True
+                            num_contained += 1
+                        break
+                    # if the index is contained the data will be
+                    # transfered, but the million-dollar question is
+                    # whether it will be accessed
+
+                    if contained and self.access_mat[idx[0]][idx[1]] > 0:
+                        num_accessed += 1
+
+                print(pwb, num_accessed, pwb.size(), num_contained)
+
+                pwae.append(num_accessed/num_contained)
+
+        return pwae
+                    
+            
 
     def print_access_mat(self, mat):
         for i in range(len(mat)):

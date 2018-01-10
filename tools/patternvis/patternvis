@@ -423,6 +423,13 @@ def pairwise_access_bbox(llhs):
         for (j,bb) in enumerate(ll.gen_pairwise_access_bbox(llhs)):
             print('\tLOCALE{}\t\t{}'.format(j, str(bb)))
 
+def pwise_access_efficiency(llhs):
+    print('Pairwise access box efficiency')
+    for (i, ll) in enumerate(llhs):
+        print('LOCALE{}'.format(i))
+        for (j,bb) in enumerate(ll.gen_pwise_access_efficiency(llhs)):
+            print('\tLOCALE{}\t\t{}'.format(j, str(bb)))
+
 def access_mem_ratio(llhs):
     print('Access memory ratios')
     for (i, ll) in enumerate(llhs):
@@ -441,6 +448,7 @@ def main():
         # rar(llhs)
         # access_bbox(llhs)
         pairwise_access_bbox(llhs)
+        pwise_access_efficiency(llhs)
         # total_access(llhs)
     if plot:
         do_plot(mlh, llhs)
