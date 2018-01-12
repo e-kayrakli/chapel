@@ -30,7 +30,7 @@
   directory and (in some cases) in TODO comments in the code.
 
  */
-use StencilDist;
+use CyclicDist;
 
 
 use Time,       // to get timing routines for benchmarking
@@ -134,18 +134,16 @@ const ElemSpace = if use3DRepresentation
 
 /* Declare the (potentially distributed) problem domains */
 
-config const fs = 150;
 const Elems = if useBlockDist then ElemSpace dmapped Block(ElemSpace)
                               else ElemSpace,
       Nodes = if useBlockDist then NodeSpace dmapped Block(NodeSpace)
                               else NodeSpace,
-      NodesStencil = NodeSpace dmapped Stencil(NodeSpace, 
-                                               fluff=(fs,));
+      NodesCyclic = NodeSpace dmapped Cyclic(startIdx=NodeSpace.first);
 
 
 /* The coordinates */
 
-var x, y, z: [NodesStencil] real;
+var x, y, z: [NodesCyclic] real;
                               
 config const accessLog = false;
 if accessLog then
@@ -264,7 +262,7 @@ var elemBC: [Elems] int,
 
 /* Nodal fields */
 
-var xd, yd, zd: [NodesStencil] real, // velocities
+var xd, yd, zd: [Nodes] real, // velocities
 
     xdd, ydd, zdd: [Nodes] real, // acceleration
 
@@ -365,10 +363,6 @@ proc initMasses() {
   // This is a temporary array used to accumulate masses in parallel
   // without losing updates by using 'atomic' variables
   var massAccum: [Nodes] atomic real;
-
-  x.updateFluff();
-  y.updateFluff();
-  z.updateFluff();
 
   forall eli in Elems {
     var x_local, y_local, z_local: 8*real;
@@ -1014,10 +1008,6 @@ proc CalcVolumeForceForElems() {
 
 
 proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
-  x.updateFluff();
-  y.updateFluff();
-  z.updateFluff();
-
   forall k in Elems {
     var b_x, b_y, b_z: 8*real;
     var x_local, y_local, z_local: 8*real;
@@ -1047,9 +1037,6 @@ proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
 
 proc CalcHourglassControlForElems(determ) {
   var dvdx, dvdy, dvdz, x8n, y8n, z8n: [Elems] 8*real;
-  x.updateFluff();
-  y.updateFluff();
-  z.updateFluff();
 
   forall eli in Elems {
     /* Collect domain nodes to elem nodes */
@@ -1089,9 +1076,6 @@ const gammaCoef: 4*(8*real) = // WAS: [1..4, 1..8] real =
 
 /* Calculates the Flanagan-Belytschko anti-hourglass force. */
 proc CalcFBHourglassForceForElems(determ, x8n, y8n, z8n, dvdx, dvdy, dvdz) {
-  xd.updateFluff();
-  yd.updateFluff();
-  zd.updateFluff();
 
   /* compute the hourglass modes */
   forall eli in Elems {
@@ -1214,13 +1198,6 @@ proc CalcLagrangeElements() {
 
 proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
   // loop over all elements
-  x.updateFluff();
-  y.updateFluff();
-  z.updateFluff();
-
-  xd.updateFluff();
-  yd.updateFluff();
-  zd.updateFluff();
   forall k in Elems {
     var b_x, b_y, b_z: 8*real,
         d: 6*real,
@@ -1337,14 +1314,6 @@ proc UpdateVolumesForElems() {
 
 proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta, 
                                      delx_xi, delx_eta, delx_zeta) {
-  x.updateFluff();
-  y.updateFluff();
-  z.updateFluff();
-
-  xd.updateFluff();
-  yd.updateFluff();
-  zd.updateFluff();
-
   forall eli in Elems {
     const ptiny = 1.0e-36;
     var xl, yl, zl: 8*real;
