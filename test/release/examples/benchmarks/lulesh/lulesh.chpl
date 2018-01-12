@@ -149,32 +149,6 @@ config const accessLog = false;
 if accessLog then
   x.enableAccessLogging("x");
 
-var localizedArrsDom = Locales.domain dmapped Block(Locales.domain);
-var localizedXs: [localizedArrsDom] x.type;
-var localizedYs: [localizedArrsDom] y.type;
-var localizedZs: [localizedArrsDom] z.type;
-
-proc myX ref {
-  if handPrefetch then
-    return localizedXs[here.id];
-  else
-    return x;
-}
-
-proc myY ref {
-  if handPrefetch then
-    return localizedYs[here.id];
-  else
-    return y;
-}
-
-proc myZ ref {
-  if handPrefetch then
-    return localizedZs[here.id];
-  else
-    return z;
-}
-
 /*proc myX { return x; }*/
 
 /* The number of nodes per element.  In a rank-independent version,
@@ -298,7 +272,56 @@ var xd, yd, zd: [Nodes] real, // velocities
 
     nodalMass: [Nodes] real; // mass
 
+var localizedArrsDom = Locales.domain dmapped Block(Locales.domain);
+var localizedXs: [localizedArrsDom] x.type;
+var localizedYs: [localizedArrsDom] y.type;
+var localizedZs: [localizedArrsDom] z.type;
 
+var localizedXds: [localizedArrsDom] xd.type;
+var localizedYds: [localizedArrsDom] yd.type;
+var localizedZds: [localizedArrsDom] zd.type;
+
+proc myX ref {
+  if handPrefetch then
+    return localizedXs[here.id];
+  else
+    return x;
+}
+
+proc myY ref {
+  if handPrefetch then
+    return localizedYs[here.id];
+  else
+    return y;
+}
+
+proc myZ ref {
+  if handPrefetch then
+    return localizedZs[here.id];
+  else
+    return z;
+}
+
+proc myXd ref {
+  if handPrefetch then
+    return localizedXds[here.id];
+  else
+    return xd;
+}
+
+proc myYd ref {
+  if handPrefetch then
+    return localizedYds[here.id];
+  else
+    return yd;
+}
+
+proc myZd ref {
+  if handPrefetch then
+    return localizedZds[here.id];
+  else
+    return zd;
+}
 /* Parameters */
 
 var time = 0.0,          // current time
@@ -309,7 +332,31 @@ var time = 0.0,          // current time
     cycle = 0;           // iteration count for simulation
 
 
-proc initLocalizedArrays() {
+proc initLocalizedDisplacements() {
+  if handPrefetch {
+    coforall l in Locales do on l {
+      const myId = here.id;
+      if myId == 0 {
+        myXd = xd;
+        myYd = yd;
+        myZd = zd;
+      }
+      else {
+        const startRatio = 0.6;
+        const lenRatio = 2.5;
+        const myLen = x.localSubdomain().size;
+        const cpRange = 
+          (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
+        const cpDom = x.domain[cpRange];
+        myXd[cpDom] = xd[cpDom];
+        myYd[cpDom] = yd[cpDom];
+        myZd[cpDom] = zd[cpDom];
+      }
+    }
+  }
+}
+
+proc initLocalizedCoords() {
 
   if handPrefetch {
     coforall l in Locales do on l {
@@ -339,7 +386,8 @@ proc main() {
 
   initLulesh();
 
-  initLocalizedArrays();
+  initLocalizedCoords();
+  initLocalizedDisplacements();
 
   var st: real;
   if doTiming then st = getCurrentTime();
@@ -1146,7 +1194,7 @@ proc CalcFBHourglassForceForElems(determ, x8n, y8n, z8n, dvdx, dvdy, dvdz) {
     var coefficient: real;
 
     var xd1, yd1, zd1: 8*real;
-    localizeNeighborNodes(eli, xd, xd1, yd, yd1, zd, zd1);
+    localizeNeighborNodes(eli, myXd, xd1, myYd, yd1, myZd, zd1);
 
     /* TODO: Can we enable this local block? */
     // local {
@@ -1222,6 +1270,7 @@ proc CalcVelocityForNodes(dt: real, u_cut: real) {
     yd[i] = ydtmp;
     zd[i] = zdtmp;
   }
+  initLocalizedDisplacements();
 }
 
 
@@ -1231,7 +1280,7 @@ proc CalcPositionForNodes(dt: real) {
     y[ijk] += yd[ijk] * dt;
     z[ijk] += zd[ijk] * dt;
   }
-  initLocalizedArrays();
+  initLocalizedCoords();
 }
 
 // sungeun: Temporary array reused throughout
@@ -1271,7 +1320,7 @@ proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
 
     //get nodal velocities from global arrays and copy into local arrays
     var xd_local, yd_local, zd_local: 8*real;
-    localizeNeighborNodes(k, xd, xd_local, yd, yd_local, zd, zd_local);
+    localizeNeighborNodes(k, myXd, xd_local, myYd, yd_local, myZd, zd_local);
     var dt2 = 0.5 * dt; //wish this was local, too...
 
     local {
@@ -1382,7 +1431,7 @@ proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta,
     var xl, yl, zl: 8*real;
     localizeNeighborNodes(eli, myX, xl, myY, yl, myZ, zl);
     var xvl, yvl, zvl: 8*real;
-    localizeNeighborNodes(eli, xd, xvl, yd, yvl, zd, zvl);
+    localizeNeighborNodes(eli, myXd, xvl, myYd, yvl, myZd, zvl);
 
     local {
       const vol = volo[eli] * vnew[eli],
