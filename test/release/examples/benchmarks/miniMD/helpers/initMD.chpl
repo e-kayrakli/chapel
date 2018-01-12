@@ -230,6 +230,11 @@ var Bins: [Space] [perBinSpace] atom;
 
 // bin counts
 var Count: [DistSpace] int(32);
+
+Pos.enableAccessLogging("Pos");
+Bins.enableAccessLogging("Pos");
+Count.enableAccessLogging("Pos");
+
 ref RealCount = if useStencilDist then Count.noFluffView()
                 else Count[binSpace];
 
