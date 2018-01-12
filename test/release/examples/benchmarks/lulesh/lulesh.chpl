@@ -148,6 +148,16 @@ config const accessLog = false;
 if accessLog then
   x.enableAccessLogging("x");
 
+var localizedArrsDom = Locales.domain dmapped Block(Locales.domain);
+var localizedXs: [localizedArrsDom] x.type;
+var localizedYs: [localizedArrsDom] y.type;
+var localizedZs: [localizedArrsDom] z.type;
+
+proc myX ref { return localizedXs[here.id]; }
+proc myY ref { return localizedYs[here.id]; }
+proc myZ ref { return localizedZs[here.id]; }
+/*proc myX { return x; }*/
+
 /* The number of nodes per element.  In a rank-independent version,
    this could be written 2**rank */
 
@@ -279,11 +289,45 @@ var time = 0.0,          // current time
 
     cycle = 0;           // iteration count for simulation
 
+proc initLocalizedArrays() {
+
+  coforall l in Locales do on l {
+    const myId = here.id;
+    if myId == 0 {
+      myX = x;
+      myY = y;
+      myZ = z;
+      /*for i in myX.domain {*/
+        /*writeln("\t", here, " ", i, " ", x[i], " ", myX[i]);*/
+      /*}*/
+    }
+    else {
+      const startRatio = 0.6;
+      const lenRatio = 2.5;
+      const myLen = x.localSubdomain().size;
+      const cpRange = 
+          (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
+      const cpDom = x.domain[cpRange];
+      /*writeln(here, " copying ", cpDom);*/
+      myX[cpDom] = x[cpDom];
+      myY[cpDom] = y[cpDom];
+      myZ[cpDom] = z[cpDom];
+      /*forall i in cpDom do myX[i] = x[i];*/
+      /*for i in cpDom {*/
+        /*writeln("\t", here, " ", i, " ", x[i], " ", myX[i]);*/
+      /*}*/
+    }
+  }
+}
 
 proc main() {
   if debug then writeln("Lulesh -- Problem Size = ", numElems);
 
+  writeln("Initialization started");
   initLulesh();
+  writeln("Initialization finished");
+
+  initLocalizedArrays();
 
   var st: real;
   if doTiming then st = getCurrentTime();
@@ -362,6 +406,7 @@ proc initMasses() {
   // This is a temporary array used to accumulate masses in parallel
   // without losing updates by using 'atomic' variables
   var massAccum: [Nodes] atomic real;
+  /*initLocalizedArrays();*/
 
   forall eli in Elems {
     var x_local, y_local, z_local: 8*real;
@@ -484,6 +529,7 @@ inline proc localizeNeighborNodes(eli: index(Elems),
     const noi = elemToNode[eli][i];
 
     x_local[i] = x[noi];
+    /*writeln(noi, " copied ", x[noi]);*/
     y_local[i] = y[noi];
     z_local[i] = z[noi];
   }
@@ -1007,10 +1053,12 @@ proc CalcVolumeForceForElems() {
 
 
 proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
+  initLocalizedArrays();
+
   forall k in Elems {
     var b_x, b_y, b_z: 8*real;
     var x_local, y_local, z_local: 8*real;
-    localizeNeighborNodes(k, x, x_local, y, y_local, z, z_local);
+    localizeNeighborNodes(k, myX, x_local, myY, y_local, myZ, z_local);
 
     var fx_local, fy_local, fz_local: 8*real;
 
@@ -1036,11 +1084,12 @@ proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
 
 proc CalcHourglassControlForElems(determ) {
   var dvdx, dvdy, dvdz, x8n, y8n, z8n: [Elems] 8*real;
+  initLocalizedArrays();
 
   forall eli in Elems {
     /* Collect domain nodes to elem nodes */
     var x1, y1, z1: 8*real;
-    localizeNeighborNodes(eli, x, x1, y, y1, z, z1);
+    localizeNeighborNodes(eli, myX, x1, myY, y1, myZ, z1);
     var pfx, pfy, pfz: 8*real;
 
     local {
@@ -1170,6 +1219,7 @@ proc CalcPositionForNodes(dt: real) {
     y[ijk] += yd[ijk] * dt;
     z[ijk] += zd[ijk] * dt;
   }
+  initLocalizedArrays();
 }
 
 // sungeun: Temporary array reused throughout
@@ -1197,6 +1247,7 @@ proc CalcLagrangeElements() {
 
 proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
   // loop over all elements
+  initLocalizedArrays();
   forall k in Elems {
     var b_x, b_y, b_z: 8*real,
         d: 6*real,
@@ -1204,7 +1255,7 @@ proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
 
     //get nodal coordinates from global arrays and copy into local arrays
     var x_local, y_local, z_local: 8*real;
-    localizeNeighborNodes(k, x, x_local, y, y_local, z, z_local);
+    localizeNeighborNodes(k, myX, x_local, myY, y_local, myZ, z_local);
 
     //get nodal velocities from global arrays and copy into local arrays
     var xd_local, yd_local, zd_local: 8*real;
@@ -1313,10 +1364,11 @@ proc UpdateVolumesForElems() {
 
 proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta, 
                                      delx_xi, delx_eta, delx_zeta) {
+  initLocalizedArrays();
   forall eli in Elems {
     const ptiny = 1.0e-36;
     var xl, yl, zl: 8*real;
-    localizeNeighborNodes(eli, x, xl, y, yl, z, zl);
+    localizeNeighborNodes(eli, myX, xl, myY, yl, myZ, zl);
     var xvl, yvl, zvl: 8*real;
     localizeNeighborNodes(eli, xd, xvl, yd, yvl, zd, zvl);
 
