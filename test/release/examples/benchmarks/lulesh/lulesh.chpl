@@ -71,6 +71,7 @@ config param useBlockDist = (CHPL_COMM != "none"),
              printWarnings = true;
 
 
+config param handPrefetch = false;
 //
 // Sanity check to ensure that input files aren't used with the 3D
 // representation
@@ -153,9 +154,27 @@ var localizedXs: [localizedArrsDom] x.type;
 var localizedYs: [localizedArrsDom] y.type;
 var localizedZs: [localizedArrsDom] z.type;
 
-proc myX ref { return localizedXs[here.id]; }
-proc myY ref { return localizedYs[here.id]; }
-proc myZ ref { return localizedZs[here.id]; }
+proc myX ref {
+  if handPrefetch then
+    return localizedXs[here.id];
+  else
+    return x;
+}
+
+proc myY ref {
+  if handPrefetch then
+    return localizedYs[here.id];
+  else
+    return y;
+}
+
+proc myZ ref {
+  if handPrefetch then
+    return localizedZs[here.id];
+  else
+    return z;
+}
+
 /*proc myX { return x; }*/
 
 /* The number of nodes per element.  In a rank-independent version,
@@ -289,33 +308,28 @@ var time = 0.0,          // current time
 
     cycle = 0;           // iteration count for simulation
 
+
 proc initLocalizedArrays() {
 
-  coforall l in Locales do on l {
-    const myId = here.id;
-    if myId == 0 {
-      myX = x;
-      myY = y;
-      myZ = z;
-      /*for i in myX.domain {*/
-        /*writeln("\t", here, " ", i, " ", x[i], " ", myX[i]);*/
-      /*}*/
-    }
-    else {
-      const startRatio = 0.6;
-      const lenRatio = 2.5;
-      const myLen = x.localSubdomain().size;
-      const cpRange = 
+  if handPrefetch {
+    coforall l in Locales do on l {
+      const myId = here.id;
+      if myId == 0 {
+        myX = x;
+        myY = y;
+        myZ = z;
+      }
+      else {
+        const startRatio = 0.6;
+        const lenRatio = 2.5;
+        const myLen = x.localSubdomain().size;
+        const cpRange = 
           (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
-      const cpDom = x.domain[cpRange];
-      /*writeln(here, " copying ", cpDom);*/
-      myX[cpDom] = x[cpDom];
-      myY[cpDom] = y[cpDom];
-      myZ[cpDom] = z[cpDom];
-      /*forall i in cpDom do myX[i] = x[i];*/
-      /*for i in cpDom {*/
-        /*writeln("\t", here, " ", i, " ", x[i], " ", myX[i]);*/
-      /*}*/
+        const cpDom = x.domain[cpRange];
+        myX[cpDom] = x[cpDom];
+        myY[cpDom] = y[cpDom];
+        myZ[cpDom] = z[cpDom];
+      }
     }
   }
 }
@@ -323,9 +337,7 @@ proc initLocalizedArrays() {
 proc main() {
   if debug then writeln("Lulesh -- Problem Size = ", numElems);
 
-  writeln("Initialization started");
   initLulesh();
-  writeln("Initialization finished");
 
   initLocalizedArrays();
 
@@ -1053,7 +1065,7 @@ proc CalcVolumeForceForElems() {
 
 
 proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
-  initLocalizedArrays();
+  /*initLocalizedArrays();*/
 
   forall k in Elems {
     var b_x, b_y, b_z: 8*real;
@@ -1084,7 +1096,7 @@ proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
 
 proc CalcHourglassControlForElems(determ) {
   var dvdx, dvdy, dvdz, x8n, y8n, z8n: [Elems] 8*real;
-  initLocalizedArrays();
+  /*initLocalizedArrays();*/
 
   forall eli in Elems {
     /* Collect domain nodes to elem nodes */
@@ -1247,7 +1259,7 @@ proc CalcLagrangeElements() {
 
 proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
   // loop over all elements
-  initLocalizedArrays();
+  /*initLocalizedArrays();*/
   forall k in Elems {
     var b_x, b_y, b_z: 8*real,
         d: 6*real,
@@ -1364,7 +1376,7 @@ proc UpdateVolumesForElems() {
 
 proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta, 
                                      delx_xi, delx_eta, delx_zeta) {
-  initLocalizedArrays();
+  /*initLocalizedArrays();*/
   forall eli in Elems {
     const ptiny = 1.0e-36;
     var xl, yl, zl: 8*real;
