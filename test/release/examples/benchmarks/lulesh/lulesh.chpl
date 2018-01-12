@@ -331,6 +331,8 @@ var time = 0.0,          // current time
 
     cycle = 0;           // iteration count for simulation
 
+config const hpStartRatio = 0.6;
+config const hpLenRatio = 2.5;
 
 proc initLocalizedDisplacements() {
   if handPrefetch {
@@ -342,8 +344,8 @@ proc initLocalizedDisplacements() {
         myZd = zd;
       }
       else {
-        const startRatio = 0.6;
-        const lenRatio = 2.5;
+        const startRatio = hpStartRatio;
+        const lenRatio = hpLenRatio;
         const myLen = x.localSubdomain().size;
         const cpRange = 
           (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
@@ -367,8 +369,8 @@ proc initLocalizedCoords() {
         myZ = z;
       }
       else {
-        const startRatio = 0.6;
-        const lenRatio = 2.5;
+        const startRatio = hpStartRatio;
+        const lenRatio = hpLenRatio;
         const myLen = x.localSubdomain().size;
         const cpRange = 
           (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
