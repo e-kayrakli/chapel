@@ -338,12 +338,12 @@ proc initLocalizedDisplacements() {
   if handPrefetch {
     coforall l in Locales do on l {
       const myId = here.id;
-      if myId == 0 {
-        myXd = xd;
-        myYd = yd;
-        myZd = zd;
-      }
-      else {
+      /*if myId == 0 {*/
+        /*myXd = xd;*/
+        /*myYd = yd;*/
+        /*myZd = zd;*/
+      /*}*/
+      /*else {*/
         const startRatio = hpStartRatio;
         const lenRatio = hpLenRatio;
         const myLen = x.localSubdomain().size;
@@ -353,7 +353,7 @@ proc initLocalizedDisplacements() {
         myXd[cpDom] = xd[cpDom];
         myYd[cpDom] = yd[cpDom];
         myZd[cpDom] = zd[cpDom];
-      }
+      /*}*/
     }
   }
 }
@@ -363,12 +363,12 @@ proc initLocalizedCoords() {
   if handPrefetch {
     coforall l in Locales do on l {
       const myId = here.id;
-      if myId == 0 {
-        myX = x;
-        myY = y;
-        myZ = z;
-      }
-      else {
+      /*if myId == 0 {*/
+        /*myX = x;*/
+        /*myY = y;*/
+        /*myZ = z;*/
+      /*}*/
+      /*else {*/
         const startRatio = hpStartRatio;
         const lenRatio = hpLenRatio;
         const myLen = x.localSubdomain().size;
@@ -378,7 +378,7 @@ proc initLocalizedCoords() {
         myX[cpDom] = x[cpDom];
         myY[cpDom] = y[cpDom];
         myZ[cpDom] = z[cpDom];
-      }
+      /*}*/
     }
   }
 }
