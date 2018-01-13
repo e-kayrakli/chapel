@@ -72,6 +72,7 @@ config param useBlockDist = (CHPL_COMM != "none"),
 
 
 config param handPrefetch = false;
+config const useLocal = false;
 //
 // Sanity check to ensure that input files aren't used with the 3D
 // representation
@@ -273,13 +274,13 @@ var xd, yd, zd: [Nodes] real, // velocities
     nodalMass: [Nodes] real; // mass
 
 var localizedArrsDom = Locales.domain dmapped Block(Locales.domain);
-var localizedXs: [localizedArrsDom] x.type;
-var localizedYs: [localizedArrsDom] y.type;
-var localizedZs: [localizedArrsDom] z.type;
+var localizedXs: [localizedArrsDom] [NodeSpace] real;
+var localizedYs: [localizedArrsDom] [NodeSpace] real;
+var localizedZs: [localizedArrsDom] [NodeSpace] real;
 
-var localizedXds: [localizedArrsDom] xd.type;
-var localizedYds: [localizedArrsDom] yd.type;
-var localizedZds: [localizedArrsDom] zd.type;
+var localizedXds: [localizedArrsDom] [NodeSpace] real;
+var localizedYds: [localizedArrsDom] [NodeSpace] real;
+var localizedZds: [localizedArrsDom] [NodeSpace] real;
 
 proc myX ref {
   if handPrefetch then
@@ -438,6 +439,7 @@ proc main() {
 proc initLulesh() {
   // initialize the coordinates
   initCoordinates(x,y,z);
+  initLocalizedCoords();
 
   // initialize the element to node mapping
   initElemToNodeMapping(elemToNode);
@@ -470,9 +472,10 @@ proc initMasses() {
   var massAccum: [Nodes] atomic real;
   /*initLocalizedArrays();*/
 
+  /*writeln("initMasses");*/
   forall eli in Elems {
     var x_local, y_local, z_local: 8*real;
-    localizeNeighborNodes(eli, x, x_local, y, y_local, z, z_local);
+    localizeNeighborNodes(eli, myX, x_local, myY, y_local, myZ, z_local);
 
     const volume = CalcElemVolume(x_local, y_local, z_local);
     volo[eli] = volume;
@@ -590,10 +593,12 @@ inline proc localizeNeighborNodes(eli: index(Elems),
   for i in 1..nodesPerElem {
     const noi = elemToNode[eli][i];
 
-    x_local[i] = x[noi];
-    /*writeln(noi, " copied ", x[noi]);*/
-    y_local[i] = y[noi];
-    z_local[i] = z[noi];
+    /*writeln(here, " Localizing ", noi);*/
+    local useLocal {
+      x_local[i] = x[noi];
+      y_local[i] = y[noi];
+      z_local[i] = z[noi];
+    }
   }
 }
 
@@ -1117,6 +1122,7 @@ proc CalcVolumeForceForElems() {
 proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
   /*initLocalizedArrays();*/
 
+  /*writeln("integrateStressForElems");*/
   forall k in Elems {
     var b_x, b_y, b_z: 8*real;
     var x_local, y_local, z_local: 8*real;
@@ -1148,6 +1154,7 @@ proc CalcHourglassControlForElems(determ) {
   var dvdx, dvdy, dvdz, x8n, y8n, z8n: [Elems] 8*real;
   /*initLocalizedArrays();*/
 
+  /*writeln("CalcHourglassControlForElems");*/
   forall eli in Elems {
     /* Collect domain nodes to elem nodes */
     var x1, y1, z1: 8*real;
@@ -1188,6 +1195,7 @@ const gammaCoef: 4*(8*real) = // WAS: [1..4, 1..8] real =
 proc CalcFBHourglassForceForElems(determ, x8n, y8n, z8n, dvdx, dvdy, dvdz) {
 
   /* compute the hourglass modes */
+  /*writeln("CalcFBHourglassForceForElems");*/
   forall eli in Elems {
     var hourgam: 8*(4*real);
     const volinv = 1.0 / determ[eli];
@@ -1311,6 +1319,7 @@ proc CalcLagrangeElements() {
 proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
   // loop over all elements
   /*initLocalizedArrays();*/
+  /*writeln("CalcKinematicsForElems");*/
   forall k in Elems {
     var b_x, b_y, b_z: 8*real,
         d: 6*real,
@@ -1428,6 +1437,7 @@ proc UpdateVolumesForElems() {
 proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta, 
                                      delx_xi, delx_eta, delx_zeta) {
   /*initLocalizedArrays();*/
+  /*writeln("CalcMonotonicQGradientsForElems");*/
   forall eli in Elems {
     const ptiny = 1.0e-36;
     var xl, yl, zl: 8*real;
