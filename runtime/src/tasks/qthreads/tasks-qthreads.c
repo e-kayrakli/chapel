@@ -8,7 +8,7 @@
 //
 
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -939,7 +939,7 @@ void chpl_task_taskCallFTable(chpl_fn_int_t fid,
                               c_sublocid_t subloc,
                               int lineno, int32_t filename)
 {
-    PROFILE_INCR(profile_task_taskCall,1);
+    PROFILE_INCR(profile_task_taskCallFTable,1);
 
     taskCallBody(fid, chpl_ftable[fid], arg, arg_size, subloc, lineno, filename);
 }

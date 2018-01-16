@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -47,8 +47,6 @@ static void flattenPrimaryMethod(TypeSymbol* ts, FnSymbol* fn);
 static void applyAtomicTypeToPrimaryMethod(TypeSymbol* ts, FnSymbol* fn);
 
 static void changeCastInWhere(FnSymbol* fn);
-
-static void addParensToDeinitFns(FnSymbol* fn);
 
 static void fixupVoidReturnFn(FnSymbol* fn);
 
@@ -110,7 +108,6 @@ static void cleanup(ModuleSymbol* module) {
         }
 
         changeCastInWhere(fn);
-        addParensToDeinitFns(fn);
         fixupVoidReturnFn(fn);
       }
     }
@@ -392,18 +389,5 @@ static void changeCastInWhere(FnSymbol* fn) {
         }
       }
     }
-  }
-}
-
-/************************************* | **************************************
-*                                                                             *
-* Make paren-less decls act as paren-ful.                                     *
-* Otherwise "arg.deinit()" in proc chpl__delete(arg) would not resolve.       *
-*                                                                             *
-************************************** | *************************************/
-
-static void addParensToDeinitFns(FnSymbol* fn) {
-  if (fn->hasFlag(FLAG_DESTRUCTOR)) {
-    fn->removeFlag(FLAG_NO_PARENS);
   }
 }

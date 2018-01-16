@@ -50,13 +50,15 @@ Launcher Name        Description
 amudprun             GASNet launcher for programs running over UDP        
 aprun                Cray application launcher using aprun                
 gasnetrun_ibv        GASNet launcher for programs running over Infiniband 
-gasnetrun_psm        GASNet launcher for programs running over OmniPath
 gasnetrun_mpi        GASNet launcher for programs using the MPI conduit   
+gasnetrun_ofi        GASNet launcher for programs using the OFI conduit
+gasnetrun_psm        GASNet launcher for programs running over OmniPath
 lsf-gasnetrun_ibv    GASNet launcher using LSF (bsub) over Infiniband     
 pbs-aprun            Cray application launcher using PBS (qsub) + aprun   
 pbs-gasnetrun_ibv    GASNet launcher using PBS (qsub) over Infiniband     
 slurm-gasnetrun_ibv  GASNet launcher using SLURM over Infiniband          
 slurm-srun           native SLURM launcher                                
+smp                  GASNet launcher for programs running over shared-memory
 none                 do not use a launcher                                
 ===================  ====================================================
 
@@ -84,7 +86,9 @@ follows:
   CHPL_COMM_SUBSTRATE=ibv  gasnetrun_ibv
   CHPL_COMM_SUBSTRATE=mpi  gasnetrun_mpi
   CHPL_COMM_SUBSTRATE=mxm  gasnetrun_ibv
+  CHPL_COMM_SUBSTRATE=ofi  gasnetrun_ofi
   CHPL_COMM_SUBSTRATE=psm  gasnetrun_psm
+  CHPL_COMM_SUBSTRATE=smp  smp
   CHPL_COMM_SUBSTRATE=udp  amudprun
   otherwise                none
   =======================  ==============================================

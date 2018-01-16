@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -58,6 +58,8 @@ Expr* buildDotExpr(BaseAST* base, const char* member);
 Expr* buildDotExpr(const char* base, const char* member);
 
 BlockStmt* buildChapelStmt(Expr* expr = NULL);
+BlockStmt* buildErrorStandin();
+
 BlockStmt* buildUseStmt(CallExpr* modules);
 BlockStmt* buildUseStmt(Expr* mod, std::vector<OnlyRename*>* names, bool except);
 bool processStringInRequireStmt(const char* str, bool parseTime);
@@ -71,6 +73,7 @@ ModuleSymbol* buildModule(const char* name,
                           BlockStmt*  block,
                           const char* filename,
                           bool        priv,
+                          bool        prototype,
                           const char* docs);
 
 CallExpr* buildPrimitiveExpr(CallExpr* exprs);
@@ -90,6 +93,7 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
                                  bool zippered = false);
 BlockStmt* buildGotoStmt(GotoTag tag, const char* name);
 BlockStmt* buildPrimitiveStmt(PrimitiveTag tag, Expr* e1 = NULL, Expr* e2 = NULL);
+BlockStmt* buildDeleteStmt(CallExpr* exprlist);
 CallExpr* zipToTuple(CallExpr* zipExpr);
 BlockStmt* buildForallLoopStmt(Expr* indices,
                                Expr* iterator,
@@ -168,5 +172,9 @@ BlockStmt* handleConfigTypes(BlockStmt*);
 
 Expr* tryExpr(Expr*);
 Expr* tryBangExpr(Expr*);
+
+// Intended to help issue better compile errors
+// Converts a misuse of 'if a=b' into 'if a==b' and warns.
+Expr* convertAssignmentAndWarn(Expr* a, const char* op, Expr* b);
 
 #endif

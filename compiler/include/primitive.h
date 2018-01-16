@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -37,6 +37,7 @@ enum PrimitiveTag {
 
   PRIM_INIT,
   PRIM_INIT_FIELD,
+  PRIM_INIT_MAYBE_SYNC_SINGLE_FIELD,
   PRIM_INIT_VAR,
   PRIM_NO_INIT,
   PRIM_TYPE_INIT,       // Used in a context where only a type is needed.
@@ -127,6 +128,8 @@ enum PrimitiveTag {
   PRIM_CAST,
   PRIM_DYNAMIC_CAST,
   PRIM_TYPEOF,
+  PRIM_STATIC_TYPEOF,
+  PRIM_SCALAR_PROMOTION_TYPE,
   PRIM_USED_MODULES_LIST,       // used modules in BlockStmt::modUses
   PRIM_TUPLE_EXPAND,
   PRIM_TUPLE_AND_EXPAND,
@@ -174,8 +177,6 @@ enum PrimitiveTag {
   PRIM_TO_LEADER,
   PRIM_TO_FOLLOWER,
   PRIM_TO_STANDALONE,
-
-  PRIM_DELETE,
 
   PRIM_CALL_DESTRUCTOR,         // call destructor on type (do not free)
 
@@ -234,6 +235,7 @@ enum PrimitiveTag {
   PRIM_CLASS_NAME_BY_ID,
   PRIM_ITERATOR_RECORD_FIELD_VALUE_BY_FORMAL,
   PRIM_IS_EXTERN_CLASS_TYPE,
+  PRIM_IS_RECORD_TYPE,
   PRIM_IS_UNION_TYPE,
   PRIM_IS_ATOMIC_TYPE,
   PRIM_IS_REF_ITER_TYPE,

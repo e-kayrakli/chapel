@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -33,10 +33,20 @@ module ArrayViewReindex {
   // domain indicating the old and new index sets, respectively.
   //
   class ArrayViewReindexDist: BaseDist {
-    const downdist;
+    // a pointer down to the distribution that this class is creating
+    // reindexed views of
+    const downDistPid: int;
+    const downDistInst;
     const updom;
     const downdomPid;
     const downdomInst;
+
+    inline proc downDist {
+      if _isPrivatized(downDistInst) then
+        return chpl_getPrivatizedCopy(downDistInst.type, downDistPid);
+      else
+        return downDistInst;
+    }
 
     proc dsiNewRectangularDom(param rank, type idxType, param stridable, inds) {
       var newdom = new ArrayViewReindexDom(rank=rank,
@@ -45,15 +55,34 @@ module ArrayViewReindex {
                                            stridable=stridable,
                                            downdomPid=downdomPid,
                                            downdomInst=downdomInst,
-                                           dist=this);
+                                           distPid=this.pid,
+                                           distInst=this);
       newdom.dsiSetIndices(inds);
       return newdom;
     }
 
-    proc dsiClone() return new ArrayViewReindexDist(downdist=downdist,
+    proc dsiClone() return new ArrayViewReindexDist(downDistPid=downDistPid,
+                                                    downDistInst=downDistInst,
                                                     updom=updom,
                                                     downdomPid=downdomPid,
                                                     downdomInst=downdomInst);
+
+    // Don't want to privatize a DefaultRectangular, so pass the query on to
+    // the wrapped array
+    proc dsiSupportsPrivatization() param
+      return downDistInst.dsiSupportsPrivatization();
+
+    proc dsiGetPrivatizeData() {
+      return (downDistPid, downDistInst, updom, downdomPid, downdomInst);
+    }
+
+    proc dsiPrivatize(privatizeData) {
+      return new ArrayViewReindexDist(downDistPid = privatizeData(1),
+                                      downDistInst = privatizeData(2),
+                                      updom = privatizeData(3),
+                                      downdomPid = privatizeData(4),
+                                      downdomInst = privatizeData(5));
+    }
 
     proc dsiDestroyDist() {
       _delete_dom(updom, false);
@@ -71,22 +100,31 @@ module ArrayViewReindex {
  class ArrayViewReindexDom: BaseRectangularDom {
     // the new reindexed index set that we represent upwards
     var updom: DefaultRectangularDom(rank, idxType, stridable);
+    forwarding updom except these;
 
     // the old original index set that we're equivalent to
     var downdomPid;
     var downdomInst; //: downdomtype(rank, idxType, stridable);
 
-    var dist;
+    const distPid;  // a reference back to our ArrayViewReindexDist
+    const distInst;
 
     var ownsDownDomInst = false;
 
+    inline proc dist {
+      if _isPrivatized(distInst) then
+        return chpl_getPrivatizedCopy(distInst.type, distPid);
+      else
+        return distInst;
+    }
+    
     //
     // TODO: If we put this expression into the variable declaration
     // above, we get a memory leak.  File a future against this?
     //
     proc downdomtype(param rank: int, type idxType, param stridable: bool) type {
       var ranges : rank*range(idxType, BoundedRangeType.bounded, stridable);
-      var a = dist.downdist.dsiNewRectangularDom(rank=rank, idxType=idxType,
+      var a = dist.downDist.dsiNewRectangularDom(rank=rank, idxType=idxType,
                                               stridable=stridable, ranges);
       return a.type;
     }
@@ -102,63 +140,11 @@ module ArrayViewReindex {
       pragma "no auto destroy"
       const downarr = _newArray(downdom.dsiBuildArray(eltType));
       return new ArrayViewReindexArr(eltType  =eltType,
-      // TODO: Update once we start privatizing vvv
-                                        _DomPid = nullPid,
+                                        _DomPid = this.pid,
                                         dom = this,
                                         _ArrPid=downarr._pid,
                                         _ArrInstance=downarr._instance,
                                         ownsArrInstance=true);
-    }
-
-    // TODO: Use delegation feature for these?
-    // TODO: Can't all these be implemented in ChapelArray given dsiDim()?
-
-    proc dsiNumIndices {
-      return updom.dsiNumIndices;
-    }
-
-    proc dsiLow {
-      return updom.dsiLow;
-    }
-
-    proc dsiHigh {
-      return updom.dsiHigh;
-    }
-
-    proc dsiAlignedLow {
-      return updom.dsiAlignedLow;
-    }
-
-    proc dsiAlignedHigh {
-      return updom.dsiAlignedHigh;
-    }
-
-    proc dsiStride {
-      return updom.dsiStride;
-    }
-
-    proc dsiAlignment {
-      return updom.dsiAlignment;
-    }
-
-    proc dsiFirst {
-      return updom.dsiFirst;
-    }
-
-    proc dsiLast {
-      return updom.dsiLast;
-    }
-
-    proc dsiDim(d: int) {
-      return updom.dsiDim(d);
-    }
-
-    proc dsiDims() {
-      return updom.dsiDims();
-    }
-
-    proc dsiGetIndices() {
-      return updom.dsiGetIndices();
     }
 
     proc dsiSetIndices(inds) {
@@ -171,7 +157,7 @@ module ArrayViewReindex {
       updom = updomRec._value;
 
       var ranges : rank*range(idxType, BoundedRangeType.bounded, dist.downdomInst.stridable);
-      var downdomclass = dist.downdist.dsiNewRectangularDom(rank=rank,
+      var downdomclass = dist.downDist.dsiNewRectangularDom(rank=rank,
                                                          idxType=idxType,
                                                          stridable=dist.downdomInst.stridable, ranges);
       pragma "no auto destroy"
@@ -188,10 +174,6 @@ module ArrayViewReindex {
       ownsDownDomInst = true;
     }
 
-    proc dsiMember(i) {
-      return updom.dsiMember(i);
-    }
-
     iter these() {
       if chpl__isDROrDRView(downdom) {
         for i in updom do
@@ -206,7 +188,7 @@ module ArrayViewReindex {
       && chpl__isDROrDRView(downdom)
       && __primitive("method call resolves", updom, "these", tag)
     {
-      for i in updom.these(tag) do
+      forall i in updom do
           yield i;
     }
 
@@ -214,7 +196,7 @@ module ArrayViewReindex {
       && !chpl__isDROrDRView(downdom)
       && __primitive("method call resolves", downdom, "these", tag)
     {
-      for i in downdom.these(tag) do
+      forall i in downdom do
         yield downIdxToUpIdx(i);
     }
 
@@ -257,11 +239,6 @@ module ArrayViewReindex {
       return ind;
     }
 
-    // TODO: Is there something we can re-use here?
-    proc dsiSerialWrite(f) {
-      updom.dsiSerialWrite(f);
-    }
-
     proc dsiMyDist() {
       return dist;
     }
@@ -299,6 +276,41 @@ module ArrayViewReindex {
       _delete_dom(downdomInst, _isPrivatized(downdomInst));
     }
 
+    // Don't want to privatize a DefaultRectangular, so pass the query on to
+    // the wrapped array
+    proc dsiSupportsPrivatization() param
+      return downdomInst.dsiSupportsPrivatization();
+
+    proc dsiGetPrivatizeData() {
+      return (updom, downdomPid, downdomInst, distPid, distInst);
+    }
+
+    proc dsiPrivatize(privatizeData) {
+      return new ArrayViewReindexDom(rank = this.rank,
+                                     idxType = this.idxType,
+                                     stridable = this.stridable,
+                                     updom = privatizeData(1),
+                                     downdomPid = privatizeData(2),
+                                     downdomInst = privatizeData(3),
+                                     distPid = privatizeData(4),
+                                     distInst = privatizeData(5)
+                                     );
+    }
+
+    proc dsiGetReprivatizeData() {
+      return (updom, downdomPid, downdomInst);
+    }
+
+    proc dsiReprivatize(other, reprivatizeData) {
+      updom = reprivatizeData(1);
+      //      collapsedDim = other.collapsedDim;
+      //      idx = other.idx;
+      //      distPid = other.distPid;
+      //      distInst = other.distInst;
+      downdomPid = reprivatizeData(2);
+      downdomInst = reprivatizeData(3);
+    }
+
   } // end of class ArrayViewReindexDom
 
   //
@@ -327,11 +339,16 @@ module ArrayViewReindex {
 
     const ownsArrInstance = false;
 
+    forwarding arr except these,
+                      doiBulkTransferFromKnown, doiBulkTransferToKnown,
+                      doiBulkTransferFromAny,  doiBulkTransferToAny;
+
     proc downdom {
-      var arr = if _isPrivatized(_ArrInstance) then
-        chpl_getPrivatizedCopy(_ArrInstance.type, _ArrPid)
-      else
-        _ArrInstance;
+      // TODO: This routine may get a remote domain if this is a view
+      // of a view and is called on a locale other than the
+      // originating one for the domain.  Relax the requirement that
+      // arrays have a field named 'dom' and let arr.dom return
+      // whatever domain class is nearby/cheap.
       return arr.dom;
     }
 
@@ -377,12 +394,12 @@ module ArrayViewReindex {
     iter these(param tag: iterKind) ref
       where tag == iterKind.standalone && !localeModelHasSublocales &&
            __primitive("method call resolves", privDom, "these", tag) {
-      for i in privDom.these(tag) {
+      forall i in privDom {
         if shouldUseIndexCache() {
           const dataIdx = indexCache.getDataIndex(i);
           yield indexCache.getDataElem(dataIdx);
         } else {
-          yield arr.dsiAccess(chpl_reindexConvertIdx(i, dom, downdom));
+          yield arr.dsiAccess(chpl_reindexConvertIdx(i, privDom, downdom));
         }
       }
     }
@@ -400,7 +417,7 @@ module ArrayViewReindex {
           const dataIdx = indexCache.getDataIndex(i);
           yield indexCache.getDataElem(dataIdx);
         } else {
-          yield arr.dsiAccess(chpl_reindexConvertIdx(i, dom, downdom));
+          yield arr.dsiAccess(chpl_reindexConvertIdx(i, privDom, downdom));
         }
       }
     }
@@ -453,7 +470,7 @@ module ArrayViewReindex {
         const dataIdx = indexCache.getDataIndex(i);
         return indexCache.getDataElem(dataIdx);
       } else {
-        return arr.dsiAccess(chpl_reindexConvertIdx(i, dom, downdom));
+        return arr.dsiAccess(chpl_reindexConvertIdx(i, privDom, downdom));
       }
     }
 
@@ -464,7 +481,7 @@ module ArrayViewReindex {
         const dataIdx = indexCache.getDataIndex(i);
         return indexCache.getDataElem(dataIdx);
       } else {
-        return arr.dsiAccess(chpl_reindexConvertIdx(i, dom, downdom));
+        return arr.dsiAccess(chpl_reindexConvertIdx(i, privDom, downdom));
       }
     }
 
@@ -475,20 +492,20 @@ module ArrayViewReindex {
         const dataIdx = indexCache.getDataIndex(i);
         return indexCache.getDataElem(dataIdx);
       } else {
-        return arr.dsiAccess(chpl_reindexConvertIdx(i, dom, downdom));
+        return arr.dsiAccess(chpl_reindexConvertIdx(i, privDom, downdom));
       }
     }
 
     inline proc dsiLocalAccess(i) ref
-      return arr.dsiLocalAccess(chpl_reindexConvertIdx(i, dom, downdom));
+      return arr.dsiLocalAccess(chpl_reindexConvertIdx(i, privDom, downdom));
 
     inline proc dsiLocalAccess(i)
       where shouldReturnRvalueByValue(eltType)
-      return arr.dsiLocalAccess(chpl_reindexConvertIdx(i, dom, downdom));
+      return arr.dsiLocalAccess(chpl_reindexConvertIdx(i, privDom, downdom));
 
     inline proc dsiLocalAccess(i) const ref
       where shouldReturnRvalueByConstRef(eltType)
-      return arr.dsiLocalAccess(chpl_reindexConvertIdx(i, dom, downdom));
+      return arr.dsiLocalAccess(chpl_reindexConvertIdx(i, privDom, downdom));
 
     inline proc checkBounds(i) {
       if boundsChecking then
@@ -501,27 +518,12 @@ module ArrayViewReindex {
     // locality-oriented queries
     //
 
-    proc dsiTargetLocales() {
-      return arr.dsiTargetLocales();
-    }
-
     proc dsiHasSingleLocalSubdomain() param
       return privDom.dsiHasSingleLocalSubdomain();
 
     proc dsiLocalSubdomain() {
       return privDom.dsiLocalSubdomain();
     }
-
-    proc dsiNoFluffView() {
-      // For now avoid implementing 'noFluffView' on each class and use
-      // 'canResolve' to print a better error message.
-      if canResolveMethod(arr, "dsiNoFluffView") {
-        return arr.dsiNoFluffView();
-      } else {
-        compilerError("noFluffView is not supported on this array type.");
-      }
-    }
-
 
     //
     // privatization
@@ -533,7 +535,7 @@ module ArrayViewReindex {
       return _ArrInstance.dsiSupportsPrivatization();
 
     proc dsiGetPrivatizeData() {
-      return (_DomPid, dom, _ArrPid, _ArrInstance);
+      return (_DomPid, privDom, _ArrPid, _ArrInstance);
     }
 
     proc dsiPrivatize(privatizeData) {
@@ -543,74 +545,6 @@ module ArrayViewReindex {
                                      _ArrPid=privatizeData(3),
                                      _ArrInstance=privatizeData(4));
     }
-
-
-    //
-    // bulk-transfer
-    //
-
-    proc dsiSupportsBulkTransfer() param {
-      return arr.dsiSupportsBulkTransfer();
-    }
-    proc dsiSupportsBulkTransferInterface() param return arr.dsiSupportsBulkTransferInterface();
-
-    proc _viewHelper(dims) {
-      if dims.size != dom.rank {
-        compilerError("Error while composing view domain for reindex view.");
-      }
-      const goodDims = chpl_reindexConvertDom(dims, dom, downdom).dims();
-      if _containsRCRE() {
-        var nextView = arr._getRCREView();
-        return nextView._viewHelper(goodDims);
-      } else {
-        return {(...goodDims)};
-      }
-    }
-
-    proc _getViewDom() {
-      // BHARSH TODO
-      return _viewHelper(dom.dsiDims());
-    }
-
-    proc doiUseBulkTransfer(B) {
-      return arr.doiUseBulkTransfer(B);
-    }
-
-    proc doiCanBulkTransfer(viewDom) {
-      return arr.doiCanBulkTransfer(viewDom);
-    }
-
-    proc doiBulkTransfer(B, viewDom) {
-      arr.doiBulkTransfer(B, viewDom);
-    }
-
-    // strided transfer support
-    proc doiUseBulkTransferStride(B) {
-      return arr.doiUseBulkTransferStride(B);
-    }
-
-    proc doiCanBulkTransferStride(viewDom) {
-      return arr.doiCanBulkTransferStride(viewDom);
-    }
-
-    proc doiBulkTransferStride(B, viewDom) {
-      arr.doiBulkTransferStride(B, viewDom);
-    }
-
-
-    // distributed transfer support
-    proc doiBulkTransferToDR(B, viewDom) {
-      arr.doiBulkTransferToDR(B, viewDom);
-    }
-
-    proc doiBulkTransferFromDR(B, viewDom) {
-      arr.doiBulkTransferFromDR(B, viewDom);
-    }
-
-    proc doiBulkTransferFrom(B, viewDom) {
-      arr.doiBulkTransferFrom(B, viewDom);
-    }
-
 
     //
     // utility functions used to set up the index cache
@@ -661,7 +595,7 @@ module ArrayViewReindex {
 
     // not sure what this is, but everyone seems to have one...
     inline proc dsiGetBaseDom() {
-      return dom;
+      return privDom;
     }
 
     proc _getActualArray() {
@@ -693,6 +627,19 @@ module ArrayViewReindex {
       if ownsArrInstance {
         _delete_arr(_ArrInstance, _isPrivatized(_ArrInstance));
       }
+    }
+
+    proc doiCanBulkTransferRankChange() param
+      return arr.doiCanBulkTransferRankChange();
+
+    proc doiBulkTransferFromKnown(destDom, srcClass, srcDom) : bool {
+      const shifted = chpl_reindexConvertDom(destDom.dims(), destDom._value, this.dom.dist.downdomInst);
+      return chpl__bulkTransferArray(this.arr, shifted, srcClass, srcDom);
+    }
+
+    proc doiBulkTransferToKnown(srcDom, destClass, destDom) : bool {
+      const shifted = chpl_reindexConvertDom(srcDom.dims(), srcDom._value, this.dom.dist.downdomInst);
+      return chpl__bulkTransferArray(destClass, destDom, this.arr, shifted);
     }
   }
 

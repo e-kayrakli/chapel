@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -31,10 +31,15 @@
 
 #include "beautify.h"
 #include "driver.h"
+#include "llvmVer.h"
 #include "misc.h"
 #include "mysystem.h"
 #include "stringutil.h"
 #include "tmpdirname.h"
+
+#ifdef HAVE_LLVM
+#include "llvm/Support/FileSystem.h"
+#endif
 
 #include <pwd.h>
 #include <unistd.h>
@@ -82,10 +87,19 @@ void addIncInfo(const char* incDir) {
 }
 
 void ensureDirExists(const char* dirname, const char* explanation) {
+#ifdef HAVE_LLVM
+  std::error_code err = llvm::sys::fs::create_directories(dirname);
+  if (err) {
+    USR_FATAL("creating directory %s failed: %s\n",
+              dirname,
+              err.message().c_str());
+  }
+#else
   const char* mkdircommand = "mkdir -p ";
   const char* command = astr(mkdircommand, dirname);
 
   mysystem(command, explanation);
+#endif
 }
 
 
@@ -168,9 +182,39 @@ static void ensureTmpDirExists() {
 }
 
 
-void deleteDir(const char* dirname) {
+#if !defined(HAVE_LLVM) || HAVE_LLVM_VER < 50
+static
+void deleteDirSystem(const char* dirname) {
   const char* cmd = astr("rm -rf ", dirname);
   mysystem(cmd, astr("removing directory: ", dirname));
+}
+#endif
+
+#ifdef HAVE_LLVM
+static
+void deleteDirLLVM(const char* dirname) {
+#if HAVE_LLVM_VER >= 50
+  // LLVM 5 added remove_directories
+  std::error_code err = llvm::sys::fs::remove_directories(dirname, false);
+  if (err) {
+    USR_FATAL("removing directory %s failed: %s\n",
+              dirname,
+              err.message().c_str());
+  }
+#else
+  deleteDirSystem(dirname);
+#endif
+}
+#endif
+
+
+
+void deleteDir(const char* dirname) {
+#ifdef HAVE_LLVM
+  deleteDirLLVM(dirname);
+#else
+  deleteDirSystem(dirname);
+#endif
 }
 
 
@@ -453,7 +497,7 @@ std::string runPrintChplEnv(std::map<std::string, const char*> varMap) {
   }
 
   // Toss stderr away until printchplenv supports a '--suppresswarnings' flag
-  command += std::string(CHPL_HOME) + "/util/printchplenv --simple 2> /dev/null";
+  command += std::string(CHPL_HOME) + "/util/printchplenv --all --internal --no-tidy --simple 2> /dev/null";
 
   return runCommand(command);
 }
@@ -468,6 +512,10 @@ std::string getChplPythonVersion() {
   pyVer.erase(pyVer.find_last_not_of("\n\r")+1);
 
   return pyVer;
+}
+
+bool compilingWithPrgEnv() {
+  return (strstr(CHPL_ORIG_TARGET_COMPILER, "cray-prgenv") != NULL);
 }
 
 std::string runCommand(std::string& command) {
@@ -589,12 +637,16 @@ void codegen_makefile(fileinfo* mainfile, const char** tmpbinname, bool skip_com
   // Generate one variable containing all envMap information to pass to printchplenv
   for (std::map<std::string, const char*>::iterator env=envMap.begin(); env!=envMap.end(); ++env)
   {
-    if(!useDefaultEnv(env->first)) {
-      chplmakeallvars += env->first + "=" + std::string(env->second) + " ";
-    }
+    const std::string& key = env->first;
+    const char* oldPrefix = "CHPL_";
+    const char* newPrefix = "CHPL_MAKE_";
+    INT_ASSERT(key.substr(0, strlen(oldPrefix)) == oldPrefix);
+    std::string keySuffix = key.substr(strlen(oldPrefix), std::string::npos);
+    std::string chpl_make_key = newPrefix + keySuffix;
+    chplmakeallvars += chpl_make_key + "=" + std::string(env->second) + "|";
   }
 
-  fprintf(makefile.fptr, "\nCHPL_MAKE_ALL_VARS = %s\n", chplmakeallvars.c_str());
+  fprintf(makefile.fptr, "\nexport CHPL_MAKE_SETTINGS_NO_NEWLINES := %s\n", chplmakeallvars.c_str());
 
 
   // LLVM builds just use the makefile for the launcher and
@@ -706,9 +758,9 @@ const char* filenameToModulename(const char* filename) {
   return asubstr(moduleName, strrchr(moduleName, '.'));
 }
 
-void readArgsFromCommand(const char* cmd, std::vector<std::string>& args) {
+void readArgsFromCommand(std::string cmd, std::vector<std::string>& args) {
   // Gather information from compileline into clangArgs.
-  if(FILE* fd = popen(cmd,"r")) {
+  if(FILE* fd = popen(cmd.c_str(),"r")) {
     int ch;
     // Read arguments.
     while( (ch = getc(fd)) != EOF ) {
@@ -726,6 +778,69 @@ void readArgsFromCommand(const char* cmd, std::vector<std::string>& args) {
       // First argument is the clang install directory...
       args.push_back(arg);
     }
+    fclose(fd);
+  }
+}
+
+void readArgsFromFile(std::string path, std::vector<std::string>& args) {
+
+  FILE* fd = fopen(path.c_str(), "r");
+  if (!fd)
+    USR_FATAL("Could not open file %s", path.c_str());
+
+  int ch;
+  // Read arguments.
+  while( (ch = getc(fd)) != EOF ) {
+    // Read the next argument.
+    // skip leading spaces
+    while( ch != EOF && isspace(ch) ) ch = getc(fd);
+    std::string arg;
+    arg.push_back(ch);
+    // read until space. TODO - handle quoting/spaces
+    ch = getc(fd);
+    while( ch != EOF && !isspace(ch) ) {
+      arg += ch;
+      ch = getc(fd);
+    }
+    args.push_back(arg);
+  }
+
+  fclose(fd);
+}
+
+// Expands variables like $CHPL_HOME in the string
+void expandInstallationPaths(std::string& s) {
+  const char* tofix[] = {"$CHPL_RUNTIME_LIB", CHPL_RUNTIME_LIB,
+                         "$CHPL_RUNTIME_INCL", CHPL_RUNTIME_INCL,
+                         "$CHPL_THIRD_PARTY", CHPL_THIRD_PARTY,
+                         "$CHPL_HOME", CHPL_HOME,
+                         NULL};
+
+  // For each of the patterns in tofix, find/replace all occurrences.
+  for (int j = 0; tofix[j] != NULL; j += 2) {
+
+    const char* key = tofix[j];
+    const char* val = tofix[j+1];
+    size_t key_len = strlen(key);
+    size_t val_len = strlen(val);
+
+    size_t off = 0;
+    while (true) {
+      off = s.find(key, off);
+      if (off == std::string::npos)
+        break; // no more occurrences to replace
+      s.replace(off, key_len, val);
+      off += val_len;
+    }
+  }
+}
+
+void expandInstallationPaths(std::vector<std::string>& args) {
+
+  for (size_t i = 0; i < args.size(); i++) {
+    std::string s = args[i];
+    expandInstallationPaths(s);
+    args[i] = s;
   }
 }
 

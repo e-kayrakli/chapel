@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -27,7 +27,7 @@
 
 //
 // ForallIntents: with clause/forall intents
-// TODO: replace with LoopIntentVars / ForallStmt::intentVariables
+// TODO: replace with ShadowVarSymbols / ForallStmt::shadowVariables
 //
 class ForallIntents {
 public:

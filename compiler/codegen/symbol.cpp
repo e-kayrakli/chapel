@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -28,6 +28,7 @@
 #include "AstVisitor.h"
 #include "astutil.h"
 #include "build.h"
+#include "clangUtil.h"
 #include "codegen.h"
 #include "CollapseBlocks.h"
 #include "docsDriver.h"
@@ -36,7 +37,10 @@
 #include "files.h"
 #include "intlimits.h"
 #include "iterator.h"
+#include "LayeredValueTable.h"
 #include "llvmDebug.h"
+#include "llvmExtractIR.h"
+#include "llvmUtil.h"
 #include "misc.h"
 #include "optimizations.h"
 #include "passes.h"
@@ -45,6 +49,7 @@
 #include "stringutil.h"
 #include "type.h"
 #include "resolution.h"
+#include "wellknown.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -53,6 +58,12 @@
 
 #include <inttypes.h>
 #include <stdint.h>
+
+#ifdef HAVE_LLVM
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
+#endif
 
 /******************************** | *********************************
 *                                                                   *
@@ -68,6 +79,7 @@ const char* llvmStageName[llvmStageNum::LAST] = {
   "none", //llvmStageNum::NONE
   "basic", //llvmStageNum::BASIC
   "full", //llvmStageNum::FULL
+  "every", //llvmStageNum::EVERY
   "early-as-possible",
   "module-optimizer-early",
   "loop-optimizer-end",
@@ -95,10 +107,10 @@ llvmStageNum_t llvmStageNumFromLlvmStageName(const char* stageName) {
 #ifdef HAVE_LLVM
 void printLlvmIr(llvm::Function *func, llvmStageNum_t numStage) {
   if(func) {
-    llvm::raw_os_ostream stdOut(std::cout);
     std::cout << "; " << "LLVM IR representation of " << llvmPrintIrName
-              << " function after " << llvmStageNameFromLlvmStageNum(numStage) << " optimization stage";
-    func->print(stdOut);
+              << " function after " << llvmStageNameFromLlvmStageNum(numStage)
+              << " optimization stage\n" << std::flush;
+    extractAndPrintFunctionLLVM(func);
   }
 }
 #endif
@@ -233,6 +245,8 @@ llvm::Value* codegenImmediateLLVM(Immediate* i)
               llvm::Type::getDoubleTy(info->module->getContext()),
               i->v_float64);
           break;
+        default:
+          INT_ASSERT("unsupported floating point width");
       }
       break;
     case NUM_KIND_COMPLEX:
@@ -263,6 +277,8 @@ llvm::Value* codegenImmediateLLVM(Immediate* i)
               elements);
           break;
         }
+        default:
+          INT_ASSERT("unsupported complex floating point width");
       }
       break;
     case CONST_KIND_STRING:
@@ -271,7 +287,7 @@ llvm::Value* codegenImmediateLLVM(Immediate* i)
       // so we have to convert to a sequence of bytes
       // for LLVM (the C backend can just print it out).
       std::string newString = unescapeString(i->v_string, NULL);
-      ret = info->builder->CreateGlobalString(newString);
+      ret = info->irBuilder->CreateGlobalString(newString);
       break;
   }
 
@@ -452,7 +468,7 @@ GenRet VarSymbol::codegenVarSymbol(bool lhsInSetReference) {
     //   _ret:dtNil = nil
     if( typeInfo() == dtNil && 0 == strcmp(cname, "nil") ) {
       GenRet voidPtr;
-      voidPtr.val = llvm::Constant::getNullValue(info->builder->getInt8PtrTy());
+      voidPtr.val = llvm::Constant::getNullValue(info->irBuilder->getInt8PtrTy());
       voidPtr.chplType = dtNil;
       return voidPtr;
     }
@@ -491,14 +507,11 @@ GenRet VarSymbol::codegenVarSymbol(bool lhsInSetReference) {
         llvm::GlobalVariable *globalValue =
           llvm::cast<llvm::GlobalVariable>(
               info->module->getOrInsertGlobal
-                  (name, info->builder->getInt8PtrTy()));
+                  (name, info->irBuilder->getInt8PtrTy()));
         globalValue->setConstant(true);
         globalValue->setInitializer(llvm::cast<llvm::Constant>(
-              info->builder->CreateConstInBoundsGEP2_32(
-#if HAVE_LLVM_VER >= 37
-                NULL,
-#endif
-                constString, 0, 0)));
+              info->irBuilder->CreateConstInBoundsGEP2_32(
+                NULL, constString, 0, 0)));
         ret.val = globalValue;
         ret.isLVPtr = GEN_PTR;
       } else {
@@ -514,7 +527,7 @@ GenRet VarSymbol::codegenVarSymbol(bool lhsInSetReference) {
       return ret;
     } else if (std::string(cname) == "NULL") {
       GenRet voidPtr;
-      voidPtr.val = llvm::Constant::getNullValue(info->builder->getInt8PtrTy());
+      voidPtr.val = llvm::Constant::getNullValue(info->irBuilder->getInt8PtrTy());
       voidPtr.chplType = typeInfo();
       return voidPtr;
     }
@@ -580,15 +593,11 @@ void VarSymbol::codegenDefC(bool global, bool isHeader) {
     } else if (ct->symbol->hasFlag(FLAG_WIDE_REF) ||
                ct->symbol->hasFlag(FLAG_WIDE_CLASS)) {
       if (isFnSymbol(defPoint->parentSymbol)) {
-        if (widePointersStruct) {
-          //
-          // CHPL_LOCALEID_T_INIT is #defined in the chpl-locale-model.h
-          // file in the runtime, for the selected locale model.
-          //
-          str += " = {CHPL_LOCALEID_T_INIT, NULL}";
-        } else {
-          str += " = ((wide_ptr_t) NULL)";
-        }
+        //
+        // CHPL_LOCALEID_T_INIT is #defined in the chpl-locale-model.h
+        // file in the runtime, for the selected locale model.
+        //
+        str += " = {CHPL_LOCALEID_T_INIT, NULL}";
       }
     }
   }
@@ -692,11 +701,8 @@ void VarSymbol::codegenDef() {
           llvm::GlobalVariable *globalString =
             llvm::cast<llvm::GlobalVariable>(constString);
           globalValue->setInitializer(llvm::cast<llvm::Constant>(
-                info->builder->CreateConstInBoundsGEP2_32(
-#if HAVE_LLVM_VER >= 37
-                  NULL,
-#endif
-                  globalString, 0, 0)));
+                info->irBuilder->CreateConstInBoundsGEP2_32(
+                  NULL, globalString, 0, 0)));
         } else {
           llvm::GlobalVariable *globalString =
             new llvm::GlobalVariable(
@@ -709,11 +715,8 @@ void VarSymbol::codegenDef() {
           globalString->setInitializer(llvm::Constant::getNullValue(
                 llvm::IntegerType::getInt8Ty(info->module->getContext())));
           globalValue->setInitializer(llvm::cast<llvm::Constant>(
-                info->builder->CreateConstInBoundsGEP1_32(
-#if HAVE_LLVM_VER >= 37
-                  NULL,
-#endif
-                  globalString, 0)));
+                info->irBuilder->CreateConstInBoundsGEP1_32(
+                  NULL, globalString, 0)));
         }
       } else {
         globalValue->setInitializer(llvm::cast<llvm::Constant>(
@@ -730,7 +733,7 @@ void VarSymbol::codegenDef() {
          ctype->symbol->hasFlag(FLAG_WIDE_REF) ||
          ctype->symbol->hasFlag(FLAG_WIDE_CLASS)) {
         if(isFnSymbol(defPoint->parentSymbol)) {
-          info->builder->CreateStore(
+          info->irBuilder->CreateStore(
               llvm::Constant::getNullValue(varType), varAlloca);
         }
       }
@@ -895,19 +898,14 @@ void TypeSymbol::codegenDef() {
 
 void TypeSymbol::codegenMetadata() {
 #ifdef HAVE_LLVM
-  // Don't do anything if we've already visited this type.
-  if( llvmTbaaTypeDescriptor ) return;
+  // Don't do anything if we've already visited this type,
+  // or the type is void so we don't need metadata.
+  if (llvmTbaaTypeDescriptor || type == dtVoid) return;
 
   GenInfo* info = gGenInfo;
-  llvm::LLVMContext& ctx = info->module->getContext();
-  // Create the TBAA root node if necessary.
-  if( ! info->tbaaRootNode ) {
-    LLVM_METADATA_OPERAND_TYPE* Ops[1];
-    Ops[0] = llvm::MDString::get(ctx, "Chapel types");
-    info->tbaaRootNode = llvm::MDNode::get(ctx, Ops);
-  }
+  INT_ASSERT(info->tbaaRootNode);
 
-  // Set the llvmTbaaNode to non-NULL so that we can
+  // Set the llvmTbaaTypeDescriptor to non-NULL so that we can
   // avoid recursing.
   llvmTbaaTypeDescriptor = info->tbaaRootNode;
 
@@ -920,16 +918,30 @@ void TypeSymbol::codegenMetadata() {
       AggregateType* fct = toAggregateType(field->type);
       if(fct && field->hasFlag(FLAG_SUPER_CLASS)) {
         superType = field->type;
+        field->type->symbol->codegenMetadata();
+      } else if (!isClass(type)) {
+        field->type->symbol->codegenMetadata();
       }
-      field->type->symbol->codegenMetadata();
     }
   }
 
-  llvm::MDNode* parent = info->tbaaRootNode;
+  llvm::MDNode* parent = info->tbaaUnionsNode;
   if( superType ) {
     parent = superType->symbol->llvmTbaaTypeDescriptor;
-    INT_ASSERT( parent );
+  } else {
+    llvm::Type *ty = NULL;
+    if (llvmType) {
+      ty = llvmType;
+    } else if (hasFlag(FLAG_EXTERN)) {
+      ty = info->lvt->getType(cname);
+    } else {
+      ty = this->codegen().type;
+    }
+    if (ty && llvm::isa<llvm::PointerType>(ty)) {
+      parent = dtCVoidPtr->symbol->llvmTbaaTypeDescriptor;
+    }
   }
+  INT_ASSERT(parent && parent != info->tbaaRootNode);
 
   // Ref and _ddata are really the same, and can conceivably
   // alias, so we normalize _ddata to be ref for the purposes of TBAA.
@@ -937,6 +949,7 @@ void TypeSymbol::codegenMetadata() {
     Type* eltType = getDataClassType(this)->typeInfo();
     Type* refType = getOrMakeRefTypeDuringCodegen(eltType);
     refType->symbol->codegenMetadata();
+    INT_ASSERT(refType->symbol->llvmTbaaTypeDescriptor != info->tbaaRootNode);
     this->llvmTbaaTypeDescriptor = refType->symbol->llvmTbaaTypeDescriptor;
     this->llvmTbaaAccessTag = refType->symbol->llvmTbaaAccessTag;
     this->llvmConstTbaaAccessTag = refType->symbol->llvmConstTbaaAccessTag;
@@ -948,77 +961,215 @@ void TypeSymbol::codegenMetadata() {
   // Integers, reals, bools, enums, references, wide pointers
   // count as one thing. Records, strings, complexes should not
   // get simple TBAA (they can get struct tbaa).
-  if( is_bool_type(type) || is_int_type(type) || is_uint_type(type) ||
-      is_real_type(type) || is_imag_type(type) || is_enum_type(type) ||
-      isClass(type) || hasEitherFlag(FLAG_REF,FLAG_WIDE_REF) ||
-      hasEitherFlag(FLAG_DATA_CLASS,FLAG_WIDE_CLASS) ) {
-    // Now create tbaa metadata, one for const and one for not.
-    {
-      LLVM_METADATA_OPERAND_TYPE* Ops[2];
-      Ops[0] = llvm::MDString::get(ctx, cname);
-      Ops[1] = parent;
-      llvmTbaaTypeDescriptor = llvm::MDNode::get(ctx, Ops);
+  if (isUnion(type) || (isRecord(type) && ct->numFields() == 0)) {
+    // This is necessary due to the design of LLVM TBAA metadata.
+    // The preferred situation would be to allow each union to have
+    // multiple parents, corresponding to its members.  The way TBAA
+    // metadata is designed, this can only be achieved with a struct
+    // type descriptor.  However, struct type descriptors do not
+    // support multiple members at the same offset, so that doesn't work.
+    // The only other way to handle unions correctly, given the limitations
+    // of LLVM's TBAA metadata design, is to make all unions ancestors
+    // of everything, as we do here.  Clang does this as well.
+    //
+    // This means we don't get any help with alias disambiguation on
+    // unions.  We still need to supply a TBAA type descriptor for them,
+    // though, in case they appear as a member of a class or record.
+    //
+    // Records that have no Chapel IR fields, but may have LLVM IR fields,
+    // are treated as unions because we don't know what Chapel type the
+    // LLVM fields are referring to.  (There is no backward mapping.)
+    llvmTbaaTypeDescriptor = info->tbaaUnionsNode;
+  } else if (is_complex_type(type)) {
+    codegenCplxMetadata();
+    INT_ASSERT(llvmTbaaAggTypeDescriptor);
+    llvmTbaaTypeDescriptor = llvmTbaaAggTypeDescriptor;
+  } else if (!ct || hasFlag(FLAG_STAR_TUPLE) ||
+             isClass(type) || hasEitherFlag(FLAG_REF,FLAG_WIDE_REF) ||
+             hasEitherFlag(FLAG_DATA_CLASS,FLAG_WIDE_CLASS)) {
+    if (is_imag_type(type)) {
+      // At present, imaginary often aliases with real,
+      // so make real the parent of imaginary.
+      INT_ASSERT(type == dtImag[FLOAT_SIZE_32] ||
+                 type == dtImag[FLOAT_SIZE_64]);
+      TypeSymbol *re;
+      if (type == dtImag[FLOAT_SIZE_32]) {
+        re = dtReal[FLOAT_SIZE_32]->symbol;
+      } else {
+        re = dtReal[FLOAT_SIZE_64]->symbol;
+      }
+      re->codegenMetadata();
+      parent = re->llvmTbaaTypeDescriptor;
     }
-    {
-      LLVM_METADATA_OPERAND_TYPE* Ops[3];
-      Ops[0] = llvmTbaaTypeDescriptor;
-      Ops[1] = llvmTbaaTypeDescriptor;
-      Ops[2] = llvm_constant_as_metadata(
-                   llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), 0));
-      llvmTbaaAccessTag = llvm::MDNode::get(ctx, Ops);
-    }
-    {
-      LLVM_METADATA_OPERAND_TYPE* Ops[4];
-      Ops[0] = llvmTbaaTypeDescriptor;
-      Ops[1] = llvmTbaaTypeDescriptor;
-      Ops[2] = llvm_constant_as_metadata(
-                   llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), 0));
-      Ops[3] = llvm_constant_as_metadata(
-                   llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), 1));
-      llvmConstTbaaAccessTag = llvm::MDNode::get(ctx, Ops);
-    }
+    llvmTbaaTypeDescriptor =
+      info->mdBuilder->createTBAAScalarTypeNode(cname, parent);
+  } else if (isRecord(type)) {
+    codegenAggMetadata();
+    if (llvmTbaaAggTypeDescriptor)
+      llvmTbaaTypeDescriptor = llvmTbaaAggTypeDescriptor;
   }
+  if (llvmTbaaTypeDescriptor && llvmTbaaTypeDescriptor != info->tbaaRootNode) {
+    // Create tbaa access tags, one for const and one for not.
+    // The createTBAAStructTagNode() method works for both scalars
+    // and aggregates, referencing the whole object.
+    llvmTbaaAccessTag =
+      info->mdBuilder->createTBAAStructTagNode(llvmTbaaTypeDescriptor,
+                                               llvmTbaaTypeDescriptor,
+                                               /*Offset=*/0);
+    llvmConstTbaaAccessTag =
+      info->mdBuilder->createTBAAStructTagNode(llvmTbaaTypeDescriptor,
+                                               llvmTbaaTypeDescriptor,
+                                               /*Offset=*/0,
+                                               /*IsConstant=*/true);
+  }
+#endif
+}
 
-  // Don't try to create tbaa.struct metadata for non-struct.
-  if( isUnion(type) ||
-      hasFlag(FLAG_STAR_TUPLE) ||
-      hasFlag(FLAG_REF) ||
-      hasFlag(FLAG_DATA_CLASS) ||
-      hasEitherFlag(FLAG_WIDE_REF,FLAG_WIDE_CLASS) ) {
+void TypeSymbol::codegenCplxMetadata() {
+#ifdef HAVE_LLVM
+  // At present, complex types are not records, so we have to
+  // build their struct type descriptors and tbaa.struct access tags
+  // manually, using knowledge of the contents of complex types.
+  GenInfo* info = gGenInfo;
+  llvm::LLVMContext& ctx = info->module->getContext();
+  const llvm::DataLayout& dl = info->module->getDataLayout();
+
+  INT_ASSERT(type == dtComplex[COMPLEX_SIZE_64] ||
+             type == dtComplex[COMPLEX_SIZE_128]);
+
+  TypeSymbol *re, *im;
+  if (type == dtComplex[COMPLEX_SIZE_64]) {
+    re = dtReal[FLOAT_SIZE_32]->symbol;
+    im = dtImag[FLOAT_SIZE_32]->symbol;
+  } else {
+    re = dtReal[FLOAT_SIZE_64]->symbol;
+    im = dtImag[FLOAT_SIZE_64]->symbol;
+  }
+  re->codegenMetadata();
+  im->codegenMetadata();
+
+  uint64_t fieldSize = dl.getTypeStoreSize(re->llvmType);
+  llvm::Type *int64Ty = llvm::Type::getInt64Ty(ctx);
+  llvm::ConstantAsMetadata *zero =
+    info->mdBuilder->createConstant(llvm::ConstantInt::get(int64Ty, 0));
+  llvm::ConstantAsMetadata *fsz =
+    info->mdBuilder->createConstant(llvm::ConstantInt::get(int64Ty,
+                                                             fieldSize));
+
+  llvm::Metadata *TypeOps[5];
+  TypeOps[0] = llvm::MDString::get(ctx,cname);
+  TypeOps[1] = re->llvmTbaaTypeDescriptor;
+  TypeOps[2] = zero;  // offset
+  TypeOps[3] = im->llvmTbaaTypeDescriptor;
+  TypeOps[4] = fsz;   // offset
+  llvmTbaaAggTypeDescriptor = llvm::MDNode::get(ctx, TypeOps);
+
+  llvm::Metadata *CopyOps[6];
+  CopyOps[0] = zero;  // offset
+  CopyOps[1] = fsz;   // size
+  CopyOps[2] = re->llvmTbaaAccessTag;
+  CopyOps[3] = fsz;   // offset
+  CopyOps[4] = fsz;   // size
+  CopyOps[5] = im->llvmTbaaAccessTag;
+  llvmTbaaStructCopyNode = llvm::MDNode::get(ctx, CopyOps);
+
+  llvm::Metadata *ConstCopyOps[6];
+  ConstCopyOps[0] = zero;  // offset
+  ConstCopyOps[1] = fsz;   // size
+  ConstCopyOps[2] = re->llvmConstTbaaAccessTag;
+  ConstCopyOps[3] = fsz;   // offset
+  ConstCopyOps[4] = fsz;   // size
+  ConstCopyOps[5] = im->llvmConstTbaaAccessTag;
+  llvmConstTbaaStructCopyNode = llvm::MDNode::get(ctx, ConstCopyOps);
+#endif
+}
+
+void TypeSymbol::codegenAggMetadata() {
+#ifdef HAVE_LLVM
+  GenInfo* info = gGenInfo;
+  llvm::LLVMContext& ctx = info->module->getContext();
+  const llvm::DataLayout& dl = info->module->getDataLayout();
+  AggregateType *ct = toAggregateType(type);
+  INT_ASSERT(ct);
+
+  // Create the TBAA struct type descriptors and tbaa.struct metadata nodes.
+  llvm::SmallVector<llvm::Metadata*, 16> TypeOps;
+  llvm::SmallVector<llvm::Metadata*, 16> CopyOps;
+  llvm::SmallVector<llvm::Metadata*, 16> ConstCopyOps;
+
+  const char *struct_name = ct->classStructName(true);
+  llvm::Type *struct_type_ty = info->lvt->getType(struct_name);
+  if (isClass(type) && !struct_type_ty)
     return;
-  }
+  llvm::StructType *struct_type = NULL;
+  INT_ASSERT(struct_type_ty);
+  struct_type = llvm::dyn_cast<llvm::StructType>(struct_type_ty);
+  INT_ASSERT(struct_type);
 
-  if( ct ) {
-    // Now create the tbaa.struct metadata nodes.
-    llvm::SmallVector<LLVM_METADATA_OPERAND_TYPE*, 16> Ops;
-    llvm::SmallVector<LLVM_METADATA_OPERAND_TYPE*, 16> ConstOps;
+  TypeOps.push_back(llvm::MDString::get(ctx, struct_name));
 
-    const char* struct_name = ct->classStructName(true);
-    llvm::Type* struct_type_ty = info->lvt->getType(struct_name);
-    llvm::StructType* struct_type = NULL;
-    INT_ASSERT(struct_type_ty);
-    struct_type = llvm::dyn_cast<llvm::StructType>(struct_type_ty);
-    INT_ASSERT(struct_type);
+  llvm::Type *int64Ty = llvm::Type::getInt64Ty(ctx);
+  if (ct == dtObject) {
+    // Special case because we never create object's actual field within
+    // the Chapel IR.  Change this if defineObjectClass() changes.
+    //
+    llvm::Type *fieldType = CLASS_ID_TYPE->symbol->codegen().type;
+    INT_ASSERT(CLASS_ID_TYPE->symbol->llvmTbaaTypeDescriptor &&
+               CLASS_ID_TYPE->symbol->llvmTbaaTypeDescriptor !=
+               info->tbaaRootNode);
+    llvm::Constant *off = llvm::ConstantInt::get(int64Ty, 0);
+    TypeOps.push_back(CLASS_ID_TYPE->symbol->llvmTbaaTypeDescriptor);
+    TypeOps.push_back(llvm::ConstantAsMetadata::get(off));
 
+    llvm::Constant *sz =
+      llvm::ConstantInt::get(int64Ty, dl.getTypeStoreSize(fieldType));
+    CopyOps.push_back(llvm::ConstantAsMetadata::get(off));
+    CopyOps.push_back(llvm::ConstantAsMetadata::get(sz));
+    CopyOps.push_back(CLASS_ID_TYPE->symbol->llvmTbaaAccessTag);
+    ConstCopyOps.push_back(llvm::ConstantAsMetadata::get(off));
+    ConstCopyOps.push_back(llvm::ConstantAsMetadata::get(sz));
+    ConstCopyOps.push_back(CLASS_ID_TYPE->symbol->llvmConstTbaaAccessTag);
+  } else {
     for_fields(field, ct) {
-      llvm::Type* fieldType = field->type->symbol->codegen().type;
-      AggregateType* fct = toAggregateType(field->type);
-      if(fct && field->hasFlag(FLAG_SUPER_CLASS)) {
+      if (field->type == dtVoid)
+        continue;
+
+      llvm::Type *fieldType = NULL;
+      AggregateType *fct = toAggregateType(field->type);
+      if (fct && field->hasFlag(FLAG_SUPER_CLASS)) {
         fieldType = info->lvt->getType(fct->classStructName(true));
+      } else if (field->type->symbol->hasFlag(FLAG_EXTERN)) {
+        fieldType = info->lvt->getType(field->type->symbol->cname);
+      } else {
+        fieldType = field->type->symbol->codegen().type;
       }
       INT_ASSERT(fieldType);
-      unsigned gep = ct->getMemberGEP(field->cname);
-      llvm::Constant* off = llvm::ConstantExpr::getOffsetOf(struct_type, gep);
-      llvm::Constant* sz = llvm::ConstantExpr::getSizeOf(fieldType);
-      Ops.push_back(llvm_constant_as_metadata(off));
-      Ops.push_back(llvm_constant_as_metadata(sz));
-      Ops.push_back(field->type->symbol->llvmTbaaAccessTag);
-      ConstOps.push_back(llvm_constant_as_metadata(off));
-      ConstOps.push_back(llvm_constant_as_metadata(sz));
-      ConstOps.push_back(field->type->symbol->llvmConstTbaaAccessTag);
+      uint64_t store_size = dl.getTypeStoreSize(fieldType);
+      if (store_size > 0) {
+        unsigned fieldno = ct->getMemberGEP(field->cname);
+        uint64_t byte_offset =
+          dl.getStructLayout(struct_type)->getElementOffset(fieldno);
+        llvm::Constant *off = llvm::ConstantInt::get(int64Ty, byte_offset);
+        INT_ASSERT(field->type->symbol->llvmTbaaTypeDescriptor &&
+                   field->type->symbol->llvmTbaaTypeDescriptor !=
+                   info->tbaaRootNode);
+        TypeOps.push_back(field->type->symbol->llvmTbaaTypeDescriptor);
+        TypeOps.push_back(llvm::ConstantAsMetadata::get(off));
+
+        llvm::Constant *sz = llvm::ConstantInt::get(int64Ty, store_size);
+        CopyOps.push_back(llvm::ConstantAsMetadata::get(off));
+        CopyOps.push_back(llvm::ConstantAsMetadata::get(sz));
+        CopyOps.push_back(field->type->symbol->llvmTbaaAccessTag);
+        ConstCopyOps.push_back(llvm::ConstantAsMetadata::get(off));
+        ConstCopyOps.push_back(llvm::ConstantAsMetadata::get(sz));
+        ConstCopyOps.push_back(field->type->symbol->llvmConstTbaaAccessTag);
+      }
     }
-    llvmTbaaStructCopyNode = llvm::MDNode::get(ctx, Ops);
-    llvmConstTbaaStructCopyNode = llvm::MDNode::get(ctx, ConstOps);
+  }
+  if (CopyOps.size() > 0) {
+    llvmTbaaAggTypeDescriptor = llvm::MDNode::get(ctx, TypeOps);
+    llvmTbaaStructCopyNode = llvm::MDNode::get(ctx, CopyOps);
+    llvmConstTbaaStructCopyNode = llvm::MDNode::get(ctx, ConstCopyOps);
   }
 #endif
 }
@@ -1150,7 +1301,7 @@ GenRet FnSymbol::codegenCast(GenRet fnPtr) {
     // now cast to correct function type
     llvm::FunctionType* fnType = llvm::cast<llvm::FunctionType>(t.type);
     llvm::PointerType *ptrToFnType = llvm::PointerType::get(fnType, 0);
-    fngen.val = info->builder->CreateBitCast(fnPtr.val, ptrToFnType);
+    fngen.val = info->irBuilder->CreateBitCast(fnPtr.val, ptrToFnType);
 #endif
   }
   return fngen;
@@ -1287,17 +1438,19 @@ void FnSymbol::codegenDef() {
         func->addFnAttr(llvm::Attribute::NoInline);
         llvmPrintIrCName = cname;
     }
+    if (fNoInline)
+      func->addFnAttr(llvm::Attribute::NoInline);
 
     llvm::BasicBlock *block =
       llvm::BasicBlock::Create(info->module->getContext(), "entry", func);
 
-    info->builder->SetInsertPoint(block);
+    info->irBuilder->SetInsertPoint(block);
 
     info->lvt->addLayer();
 
     if(debug_info) {
-      LLVM_DISUBPROGRAM dbgScope = debug_info->get_function(this);
-      info->builder->SetCurrentDebugLocation(
+      llvm::DISubprogram* dbgScope = debug_info->get_function(this);
+      info->irBuilder->SetCurrentDebugLocation(
         llvm::DebugLoc::get(linenum(),0,dbgScope));
     }
 
@@ -1354,21 +1507,18 @@ void FnSymbol::codegenDef() {
     info->lvt->removeLayer();
     if( developer ) {
       bool problems = false;
-#if HAVE_LLVM_VER >= 35
       // Debug info generation creates metadata nodes that won't be
       // finished until the whole codegen is complete and finalize
       // is called.
       if( ! debug_info )
         problems = llvm::verifyFunction(*func, &llvm::errs());
-#else
-      problems = llvm::verifyFunction(*func, llvm::PrintMessageAction);
-#endif
       if( problems ) {
         INT_FATAL("LLVM function verification failed");
       }
     }
 
-    if(llvmPrintIrStageNum == llvmStageNum::NONE
+    if((llvmPrintIrStageNum == llvmStageNum::NONE ||
+        llvmPrintIrStageNum == llvmStageNum::EVERY)
             && strcmp(llvmPrintIrName, name) == 0)
         printLlvmIr(func, llvmStageNum::NONE);
 
@@ -1380,7 +1530,8 @@ void FnSymbol::codegenDef() {
     // (note, in particular, the default pass manager's
     //  populateFunctionPassManager does not include vectorization)
     info->FPM_postgen->run(*func);
-    if(llvmPrintIrStageNum == llvmStageNum::BASIC
+    if((llvmPrintIrStageNum == llvmStageNum::BASIC ||
+        llvmPrintIrStageNum == llvmStageNum::EVERY)
             && strcmp(llvmPrintIrName, name) == 0)
         printLlvmIr(func, llvmStageNum::BASIC);
 #endif

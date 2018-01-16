@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -486,49 +486,71 @@ static void processImportExprs() {
   }
 }
 
-/************************************* | **************************************
-*                                                                             *
-*                                                                             *
-*                                                                             *
-************************************** | *************************************/
+/************************************* | *************************************/
+
+static void handleLoopStmtGoto(LoopStmt* loop, GotoStmt* gs) {
+  if (gs->gotoTag == GOTO_BREAK) {
+    gs->label->replace(new SymExpr(loop->breakLabelGet()));
+
+  } else if (gs->gotoTag == GOTO_CONTINUE) {
+    gs->label->replace(new SymExpr(loop->continueLabelGet()));
+
+  } else {
+    INT_FATAL(gs, "unexpected goto type");
+  }
+}
+
+static void handleForallGoto(ForallStmt* forall, GotoStmt* gs) {
+  if (gs->gotoTag == GOTO_BREAK) {
+    USR_FATAL_CONT(gs, "'break' is not allowed in forall loops");
+    USR_PRINT(forall, "the enclosing forall loop is here");
+
+  } else if (gs->gotoTag == GOTO_CONTINUE) {
+    gs->label->replace(new SymExpr(forall->continueLabel()));
+
+  } else {
+    INT_FATAL(gs, "unexpected goto type");
+  }
+}
 
 static void resolveGotoLabels() {
   forv_Vec(GotoStmt, gs, gGotoStmts) {
     SET_LINENO(gs);
 
-    LoopStmt* loop = NULL;
+    Stmt* loop = NULL;
 
     if (isSymExpr(gs->label) == true) {
-      loop = LoopStmt::findEnclosingLoop(gs);
+      loop = LoopStmt::findEnclosingLoopOrForall(gs);
 
       if (loop == NULL) {
-        USR_FATAL(gs, "break or continue is not in a loop");
+        USR_FATAL_CONT(gs, "break or continue is not in a loop");
       }
 
     } else if (UnresolvedSymExpr* label = toUnresolvedSymExpr(gs->label)) {
       loop = LoopStmt::findEnclosingLoop(gs, label->unresolved);
 
       if (loop == NULL) {
-        USR_FATAL(gs, "bad label on break or continue");
+        USR_FATAL_CONT(gs, "bad label '%s' on break or continue",
+                       label->unresolved);
       }
     }
 
-    if (gs->gotoTag == GOTO_BREAK) {
-      gs->label->replace(new SymExpr(loop->breakLabelGet()));
+    if (loop == NULL) {
+      // Handled above as needed. Nothing to do here.
 
-    } else if (gs->gotoTag == GOTO_CONTINUE) {
-      gs->label->replace(new SymExpr(loop->continueLabelGet()));
+    } else if (LoopStmt* loopS = toLoopStmt(loop)) {
+      handleLoopStmtGoto(loopS, gs);
+
+    } else if (ForallStmt* forall = toForallStmt(loop)) {
+      handleForallGoto(forall, gs);
 
     } else {
-      INT_FATAL(gs, "unexpected goto type");
+      INT_ASSERT(false); // should not have any other loops here
     }
   }
 }
 
-/************************************* | **************************************
-*                                                                             *
-*                                                                             *
-************************************** | *************************************/
+/************************************* | *************************************/
 
 static void resolveUnresolvedSymExpr(UnresolvedSymExpr* usymExpr);
 
@@ -622,7 +644,7 @@ static void resolveUnresolvedSymExpr(UnresolvedSymExpr* usymExpr) {
       updateMethod(usymExpr, sym, symExpr);
 
     // sjd: stopgap to avoid shadowing variables or functions by methods
-    } else if (fn->hasFlag(FLAG_METHOD) == true) {
+    } else if (fn->isMethod() == true) {
       updateMethod(usymExpr);
 
     // handle function call without parentheses
@@ -659,7 +681,8 @@ static void resolveUnresolvedSymExpr(UnresolvedSymExpr* usymExpr) {
     updateMethod(usymExpr);
 
 #ifdef HAVE_LLVM
-    if (tryCResolve(usymExpr->getModule(), name) == true) {
+    if (gExternBlockStmts.size() > 0 &&
+        tryCResolve(usymExpr->getModule(), name) == true) {
       // Try resolution again since the symbol should exist now
       resolveUnresolvedSymExpr(usymExpr);
     }
@@ -801,33 +824,42 @@ static int computeNestedDepth(const char* name, Type* type) {
 // isMethodName returns true iff 'name' names a method of 'type'
 //
 static bool isMethodName(const char* name, Type* type) {
+  bool retval = false;
+
   if (strcmp(name, type->symbol->name) == 0) {
-    return false;
-  }
+    retval = false;
 
-  forv_Vec(Symbol, method, type->methods) {
-    if (method != NULL && strcmp(name, method->name) == 0) {
-      return true;
+  } else {
+    forv_Vec(Symbol, method, type->methods) {
+      if (method != NULL && strcmp(name, method->name) == 0) {
+        retval = true;
+        break;
+      }
     }
-  }
 
-  forv_Vec(Type, pt, type->dispatchParents) {
-    if (isMethodName(name, pt) == true) {
-      return true;
-    }
-  }
+    if (retval == false) {
+      if (AggregateType* at = toAggregateType(type)) {
+        Type* outerType = at->symbol->defPoint->parentSymbol->type;
 
-  if (AggregateType* ct = toAggregateType(type)) {
-    Type* outerType = ct->symbol->defPoint->parentSymbol->type;
+        forv_Vec(AggregateType, pt, at->dispatchParents) {
+          if (isMethodName(name, pt) == true) {
+            retval = true;
+            break;
+          }
+        }
 
-    if (AggregateType* outer = toAggregateType(outerType)) {
-      if (isMethodName(name, outer) == true) {
-        return true;
+        if (retval == false) {
+          if (AggregateType* outer = toAggregateType(outerType)) {
+            if (isMethodName(name, outer) == true) {
+              retval = true;
+            }
+          }
+        }
       }
     }
   }
 
-  return false;
+  return retval;
 }
 
 
@@ -836,23 +868,32 @@ static bool isMethodName(const char* name, Type* type) {
 // excluding methods of an outer type
 //
 static bool isMethodNameLocal(const char* name, Type* type) {
+  bool retval = false;
+
   if (strcmp(name, type->symbol->name) == 0) {
-    return false;
-  }
+    retval = false;
 
-  forv_Vec(Symbol, method, type->methods) {
-    if (method != NULL && strcmp(name, method->name) == 0) {
-      return true;
+  } else {
+    forv_Vec(Symbol, method, type->methods) {
+      if (method != NULL && strcmp(name, method->name) == 0) {
+        retval = true;
+        break;
+      }
+    }
+
+    if (retval == false) {
+      if (AggregateType* at = toAggregateType(type)) {
+        forv_Vec(AggregateType, pt, at->dispatchParents) {
+          if (isMethodName(name, pt) == true) {
+            retval = true;
+            break;
+          }
+        }
+      }
     }
   }
 
-  forv_Vec(Type, pt, type->dispatchParents) {
-    if (isMethodName(name, pt) == true) {
-      return true;
-    }
-  }
-
-  return false;
+  return retval;
 }
 
 
@@ -1018,7 +1059,7 @@ static bool tryCResolve(ModuleSymbol*                     module,
   if (module == NULL) {
     return false;
 
-  } else if (llvm_small_set_insert(visited, module)) {
+  } else if (visited.insert(module).second) {
     // visited.insert(module)) {
     // we added it to the set, so continue.
 
@@ -1164,6 +1205,23 @@ static void lookup(const char*           name,
 
                    std::vector<Symbol*>& symbols);
 
+// Show what symbols from 'symbols' conflict with the given 'sym'.
+static void printConflictingSymbols(std::vector<Symbol*>& symbols, Symbol* sym)
+{
+  Symbol* sampleFunction = NULL;
+  for_vector(Symbol, another, symbols) if (another != sym)
+  {
+    if (isFnSymbol(another))
+      sampleFunction = another;
+    else
+      USR_PRINT(another, "also defined here", another->name);
+  }
+
+  if (sampleFunction)
+    USR_PRINT(sampleFunction,
+              "also defined as a function here (and possibly elsewhere)");
+}
+
 // Given a name and a calling context, determine the symbol referred to
 // by that name in the context of that call
 Symbol* lookup(const char* name, BaseAST* context) {
@@ -1186,7 +1244,9 @@ Symbol* lookup(const char* name, BaseAST* context) {
 
     for_vector(Symbol, sym, symbols) {
       if (isFnSymbol(sym) == false) {
-        USR_FATAL_CONT(sym, "Symbol %s multiply defined", name);
+        USR_FATAL_CONT(sym, "symbol %s is multiply defined", name);
+        printConflictingSymbols(symbols, sym);
+        break;
       }
     }
 
@@ -1409,13 +1469,13 @@ static Symbol* inSymbolTable(const char* name, BaseAST* ast) {
 
   if (ResolveScope* scope = ResolveScope::getScopeFor(ast)) {
     if (Symbol* sym = scope->lookupNameLocally(name)) {
-      if (sym->hasFlag(FLAG_METHOD) == false) {
-        retval = sym;
-
-      } else if (FnSymbol* fn = toFnSymbol(sym)) {
-        if (methodMatched(ast, fn) == true) {
+      if (FnSymbol* fn = toFnSymbol(sym)) {
+        if (fn->isMethod() == false || methodMatched(ast, fn) == true) {
           retval = sym;
         }
+
+      } else {
+        retval = sym;
       }
     }
   }
@@ -1491,36 +1551,44 @@ static bool methodMatched(BaseAST* scope, FnSymbol* method) {
 // This function uses the same methodology as isMethodName but returns the
 // symbol found instead of just a boolean
 static FnSymbol* getMethod(const char* name, Type* type) {
+  FnSymbol* retval = NULL;
+
   if (strcmp(name, type->symbol->name) == 0) {
-    return NULL;
-  }
+    retval = NULL;
 
-  // Looks for name in methods defined directly on this type
-  forv_Vec(FnSymbol, method, type->methods) {
-    if (method != NULL && strcmp(name, method->name) == 0) {
-      return method;
+  } else {
+    // Looks for name in methods defined directly on this type
+    forv_Vec(FnSymbol, method, type->methods) {
+      if (method != NULL && strcmp(name, method->name) == 0) {
+        retval = method;
+      }
     }
-  }
 
-  // Looks for name in methods defined on parent types
-  forv_Vec(Type, pt, type->dispatchParents) {
-    if (FnSymbol* sym = getMethod(name, pt)) {
-      return sym;
-    }
-  }
+    if (retval == NULL) {
+      if (AggregateType* at = toAggregateType(type)) {
+        Type* outerType = at->symbol->defPoint->parentSymbol->type;
 
-  // Looks for name in types wrapping this type definition
-  if (AggregateType* ct = toAggregateType(type)) {
-    Type *outerType = ct->symbol->defPoint->parentSymbol->type;
+        // Looks for name in methods defined on parent types
+        forv_Vec(AggregateType, pt, at->dispatchParents) {
+          if (FnSymbol* sym = getMethod(name, pt)) {
+            retval = sym;
+            break;
+          }
+        }
 
-    if (AggregateType* outer = toAggregateType(outerType)) {
-      if (FnSymbol* sym = getMethod(name, outer)) {
-        return sym;
+        // Looks for name in types wrapping this type definition
+        if (retval == NULL) {
+          if (AggregateType* outer = toAggregateType(outerType)) {
+            if (FnSymbol* sym = getMethod(name, outer)) {
+              retval = sym;
+            }
+          }
+        }
       }
     }
   }
 
-  return NULL;
+  return retval;
 }
 
 static void buildBreadthFirstModuleList(Vec<UseStmt*>* modules) {

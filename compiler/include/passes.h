@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -95,12 +95,14 @@ void checkReturnTypesHaveRefTypes();
 
 // buildDefaultFunctions.cpp
 void buildDefaultDestructor(AggregateType* ct);
+void buildNearScopeEnumFunctions(EnumType* et);
+void buildFarScopeEnumFunctions(EnumType* et);
 
 // createTaskFunctions.cpp -> implementForallIntents.cpp
 extern Symbol* markPruned;
 extern Symbol* markUnspecified;
 void replaceVarUses(Expr* topAst, SymbolMap& vars);
-void pruneThisArg(Symbol* parent, SymbolMap& uses);
+void pruneOuterVars(Symbol* parent, SymbolMap& uses);
 
 // deadCodeElimination.cpp
 void deadBlockElimination();
@@ -118,6 +120,7 @@ void normalize(Expr* expr);
 // parallel.cpp
 Type* getOrMakeRefTypeDuringCodegen(Type* type);
 Type* getOrMakeWideTypeDuringCodegen(Type* refType);
+CallExpr* findDownEndCount(FnSymbol* fn);
 
 // type.cpp
 void initForTaskIntents();

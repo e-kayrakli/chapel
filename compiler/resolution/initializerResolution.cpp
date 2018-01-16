@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -29,6 +29,7 @@
 #include "passes.h"
 #include "resolution.h"
 #include "ResolutionCandidate.h"
+#include "resolveFunction.h"
 #include "stmt.h"
 #include "stringutil.h"
 #include "symbol.h"
@@ -42,7 +43,7 @@ static void gatherInitCandidates(CallInfo&                  info,
                                  Vec<FnSymbol*>&            visibleFns,
                                  Vec<ResolutionCandidate*>& candidates);
 
-static void resolveMatch(FnSymbol* fn);
+static void resolveInitializerMatch(FnSymbol* fn);
 
 static void makeRecordInitWrappers(CallExpr* call);
 
@@ -53,34 +54,51 @@ static void makeRecordInitWrappers(CallExpr* call);
 ************************************** | *************************************/
 
 FnSymbol* resolveInitializer(CallExpr* call) {
+  FnSymbol* retval = NULL;
+
   callStack.add(call);
 
   resolveInitCall(call);
 
-  INT_ASSERT(call->isResolved());
+  // call->isResolved() is sometimes false on this.init() calls for generic
+  // records, as it might be a partial call that needs to get adjusted in order
+  // to resolve
+  if (call->isResolved()) {
 
-  resolveMatch(call->resolvedFunction());
+    resolveInitializerMatch(call->resolvedFunction());
 
-  if (isGenericRecord(call->get(2)->typeInfo())) {
-    NamedExpr* named   = toNamedExpr(call->get(2));
-    INT_ASSERT(named);
+    if (isGenericRecord(call->get(2)->typeInfo())) {
+      SymExpr* namedSe = NULL;
 
-    SymExpr*   namedSe = toSymExpr(named->actual);
-    INT_ASSERT(namedSe);
+      // There are two cases for generic records
+      if (NamedExpr* named = toNamedExpr(call->get(2))) {
+        // Case 1) this is the outermost init call
+        // This means that the second argument to the call will be named
+        namedSe = toSymExpr(named->actual);
 
-    Symbol*    sym     = namedSe->symbol();
+      } else if (isSymExpr(call->get(2))) {
+        // Case 2) this is a this.init() call in the initializer.
+        // This means that the second argument to the call will not be named.
+        namedSe = toSymExpr(call->get(2));
+      }
 
-    sym->type = call->resolvedFunction()->_this->type;
+      Symbol* sym = namedSe->symbol();
 
-    if (sym->hasFlag(FLAG_DELAY_GENERIC_EXPANSION))
-      sym->removeFlag(FLAG_DELAY_GENERIC_EXPANSION);
+      sym->type = call->resolvedFunction()->_this->type;
 
-    makeRecordInitWrappers(call);
+      if (sym->hasFlag(FLAG_DELAY_GENERIC_EXPANSION) == true) {
+        sym->removeFlag(FLAG_DELAY_GENERIC_EXPANSION);
+      }
+
+      makeRecordInitWrappers(call);
+    }
+
+    retval = call->resolvedFunction();
   }
 
   callStack.pop();
 
-  return call->resolvedFunction();
+  return retval;
 }
 
 /************************************* | **************************************
@@ -98,10 +116,7 @@ static void resolveInitCall(CallExpr* call) {
     gdbShouldBreakHere();
   }
 
-  if (info.isNotWellFormed(call) == true) {
-    info.haltNotWellFormed();
-
-  } else {
+  if (info.isWellFormed(call) == true) {
     Vec<FnSymbol*>            visibleFns;
     Vec<ResolutionCandidate*> candidates;
     ResolutionCandidate*      best        = NULL;
@@ -144,6 +159,9 @@ static void resolveInitCall(CallExpr* call) {
     forv_Vec(ResolutionCandidate*, candidate, candidates) {
       delete candidate;
     }
+
+  } else {
+    info.haltNotWellFormed();
   }
 }
 
@@ -153,15 +171,14 @@ static void resolveInitCall(CallExpr* call) {
 *                                                                             *
 ************************************** | *************************************/
 
-static void      doGatherInitCandidates(CallInfo&                  info,
-                                        Vec<FnSymbol*>&            visibleFns,
-                                        bool                       generated,
-                                        Vec<ResolutionCandidate*>& candidates);
+static void doGatherInitCandidates(CallInfo&                  info,
+                                   Vec<FnSymbol*>&            visibleFns,
+                                   bool                       generated,
+                                   Vec<ResolutionCandidate*>& candidates);
 
-static void      filterInitCandidate(CallInfo&                  info,
-                                     FnSymbol*                  fn,
-                                     Vec<ResolutionCandidate*>& candidates);
-
+static void filterInitCandidate(CallInfo&                  info,
+                                FnSymbol*                  fn,
+                                Vec<ResolutionCandidate*>& candidates);
 
 static void gatherInitCandidates(CallInfo&                  info,
                                  Vec<FnSymbol*>&            visibleFns,
@@ -237,67 +254,77 @@ static void filterInitCandidate(CallInfo&                  info,
 
 /************************************* | **************************************
 *                                                                             *
-* Copied from resolveFns(FnSymbol* fn) in functionResolution.                 *
+* Copied from resolveFunction(FnSymbol* fn) in functionResolution.            *
 *                                                                             *
 * Removed code for extern functions (since I don't think it will apply),      *
 * iterators, type constructors, and FLAG_PRIVATIZED_CLASS.                    *
 *                                                                             *
 ************************************** | *************************************/
 
-static void resolveMatch(FnSymbol* fn) {
-  if (fn->isResolved() == true) {
-    return;
-  }
+static bool resolveInitializerBody(FnSymbol* fn);
 
-  if (fn->id == breakOnResolveID) {
-    printf("breaking on resolve fn:\n");
-    print_view(fn);
-    gdbShouldBreakHere();
+static void resolveInitializerMatch(FnSymbol* fn) {
+  if (fn->isResolved() == false) {
+    AggregateType* at = toAggregateType(fn->_this->type);
+
+    if (fn->id == breakOnResolveID) {
+      printf("breaking on resolve fn:\n");
+      print_view(fn);
+      gdbShouldBreakHere();
+    }
+
+    insertFormalTemps(fn);
+
+    if (at->isRecord() == true) {
+      at->setFirstGenericField();
+
+      resolveInitializerBody(fn);
+
+    } else if (at->isClass() == true) {
+      AggregateType* parent = at->dispatchParents.v[0];
+
+      if (parent->isGeneric() == false) {
+        if (at->setFirstGenericField() == false) {
+          INT_ASSERT(false);
+        }
+
+      } else {
+        at->setFirstGenericField();
+      }
+
+      resolveInitializerBody(fn);
+
+      buildClassAllocator(fn);
+
+    } else {
+      INT_ASSERT(false);
+    }
   }
+}
+
+static bool resolveInitializerBody(FnSymbol* fn) {
+  bool retval = false;
 
   fn->addFlag(FLAG_RESOLVED);
 
-  insertFormalTemps(fn);
-
-  bool wasGeneric = fn->_this->type->symbol->hasFlag(FLAG_GENERIC);
-
-  if (wasGeneric) {
-    AggregateType* at  = toAggregateType(fn->_this->type);
-    INT_ASSERT(at);
-
-    bool           res = at->setNextGenericField();
-    if (at->dispatchParents.v[0] == NULL ||
-        at->dispatchParents.v[0]->symbol->hasFlag(FLAG_GENERIC) == false) {
-      INT_ASSERT(res);
-    }
-  }
-
   resolveBlockStmt(fn->body);
 
-  if (wasGeneric == true && isClass(fn->_this->type) == true) {
-    FnSymbol* classAlloc = buildClassAllocator(fn);
+  if (tryFailure == false) {
+    resolveReturnType(fn);
 
-    normalize(classAlloc);
-  }
+    toAggregateType(fn->_this->type)->initializerResolved = true;
 
-  if (tryFailure) {
+    insertAndResolveCasts(fn);
+
+    ensureInMethodList(fn);
+
+    retval = true;
+
+  } else {
     fn->removeFlag(FLAG_RESOLVED);
-    return;
   }
 
-  resolveReturnType(fn);
-
-  toAggregateType(fn->_this->type)->initializerResolved = true;
-
-  //
-  // insert casts as necessary
-  //
-  insertAndResolveCasts(fn);
-
-  //
-  // make sure methods are in the methods list
-  //
-  ensureInMethodList(fn);
+  return retval;
 }
 
 /************************************* | **************************************
@@ -319,24 +346,26 @@ static void makeActualsVector(const CallInfo&          info,
                               std::vector<ArgSymbol*>& actualIdxToFormal);
 
 static void makeRecordInitWrappers(CallExpr* call) {
-  CallInfo                info;
-  std::vector<ArgSymbol*> actualIdxToFormal;
-  FnSymbol*               wrap = NULL;
+  CallInfo info;
 
-  if (info.isNotWellFormed(call) == true) {
+  if (info.isWellFormed(call) == true) {
+    std::vector<ArgSymbol*> actualIdxToFormal;
+    FnSymbol*               wrap = NULL;
+
+    makeActualsVector(info, actualIdxToFormal);
+
+    wrap = wrapAndCleanUpActuals(call->resolvedFunction(),
+                                 info,
+                                 actualIdxToFormal,
+                                 true);
+
+    call->baseExpr->replace(new SymExpr(wrap));
+
+    resolveFunction(wrap);
+
+  } else {
     info.haltNotWellFormed();
   }
-
-  makeActualsVector(info, actualIdxToFormal);
-
-  wrap = wrapAndCleanUpActuals(call->resolvedFunction(),
-                               info,
-                               &actualIdxToFormal,
-                               true);
-
-  call->baseExpr->replace(new SymExpr(wrap));
-
-  resolveFns(wrap);
 }
 
 // Modified version of computeActualFormalAlignment to only populate the

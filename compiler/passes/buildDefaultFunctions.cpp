@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -34,7 +34,8 @@
 static bool mainReturnsInt;
 
 static void build_chpl_entry_points();
-static void build_accessor(AggregateType* ct, Symbol* field, bool setter);
+static void build_accessor(AggregateType* ct, Symbol* field,
+                           bool setter, bool typeMethod);
 static void build_accessors(AggregateType* ct, Symbol* field);
 
 static void buildDefaultOfFunction(AggregateType* ct);
@@ -84,6 +85,8 @@ void buildDefaultFunctions() {
           ct->buildDefaultInitializer();
         }
 
+        ct->buildCopyInitializer();
+
         if (!ct->symbol->hasFlag(FLAG_REF)) {
           buildDefaultDestructor(ct);
         }
@@ -121,13 +124,8 @@ void buildDefaultFunctions() {
         }
 
       } else if (EnumType* et = toEnumType(type->type)) {
-        buildStringCastFunction(et);
-
-        build_enum_cast_function(et);
-        build_enum_assignment_function(et);
-        build_enum_first_function(et);
-        build_enum_size_function(et);
-        build_enum_enumerate_function(et);
+        buildNearScopeEnumFunctions(et);
+        buildFarScopeEnumFunctions(et);
 
       } else {
         // The type is a simple type.
@@ -298,12 +296,8 @@ static void fixup_accessor(AggregateType* ct, Symbol *field,
 
 // This function builds the getter or the setter, depending on the
 // 'setter' argument.
-static void build_accessor(AggregateType* ct, Symbol* field, bool setter) {
-  // Only build a 'ref' version for records and classes.
-  // Unions need a special getter and setter.
-  if (isUnion(ct) == false && setter == false)
-    return;
-
+static void build_accessor(AggregateType* ct, Symbol* field,
+                           bool setter, bool typeMethod) {
   const bool fieldIsConst = field->hasFlag(FLAG_CONST);
   const bool recordLike   = ct->isRecord() || ct->isUnion();
   FnSymbol*  fn           = new FnSymbol(field->name);
@@ -316,15 +310,22 @@ static void build_accessor(AggregateType* ct, Symbol* field, bool setter) {
 
   fn->addFlag(FLAG_FIELD_ACCESSOR);
 
-  if (fieldIsConst)
-    fn->addFlag(FLAG_REF_TO_CONST);
-  else if (recordLike)
-    fn->addFlag(FLAG_REF_TO_CONST_WHEN_CONST_THIS);
+  if (!typeMethod) {
+    if (fieldIsConst)
+      fn->addFlag(FLAG_REF_TO_CONST);
+    else if (recordLike)
+      fn->addFlag(FLAG_REF_TO_CONST_WHEN_CONST_THIS);
+  }
 
   fn->insertFormalAtTail(new ArgSymbol(INTENT_BLANK, "_mt", dtMethodToken));
-  fn->addFlag(FLAG_METHOD);
+
+  fn->setMethod(true);
 
   ArgSymbol* _this = new ArgSymbol(INTENT_BLANK, "this", ct);
+
+  if (typeMethod) {
+    _this->addFlag(FLAG_TYPE_VARIABLE);
+  }
 
   _this->addFlag(FLAG_ARG_THIS);
   fn->insertFormalAtTail(_this);
@@ -335,15 +336,21 @@ static void build_accessor(AggregateType* ct, Symbol* field, bool setter) {
   } else if (field->hasFlag(FLAG_TYPE_VARIABLE)) {
     fn->retTag = RET_TYPE;
 
-  } else if (field->hasFlag(FLAG_SUPER_CLASS)) {
-    fn->retTag = RET_VALUE;
   } else {
-    if (fieldIsConst || !setter)
-      fn->retTag = RET_CONST_REF;
-    else {
-      fn->retTag = RET_REF;
-      if (recordLike) {
-        _this->intent = INTENT_REF;
+    // Can't access the field if we don't return param/type.
+    // This would be different if we added something like C++ static fields
+    INT_ASSERT(!typeMethod);
+
+    if (field->hasFlag(FLAG_SUPER_CLASS)) {
+      fn->retTag = RET_VALUE;
+    } else {
+      if (fieldIsConst || !setter)
+        fn->retTag = RET_CONST_REF;
+      else {
+        fn->retTag = RET_REF;
+        if (recordLike) {
+          _this->intent = INTENT_REF;
+        }
       }
     }
   }
@@ -395,21 +402,27 @@ static void build_accessor(AggregateType* ct, Symbol* field, bool setter) {
 
   ct->methods.add(fn);
 
-  fn->addFlag(FLAG_METHOD);
+  fn->setMethod(true);
+
   fn->addFlag(FLAG_METHOD_PRIMARY);
+
   fn->cname = astr("chpl_get_", ct->symbol->cname, "_", fn->cname);
+
   fn->addFlag(FLAG_NO_PARENS);
+
   fn->_this = _this;
 }
 
 // Getter and setter functions are provided by the compiler if not supplied by
 // the user.
 // These functions have the same binding strength as if they were user-defined.
-// This function calls build_accessor twice, passing
-// true (to build the setter) and false (to build the getter).
+// This function calls build_accessor multiple times to create appropriate
+// accessors.
 static void build_accessors(AggregateType* ct, Symbol *field) {
   const bool fieldIsConst = field->hasFlag(FLAG_CONST);
   const bool recordLike = ct->isRecord() || ct->isUnion();
+  const bool fieldTypeOrParam = field->isParameter() ||
+                                field->hasFlag(FLAG_TYPE_VARIABLE);
 
   FnSymbol *setter = function_exists(field->name,
                                      dtMethodToken, ct, FIND_REF);
@@ -423,8 +436,22 @@ static void build_accessors(AggregateType* ct, Symbol *field) {
     return;
 
   // Otherwise, build compiler-default getter and setter.
-  build_accessor(ct, field, true);
-  build_accessor(ct, field, false);
+
+  if (isUnion(ct)) {
+    // Unions need a special getter and setter.
+    build_accessor(ct, field, /* setter? */ false, /* type method? */ false);
+    build_accessor(ct, field, /* setter? */ true,  /* type method? */ false);
+  } else {
+    // Otherwise, only build one version for records and classes.
+    // This is normally the 'ref' version.
+    build_accessor(ct, field,
+                   /* setter? */ !fieldIsConst, /* type method? */ false);
+  }
+
+  // If the field is type/param, add a type-method accessor.
+  if (fieldTypeOrParam) {
+    build_accessor(ct, field, /* getter? */ false, /* type method? */ true);
+  }
 }
 
 static FnSymbol* chpl_gen_main_exists() {
@@ -697,16 +724,38 @@ static void build_record_inequality_function(AggregateType* ct) {
   normalize(fn);
 }
 
+// Builds default enum functions that are defined in the scope in which the
+// enum type is defined
+void buildNearScopeEnumFunctions(EnumType* et) {
+  build_enum_assignment_function(et);
+  build_enum_enumerate_function(et);
+}
+
+// Builds default enum functions that are defined outside of the scope in which
+// the enum type is defined
+// It is necessary to have this separated out, because such functions are not
+// automatically created when the EnumType is copied.
+void buildFarScopeEnumFunctions(EnumType* et) {
+  buildStringCastFunction(et);
+
+  build_enum_cast_function(et);
+  build_enum_first_function(et);
+  build_enum_size_function(et);
+}
+
 
 static void build_enum_size_function(EnumType* et) {
   if (function_exists("size", et))
     return;
   // Build a function that returns the length of the enum specified
   FnSymbol* fn = new FnSymbol("size");
+
   fn->addFlag(FLAG_COMPILER_GENERATED);
   fn->addFlag(FLAG_LAST_RESORT);
   fn->addFlag(FLAG_NO_PARENS);
-  fn->addFlag(FLAG_METHOD);
+
+  fn->setMethod(true);
+
   fn->insertFormalAtTail(new ArgSymbol(INTENT_BLANK, "_mt", dtMethodToken));
 
   fn->_this = new ArgSymbol(INTENT_BLANK, "this", dtAny);
@@ -716,7 +765,7 @@ static void build_enum_size_function(EnumType* et) {
 
   fn->insertFormalAtTail(fn->_this);
 
-  fn->retTag = RET_VALUE;
+  fn->retTag = RET_PARAM;
   //use this function only where the argument is an enum
   fn->where = new BlockStmt(new CallExpr("==", fn->_this, et->symbol));
 
@@ -730,6 +779,7 @@ static void build_enum_size_function(EnumType* et) {
   reset_ast_loc(fnDef, et->symbol);
 
   normalize(fn);
+  fn->tagIfGeneric();
 }
 
 
@@ -770,6 +820,7 @@ static void build_enum_first_function(EnumType* et) {
   reset_ast_loc(fnDef, et->symbol);
 
   normalize(fn);
+  fn->tagIfGeneric();
 }
 
 static void build_enum_enumerate_function(EnumType* et) {
@@ -795,6 +846,7 @@ static void build_enum_enumerate_function(EnumType* et) {
   fn->insertAtTail(new CallExpr(PRIM_RETURN, call));
 
   normalize(fn);
+  fn->tagIfGeneric();
 }
 
 static void build_enum_cast_function(EnumType* et) {
@@ -845,6 +897,8 @@ static void build_enum_cast_function(EnumType* et) {
   reset_ast_loc(def, et->symbol);
   normalize(fn);
 
+  fn->tagIfGeneric();
+
   // string to enumerated type cast function
   fn = new FnSymbol(astr_cast);
   fn->addFlag(FLAG_COMPILER_GENERATED);
@@ -854,6 +908,14 @@ static void build_enum_cast_function(EnumType* et) {
   arg2 = new ArgSymbol(INTENT_BLANK, "_arg2", dtString);
   fn->insertFormalAtTail(arg1);
   fn->insertFormalAtTail(arg2);
+
+  // First, handle error case of trying to convert an empty string
+  fn->insertAtTail(new CondStmt(new CallExpr(buildDotExpr(arg2,
+                                                          "isEmptyString"),
+                                             new CallExpr(PRIM_ACTUALS_LIST)),
+                                new CallExpr(PRIM_RT_ERROR,
+                                             new_CStringSymbol(astr("Empty string when converting from string to ",
+                                                                    et->symbol->name)))));
 
   CondStmt* cond = NULL;
   for_enums(constant, et) {
@@ -889,6 +951,7 @@ static void build_enum_cast_function(EnumType* et) {
   baseModule->block->insertAtTail(def);
   reset_ast_loc(def, et->symbol);
   normalize(fn);
+  fn->tagIfGeneric();
 }
 
 
@@ -1489,22 +1552,27 @@ static void buildRecordQueryVarField(FnSymbol*  fn,
 ************************************** | *************************************/
 
 static bool inheritsFromError(Type* t) {
-  if (t == dtError)
-    return true;
+  bool retval = false;
 
-  bool ret = false;
+  if (t == dtError) {
+    retval = true;
 
-  forv_Vec(Type, parent, t->dispatchParents) {
-    ret = ret || inheritsFromError(parent);
+  } else if (AggregateType* at = toAggregateType(t)) {
+    forv_Vec(AggregateType, parent, at->dispatchParents) {
+      if (inheritsFromError(parent) == true) {
+        retval = true;
+        break;
+      }
+    }
   }
 
-  return ret;
+  return retval;
 }
 
 static void buildDefaultReadWriteFunctions(AggregateType* ct) {
-  bool hasReadWriteThis = false;
-  bool hasReadThis = false;
-  bool hasWriteThis = false;
+  bool hasReadWriteThis         = false;
+  bool hasReadThis              = false;
+  bool hasWriteThis             = false;
   bool makeReadThisAndWriteThis = true;
 
   //
@@ -1536,73 +1604,106 @@ static void buildDefaultReadWriteFunctions(AggregateType* ct) {
   // We'll make a writeThis and a readThis if neither exist.
   // If only one exists, we leave just one (as some types
   // can be written but not read, for example).
-  if (hasWriteThis || hasReadThis)
+  if (hasWriteThis || hasReadThis) {
     makeReadThisAndWriteThis = false;
+  }
 
   // Make writeThis when appropriate
-  if ( makeReadThisAndWriteThis && ! hasWriteThis ) {
+  if (makeReadThisAndWriteThis == true && hasWriteThis == false) {
     FnSymbol* fn = new FnSymbol("writeThis");
+
     fn->addFlag(FLAG_COMPILER_GENERATED);
     fn->addFlag(FLAG_LAST_RESORT);
     fn->addFlag(FLAG_INLINE);
+
     fn->cname = astr("_auto_", ct->symbol->name, "_write");
     fn->_this = new ArgSymbol(INTENT_BLANK, "this", ct);
     fn->_this->addFlag(FLAG_ARG_THIS);
+
     ArgSymbol* fileArg = new ArgSymbol(INTENT_BLANK, "f", dtAny);
+
     fileArg->addFlag(FLAG_MARKED_GENERIC);
+
+    fn->setMethod(true);
+
     fn->insertFormalAtTail(new ArgSymbol(INTENT_BLANK, "_mt", dtMethodToken));
-    fn->addFlag(FLAG_METHOD);
     fn->insertFormalAtTail(fn->_this);
     fn->insertFormalAtTail(fileArg);
 
     fn->retType = dtVoid;
 
-    if( hasReadWriteThis ) {
+    if (hasReadWriteThis == true) {
       Expr* dotReadWriteThis = buildDotExpr(fn->_this, "readWriteThis");
+
       fn->insertAtTail(new CallExpr(dotReadWriteThis, fileArg));
+
     } else {
-      fn->insertAtTail(new CallExpr("writeThisDefaultImpl", fileArg, fn->_this));
+      fn->insertAtTail(new CallExpr("writeThisDefaultImpl",
+                                    fileArg,
+                                    fn->_this));
     }
 
     DefExpr* def = new DefExpr(fn);
+
     ct->symbol->defPoint->insertBefore(def);
-    fn->addFlag(FLAG_METHOD);
+
+    fn->setMethod(true);
     fn->addFlag(FLAG_METHOD_PRIMARY);
+
     reset_ast_loc(def, ct->symbol);
+
     normalize(fn);
+
     ct->methods.add(fn);
   }
 
   // Make readThis when appropriate
-  if ( makeReadThisAndWriteThis && ! hasReadThis ) {
+  if (makeReadThisAndWriteThis == true && hasReadThis == false) {
     FnSymbol* fn = new FnSymbol("readThis");
+
     fn->addFlag(FLAG_COMPILER_GENERATED);
     fn->addFlag(FLAG_LAST_RESORT);
     fn->addFlag(FLAG_INLINE);
+
     fn->cname = astr("_auto_", ct->symbol->name, "_read");
+
     fn->_this = new ArgSymbol(INTENT_BLANK, "this", ct);
     fn->_this->addFlag(FLAG_ARG_THIS);
+
     ArgSymbol* fileArg = new ArgSymbol(INTENT_BLANK, "f", dtAny);
+
     fileArg->addFlag(FLAG_MARKED_GENERIC);
+
+    fn->setMethod(true);
+
     fn->insertFormalAtTail(new ArgSymbol(INTENT_BLANK, "_mt", dtMethodToken));
-    fn->addFlag(FLAG_METHOD);
     fn->insertFormalAtTail(fn->_this);
     fn->insertFormalAtTail(fileArg);
+
     fn->retType = dtVoid;
 
-    if( hasReadWriteThis ) {
+    if (hasReadWriteThis == true) {
       Expr* dotReadWriteThis = buildDotExpr(fn->_this, "readWriteThis");
+
       fn->insertAtTail(new CallExpr(dotReadWriteThis, fileArg));
+
     } else {
-      fn->insertAtTail(new CallExpr("readThisDefaultImpl", fileArg, fn->_this));
+      fn->insertAtTail(new CallExpr("readThisDefaultImpl",
+                                    fileArg,
+                                    fn->_this));
     }
 
     DefExpr* def = new DefExpr(fn);
+
     ct->symbol->defPoint->insertBefore(def);
-    fn->addFlag(FLAG_METHOD);
+
+    fn->setMethod(true);
     fn->addFlag(FLAG_METHOD_PRIMARY);
+
     reset_ast_loc(def, ct->symbol);
+
     normalize(fn);
+
     ct->methods.add(fn);
   }
 }
@@ -1639,34 +1740,45 @@ static void buildStringCastFunction(EnumType* et) {
   baseModule->block->insertAtTail(def);
   reset_ast_loc(def, et->symbol);
   normalize(fn);
+  fn->tagIfGeneric();
 }
 
 
 void buildDefaultDestructor(AggregateType* ct) {
-  if (function_exists("deinit", dtMethodToken, ct))
-    return;
+  if (function_exists("deinit", dtMethodToken, ct) == NULL) {
+    SET_LINENO(ct->symbol);
 
-  SET_LINENO(ct->symbol);
+    FnSymbol* fn = new FnSymbol("deinit");
 
-  FnSymbol* fn = new FnSymbol("deinit");
-  fn->addFlag(FLAG_COMPILER_GENERATED);
-  fn->addFlag(FLAG_LAST_RESORT);
-  fn->addFlag(FLAG_LAST_RESORT);
-  fn->addFlag(FLAG_DESTRUCTOR);
-  fn->addFlag(FLAG_INLINE);
+    fn->cname = astr("chpl__auto_destroy_", ct->symbol->name);
 
-  if (ct->symbol->hasFlag(FLAG_TUPLE))
-    gGenericTupleDestroy = fn;
+    fn->setMethod(true);
+    fn->addFlag(FLAG_METHOD_PRIMARY);
 
-  fn->cname = astr("chpl__auto_destroy_", ct->symbol->name);
-  fn->insertFormalAtTail(new ArgSymbol(INTENT_BLANK, "_mt", dtMethodToken));
-  fn->addFlag(FLAG_METHOD);
-  fn->_this = new ArgSymbol(INTENT_BLANK, "this", ct);
-  fn->_this->addFlag(FLAG_ARG_THIS);
-  fn->insertFormalAtTail(fn->_this);
-  fn->retType = dtVoid;
-  fn->insertAtTail(new CallExpr(PRIM_RETURN, gVoid));
-  ct->symbol->defPoint->insertBefore(new DefExpr(fn));
-  fn->addFlag(FLAG_METHOD_PRIMARY);
-  ct->methods.add(fn);
+    fn->addFlag(FLAG_COMPILER_GENERATED);
+    fn->addFlag(FLAG_LAST_RESORT);
+    fn->addFlag(FLAG_LAST_RESORT);
+    fn->addFlag(FLAG_DESTRUCTOR);
+    fn->addFlag(FLAG_INLINE);
+
+    if (ct->symbol->hasFlag(FLAG_TUPLE) == true) {
+      gGenericTupleDestroy = fn;
+    }
+
+    fn->insertFormalAtTail(new ArgSymbol(INTENT_BLANK, "_mt", dtMethodToken));
+
+    fn->_this = new ArgSymbol(INTENT_BLANK, "this", ct);
+    fn->_this->addFlag(FLAG_ARG_THIS);
+
+    fn->insertFormalAtTail(fn->_this);
+
+    fn->retType = dtVoid;
+
+    fn->insertAtTail(new CallExpr(PRIM_RETURN, gVoid));
+
+    ct->symbol->defPoint->insertBefore(new DefExpr(fn));
+
+
+    ct->methods.add(fn);
+  }
 }

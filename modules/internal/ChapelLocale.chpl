@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -98,7 +98,13 @@ module ChapelLocale {
   class locale {
     //- Constructor
     pragma "no doc"
-    proc locale() { }
+    proc init() { }
+
+    pragma "no doc"
+    proc init(parent: locale) {
+      this.parent = parent;
+      super.init();
+    }
 
     //------------------------------------------------------------------------{
     //- Fields and accessors defined for all locale types (not overridable)
@@ -327,6 +333,8 @@ module ChapelLocale {
    */
   pragma "no doc"
   class DummyLocale : locale {
+    proc init() { }
+
     proc chpl_id() : int {
       return -1;
     }
@@ -353,6 +361,11 @@ module ChapelLocale {
   class AbstractLocaleModel : locale {
     // This will be used for interfaces that will be common to all
     // (non-RootLocale) locale models
+    proc init(parent_loc : locale) {
+      super.init(parent_loc);
+    }
+
+    proc init() {  }
   }
 
   // rootLocale is declared to be of type locale rather than
@@ -388,6 +401,8 @@ module ChapelLocale {
 
   pragma "no doc"
   class AbstractRootLocale : locale {
+    proc init() { }
+
     // These functions are used to establish values for Locales[] and
     // LocaleSpace -- an array of locales and its corresponding domain
     // which are used as the default set of targetLocales in many
@@ -531,10 +546,8 @@ module ChapelLocale {
       // so tell the compiler to not insert them.
       pragma "no copy" pragma "no auto destroy"
       const ref origLocales = (origRootLocale:RootLocale).getDefaultLocaleArray();
-      assert(origLocales._value.oneDData
-             && newRootLocale.getDefaultLocaleArray()._value.oneDData);
-      var origRL = origLocales._value.theDataChunk(0);
-      var newRL = newRootLocale.getDefaultLocaleArray()._value.theDataChunk(0);
+      var origRL = origLocales._value.theData;
+      var newRL = newRootLocale.getDefaultLocaleArray()._value.theData;
       // We must directly implement a bulk copy here, as the mechanisms
       // for doing so via a whole array assignment are not initialized
       // yet and copying element-by-element via a for loop is costly.

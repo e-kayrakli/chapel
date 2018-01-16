@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -73,7 +73,7 @@ class CS: BaseDist {
   param compressRows: bool = true;
 
   proc dsiNewSparseDom(param rank: int, type idxType, dom: domain) {
-    return new CSDom(rank, idxType, this.compressRows, this, dom);
+    return new CSDom(rank, idxType, this.compressRows, dom.stridable, this, dom);
   }
 
   proc dsiClone() return new CS(compressRows=this.compressRows);
@@ -90,26 +90,29 @@ class CS: BaseDist {
 
 class CSDom: BaseSparseDomImpl {
   param compressRows;
+  param stridable;
   var dist: CS(compressRows);
 
-  var rowRange: range(idxType);
-  var colRange: range(idxType);
+  var rowRange: range(idxType, stridable=stridable);
+  var colRange: range(idxType, stridable=stridable);
 
   /* (row|col) startIdxDom */
   const startIdxDom: domain(1, idxType);
 
   /* (row|col) start */
+  pragma "local field"
   var startIdx: [startIdxDom] idxType;      // would like index(nnzDom)
   /* (row|col) idx */
+  pragma "local field"
   var idx: [nnzDom] idxType;        // would like index(parentDom.dim(1))
 
   /* Initializer */
-  proc CSDom(param rank, type idxType, param compressRows, dist: CS(compressRows), parentDom: domain(rank, idxType)) {
-    if (rank != 2) then
+  proc CSDom(param rank, type idxType, param compressRows, param stridable, dist: CS(compressRows), parentDom: domain) {
+    if (rank != 2 || parentDom.rank != 2) then
       compilerError("Only 2D sparse domains are supported by the CS distribution");
-    // TODO: Open question -- How should strided parentDom work?
-    if parentDom.stridable then
-      compilerError("Only non-strided domains are supported by the CS distribution");
+    if parentDom.idxType != idxType then
+      compilerError("idxType mismatch in CSDom.init(): " + idxType:string + " != " + parentDom.idxType:string);
+
     this.dist = dist;
     this.parentDom = parentDom;
     rowRange = parentDom.dim(1);

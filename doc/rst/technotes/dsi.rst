@@ -61,7 +61,7 @@ information on domain maps in general.
 
     The high level motivation and overview of DSI.
 
-    http://chapel.cray.com/publications/hotpar10-final.pdf
+    https://chapel-lang.org/publications/hotpar10-final.pdf
 
 - "Authoring User-Defined Domain Maps in Chapel."  Bradford
   L. Chamberlain, Sung-Eun Choi, Steven J. Deitz, David Iten, Vassily
@@ -69,7 +69,7 @@ information on domain maps in general.
 
     A follow-on paper that outlines how to write a domain map.
 
-    http://chapel.cray.com/publications/cug11-final.pdf
+    https://chapel-lang.org/publications/cug11-final.pdf
 
 
 ========
@@ -235,6 +235,20 @@ class ``GlobalDomain``
   It is used to initialize the index set of the object returned by
   ``dsiNewRectangularDom()`` to the index set of the corresponding Chapel
   domain value.
+
+.. method:: proc GlobalDomain.dsiAssignDomain(rhs: domain, lhsPrivate:bool): void
+
+  Set one domain to another. The receiver is the domain being set.
+  The rhs could be any domain, but this function should raise a
+  compilation error if the types do not match sufficiently.
+
+  In some cases when this method is called, the LHS can't be shared
+  or have any arrays declared over it. In that case, ``lhsPrivate=true``
+  is passed.
+
+  Note that the method ``chpl_assignDomainWithGetSetIndices`` can be called 
+  to use ``dsiReallocate``/``getIndices``/``dsiSetIndices``/
+  ``dsiPostReallocate`` to accomplish the assignment.
 
 .. method:: iter GlobalDomain.these()
 

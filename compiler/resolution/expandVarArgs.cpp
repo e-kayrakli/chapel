@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -223,6 +223,7 @@ static FnSymbol* expandVarArgsQuery(FnSymbol* fn, CallInfo& info) {
 
         retval = fn->copy(&substitutions);
         retval->addFlag(FLAG_INVISIBLE_FN);
+        retval->instantiatedFrom = fn;
 
         fn->defPoint->insertBefore(new DefExpr(retval));
 

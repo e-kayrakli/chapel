@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -393,7 +393,42 @@ typedef struct {
 } mem_region_table_t;
 
 static mem_region_table_t mem_regions;
+
+
+//
+// Used to serialize access to critical sections in the dynamic registration
+// allocation/registration/free routines. In addition to using a pthread_mutex,
+// we also have to prevent multiple tasks from running on the same pthread.
+// This allows us to get away with a simple pthread_mutex (vs chapel sync var,
+// or mutex+try-lock) and more importantly ensures that an entire allocation
+// can be completed before yielding, since some tasking layers don't support
+// yielding for some allocations. For example, qthreads doesn't support
+// yielding while grabbing memory to initialize task stacks.
+//
+
 static pthread_mutex_t mem_regions_mutex = PTHREAD_MUTEX_INITIALIZER;
+static __thread chpl_bool allow_task_yield = true;
+
+static inline
+void mem_regions_lock(void) {
+  if (pthread_mutex_lock(&mem_regions_mutex) != 0)
+    CHPL_INTERNAL_ERROR("cannot acquire mem region lock");
+  allow_task_yield = false;
+}
+
+static inline
+void mem_regions_unlock(void) {
+  if (pthread_mutex_unlock(&mem_regions_mutex) != 0)
+    CHPL_INTERNAL_ERROR("cannot release mem region lock");
+  allow_task_yield = true;
+}
+
+static inline
+chpl_bool can_task_yield(void) {
+  return allow_task_yield;
+}
+
+
 
 #ifdef DEBUG
 static uint32_t mreg_cnt_max;
@@ -526,6 +561,8 @@ static __thread int cd_idx = -1;
 // Declarations having to do with individual remote references.
 //
 
+#define MAX_UGNI_TRANS_SZ ((size_t) 1 << 30)
+
 #define ALIGN_32_DN(x)    ALIGN_DN((x), sizeof(int32_t))
 #define ALIGN_32_UP(x)    ALIGN_UP((x), sizeof(int32_t))
 #define IS_ALIGNED_32(x)  ((x) == ALIGN_32_DN(x))
@@ -538,7 +575,7 @@ static __thread int cd_idx = -1;
 #define UI64_TO_VP(x)     ((void*) (intptr_t) (x))
 
 //
-// Maximum nunber of PUTs in a chained transaction list.  This number
+// Maximum number of PUTs in a chained transaction list.  This number
 // was determined empirically (on XC/Aries).  Doing more than this at
 // once didn't seem to improve performance.
 //
@@ -1254,6 +1291,8 @@ static void      do_remote_put_V(int, void**, c_nodeid_t*, void**, size_t*,
                                  drpg_may_proxy_t);
 static void      do_remote_get(void*, c_nodeid_t, void*, size_t,
                                drpg_may_proxy_t);
+static void      do_nic_get(void*, c_nodeid_t, mem_region_t*,
+                            void*, size_t, mem_region_t*);
 static int       amo_cmd_2_nic_op(fork_amo_cmd_t, int);
 static void      do_nic_amo(void*, void*, c_nodeid_t, void*, size_t,
                             gni_fma_cmd_type_t, void*);
@@ -1274,7 +1313,7 @@ static void      acquire_comm_dom_and_req_buf(c_nodeid_t, int*);
 static void      release_comm_dom(void);
 static chpl_bool reacquire_comm_dom(int);
 static int       post_fma(c_nodeid_t, gni_post_descriptor_t*);
-static void      post_fma_and_wait(c_nodeid_t, gni_post_descriptor_t*);
+static void      post_fma_and_wait(c_nodeid_t, gni_post_descriptor_t*, chpl_bool);
 static int       post_fma_ct(c_nodeid_t*, gni_post_descriptor_t*);
 static void      post_fma_ct_and_wait(c_nodeid_t*, gni_post_descriptor_t*);
 static void      local_yield(void);
@@ -2685,12 +2724,7 @@ void* chpl_comm_impl_regMemAlloc(size_t size)
 
   PERFSTATS_INC(regMem_cnt);
 
-  //
-  // Memory region table adjustments, both here and on other nodes,
-  // need to be single-threaded.
-  //
-  if (pthread_mutex_lock(&mem_regions_mutex) != 0)
-    CHPL_INTERNAL_ERROR("chpl_comm_regMemAlloc(): cannot lock");
+  mem_regions_lock();
 
   //
   // Do we have room for another registered memory table entry?
@@ -2746,8 +2780,7 @@ void* chpl_comm_impl_regMemAlloc(size_t size)
              size);
   }
 
-  if (pthread_mutex_unlock(&mem_regions_mutex) != 0)
-    CHPL_INTERNAL_ERROR("chpl_comm_regMemAlloc(): cannot unlock");
+  mem_regions_unlock();
 
   return p;
 }
@@ -2774,12 +2807,7 @@ void chpl_comm_impl_regMemPostAlloc(void* p, size_t size)
 
   mr_i = (int) (mr - &mem_regions.mregs[0]);
 
-  //
-  // Memory region table adjustments, both here and on other nodes,
-  // need to be single-threaded.
-  //
-  if (pthread_mutex_lock(&mem_regions_mutex) != 0)
-    CHPL_INTERNAL_ERROR("chpl_comm_regMemPostAlloc(): cannot lock");
+  mem_regions_lock();
 
   //
   // Finish filling the table entry and register the memory.
@@ -2839,8 +2867,7 @@ void chpl_comm_impl_regMemPostAlloc(void* p, size_t size)
     }
   }
 
-  if (pthread_mutex_unlock(&mem_regions_mutex) != 0)
-    CHPL_INTERNAL_ERROR("chpl_comm_regMemPostAlloc(): cannot unlock");
+  mem_regions_unlock();
 }
 
 
@@ -2870,14 +2897,11 @@ chpl_bool chpl_comm_impl_regMemFree(void* p, size_t size)
            p, size, mr_i);
 
   //
-  // Deregister the memory and empty the entry in our table.  The
-  // table adjustments, both here and on other nodes, need to be
-  // single-threaded.  Note that even with single-threading we can't
-  // compress the table, because other threads may be doing lookups
-  // in it and they aren't locked out.
+  // Deregister the memory and empty the entry in our table. Note that even
+  // with single-threading we can't compress the table, because other threads
+  // may be doing lookups in it and they aren't locked out.
   //
-  if (pthread_mutex_lock(&mem_regions_mutex) != 0)
-    CHPL_INTERNAL_ERROR("chpl_comm_regMemFree(): cannot lock");
+  mem_regions_lock();
 
   deregister_mem_region(mr);
 
@@ -2944,8 +2968,7 @@ chpl_bool chpl_comm_impl_regMemFree(void* p, size_t size)
     }
   }
 
-  if (pthread_mutex_unlock(&mem_regions_mutex) != 0)
-    CHPL_INTERNAL_ERROR("chpl_comm_regMemFree(): cannot unlock");
+  mem_regions_unlock();
 
   free_huge_pages(p);
 
@@ -4297,18 +4320,32 @@ void do_remote_put(void* src_addr, c_nodeid_t locale, void* tgt_addr,
   post_desc.rdma_mode       = 0;
   post_desc.src_cq_hndl     = 0;
 
-  post_desc.local_addr      = (uint64_t) (intptr_t) src_addr;
-  post_desc.remote_addr     = (uint64_t) (intptr_t) tgt_addr;
-  post_desc.remote_mem_hndl = remote_mr->mdh;
-  post_desc.length          = size;
-
   //
-  // Initiate the transaction and wait for it to complete.
+  // If the transfer is larger than the maximum transaction length,
+  // then we have to break it into smaller pieces.
   //
-  PERFSTATS_INC(put_cnt);
-  PERFSTATS_ADD(put_byte_cnt, size);
+  while (size > 0) {
+    size_t tsz;
 
-  post_fma_and_wait(locale, &post_desc);
+    tsz = (size <= MAX_UGNI_TRANS_SZ) ? size : MAX_UGNI_TRANS_SZ;
+
+    post_desc.local_addr      = (uint64_t) (intptr_t) src_addr;
+    post_desc.remote_addr     = (uint64_t) (intptr_t) tgt_addr;
+    post_desc.remote_mem_hndl = remote_mr->mdh;
+    post_desc.length          = tsz;
+
+    src_addr = (char*) src_addr + tsz;
+    tgt_addr = (char*) tgt_addr + tsz;
+    size -= tsz;
+
+    //
+    // Initiate the transaction and wait for it to complete.
+    //
+    PERFSTATS_INC(put_cnt);
+    PERFSTATS_ADD(put_byte_cnt, tsz);
+
+    post_fma_and_wait(locale, &post_desc, true);
+  }
 }
 
 
@@ -4436,7 +4473,6 @@ void do_remote_get(void* tgt_addr, c_nodeid_t locale, void* src_addr,
   uint64_t              xmit_size;
   void*                 src_addr_xmit;
   uint64_t              src_addr_xmit_off;
-  gni_post_descriptor_t post_desc;
 
   DBG_P_LP(DBGF_GETPUT, "DoRemGet %p <- %d:%p (%#zx), proxy %c",
            tgt_addr, (int) locale, src_addr, size, may_proxy ? 'y' : 'n');
@@ -4535,13 +4571,78 @@ void do_remote_get(void* tgt_addr, c_nodeid_t locale, void* src_addr,
   xmit_size         = ALIGN_32_UP(size + src_addr_xmit_off);
 
   local_mr = mreg_for_local_addr(tgt_addr_xmit);
-  if (local_mr == NULL
-      || !IS_ALIGNED_32((size_t) (intptr_t) tgt_addr)
-      || src_addr_xmit != src_addr
-      || xmit_size != size) {
-    tgt_addr_xmit = get_buf_alloc(xmit_size);
-    local_mr = gnr_mreg;
+  if (local_mr != NULL
+      && IS_ALIGNED_32((size_t) (intptr_t) tgt_addr)
+      && src_addr_xmit == src_addr
+      && xmit_size == size) {
+    //
+    // The remote and local addresses are both registered and aligned,
+    // and the length is aligned, so we can do a direct transfer.
+    //
+    do_nic_get(tgt_addr, locale, remote_mr, src_addr, size, local_mr);
+    return;
   }
+
+  local_mr = gnr_mreg;
+
+  if (xmit_size <= gbp_max_size) {
+    //
+    // The transfer will fit in a single trampoline buffer.
+    //
+    tgt_addr_xmit = get_buf_alloc(size);
+
+    do_nic_get(tgt_addr_xmit, locale, remote_mr,
+               src_addr_xmit, xmit_size, gnr_mreg);
+    memcpy(tgt_addr, (char*) tgt_addr_xmit + src_addr_xmit_off, size);
+
+    get_buf_free(tgt_addr_xmit);
+  }
+  else {
+    //
+    // The transfer is larger than the largest trampoline buffer.
+    // Do it in pieces.
+    //
+    tgt_addr_xmit = get_buf_alloc(gbp_max_size);
+
+    // In the first chunk we handle src start address misalignment.
+    do_nic_get(tgt_addr_xmit, locale, remote_mr,
+               src_addr_xmit, gbp_max_size, gnr_mreg);
+    memcpy(tgt_addr, (char*) tgt_addr_xmit + src_addr_xmit_off,
+           gbp_max_size - src_addr_xmit_off);
+    tgt_addr = (char*) tgt_addr + gbp_max_size - src_addr_xmit_off;
+    src_addr_xmit = (char*) src_addr_xmit + gbp_max_size;
+    xmit_size -= gbp_max_size;
+
+    // The middle chunks are all full ones.
+    while (xmit_size > gbp_max_size) {
+      do_nic_get(tgt_addr_xmit, locale, remote_mr,
+                 src_addr_xmit, gbp_max_size, gnr_mreg);
+      memcpy(tgt_addr, tgt_addr_xmit, xmit_size);
+      tgt_addr = (char*) tgt_addr + gbp_max_size;
+      src_addr_xmit = (char*) src_addr_xmit + gbp_max_size;
+      xmit_size -= gbp_max_size;
+    }
+
+    // In the last chunk chunk we handle length misalignment.
+    do_nic_get(tgt_addr_xmit, locale, remote_mr,
+               src_addr_xmit, xmit_size, gnr_mreg);
+    memcpy(tgt_addr, tgt_addr_xmit, (size + src_addr_xmit_off) % gbp_max_size);
+
+    get_buf_free(tgt_addr_xmit);
+  }
+}
+
+
+static inline
+void do_nic_get(void* tgt_addr, c_nodeid_t locale, mem_region_t* remote_mr,
+                void* src_addr, size_t size, mem_region_t* local_mr)
+{
+  gni_post_descriptor_t post_desc;
+
+  //
+  // Assumes remote and local addresses are both registered and aligned,
+  // and length is aligned, so we can do a direct transfer.
+  //
 
   //
   // Fill in the POST descriptor.
@@ -4552,27 +4653,32 @@ void do_remote_get(void* tgt_addr, c_nodeid_t locale, void* src_addr,
   post_desc.rdma_mode       = 0;
   post_desc.src_cq_hndl     = 0;
 
-  post_desc.local_addr      = (uint64_t) (intptr_t) tgt_addr_xmit;
-  post_desc.local_mem_hndl  = local_mr->mdh;
-  post_desc.remote_addr     = (uint64_t) (intptr_t) src_addr_xmit;
-  post_desc.remote_mem_hndl = remote_mr->mdh;
-  post_desc.length          = xmit_size;
+  //
+  // If the transfer is larger than the maximum transaction length,
+  // then we have to break it into smaller pieces.
+  //
+  while (size > 0) {
+    size_t tsz;
 
-  //
-  // Initiate the transaction and wait for it to complete.
-  //
-  PERFSTATS_INC(get_cnt);
-  PERFSTATS_ADD(get_byte_cnt, size);
+    tsz = (size <= MAX_UGNI_TRANS_SZ) ? size : MAX_UGNI_TRANS_SZ;
 
-  post_fma_and_wait(locale, &post_desc);
+    post_desc.local_addr      = (uint64_t) (intptr_t) tgt_addr;
+    post_desc.local_mem_hndl  = local_mr->mdh;
+    post_desc.remote_addr     = (uint64_t) (intptr_t) src_addr;
+    post_desc.remote_mem_hndl = remote_mr->mdh;
+    post_desc.length          = tsz;
 
-  //
-  // If we had to do the GET into our temporary buffer, copy the result
-  // out to the caller's buffer now, and free the temporary.
-  //
-  if (tgt_addr_xmit != tgt_addr) {
-    memcpy(tgt_addr, (char *) tgt_addr_xmit + src_addr_xmit_off, size);
-    get_buf_free(tgt_addr_xmit);
+    src_addr = (char*) src_addr + tsz;
+    tgt_addr = (char*) tgt_addr + tsz;
+    size -= tsz;
+
+    //
+    // Initiate the transaction and wait for it to complete.
+    //
+    PERFSTATS_INC(get_cnt);
+    PERFSTATS_ADD(get_byte_cnt, tsz);
+
+    post_fma_and_wait(locale, &post_desc, true);
   }
 }
 
@@ -5867,7 +5973,7 @@ void do_nic_amo(void* opnd1, void* opnd2, c_nodeid_t locale,
   //
   PERFSTATS_INC(amo_cnt);
 
-  post_fma_and_wait(locale, &post_desc);
+  post_fma_and_wait(locale, &post_desc, true);
 
   if (p_result != result) {
     memcpy(result, p_result, size);
@@ -6381,7 +6487,13 @@ void do_fork_post(c_nodeid_t locale,
     *cdi_p = cd_idx;
   if (rbi_p != NULL)
     *rbi_p = rbi;
-  post_fma_and_wait(locale, &post_desc);
+
+  // note: Do __NOT__ yield while waiting for the ack on a NB fork. We want to
+  // ensure any subsequent NB tasks are spawned before we yield the processor.
+  // For a case like `coforall loc in Locales do on loc do body()` this ensures
+  // we've forked all remote tasks before we give up this task to potentially
+  // work on the body for this locale.
+  post_fma_and_wait(locale, &post_desc, blocking);
 
   if (blocking) {
     PERFSTATS_INC(wait_rfork_cnt);
@@ -6670,7 +6782,7 @@ int post_fma(c_nodeid_t locale, gni_post_descriptor_t* post_desc)
 
 
 static
-void post_fma_and_wait(c_nodeid_t locale, gni_post_descriptor_t* post_desc)
+void post_fma_and_wait(c_nodeid_t locale, gni_post_descriptor_t* post_desc, chpl_bool do_yield)
 {
   int cdi;
   atomic_bool post_done;
@@ -6686,7 +6798,9 @@ void post_fma_and_wait(c_nodeid_t locale, gni_post_descriptor_t* post_desc)
   // we can find something else to do in the meantime.
   //
   do {
-    local_yield();
+    if (do_yield) {
+      local_yield();
+    }
     consume_all_outstanding_cq_events(cdi);
   } while (!atomic_load_explicit_bool(&post_done, memory_order_acquire));
 
@@ -6777,7 +6891,10 @@ void local_yield(void)
     // Without a comm domain, just yield.
     //
     PERFSTATS_INC(tskyield_in_lyield_no_cd_cnt);
-    chpl_task_yield();
+    if (can_task_yield()) 
+      chpl_task_yield();
+    else
+      sched_yield();
   }
   else {
     //

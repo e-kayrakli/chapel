@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -87,7 +87,10 @@ extern const char* CHPL_HOST_PLATFORM;
 extern const char* CHPL_HOST_COMPILER;
 extern const char* CHPL_TARGET_PLATFORM;
 extern const char* CHPL_TARGET_COMPILER;
+extern const char* CHPL_ORIG_TARGET_COMPILER;
 extern const char* CHPL_TARGET_ARCH;
+extern const char* CHPL_RUNTIME_ARCH;
+extern const char* CHPL_TARGET_BACKEND_ARCH;
 extern const char* CHPL_LOCALE_MODEL;
 extern const char* CHPL_COMM;
 extern const char* CHPL_COMM_SUBSTRATE;
@@ -106,15 +109,11 @@ extern const char* CHPL_WIDE_POINTERS;
 extern const char* CHPL_LLVM;
 extern const char* CHPL_AUX_FILESYS;
 extern const char* CHPL_UNWIND;
+extern const char* CHPL_RUNTIME_SUBDIR;
+extern const char* CHPL_LAUNCHER_SUBDIR;
 
 extern bool  printPasses;
 extern FILE* printPassesFile;
-
-// Set true if CHPL_WIDE_POINTERS==struct.
-// In that case, the code generator emits structures
-// for wide pointers. Otherwise, wide pointers are
-// packed into a wide pointer type.
-extern bool widePointersStruct;
 
 extern char fExplainCall[256];
 extern int  explainCallID;
@@ -132,6 +131,8 @@ extern bool fPrintModuleResolution;
 extern bool fPrintEmittedCodeSize;
 extern char fPrintStatistics[256];
 extern bool fPrintDispatch;
+extern bool fPrintUnusedFns;
+extern bool fPrintUnusedInternalFns;
 extern bool fGenIDS;
 extern bool fLocal;
 extern bool fIgnoreLocalClasses;
@@ -183,6 +184,8 @@ extern bool fReportPromotion;
 extern bool fReportScalarReplace;
 extern bool fReportDeadBlocks;
 extern bool fReportDeadModules;
+
+extern bool fPermitUnhandledModuleErrors;
 
 extern bool debugCCode;
 extern bool optimizeCCode;

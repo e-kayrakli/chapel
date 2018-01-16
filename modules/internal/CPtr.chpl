@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -55,6 +55,13 @@ module CPtr {
       if x then do writeln("x is not nil");
       if !x then do writeln("x is nil");
 
+    Additionally, a ``c_ptr`` can be output like so:
+
+    .. code-block:: chapel
+
+      var x: c_ptr = c_ptrTo(...);
+      writeln(x); // outputs nil or e.g. 0xabc123000000
+
   */
 
   //   Similar to _ddata from ChapelBase, but differs
@@ -87,14 +94,10 @@ module CPtr {
 
   pragma "no doc"
   inline proc c_void_ptr.writeThis(ch) {
-    if this == c_nil {
-      ch <~> "(nil)";
-    } else {
-      var err:syserr = ENOERR;
-      ch.writef(error=err, "0x%xu", this:c_uintptr);
-      if err then
-        ch.setError(err);
-    }
+    var err:syserr = ENOERR;
+    ch.writef(error=err, "0x%xu", this:c_uintptr);
+    if err then
+      ch.setError(err);
   }
 
   pragma "no doc"
@@ -264,26 +267,7 @@ module CPtr {
     :arg arr: the array for which we should retrieve a pointer
     :returns: a pointer to the array data
   */
-  inline proc c_ptrTo(arr: []) where isRectangularArr(arr) && !chpl__isDROrDRView(arr) {
-    if !chpl__getActualArray(arr).oneDData then halt("error: c_ptrTo(multi_ddata array");
-    return c_pointer_return(arr[arr.domain.low]);
-  }
-
-  pragma "no doc"
-  inline proc c_ptrTo(arr: []) where chpl__isDROrDRView(arr) {
-    const val = arr._value;
-    if chpl__isArrayView(val) {
-      // BHARSH TODO: there *has* to be a cleaner way to do this sort of thing...
-      const cache = if val.shouldUseIndexCache() then
-                      val.indexCache
-                    else if val.isSliceArrayView() then
-                      val._getActualArray().dsiGetRAD().toSlice(val.dom)
-                    else
-                      val._getActualArray().dsiGetRAD(); // Should never get here
-      if !cache.oneDData then halt("error: c_ptrTo(multi_ddata array");
-    } else {
-      if !chpl__getActualArray(arr).oneDData then halt("error: c_ptrTo(multi_ddata array");
-    }
+  inline proc c_ptrTo(arr: []) where isRectangularArr(arr) {
     return c_pointer_return(arr[arr.domain.low]);
   }
 
@@ -322,7 +306,14 @@ module CPtr {
   }
 
 
-  private extern const CHPL_RT_MD_ARRAY_ELEMENTS:chpl_mem_descInt_t;
+  // Offset the CHPL_RT_MD constant in order to preserve the value through
+  // calls to chpl_here_alloc. See comments on offset_STR_* in String.chpl
+  // for more.
+  private proc offset_ARRAY_ELEMENTS {
+    extern const CHPL_RT_MD_ARRAY_ELEMENTS:chpl_mem_descInt_t;
+    extern proc chpl_memhook_md_num(): chpl_mem_descInt_t;
+    return CHPL_RT_MD_ARRAY_ELEMENTS - chpl_memhook_md_num();
+  }
 
   /*
     Return the size in bytes of a type, as with the C ``sizeof`` built-in.
@@ -354,7 +345,7 @@ module CPtr {
     */
   inline proc c_calloc(type eltType, size: integral) : c_ptr(eltType) {
     const alloc_size = size.safeCast(size_t) * c_sizeof(eltType);
-    return chpl_here_calloc(alloc_size, 1, CHPL_RT_MD_ARRAY_ELEMENTS):c_ptr(eltType);
+    return chpl_here_calloc(alloc_size, 1, offset_ARRAY_ELEMENTS):c_ptr(eltType);
   }
 
   /*
@@ -367,7 +358,7 @@ module CPtr {
     */
   inline proc c_malloc(type eltType, size: integral) : c_ptr(eltType) {
     const alloc_size = size.safeCast(size_t) * c_sizeof(eltType);
-    return chpl_here_alloc(alloc_size, CHPL_RT_MD_ARRAY_ELEMENTS):c_ptr(eltType);
+    return chpl_here_alloc(alloc_size, offset_ARRAY_ELEMENTS):c_ptr(eltType);
   }
 
   /* Free memory that was allocated with :proc:`c_calloc` or :proc:`c_malloc`.

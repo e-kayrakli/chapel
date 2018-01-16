@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -1263,16 +1263,25 @@ module ChapelBase {
 
   // implements 'delete' statement
   inline proc chpl__delete(arg)
-    where isClassType(arg.type) || isExternClassType(arg.type)
-  {
+    where isClassType(arg.type) || isExternClassType(arg.type) {
+
     if chpl_isDdata(arg.type) then
       compilerError("cannot delete data class");
+
     if arg.type == _nilType then
       compilerError("should not delete 'nil'");
 
-    arg.deinit();
-    on arg do
-      chpl_here_free(__primitive("_wide_get_addr", arg));
+    if (arg != nil) {
+      arg.deinit();
+
+      on arg do
+        chpl_here_free(__primitive("_wide_get_addr", arg));
+    }
+  }
+
+  proc chpl__delete(arr: []) {
+    forall a in arr do
+      chpl__delete(a);
   }
 
   // report an error when 'delete' is inappropriate
@@ -1283,6 +1292,13 @@ module ChapelBase {
     else
       compilerError("'delete' is not allowed on non-class type ",
                     arg.type:string);
+  }
+
+  // delete two or more things
+  inline proc chpl__delete(arg, args...) {
+    chpl__delete(arg);
+    for param i in 1..args.size do
+      chpl__delete(args(i));
   }
 
   // c_void_ptr operations
@@ -1485,18 +1501,22 @@ module ChapelBase {
   //
   // non-param/param and param/non-param cases -- these cases
   // are provided to support operations on runtime uint and
-  // param uint combinations.  The param/non-param int cases
-  // don't need to be explicitly given because they will default
-  // to the normal int/int cases above.  If these overloads are
-  // not provided, these functions will dispatch to the error
-  // cases just above, which is inconsistent (i.e., one should
-  // be able to add "1" to a uint variable given that "1" is a
-  // legal uint param).
-  //
+  // param uint combinations.  These are expressed in terms of int/uint
+  // functions with one param argument and one non-param argument.
+  // Since function disambiguation prefers a 'param' argument over
+  // a non-param one, if the 'int' version here is not provided,
+  // anEnumVariable + 1 (say) will resolve to the uint + here
+  // and that would give the wrong result type (uint rather than int).
   inline proc +(a: uint(64), param b: uint(64)) {
     return __primitive("+", a, b);
   }
   inline proc +(param a: uint(64), b: uint(64)) {
+    return __primitive("+", a, b);
+  }
+  inline proc +(a: int(64), param b: int(64)) {
+    return __primitive("+", a, b);
+  }
+  inline proc +(param a: int(64), b: int(64)) {
     return __primitive("+", a, b);
   }
 
@@ -1512,6 +1532,12 @@ module ChapelBase {
   inline proc -(param a: uint(64), b: uint(64)) {
     return __primitive("-", a, b);
   }
+  inline proc -(a: int(64), param b: int(64)) {
+    return __primitive("-", a, b);
+  }
+  inline proc -(param a: int(64), b: int(64)) {
+    return __primitive("-", a, b);
+  }
 
 
   // non-param/non-param
@@ -1523,6 +1549,12 @@ module ChapelBase {
     return __primitive("*", a, b);
   }
   inline proc *(param a: uint(64), b: uint(64)) {
+    return __primitive("*", a, b);
+  }
+  inline proc *(a: int(64), param b: int(64)) {
+    return __primitive("*", a, b);
+  }
+  inline proc *(param a: int(64), b: int(64)) {
     return __primitive("*", a, b);
   }
 
@@ -1548,6 +1580,12 @@ module ChapelBase {
         halt("Attempt to divide by zero");
     return __primitive("/", a, b);
   }
+  inline proc /(param a: int(64), b: int(64)) {
+    if (chpl_checkDivByZero) then
+      if b == 0 then
+        halt("Attempt to divide by zero");
+    return __primitive("/", a, b);
+  }
 
 
   // non-param/non-param
@@ -1561,6 +1599,12 @@ module ChapelBase {
   inline proc **(param a: uint(64), b: uint(64)) {
     return __primitive("**", a, b);
   }
+  inline proc **(a: int(64), param b: int(64)) {
+    return __primitive("**", a, b);
+  }
+  inline proc **(param a: int(64), b: int(64)) {
+    return __primitive("**", a, b);
+  }
 
 
   // non-param/non-param
@@ -1572,17 +1616,21 @@ module ChapelBase {
     if b == 0 then compilerError("Attempt to compute a modulus by zero");
     return __primitive("%", a, b);
   }
-
-  // TODO: No longer necessary once param coercion for uints is improved
+  // necessary to support e.g. 10 % myuint
   inline proc %(param a: uint(64), b: uint(64)) {
     if (chpl_checkDivByZero) then
       if b == 0 then
         halt("Attempt to compute a modulus by zero");
     return __primitive("%", a, b);
   }
-
   inline proc %(a: int(64), param b: int(64)) {
     if b == 0 then compilerError("Attempt to compute a modulus by zero");
+    return __primitive("%", a, b);
+  }
+  inline proc %(param a: int(64), b: int(64)) {
+    if (chpl_checkDivByZero) then
+      if b == 0 then
+        halt("Attempt to compute a modulus by zero");
     return __primitive("%", a, b);
   }
 
@@ -1603,12 +1651,9 @@ module ChapelBase {
   }
 
   // non-param/param and param/non-param
-  inline proc ==(a: uint(64), param b: uint(64)) {
-    return __primitive("==", a, b);
-  }
-  inline proc ==(param a: uint(64), b: uint(64)) {
-    return __primitive("==", a, b);
-  }
+  // not necessary since the == versions above
+  // work there (and aren't an error)
+
 
 
   // non-param/non-param
@@ -1620,12 +1665,8 @@ module ChapelBase {
   }
 
   // non-param/param and param/non-param
-  inline proc !=(a: uint(64), param b: uint(64)) {
-    return __primitive("!=", a, b);
-  }
-  inline proc !=(param a: uint(64), b: uint(64)) {
-    return __primitive("!=", a, b);
-  }
+  // not necessary since the == versions above
+  // work there (and aren't an error)
 
 
   // non-param/non-param
@@ -1637,12 +1678,14 @@ module ChapelBase {
   }
 
   // non-param/param and param/non-param
-  inline proc >(a: uint(64), param b: uint(64)) {
-    return __primitive(">", a, b);
-  }
+  // non-param/param version not necessary since > above works fine for that
   inline proc >(param a: uint(64), b: uint(64)) {
     if a == 0 then return false; else return __primitive(">", a, b);
   }
+  inline proc >(param a: int(64), b: int(64)) {
+    return __primitive(">", a, b);
+  }
+
 
   // non-param/non-param
   inline proc <(a: uint(64), b: int(64)) {
@@ -1653,12 +1696,14 @@ module ChapelBase {
   }
 
   // non-param/param and param/non-param
+  // param/non-param version not necessary since < above works fine for that
   inline proc <(a: uint(64), param b: uint(64)) {
     if b == 0 then return false; else return __primitive("<", a, b);
   }
-  inline proc <(param a: uint(64), b: uint(64)) {
+  inline proc <(a: int(64), param b: int(64)) {
     return __primitive("<", a, b);
   }
+
 
 
   // non-param/non-param
@@ -1673,7 +1718,7 @@ module ChapelBase {
   inline proc >=(a: uint(64), param b: uint(64)) {
     if b == 0 then return true; else return __primitive(">=", a, b);
   }
-  inline proc >=(param a: uint(64), b: uint(64)) {
+  inline proc >=(a: int(64), param b: int(64)) {
     return __primitive(">=", a, b);
   }
 
@@ -1687,34 +1732,36 @@ module ChapelBase {
   }
 
   // non-param/param and param/non-param
-  inline proc <=(a: uint(64), param b: uint(64)) {
-    return __primitive("<=", a, b);
-  }
   inline proc <=(param a: uint(64), b: uint(64)) {
     if a == 0 then return true; else return __primitive("<=", a, b);
   }
+  inline proc <=(param a: int(64), b: int(64)) {
+    return __primitive("<=", a, b);
+  }
+
 
   proc isClassType(type t) param where t:object return true;
   proc isClassType(type t) param where t == _nilType return true;
   proc isClassType(type t) param return false;
 
-  proc isRecordType(type t) param where t: value {
-    // some non-record types are implemented via records - exclude those
-    if
-      isDmapType(t)   ||
-      isDomainType(t) ||
-      isArrayType(t)  ||
-      isRangeType(t)  ||
-      isTupleType(t)  ||
-      isSyncType(t)   ||
-      isSingleType(t) ||
-      isAtomicType(t)
-    then
+  proc isRecordType(type t) param {
+    if __primitive("is record type", t) == false then
       return false;
+
+    // some non-record types are implemented via records - exclude those
+    else if isDmapType(t)   ||
+            isDomainType(t) ||
+            isArrayType(t)  ||
+            isRangeType(t)  ||
+            isTupleType(t)  ||
+            isSyncType(t)   ||
+            isSingleType(t) ||
+            isAtomicType(t) then
+      return false;
+
     else
       return true;
   }
-  proc isRecordType(type t) param return false;
 
   proc isUnionType(type t) param return __primitive("is union type", t);
 

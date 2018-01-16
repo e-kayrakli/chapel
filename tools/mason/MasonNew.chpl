@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -23,6 +23,7 @@ use Spawn;
 use FileSystem;
 use MasonUtils;
 use MasonHelp;
+use MasonEnv;
 
 
 
@@ -41,17 +42,17 @@ proc masonNew(args) {
     var name = 'MyPackage';
     for arg in args[2..] {
       if arg == '-h' || arg == '--help' {
-	masonNewHelp();
-	exit();
+        masonNewHelp();
+        exit();
       }
       else if arg == '--no-vcs' {
-	vcs = false;
+        vcs = false;
       }
       else if arg == '--show' {
-	show = true;
+        show = true;
       }
       else {
-	name = arg;
+        name = arg;
       }
     }
     InitProject(name, vcs, show);
@@ -59,8 +60,8 @@ proc masonNew(args) {
 }
 
 
-  
-  
+
+
 proc InitProject(name, vcs, show) {
   if vcs {
     gitInit(name, show);
@@ -108,12 +109,12 @@ proc makeBasicToml(name: string) {
   tomlWriter.write(baseToml);
   tomlWriter.close();
 }
-  
+
 
 proc makeProjectFiles(name: string) {
   mkdir(name + "/src");
   const libTemplate = '/* Documentation for ' + name +
-    ' */\nmodule '+ name + ' {\n   writeln("New library: '+ name +'");\n}';
+    ' */\nmodule '+ name + ' {\n  writeln("New library: '+ name +'");\n}';
   var lib = open(name+'/src/'+name+'.chpl', iomode.cw);
   var libWriter = lib.writer();
   libWriter.write(libTemplate);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -580,6 +580,9 @@ static ModuleSymbol* parseFile(const char* path,
 
     closeInputFile(fp);
 
+    // Halt now if there were parse errors.
+    USR_STOP();
+
     if (yyblock == NULL) {
       INT_FATAL("yyblock should always be non-NULL after yyparse()");
 
@@ -610,7 +613,7 @@ static ModuleSymbol* parseFile(const char* path,
     } else {
       const char* modName = filenameToModulename(path);
 
-      retval = buildModule(modName, modTag, yyblock, yyfilename, false, NULL);
+      retval = buildModule(modName, modTag, yyblock, yyfilename, false, false, NULL);
 
       ModuleSymbol::addTopLevelModule(retval);
 

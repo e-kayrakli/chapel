@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,6 +21,7 @@
 #include "AstVisitor.h"
 #include "build.h"
 #include "foralls.h"
+#include "ForLoop.h"
 #include "passes.h"
 #include "stringutil.h"
 
@@ -33,11 +34,13 @@
 ForallStmt::ForallStmt(bool zippered, BlockStmt* body):
   Stmt(E_ForallStmt),
   fZippered(zippered),
-  fLoopBody(body)
+  fLoopBody(body),
+  fFromForLoop(false),
+  fContinueLabel(NULL)
 {
   fIterVars.parent = this;
   fIterExprs.parent = this;
-  fIntentVars.parent = this;
+  fShadowVars.parent = this;
   gForallStmts.add(this);
 }
 
@@ -48,8 +51,8 @@ ForallStmt* ForallStmt::copyInner(SymbolMap* map) {
     _this->fIterVars.insertAtTail(COPY_INT(expr));
   for_alist(expr, fIterExprs)
     _this->fIterExprs.insertAtTail(COPY_INT(expr));
-  for_alist(expr, fIntentVars)
-    _this->fIntentVars.insertAtTail(COPY_INT(expr));
+  for_alist(expr, fShadowVars)
+    _this->fShadowVars.insertAtTail(COPY_INT(expr));
 
   return _this;
 }
@@ -92,11 +95,11 @@ void ForallStmt::verify() {
 
   verifyList(fIterExprs, this);
 
-  verifyList(fIntentVars, this);
-  for_alist(expr, fIntentVars) {
-    DefExpr* ivDef = toDefExpr(expr);
-    INT_ASSERT(ivDef);
-    INT_ASSERT(isShadowVarSymbol(ivDef->sym));
+  verifyList(fShadowVars, this);
+  for_alist(expr, fShadowVars) {
+    DefExpr* svDef = toDefExpr(expr);
+    INT_ASSERT(svDef);
+    INT_ASSERT(isShadowVarSymbol(svDef->sym));
   }
 
   INT_ASSERT(fLoopBody);
@@ -121,7 +124,7 @@ void ForallStmt::accept(AstVisitor* visitor) {
       expr->accept(visitor);
     for_alist(expr, iteratedExpressions())
       expr->accept(visitor);
-    for_alist(expr, intentVariables())
+    for_alist(expr, shadowVariables())
       expr->accept(visitor);
     fLoopBody->accept(visitor);
     visitor->exitForallStmt(this);
@@ -154,13 +157,13 @@ Expr* ForallStmt::getNextExpr(Expr* expr) {
     return fIterExprs.head;
 
   if (expr == fIterExprs.tail) {
-    if (Expr* inv = fIntentVars.head)
+    if (Expr* inv = fShadowVars.head)
       return inv;
     else
       return fLoopBody->getFirstExpr();
   }
 
-  if (expr == fIntentVars.tail)
+  if (expr == fShadowVars.tail)
     return fLoopBody->getFirstExpr();
 
   return this;
@@ -220,6 +223,19 @@ BlockStmt* userLoop(const ForallStmt* fs) {
   BlockStmt* ul = toBlockStmt(fs->loopBody()->body.tail);
   INT_ASSERT(ul);
   return ul;
+}
+
+LabelSymbol* ForallStmt::continueLabel() {
+  if (fContinueLabel == NULL) {
+    // We are extra-cautious here, to guard against the potential
+    // that we have added code that must execute at the end of fLoopBody.
+    // If this presents hardship, we can switch to always creating
+    // fContinueLabel, right when the ForallStmt is created.
+    INT_ASSERT(!normalized);
+    fContinueLabel = new LabelSymbol("_continueLabel");
+    fLoopBody->insertAtTail(new DefExpr(fContinueLabel));
+  }
+  return fContinueLabel;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -385,9 +401,9 @@ BlockStmt* ForallStmt::build(Expr* indices, Expr* iterator, CallExpr* intents,
   // Transfer the DefExprs of the intent variables (ShadowVarSymbols).
   if (intents) {
     while (Expr* src = intents->argList.head) {
-      DefExpr* ivDef = toDefExpr(src->remove());
-      INT_ASSERT(ivDef);
-      fs->intentVariables().insertAtTail(ivDef);
+      DefExpr* svDef = toDefExpr(src->remove());
+      INT_ASSERT(svDef);
+      fs->shadowVariables().insertAtTail(svDef);
     }
   }
 
@@ -399,4 +415,20 @@ BlockStmt* ForallStmt::build(Expr* indices, Expr* iterator, CallExpr* intents,
   body->blockTag = BLOCK_NORMAL; // do not flatten it in cleanup(), please
 
   return buildChapelStmt(fs);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// support for converting from a for loop
+/////////////////////////////////////////////////////////////////////////////
+
+ForallStmt* ForallStmt::fromForLoop(ForLoop* forLoop) {
+  // intended only for for-loops
+  INT_ASSERT(forLoop->isForLoop());
+  // conversion from zippered is not implemented
+  INT_ASSERT(forLoop->zipperedGet() == false);
+
+  ForallStmt* result = new ForallStmt(false, new BlockStmt());
+  result->fFromForLoop = true;
+
+  return result;
 }

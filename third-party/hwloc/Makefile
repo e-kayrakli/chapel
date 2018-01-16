@@ -27,6 +27,7 @@ CHPL_HWLOC_CFG_OPTIONS += --enable-static \
                           --disable-cairo \
                           --disable-libxml2 \
                           --disable-libudev \
+                          --disable-cuda \
                           --disable-opencl \
                           --disable-pci
 
@@ -62,7 +63,9 @@ hwloc-config: FORCE
 #
 	cd $(HWLOC_SUBDIR) && touch -c configure.ac
 	cd $(HWLOC_SUBDIR) && find . -name "*.m4" | xargs touch 
+	sleep 1
 	cd $(HWLOC_SUBDIR) && touch -c aclocal.m4
+	sleep 1
 	cd $(HWLOC_SUBDIR) && touch configure
 	cd $(HWLOC_SUBDIR) && find . -name "*.in" | xargs touch
 #

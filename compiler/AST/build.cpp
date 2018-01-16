@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -142,6 +142,12 @@ static void addPragmaFlags(Symbol* sym, Vec<const char*>* pragmas) {
           USR_WARN(fn, "function's return type is not a value type.  Ignoring.");
         }
         fn->retTag = RET_TYPE;
+      } else if (flag == FLAG_USE_DEFAULT_INIT) {
+        AggregateType* at = toAggregateType(sym->type);
+        if (!isTypeSymbol(sym) || at == NULL || at->isRecord()) {
+          USR_FATAL_CONT(sym, "cannot apply 'use default init' to symbol '%s',"
+                         " not a class definition", sym->name);
+        }
       }
     }
   }
@@ -361,6 +367,9 @@ BlockStmt* buildChapelStmt(Expr* expr) {
   return new BlockStmt(expr, BLOCK_SCOPELESS);
 }
 
+BlockStmt* buildErrorStandin() {
+  return new BlockStmt(new CallExpr(PRIM_ERROR), BLOCK_SCOPELESS);
+}
 
 static void addModuleToSearchList(UseStmt* newUse, BaseAST* module) {
   UnresolvedSymExpr* modNameExpr = toUnresolvedSymExpr(module);
@@ -669,6 +678,7 @@ ModuleSymbol* buildModule(const char* name,
                           BlockStmt*  block,
                           const char* filename,
                           bool        priv,
+                          bool        prototype,
                           const char* docs) {
   ModuleSymbol* mod = new ModuleSymbol(name, modTag, block);
 
@@ -678,6 +688,10 @@ ModuleSymbol* buildModule(const char* name,
 
   if (priv == true) {
     mod->addFlag(FLAG_PRIVATE);
+  }
+
+  if (prototype == true) {
+    mod->addFlag(FLAG_PROTOTYPE_MODULE);
   }
 
   mod->filename = astr(filename);
@@ -917,6 +931,7 @@ CallExpr*
 buildForLoopExpr(Expr* indices, Expr* iteratorExpr, Expr* expr, Expr* cond, bool maybeArrayType, bool zippered) {
   FnSymbol* fn = new FnSymbol(astr("_seqloopexpr", istr(loopexpr_uid++)));
   fn->addFlag(FLAG_COMPILER_NESTED_FUNCTION);
+  fn->addFlag(FLAG_FN_RETURNS_ITERATOR);
 
   // See comment in buildForallLoopExpr()
   ArgSymbol* iteratorExprArg = new ArgSymbol(INTENT_BLANK, "iterExpr", dtAny);
@@ -971,6 +986,7 @@ static void buildLeaderIteratorFn(FnSymbol* fn, const char* iteratorName,
                                   bool zippered)
 {
   FnSymbol* lifn = new FnSymbol(iteratorName);
+  lifn->addFlag(FLAG_FN_RETURNS_ITERATOR);
 
   Expr* tag = buildDotExpr(buildDotExpr(new UnresolvedSymExpr("ChapelBase"),
                                         iterKindTypename),
@@ -1067,6 +1083,7 @@ static CallExpr* buildForallLoopExprFromForallExpr(ForallExpr* faExpr) {
   FnSymbol* fn = new FnSymbol(astr("_parloopexpr", istr(loopexpr_uid++)));
   fn->addFlag(FLAG_COMPILER_NESTED_FUNCTION);
   fn->addFlag(FLAG_MAYBE_ARRAY_TYPE);
+  fn->addFlag(FLAG_FN_RETURNS_ITERATOR);
 
   // MPF: We'll add the iteratorExpr to the call, so we need an
   // argument to accept it in the new function. This way,
@@ -1254,7 +1271,7 @@ static void setupOneReduceIntent(VarSymbol* iterRec, BlockStmt* parLoop,
     iterRec->defPoint->insertBefore("'move'(%S, 'new'(%E(%E)))",
                         globalOp, reduceOp, new NamedExpr("eltType", eltType));
   // reduceVar = globalOp.generate(); delete globalOp;
-  parLoop->insertAfter("'delete'(%S)",
+  parLoop->insertAfter("chpl__delete(%S)",
                        globalOp);
   parLoop->insertAfter(new CallExpr("=", reduceVar->copy(),
                          new_Expr(".(%S, 'generate')()", globalOp)));
@@ -1506,20 +1523,17 @@ buildForallLoopStmt(Expr*      indices,
 }
 
 // Todo: replace with ForallIntents or similar.
-void addTaskIntent(CallExpr* ti, Expr* var, IntentTag intent, Expr* ri) {
-  if (ri) {
+void addTaskIntent(CallExpr* ti, ShadowVarSymbol* svar) {
+  Expr* ovar = svar->outerVarRep;
+  if (Expr* ri = svar->reduceOpExpr()) {
     // This is a reduce intent. NB 'intent' is undefined.
     ti->insertAtTail(ri);
-    ti->insertAtTail(var);
+    ti->insertAtTail(ovar);
   } else {
-    ArgSymbol* tiMark = tiMarkForIntent(intent);
-    if (!tiMark) {
-      USR_FATAL_CONT(var, "%s is not supported in a 'with' clause",
-                           intentDescrString(intent));
-      tiMark = tiMarkForIntent(INTENT_IN); //dummy, so parser can continue
-    }
+    ArgSymbol* tiMark = tiMarkForForallIntent(svar->intent);
+    INT_ASSERT(tiMark != NULL);
     ti->insertAtTail(tiMark);
-    ti->insertAtTail(var);
+    ti->insertAtTail(ovar);
   }
 }
 
@@ -1880,7 +1894,7 @@ static void addElseClauseForSerialIter(BlockStmt* forall,
                                                   zippered));
 
   serialBlock->insertAtTail(new CallExpr(PRIM_MOVE, result, new CallExpr(new CallExpr(".", globalOp, new_CStringSymbol("generate")))));
-  serialBlock->insertAtTail("'delete'(%S)", globalOp);
+  serialBlock->insertAtTail("chpl__delete(%S)", globalOp);
 
   CondStmt* if2 = new CondStmt(new SymExpr(gTryToken), lfBlock, serialBlock);
 
@@ -2122,7 +2136,7 @@ CallExpr* buildReduceExpr(Expr* opExpr, Expr* dataExpr, bool zippered) {
   followBlock->insertAtTail("'move'(%S, 'new'(%E(%E)))", localOp, opExpr->copy(), new NamedExpr("eltType", new SymExpr(eltType)));
   followBlock->insertAtTail(followBody);
   followBlock->insertAtTail("chpl__reduceCombine(%S, %S)", globalOp, localOp);
-  followBlock->insertAtTail("'delete'(%S)", localOp);
+  followBlock->insertAtTail("chpl__delete(%S)", localOp);
 
   ForLoop* leadBody = new ForLoop(leadIdx, leadIter, NULL, zippered, /*forall*/ true);
 
@@ -2148,7 +2162,7 @@ CallExpr* buildReduceExpr(Expr* opExpr, Expr* dataExpr, bool zippered) {
 
   VarSymbol* result = new VarSymbol("result");
   fn->insertAtTail(new DefExpr(result, new CallExpr(new CallExpr(".", globalOp, new_CStringSymbol("generate")))));
-  fn->insertAtTail("'delete'(%S)", globalOp);
+  fn->insertAtTail("chpl__delete(%S)", globalOp);
   fn->insertAtTail("'return'(%S)", result);
   return new CallExpr(new DefExpr(fn), dataExpr);
 }
@@ -2159,6 +2173,7 @@ CallExpr* buildScanExpr(Expr* opExpr, Expr* dataExpr, bool zippered) {
 
   FnSymbol* fn = new FnSymbol(astr("chpl__scan", istr(uid++)));
   fn->addFlag(FLAG_COMPILER_NESTED_FUNCTION);
+  fn->addFlag(FLAG_FN_RETURNS_ITERATOR);
 
   // data will hold the reduce-d expression as an argument
   // we'll store dataExpr in the call to the chpl__scan function.
@@ -2346,7 +2361,8 @@ DefExpr* buildClassDefExpr(const char*  name,
 void setupTypeIntentArg(ArgSymbol* arg) {
   arg->intent = INTENT_BLANK;
   arg->addFlag(FLAG_TYPE_VARIABLE);
-  arg->type = dtAny;
+  if (arg->typeExpr == NULL)
+    arg->type = dtAny;
 }
 
 
@@ -2476,7 +2492,7 @@ buildFunctionSymbol(FnSymbol*   fn,
 
     ArgSymbol* mt = new ArgSymbol(INTENT_BLANK, "_mt", dtMethodToken);
 
-    fn->addFlag(FLAG_METHOD);
+    fn->setMethod(true);
     fn->insertFormalAtHead(new DefExpr(mt));
   }
 
@@ -2982,6 +2998,12 @@ BlockStmt* buildPrimitiveStmt(PrimitiveTag tag, Expr* e1, Expr* e2) {
   return buildChapelStmt(new CallExpr(tag, e1, e2));
 }
 
+
+BlockStmt* buildDeleteStmt(CallExpr* exprlist) {
+  INT_ASSERT(exprlist->isPrimitive(PRIM_ACTUALS_LIST));
+  return new BlockStmt(new CallExpr("chpl__delete", exprlist), BLOCK_SCOPELESS);
+}
+
 BlockStmt*
 buildAtomicStmt(Expr* stmt) {
   static bool atomic_warning = false;
@@ -3053,8 +3075,11 @@ BlockStmt* handleConfigTypes(BlockStmt* blk) {
           }
         }
       }
+    } else if (BlockStmt* innerBlk = toBlockStmt(node)) {
+      // recursively handle multiple defs in a single statement
+      handleConfigTypes(innerBlk);
     } else {
-      INT_FATAL("Got non-DefExpr in type_alias_decl_stmt");
+      INT_FATAL("Got non-DefExpr/BlockStmt in type_alias_decl_stmt");
     }
   }
   return blk;
@@ -3115,4 +3140,18 @@ Expr* tryExpr(Expr* e)
 Expr* tryBangExpr(Expr* e)
 {
   return new CallExpr(PRIM_TRYBANG_EXPR, e);
+}
+
+Expr* convertAssignmentAndWarn(Expr* a, const char* op, Expr* b)
+{
+  if (0 == strcmp("=", op)) {
+    USR_FATAL_CONT(a, "Assignment is illegal in a conditional");
+    USR_PRINT(a, "Use == to check for equality in a conditional");
+  } else {
+    USR_FATAL_CONT(a, "Assignment operation %s is illegal in a conditional",
+                   op);
+  }
+
+  // Either way, continue compiling with ==
+  return new CallExpr("==", a, b);
 }

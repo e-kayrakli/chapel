@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -407,7 +407,7 @@ bool AstDumpToNode::enterForallStmt(ForallStmt* node)
 
   writeField("inductionVariables:  ", node->inductionVariables());
   writeField("iteratedExpressions: ", node->iteratedExpressions());
-  writeField("intentVariables:     ", node->intentVariables());
+  writeField("shadowVariables:     ", node->shadowVariables());
 
   newline();
   writeField("loopBody: ", 10, node->loopBody());
@@ -895,7 +895,7 @@ bool AstDumpToNode::enterFnSym(FnSymbol* node)
     newline();
     fprintf(mFP, "RetType:  ");
     mOffset = mOffset + 10;
-    node->retType->symbol->accept(this);
+    writeType(node->retType, false);
     mOffset = mOffset - 10;
   }
 
@@ -1941,7 +1941,7 @@ void AstDumpToNode::ast_symbol(Symbol* sym, bool def)
 
 int AstDumpToNode::writeQual(QualifiedType qual) const
 {
-  const char* name = qual.qualStr();
+  const char* name = qualifierToStr(qual.getQual());
 
   if (compact)
     fprintf(mFP, " qual: %s", name);

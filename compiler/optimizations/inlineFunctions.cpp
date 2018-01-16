@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -45,6 +45,8 @@ static void inlineCleanup();
 ************************************** | *************************************/
 
 void inlineFunctions() {
+  convertToQualifiedRefs();
+
   compute_call_sites();
 
   updateRefCalls();
@@ -255,6 +257,27 @@ static BlockStmt* copyBody(CallExpr* call) {
 
       stmt->insertBefore(new DefExpr(tmp));
       stmt->insertBefore(new CallExpr(PRIM_MOVE, tmp, actual));
+
+      sym = tmp;
+    }
+    if (formal->isRef() && !sym->isRef()) {
+      // When passing a value to a reference argument,
+      // create a reference temporary so that nothing in the
+      // inlined code changes meaning.
+
+      Expr*      stmt = call->getStmtExpr();
+      VarSymbol* tmp  = newTemp(astr("i_", formal->name),
+                                formal->type);
+      DefExpr*   def  = new DefExpr(tmp);
+      CallExpr*  move = NULL;
+
+      tmp->qual = QUAL_REF;
+      move      = new CallExpr(PRIM_MOVE,
+                               tmp,
+                               new CallExpr(PRIM_SET_REFERENCE, sym));
+
+      stmt->insertBefore(def);
+      stmt->insertBefore(move);
 
       sym = tmp;
     }

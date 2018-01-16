@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -47,9 +47,10 @@ class SystemError : Error {
   var err:     syserr;
   var details: string;
 
-  proc SystemError(err: syserr, details: string = "") {
+  proc init(err: syserr, details: string = "") {
     this.err     = err;
     this.details = details;
+    super.init();
   }
 
   /*
@@ -58,17 +59,13 @@ class SystemError : Error {
   */
   proc message() {
     var strerror_err: err_t = ENOERR;
-    var errstr:  c_string   = sys_strerror_syserr_str(err, strerror_err);
-    var err_msg: string     = errstr:string;
+    var errstr              = sys_strerror_syserr_str(err, strerror_err);
+    var err_msg             = new string(errstr, owned=true, needToCopy=false);
 
     if !details.isEmptyString() then
-      err_msg = errstr:string + " (" + details + ")";
+      err_msg += " (" + details + ")";
 
     return err_msg;
-  }
-
-  proc writeThis(f) {
-    f <~> msg;
   }
 
   /*
@@ -138,9 +135,8 @@ class SystemError : Error {
 
 */
 class BlockingIOError : SystemError {
-  proc BlockingIOError(details: string = "", err: syserr = EWOULDBLOCK) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = EWOULDBLOCK:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -151,9 +147,8 @@ class BlockingIOError : SystemError {
 
 */
 class ChildProcessError : SystemError {
-  proc ChildProcessError(details: string = "", err: syserr = ECHILD) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ECHILD:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -163,6 +158,7 @@ class ChildProcessError : SystemError {
    base class for all system errors regarding connections.
 
 */
+pragma "use default init"
 class ConnectionError : SystemError { }
 
 /*
@@ -172,9 +168,8 @@ class ConnectionError : SystemError { }
 
 */
 class BrokenPipeError : ConnectionError {
-  proc BrokenPipeError(details: string = "", err: syserr = EPIPE) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = EPIPE:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -185,9 +180,8 @@ class BrokenPipeError : ConnectionError {
 
 */
 class ConnectionAbortedError : ConnectionError {
-  proc ConnectionAbortedError(details: string = "", err: syserr = ECONNABORTED) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ECONNABORTED:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -198,9 +192,8 @@ class ConnectionAbortedError : ConnectionError {
 
 */
 class ConnectionRefusedError : ConnectionError {
-  proc ConnectionRefusedError(details: string = "", err: syserr = ECONNREFUSED) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ECONNREFUSED:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -211,9 +204,8 @@ class ConnectionRefusedError : ConnectionError {
 
 */
 class ConnectionResetError : ConnectionError {
-  proc ConnectionResetError(details: string = "", err: syserr = ECONNRESET) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ECONNRESET:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -224,9 +216,8 @@ class ConnectionResetError : ConnectionError {
 
 */
 class FileExistsError : SystemError {
-  proc FileExistsError(details: string = "", err: syserr = EEXIST) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = EEXIST:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -237,9 +228,8 @@ class FileExistsError : SystemError {
 
 */
 class FileNotFoundError : SystemError {
-  proc FileNotFoundError(details: string = "", err: syserr = ENOENT) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ENOENT:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -250,9 +240,8 @@ class FileNotFoundError : SystemError {
 
 */
 class InterruptedError : SystemError {
-  proc InterruptedError(details: string = "", err: syserr = EINTR) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = EINTR:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -263,9 +252,8 @@ class InterruptedError : SystemError {
 
 */
 class IsADirectoryError : SystemError {
-  proc IsADirectoryError(details: string = "", err: syserr = EISDIR) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = EISDIR:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -276,9 +264,8 @@ class IsADirectoryError : SystemError {
 
 */
 class NotADirectoryError : SystemError {
-  proc NotADirectoryError(details: string = "", err: syserr = ENOTDIR) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ENOTDIR:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -289,9 +276,8 @@ class NotADirectoryError : SystemError {
 
 */
 class PermissionError : SystemError {
-  proc PermissionError(details: string = "", err: syserr = EPERM) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = EPERM:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -302,9 +288,8 @@ class PermissionError : SystemError {
 
 */
 class ProcessLookupError : SystemError {
-  proc ProcessLookupError(details: string = "", err: syserr = ESRCH) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ESRCH:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -315,9 +300,8 @@ class ProcessLookupError : SystemError {
 
 */
 class TimeoutError : SystemError {
-  proc TimeoutError(details: string = "", err: syserr = ETIMEDOUT) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ETIMEDOUT:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -329,6 +313,7 @@ class TimeoutError : SystemError {
    used and emitted by the IO module.
 
 */
+pragma "use default init"
 class IOError : SystemError { }
 
 /*
@@ -338,9 +323,8 @@ class IOError : SystemError { }
 
 */
 class EOFError : IOError {
-  proc EOFError(details: string = "", err: syserr = EEOF) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = EEOF:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -351,9 +335,8 @@ class EOFError : IOError {
 
 */
 class UnexpectedEOFError : IOError {
-  proc UnexpectedEOFError(details: string = "", err: syserr = ESHORT) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = ESHORT:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -364,9 +347,8 @@ class UnexpectedEOFError : IOError {
 
 */
 class BadFormatError : IOError {
-  proc BadFormatError(details: string = "", err: syserr = EFORMAT) {
-    this.details = details;
-    this.err     = err;
+  proc init(details: string = "", err: syserr = EFORMAT:syserr) {
+    super.init(err, details);
   }
 }
 
@@ -376,8 +358,7 @@ private extern proc sys_strerror_syserr_str(error:syserr, out err_in_strerror:er
 /* This function takes in a string and returns it in double-quotes,
    with internal double-quotes escaped with backslash.
    */
-pragma "no doc"
-proc quote_string(s:string, len:ssize_t) {
+private proc quote_string(s:string, len:ssize_t) {
   extern const QIO_STRING_FORMAT_CHPL: uint(8);
   extern proc qio_quote_string(s:uint(8), e:uint(8), f:uint(8),
                                ptr: c_string, len:ssize_t,
@@ -393,8 +374,9 @@ proc quote_string(s:string, len:ssize_t) {
   // This doesn't handle the case where ret==NULL as did the previous
   // version in QIO, but I'm not sure how that was used.
 
-  if err then return qio_strdup("<error>");
-  return ret;
+  if err then return new string(qio_strdup("<error>"), owned=true, needToCopy=false);
+
+  return new string(ret, owned=true, needToCopy=false);
 }
 
 /* Halt with a useful message if there was an error. Do nothing if the error
@@ -422,7 +404,7 @@ proc ioerror(error:syserr, msg:string) throws
 proc ioerror(error:syserr, msg:string, path:string) throws
 {
   if error {
-    const quotedpath = quote_string(path, path.length:ssize_t): string;
+    const quotedpath = quote_string(path, path.length:ssize_t);
     var   details    = msg + " with path " + quotedpath;
     throw SystemError.fromSyserr(error, details);
   }
@@ -442,7 +424,7 @@ proc ioerror(error:syserr, msg:string, path:string) throws
 proc ioerror(error:syserr, msg:string, path:string, offset:int(64)) throws
 {
   if error {
-    const quotedpath = quote_string(path, path.length:ssize_t): string;
+    const quotedpath = quote_string(path, path.length:ssize_t);
     var   details    = msg + " with path " + quotedpath + " offset " + offset:string;
     throw SystemError.fromSyserr(error, details);
   }
@@ -464,7 +446,7 @@ proc ioerror(error:syserr, msg:string, path:string, offset:int(64)) throws
  */
 proc ioerror(errstr:string, msg:string, path:string, offset:int(64)) throws
 {
-  const quotedpath = quote_string(path, path.length:ssize_t): string;
+  const quotedpath = quote_string(path, path.length:ssize_t);
   const details    = errstr + " " + msg + " with path " + quotedpath + " offset " + offset:string;
   throw SystemError.fromSyserr(EIO:syserr, details);
 }
@@ -477,10 +459,9 @@ proc ioerror(errstr:string, msg:string, path:string, offset:int(64)) throws
  */
 proc errorToString(error:syserr):string
 {
-  var errstr:c_string = "unknown"; // Why initialize this?
   var strerror_err:err_t = ENOERR;
-  errstr = sys_strerror_syserr_str(error, strerror_err);
-  return errstr;
+  const errstr = sys_strerror_syserr_str(error, strerror_err);
+  return new string(errstr, owned=true, needToCopy=false);
 }
 
 }

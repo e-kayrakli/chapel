@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -107,6 +107,9 @@ static void viewSymbolFlags(Symbol* sym) {
           printf("immediate ");
           fprint_imm(stdout, *toVarSymbol(sym)->immediate, true);
           printf("\n");
+        }
+        if (ShadowVarSymbol* svar = toShadowVarSymbol(vs)) {
+          printf("%s shadow var  ", svar->intentDescrString());
         }
         printf("qual %s\n", qualifierToStr(vs->qual));
 

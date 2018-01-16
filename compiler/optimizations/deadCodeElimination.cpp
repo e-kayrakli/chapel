@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -421,6 +421,10 @@ static bool isDeadModule(ModuleSymbol* mod) {
         } else {
           INT_ASSERT(false);
         }
+
+      // The single definition is a nested module.  This module is not dead.
+      } else if (isModuleSymbol(defExpr->sym) == true) {
+        retval = false;
 
       } else {
         INT_ASSERT(false);

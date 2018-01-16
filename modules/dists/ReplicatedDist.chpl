@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -304,20 +304,15 @@ proc Replicated.dsiIndexToLocale(indexx): locale {
   return here;
 }
 
-/*
-dsiSetIndices accepts ranges because it is invoked so from ChapelArray or so.
-Most dsiSetIndices() on a tuple of ranges can be the same as this one.
-Or that call dsiSetIndices(ranges) could be converted following this example.
-*/
-proc ReplicatedDom.dsiSetIndices(rangesArg: rank * range(idxType,
-                                          BoundedRangeType.bounded,
-                                                         stridable)): void {
+// Call 'setIndices' in order to leverage DefaultRectangular's handling of
+// assignments from unstrided domains to strided domains.
+proc ReplicatedDom.dsiSetIndices(x) where isTuple(x) && isRange(x(1)) {
   if traceReplicatedDist then
-    writeln("ReplicatedDom.dsiSetIndices on ranges");
-  dsiSetIndices({(...rangesArg)});
+    writeln("ReplicatedDom.dsiSetIndices on ", x.type:string, ": ", x);
+  dsiSetIndices({(...x)});
 }
 
-proc ReplicatedDom.dsiSetIndices(domArg: domain(rank, idxType, stridable)): void {
+proc ReplicatedDom.dsiSetIndices(domArg: domain): void {
   if traceReplicatedDist then
     writeln("ReplicatedDom.dsiSetIndices on domain ", domArg);
   domRep = domArg;
@@ -596,5 +591,3 @@ proc ReplicatedArr.dsiHasSingleLocalSubdomain() param  return true;
 proc ReplicatedArr.dsiLocalSubdomain() {
   return chpl_myLocArr().myDom.domLocalRep;
 }
-
-use OldReplicatedDist;

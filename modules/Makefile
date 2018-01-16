@@ -1,4 +1,4 @@
-# Copyright 2004-2017 Cray Inc.
+# Copyright 2004-2018 Cray Inc.
 # Other additional copyright holders may be indicated within.
 #
 # The entirety of this work is licensed under the Apache License,
@@ -96,6 +96,7 @@ MODULES_TO_DOCUMENT = \
 
 PACKAGES_TO_DOCUMENT = \
 	packages/BLAS.chpl \
+	packages/Crypto.chpl \
 	packages/Curl.chpl \
 	packages/FFTW.chpl \
 	packages/FFTW_MT.chpl \
@@ -131,11 +132,13 @@ DISTS_TO_DOCUMENT = \
 	dists/dims/BlockDim.chpl \
 	dists/dims/ReplicatedDim.chpl \
 	layouts/LayoutCS.chpl \
+	layouts/LayoutCSR.chpl \
 
 INTERNAL_MODULES_TO_DOCUMENT =                \
 	internal/Atomics.chpl                 \
 	internal/ChapelArray.chpl             \
 	internal/ChapelComplex_forDocs.chpl   \
+	internal/ChapelError.chpl             \
 	internal/ChapelIO.chpl                \
 	internal/ChapelIteratorSupport.chpl   \
 	internal/ChapelLocale.chpl            \

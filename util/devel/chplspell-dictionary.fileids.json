@@ -77,12 +77,21 @@
     "compiler/include/countTokens.h",
     "compiler/parser/countTokens.cpp"
   ],
+  "dbbd3434-ca86-11e7-8b8c-10ddb1d4c3d5": [
+    "compiler/include/expr.h"
+  ],
+  "e1293828-ca86-11e7-8b8c-10ddb1d4c3d5": [
+    "compiler/include/implementForallIntents.h"
+  ],
   "b9f0367c-1d7f-11e6-a3a6-10ddb1d4c3d5": [
     "compiler/include/list.h"
   ],
   "59041530-69c5-11e6-90f0-10ddb1d4c3d5": [
     "compiler/include/llvmDebug.h",
     "compiler/util/llvmDebug.cpp"
+  ],
+  "de79f068-ca86-11e7-8b8c-10ddb1d4c3d5": [
+    "compiler/include/llvmVer.h"
   ],
   "dab54cf8-1d7f-11e6-a3a6-10ddb1d4c3d5": [
     "compiler/include/log.h"
@@ -173,11 +182,17 @@
   "4f065520-1d85-11e6-a3a6-10ddb1d4c3d5": [
     "compiler/resolution/implementForallIntents.cpp"
   ],
+  "5bfd40ae-ca86-11e7-8b8c-10ddb1d4c3d5": [
+    "compiler/resolution/implementForallIntents2.cpp"
+  ],
   "803ee256-1d85-11e6-a3a6-10ddb1d4c3d5": [
     "compiler/resolution/lowerIterators.cpp"
   ],
   "e44e8ee8-2015-11e7-980e-10ddb1d4c3d5": [
     "compiler/resolution/postFold.cpp"
+  ],
+  "ebe3ea10-ca86-11e7-8b8c-10ddb1d4c3d5": [
+    "compiler/resolution/preFold.cpp"
   ],
   "e95fef8a-2015-11e7-980e-10ddb1d4c3d5": [
     "compiler/resolution/virtualDispatch.cpp"
@@ -196,6 +211,9 @@
   ],
   "390fbcc4-4e3c-11e6-907f-843835579daa": [
     "compiler/util/files.cpp"
+  ],
+  "c4a256e8-ad6d-11e7-a204-10ddb1d4c3d5": [
+    "compiler/util/llvmAggregateGlobalOps.cpp"
   ],
   "4f8f1724-1d86-11e6-a3a6-10ddb1d4c3d5": [
     "compiler/util/llvmGlobalToWide.cpp"
@@ -286,6 +304,12 @@
   "5f5c9598-1e47-11e6-a3a6-10ddb1d4c3d5": [
     "doc/rst/technotes/libraries.rst"
   ],
+  "cd80a742-ad6d-11e7-a204-10ddb1d4c3d5": [
+    "doc/rst/technotes/reduceIntents.rst"
+  ],
+  "d45846e8-a1b9-11e7-a204-10ddb1d4c3d5": [
+    "doc/rst/tools/c2chapel/c2chapel.rst"
+  ],
   "a892ed32-1e49-11e6-a3a6-10ddb1d4c3d5": [
     "doc/rst/tools/chpldoc/chpldoc.rst"
   ],
@@ -303,6 +327,9 @@
   ],
   "c32754ea-8068-11e6-ab60-00a0cc3ee663": [
     "doc/rst/usingchapel/multilocale.rst"
+  ],
+  "cd28f34a-a1b9-11e7-a204-10ddb1d4c3d5": [
+    "doc/rst/usingchapel/prereqs.rst"
   ],
   "d634896c-70c9-11e6-8028-843835579daa": [
     "doc/rst/usingchapel/usingchapel.rst"
@@ -327,7 +354,6 @@
     "modules/dists/DimensionalDist2D.chpl"
   ],
   "3efba760-1f11-11e6-a3a6-10ddb1d4c3d5": [
-    "modules/dists/OldReplicatedDist.chpl",
     "modules/dists/ReplicatedDist.chpl"
   ],
   "6c8e8208-1f0f-11e6-a3a6-10ddb1d4c3d5": [
@@ -381,6 +407,9 @@
   "71a525f2-43ff-11e6-907f-843835579daa": [
     "modules/packages/BLAS.chpl"
   ],
+  "527abebe-9db6-11e7-a204-10ddb1d4c3d5": [
+    "modules/packages/Crypto.chpl"
+  ],
   "2127a88e-1f1a-11e6-a3a6-10ddb1d4c3d5": [
     "modules/packages/Curl.chpl"
   ],
@@ -389,6 +418,9 @@
   ],
   "838b0068-8aba-11e7-b3f1-10ddb1d4c3d5": [
     "modules/packages/DistributedDeque.chpl"
+  ],
+  "e9a3e440-9db7-11e7-a204-10ddb1d4c3d5": [
+    "modules/packages/DistributedIters.chpl"
   ],
   "f8a68c5e-1f19-11e6-a3a6-10ddb1d4c3d5": [
     "modules/packages/FFTW.chpl"
@@ -410,6 +442,9 @@
   ],
   "3a59da00-3376-11e6-a3a6-10ddb1d4c3d5": [
     "modules/packages/MatrixMarket.chpl"
+  ],
+  "3b5ef8a0-780c-11e7-88ba-10ddb1d4c3d5": [
+    "modules/packages/TOML.chpl"
   ],
   "ac12c756-4d89-11e6-907f-843835579daa": [
     "modules/packages/VisualDebug.chpl",
@@ -478,6 +513,9 @@
   ],
   "af6e03d4-2403-11e6-a3a6-10ddb1d4c3d5": [
     "runtime/src/launch/pbs-aprun/launch-pbs-aprun.c"
+  ],
+  "c756642a-c5e5-11e7-82fe-10ddb1d4c3d5": [
+    "runtime/src/launch/smp/launch-smp.c"
   ],
   "a2b5a7e0-2404-11e6-a3a6-10ddb1d4c3d5": [
     "runtime/src/qio/auxFilesys/curl/qio_plugin_curl.c"
@@ -571,9 +609,6 @@
   ],
   "b321068e-a888-11e6-91b8-10ddb1d4c3d5": [
     "test/exercises/c-ray/forStudents/README"
-  ],
-  "3b5ef8a0-780c-11e7-88ba-10ddb1d4c3d5": [
-    "test/modules/packages/Toml/TOML.chpl"
   ],
   "2409dd7e-b858-11e6-9740-843835579daa": [
     "test/release/examples/benchmarks/hpcc/fft.chpl"
@@ -680,6 +715,9 @@
   ],
   "8c00fe52-31db-11e6-a3a6-10ddb1d4c3d5": [
     "test/release/examples/primers/LAPACKlib.chpl"
+  ],
+  "da2ea3b8-ad6d-11e7-a204-10ddb1d4c3d5": [
+    "test/release/examples/primers/LinearAlgebralib.chpl"
   ],
   "03dbf2b0-31dc-11e6-a3a6-10ddb1d4c3d5": [
     "test/release/examples/primers/README"

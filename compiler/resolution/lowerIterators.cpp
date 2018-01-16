@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -139,6 +139,39 @@ static void nonLeaderParCheck()
   USR_STOP();
 }
 
+static bool isVirtualIterator(Symbol* iterator) {
+  bool retval = false;
+
+  if (AggregateType* at = toAggregateType(iterator->type)) {
+    Vec<AggregateType*>* children = &(at->dispatchChildren);
+
+    if (children->n == 0) {
+      retval = false;
+
+    } else if (children->n == 1 && children->v[0] == dtObject) {
+      retval = false;
+
+    } else {
+      retval = true;
+    }
+  }
+
+  return retval;
+}
+
+static void parallelIterVirtualCheck() {
+  forv_Vec(BlockStmt, block, gBlockStmts) {
+    if (isAlive(block) && block->isForLoop()) {
+      ForLoop* forLoop = toForLoop(block);
+      Symbol* iterator = toSymExpr(forLoop->iteratorGet())->symbol();
+      FnSymbol* ifn = getTheIteratorFn(iterator);
+      if (ifn->hasFlag(FLAG_INLINE_ITERATOR) && isVirtualIterator(iterator)) {
+        USR_FATAL_CONT(forLoop, "virtual parallel iterators are not yet supported (see issue #6998)");
+      }
+    }
+  }
+  USR_STOP();
+}
 
 static void nonLeaderParCheckInt(FnSymbol* fn, bool allowYields)
 {
@@ -504,7 +537,8 @@ replaceIteratorFormalsWithIteratorFields(FnSymbol* iterator, Symbol* ic,
                                          SymExpr* se) {
   int count = 1;
   for_formals(formal, iterator) {
-    if (se->symbol() == formal) {
+    if (formal->hasFlag(FLAG_RETARG) == false &&
+        se->symbol() == formal) {
       // count is used to get the nth field out of the iterator class;
       // it is replaced by the field once the iterator class is created
       Expr* stmt = se->getStmtExpr();
@@ -512,10 +546,18 @@ replaceIteratorFormalsWithIteratorFields(FnSymbol* iterator, Symbol* ic,
       // Error variable arguments should have already been handled.
       INT_ASSERT(! (formal->defPoint->parentSymbol != se->parentSymbol &&
                      formal->hasFlag(FLAG_ERROR_VARIABLE)));
-      // TODO -- this should use/respect ArgSymbol's Qualifier
-      VarSymbol* tmp = newTemp(formal->name, formal->type);
+
+      QualifiedType qt = formal->qualType();
+      // Workaround: use a ref type here
+      // In the future, the Qualifier should be sufficient
+      qt = qt.refToRefType();
+
+      VarSymbol* tmp = newTemp(formal->name, qt);
 
       stmt->insertBefore(new DefExpr(tmp));
+
+      // fixNumericalGetMemberPrims changes some of these
+      // to PRIM_GET_MEMBER_VALUE
       stmt->insertBefore(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_GET_MEMBER, ic, new_IntSymbol(count))));
       se->setSymbol(tmp);
     }
@@ -919,6 +961,7 @@ static void localizeReturnSymbols(FnSymbol* iteratorFn, std::vector<SymExpr*> sy
           SET_LINENO(se);
           Symbol* newRet = newTemp("newRet", ret->type);
           newRet->addFlag(FLAG_SHOULD_NOT_PASS_BY_REF);
+          //newRet->addFlag(FLAG_YVV);
           block->insertAtHead(new DefExpr(newRet));
           se->setSymbol(newRet);
           retReplacementMap.put(block, newRet);
@@ -938,6 +981,12 @@ static void localizeReturnSymbols(FnSymbol* iteratorFn, std::vector<SymExpr*> sy
 // will be included in 'asts' and handled when 'fn' is the enclosing
 // iterator.
 //
+// see commit 8d3b2c4065d6466dbaadab0ae0c8444e6645dae6
+// Now we're using a return temp per yield, but this change is still
+// apparently necessary. I think that lowerIterators isn't copying some
+// variables when it should be.
+//
+// TODO: revisit and remove this
 static void localizeIteratorReturnSymbols() {
   forv_Vec(FnSymbol, iterFn, gFnSymbols) {
     if (iterFn->inTree() && iterFn->isIterator()) {
@@ -1285,7 +1334,7 @@ expandIteratorInline(ForLoop* forLoop) {
     } else if (containsYield(forLoop)) {
       // Inlining a recursive iterator into a loop with a 'yield' pushes
       // that 'yield' into one of _rec_ functions, where it dangles. Ex.:
-      // test/modules/standard/FileSystem/filerator/bradc/findfiles-par.chpl
+      // test/library/standard/FileSystem/filerator/bradc/findfiles-par.chpl
       return false;
     } else {
       expandRecursiveIteratorInline(forLoop);
@@ -1840,40 +1889,46 @@ isBoundedIterator(FnSymbol* fn) {
 }
 
 
-static void
-getIteratorChildren(Vec<Type*>& children, Type* type) {
-  forv_Vec(Type, child, type->dispatchChildren) {
-    if (child != dtObject) {
-      children.add_exclusive(child);
-      getIteratorChildren(children, child);
+static void getIteratorChildren(Vec<Type*>& children, Type* type) {
+  if (AggregateType* at = toAggregateType(type)) {
+    forv_Vec(Type, child, at->dispatchChildren) {
+      if (child != dtObject) {
+        children.add_exclusive(child);
+        getIteratorChildren(children, child);
+      }
     }
   }
 }
 
-#define ZIP1 1
-#define ZIP2 2
-#define ZIP3 3
-#define ZIP4 4
-#define HASMORE 5
+#define ZIP1     1
+#define ZIP2     2
+#define ZIP3     3
+#define ZIP4     4
+#define HASMORE  5
 #define GETVALUE 6
-#define INIT 7
-#define INCR 8
+#define INIT     7
+#define INCR     8
 
-static void
-buildIteratorCallInner(BlockStmt* block, Symbol* ret, int fnid, Symbol* iterator) {
+static void buildIteratorCallInner(BlockStmt* block,
+                                   Symbol*    ret,
+                                   int        fnid,
+                                   Symbol*    iterator) {
   IteratorInfo* ii = getTheIteratorFn(iterator)->iteratorInfo;
-  FnSymbol* fn = NULL;
+  FnSymbol*     fn = NULL;
+
   switch (fnid) {
-  case ZIP1: fn = ii->zip1; break;
-  case ZIP2: fn = ii->zip2; break;
-  case ZIP3: fn = ii->zip3; break;
-  case ZIP4: fn = ii->zip4; break;
-  case HASMORE: fn = ii->hasMore; break;
+  case ZIP1:     fn = ii->zip1;     break;
+  case ZIP2:     fn = ii->zip2;     break;
+  case ZIP3:     fn = ii->zip3;     break;
+  case ZIP4:     fn = ii->zip4;     break;
+  case HASMORE:  fn = ii->hasMore;  break;
   case GETVALUE: fn = ii->getValue; break;
-  case INIT: fn = ii->init; break;
-  case INCR: fn = ii->incr; break;
+  case INIT:     fn = ii->init;     break;
+  case INCR:     fn = ii->incr;     break;
   }
+
   CallExpr* call = new CallExpr(fn, iterator);
+
   if (ret) {
     if (fn->retType->getValType() == ret->type->getValType()) {
       INT_ASSERT(fn->retType == ret->type);
@@ -1926,9 +1981,7 @@ expandForLoop(ForLoop* forLoop) {
   {
     FnSymbol* iterFn = getTheIteratorFn(iterator->type);
     if (iterFn->iteratorInfo && canInlineIterator(iterFn) &&
-        (iterator->type->dispatchChildren.n == 0 ||
-         (iterator->type->dispatchChildren.n == 1 &&
-          iterator->type->dispatchChildren.v[0] == dtObject))) {
+        !isVirtualIterator(iterator)) {
       converted = expandIteratorInline(forLoop);
     }
   }
@@ -2185,6 +2238,9 @@ static void cleanupLeaderFollowerIteratorCalls()
   //
   // cleanup leader and follower iterator calls
   //
+  // Fixes uses of formals outside of their function.
+  // Such formals were temporarily added (e.g. in preFold for PRIM_TO_FOLLOWER)
+  //
   forv_Vec(CallExpr, call, gCallExprs) {
     if (call->parentSymbol) {
       if (FnSymbol* fn = call->resolvedFunction()) {
@@ -2202,18 +2258,19 @@ static void cleanupLeaderFollowerIteratorCalls()
             int i = 2; // first field is super
             for_actuals(actual, call) {
               SymExpr* se = toSymExpr(actual);
-              if (isArgSymbol(se->symbol()) && call->parentSymbol != se->symbol()->defPoint->parentSymbol) {
+              if (isArgSymbol(se->symbol()) &&
+                  call->parentSymbol != se->symbol()->defPoint->parentSymbol) {
                 Symbol* field = toAggregateType(iteratorType)->getField(i);
                 VarSymbol* tmp = NULL;
                 SET_LINENO(call);
-                if (field->type == se->symbol()->type) {
-                  tmp = newTemp(field->name, field->type);
-                  call->getStmtExpr()->insertBefore(new DefExpr(tmp));
-                  call->getStmtExpr()->insertBefore(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_GET_MEMBER_VALUE, iterator, field)));
-                } else if (field->type->refType == se->symbol()->type) {
+                if (field->type->refType == se->symbol()->type) {
                   tmp = newTemp(field->name, field->type->refType);
                   call->getStmtExpr()->insertBefore(new DefExpr(tmp));
                   call->getStmtExpr()->insertBefore(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_GET_MEMBER, iterator, field)));
+                } else {
+                  tmp = newTemp(field->name, field->qualType());
+                  call->getStmtExpr()->insertBefore(new DefExpr(tmp));
+                  call->getStmtExpr()->insertBefore(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_GET_MEMBER_VALUE, iterator, field)));
                 }
                 actual->replace(new SymExpr(tmp));
                 i++;
@@ -2231,7 +2288,9 @@ static void handlePolymorphicIterators()
 {
   forv_Vec(FnSymbol, fn, gFnSymbols) {
     // Find iterator functions that are not in the AST tree.
-    if (fn->defPoint->parentSymbol && fn->iteratorInfo) {
+    if (fn->defPoint->parentSymbol &&
+        fn->iteratorInfo &&
+        !fn->hasFlag(FLAG_TASK_FN_FROM_ITERATOR_FN)) {
       // Assert that the getIterator() function *is* in the tree.
       FnSymbol* getIterator = fn->iteratorInfo->getIterator;
       INT_ASSERT(getIterator->defPoint->parentSymbol);
@@ -2294,29 +2353,34 @@ static void reconstructIRAutoCopy(FnSymbol* fn)
   AggregateType* irt = toAggregateType(arg->type);
   for_fields(field, irt) {
     SET_LINENO(field);
-    if (hasAutoCopyForType(field->type)) {
+
+    Symbol* fieldValue = newTemp(field->name, field->qualType());
+    block->insertAtTail(new DefExpr(fieldValue));
+
+    // Read the field
+    block->insertAtTail(new CallExpr(PRIM_MOVE, fieldValue, new CallExpr(PRIM_GET_MEMBER_VALUE, arg, field)));
+
+    // Now auto-copy it if appropriate
+    Symbol* copyResult = fieldValue;
+    if (isUserDefinedRecord(field->type) && !field->isRef() ) {
       FnSymbol* autoCopy = getAutoCopyForType(field->type);
-      Symbol* tmp1 = newTemp(field->name, field->type);
-      Symbol* tmp2 = newTemp(autoCopy->retType);
-      Symbol* refTmp = NULL;
-      block->insertAtTail(new DefExpr(tmp1));
-      block->insertAtTail(new DefExpr(tmp2));
-      if (isReferenceType(autoCopy->getFormal(1)->type)) {
-        refTmp = newTemp(autoCopy->getFormal(1)->type);
-        block->insertAtTail(new DefExpr(refTmp));
+      Symbol* valueToCopy = fieldValue;
+      Type* copyArgType = autoCopy->getFormal(1)->type;
+      // If the copy function is expecting a reference type that is
+      // a reference to the value we have, do a PRIM_ADDR_OF to pass it.
+      if (isReferenceType(copyArgType) &&
+          copyArgType->getValType() == fieldValue->type) {
+        valueToCopy = newTemp(copyArgType);
+        block->insertAtTail(new DefExpr(valueToCopy));
+        block->insertAtTail(new CallExpr(PRIM_MOVE, valueToCopy, new CallExpr(PRIM_ADDR_OF, fieldValue)));
       }
-      block->insertAtTail(new CallExpr(PRIM_MOVE, tmp1, new CallExpr(PRIM_GET_MEMBER_VALUE, arg, field)));
-      if (refTmp) {
-        block->insertAtTail(new CallExpr(PRIM_MOVE, refTmp, new CallExpr(PRIM_ADDR_OF, tmp1)));
-      }
-      block->insertAtTail(new CallExpr(PRIM_MOVE, tmp2, new CallExpr(autoCopy, refTmp?refTmp:tmp1)));
-      block->insertAtTail(new CallExpr(PRIM_SET_MEMBER, ret, field, tmp2));
-    } else {
-      Symbol* tmp = newTemp(field->name, field->type);
-      block->insertAtTail(new DefExpr(tmp));
-      block->insertAtTail(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_GET_MEMBER_VALUE, arg, field)));
-      block->insertAtTail(new CallExpr(PRIM_SET_MEMBER, ret, field, tmp));
+      copyResult = newTemp(autoCopy->retType);
+      block->insertAtTail(new DefExpr(copyResult));
+      block->insertAtTail(new CallExpr(PRIM_MOVE, copyResult, new CallExpr(autoCopy, valueToCopy)));
     }
+
+    // Now set the field
+    block->insertAtTail(new CallExpr(PRIM_SET_MEMBER, ret, field, copyResult));
   }
   block->insertAtTail(new CallExpr(PRIM_RETURN, ret));
   fn->body->replace(block);
@@ -2330,11 +2394,13 @@ static void reconstructIRAutoDestroy(FnSymbol* fn)
   AggregateType* irt = toAggregateType(arg->type);
   for_fields(field, irt) {
     SET_LINENO(field);
-    if (FnSymbol* autoDestroy = autoDestroyMap.get(field->type)) {
-      Symbol* tmp = newTemp(field->name, field->type);
-      block->insertAtTail(new DefExpr(tmp));
-      block->insertAtTail(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_GET_MEMBER_VALUE, arg, field)));
-      block->insertAtTail(new CallExpr(autoDestroy, tmp));
+    if (isUserDefinedRecord(field->type) && !field->isRef() ) {
+      if (FnSymbol* autoDestroy = autoDestroyMap.get(field->type)) {
+        Symbol* tmp = newTemp(field->name, field->type);
+        block->insertAtTail(new DefExpr(tmp));
+        block->insertAtTail(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_GET_MEMBER_VALUE, arg, field)));
+        block->insertAtTail(new CallExpr(autoDestroy, tmp));
+      }
     }
   }
   block->insertAtTail(new CallExpr(PRIM_RETURN, gVoid));
@@ -2451,6 +2517,7 @@ static void removeUncalledIterators()
 
 void lowerIterators() {
   nonLeaderParCheck();
+  parallelIterVirtualCheck();
 
   clearUpRefsInShadowVars();
 

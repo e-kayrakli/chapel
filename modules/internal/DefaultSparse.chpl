@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -28,6 +28,7 @@ module DefaultSparse {
   class DefaultSparseDom: BaseSparseDomImpl {
     var dist: DefaultDist;
 
+    pragma "local field"
     var indices: [nnzDom] index(rank, idxType);
 
     proc linksDistribution() param return false;
@@ -143,6 +144,9 @@ module DefaultSparse {
 
       // if the index already existed, then return
       if (found) then return 0;
+
+      if boundsChecking then
+        this.boundsCheck(ind);
 
       // increment number of nonzeroes
       nnz += 1;

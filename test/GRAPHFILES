@@ -82,6 +82,7 @@ performance/bharshbarg/forall-dom-range.graph
 performance/bharshbarg/arr-forall.graph
 performance/bharshbarg/views-forall-index.graph
 performance/bharshbarg/views-forall-iter.graph
+performance/bharshbarg/create-views.graph
 studies/prk/Stencil/prk-stencil-time.graph
 types/string/ferguson/temporary-copies.graph
 types/string/psahabu/perf/arguments.graph
@@ -261,9 +262,9 @@ types/string/psahabu/perf/arguments.graph
 types/string/psahabu/perf/search.graph
 types/string/psahabu/perf/substring.graph
 # suite: Standard Library
-modules/packages/Sort/performance/sorts-linearithmic.graph
-modules/packages/Sort/performance/sorts-quadratic.graph
-modules/packages/linearalgebra/performance/linearalgebra-perf.graph
+library/packages/Sort/performance/sorts-linearithmic.graph
+library/packages/Sort/performance/sorts-quadratic.graph
+library/packages/LinearAlgebra/performance/linearalgebra-perf.graph
 sparse/CS/multiplication/cs-multiplication.graph
 sparse/CS/resize/cs-resize.graph
 # suite: Misc
@@ -272,7 +273,7 @@ reductions/diten/testSerialReductions.graph
 reductions/vass/reductions-perf.graph
 spectests.graph
 studies/paracr/asenjo/PARACR-BC.graph
-modules/standard/BitOps/c-tests/performance/bitops.graph
+library/standard/BitOps/c-tests/performance/bitops.graph
 studies/rbc/tvandoren/RBC.graph
 exercises/c-ray/c-ray.graph
 # suite: Colorado State University

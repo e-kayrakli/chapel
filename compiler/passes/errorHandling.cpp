@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,6 +21,7 @@
 
 #include "AstVisitorTraverse.h"
 #include "CatchStmt.h"
+#include "DeferStmt.h"
 #include "ForLoop.h"
 #include "driver.h"
 #include "stmt.h"
@@ -153,19 +154,21 @@ namespace {
 // Static class helper functions
 static bool catchesNotExhaustive(TryStmt* tryStmt);
 static bool shouldEnforceStrict(CallExpr* node);
-static Expr* castToError(Symbol* errorExpr);
+static AList castToError(Symbol* error, SymExpr* &castedError);
 
 class ErrorHandlingVisitor : public AstVisitorTraverse {
 
 public:
   ErrorHandlingVisitor       (ArgSymbol* _outFormal, LabelSymbol* _epilogue);
 
-  virtual bool enterTryStmt (TryStmt*   node);
-  virtual void exitTryStmt  (TryStmt*   node);
-  virtual void exitCatchStmt(CatchStmt* node);
-  virtual bool enterCallExpr(CallExpr*  node);
-  virtual bool enterForLoop (ForLoop*   node);
-  virtual void exitForLoop  (ForLoop*   node);
+  virtual bool enterTryStmt  (TryStmt*   node);
+  virtual void exitTryStmt   (TryStmt*   node);
+  virtual void exitCatchStmt (CatchStmt* node);
+  virtual bool enterCallExpr (CallExpr*  node);
+  virtual bool enterForLoop  (ForLoop*   node);
+  virtual void exitForLoop   (ForLoop*   node);
+  virtual bool enterDeferStmt(DeferStmt* node);
+  virtual void exitDeferStmt (DeferStmt* node);
 
 private:
   struct TryInfo {
@@ -178,6 +181,7 @@ private:
 
   std::stack<TryInfo> tryStack;
   std::stack<TryInfo> catchesStack;
+  int                 deferDepth;
   ArgSymbol*          outError;
   LabelSymbol*        epilogue;
 
@@ -195,8 +199,9 @@ private:
 
 ErrorHandlingVisitor::ErrorHandlingVisitor(ArgSymbol*   _outError,
                                            LabelSymbol* _epilogue) {
-  outError = _outError;
-  epilogue = _epilogue;
+  deferDepth = 0;
+  outError   = _outError;
+  epilogue   = _epilogue;
 }
 
 bool ErrorHandlingVisitor::enterTryStmt(TryStmt* node) {
@@ -295,8 +300,19 @@ void ErrorHandlingVisitor::lowerCatches(const TryInfo& info) {
         currHandler = nextHandler;
       }
     }
-    catchBody->insertAtTail(
-        new CallExpr(gChplDeleteError, castToError(toDelete)));
+
+    BlockStmt* deferDeleteBody = new BlockStmt();
+    DeferStmt* deferDelete     = new DeferStmt(deferDeleteBody);
+
+    SymExpr*   castedError     = NULL;
+    AList      castError       = castToError(toDelete, castedError);
+    CallExpr*  deleteError     = new CallExpr(gChplDeleteError, castedError);
+    AList      deleteCond      = errorCond(toDelete,
+                                           new BlockStmt(deleteError));
+
+    deferDeleteBody->insertAtHead(castError);
+    deferDeleteBody->insertAtTail(deleteCond);
+    catchBody->insertAtHead(deferDelete);
   }
 
   if (!hasCatchAll) {
@@ -323,15 +339,7 @@ bool ErrorHandlingVisitor::enterCallExpr(CallExpr* node) {
   bool insideTry = !tryStack.empty();
 
   // The common case of a user-level call to a resolved function
-  FnSymbol* calledFn = node->resolvedFunction();
-
-  // Also handle the PRIMOP for a virtual method call
-  if (calledFn == NULL) {
-    if (node->isPrimitive(PRIM_VIRTUAL_METHOD_CALL)) {
-        SymExpr* arg1 = toSymExpr(node->get(1));
-        calledFn = toFnSymbol(arg1->symbol());
-    }
-  }
+  FnSymbol* calledFn = node->resolvedOrVirtualFunction();
 
   if (calledFn != NULL) {
     if (calledFn->throwsError()) {
@@ -353,7 +361,7 @@ bool ErrorHandlingVisitor::enterCallExpr(CallExpr* node) {
         insert->insertBefore(new DefExpr(errorVar));
         insert->insertBefore(new CallExpr(PRIM_MOVE, errorVar, gNil));
 
-        if (outError != NULL && node->tryTag != TRY_TAG_IN_TRYBANG)
+        if (outError != NULL && node->tryTag != TRY_TAG_IN_TRYBANG && deferDepth == 0)
           errorPolicy->insertAtTail(setOutGotoEpilogue(errorVar));
         else
           errorPolicy->insertAtTail(haltExpr(errorVar, false));
@@ -383,11 +391,34 @@ bool ErrorHandlingVisitor::enterCallExpr(CallExpr* node) {
     VarSymbol* thrownError = toVarSymbol(thrownExpr->symbol());
 
     VarSymbol* fixedError  = newTemp("fixed_error", dtError);
-    CallExpr*  fixError    = new CallExpr(gChplFixThrownError,
-                                          castToError(thrownError));
+    SymExpr*   castedError = NULL;
+    AList      castError   = castToError(thrownError, castedError);
+    CallExpr*  fixError    = new CallExpr(gChplFixThrownError, castedError);
 
+    throwBlock->insertAtTail(castError);
     throwBlock->insertAtTail(new DefExpr(fixedError));
     throwBlock->insertAtTail(new CallExpr(PRIM_MOVE, fixedError, fixError));
+
+    if (!catchesStack.empty()) {
+      Expr*      parent      = throwBlock;
+      CatchStmt* parentCatch = NULL;
+      while (parentCatch == NULL) {
+        parent      = parent->parentExpr;
+        parentCatch = toCatchStmt(parent);
+      }
+
+      if (DefExpr* catchFilter = parentCatch->expr()) {
+        VarSymbol* handledError = toVarSymbol(catchFilter->sym);
+
+        VarSymbol* throwingHandledVar = newTemp("throwingHandledError", dtBool);
+        CallExpr*  throwingHandled    = new CallExpr(PRIM_EQUAL, thrownError, handledError);
+
+        throwBlock->insertAtTail(new DefExpr(throwingHandledVar));
+        throwBlock->insertAtTail(new CallExpr(PRIM_MOVE, throwingHandledVar, throwingHandled));
+        throwBlock->insertAtTail(new CondStmt(new SymExpr(throwingHandledVar),
+                                              new CallExpr(PRIM_MOVE, handledError, gNil)));
+      }
+    }
 
     if (insideTry) {
       throwBlock->insertAtTail(setOuterErrorAndGotoHandler(fixedError));
@@ -464,15 +495,25 @@ void ErrorHandlingVisitor::exitForLoop(ForLoop* node) {
   info.handlerLabel->defPoint->insertAfter(errorCond(err, handler));
 }
 
+bool ErrorHandlingVisitor::enterDeferStmt(DeferStmt* node) {
+  deferDepth++;
+
+  return true;
+}
+
+void ErrorHandlingVisitor::exitDeferStmt(DeferStmt* node) {
+  deferDepth--;
+}
+
+
 // Sets the fn out variable with the given error, then goes to the fn epilogue.
 AList ErrorHandlingVisitor::setOutGotoEpilogue(VarSymbol* error) {
 
-  Expr* castError = castToError(error);
-
-  AList ret;
+  SymExpr* castedError = NULL;
+  AList    ret         = castToError(error, castedError);
   // Using PRIM_ASSIGN instead of PRIM_MOVE here to work around
   // errors that come up in C compilation.
-  ret.insertAtTail(new CallExpr(PRIM_ASSIGN, outError, castError));
+  ret.insertAtTail(new CallExpr(PRIM_ASSIGN, outError, castedError));
   ret.insertAtTail(new GotoStmt(GOTO_RETURN, epilogue));
 
   return ret;
@@ -491,10 +532,10 @@ GotoStmt* ErrorHandlingVisitor::gotoHandler() {
 AList ErrorHandlingVisitor::setOuterErrorAndGotoHandler(VarSymbol* error) {
 
   INT_ASSERT(!tryStack.empty());
-  Expr* castError = castToError(error);
-  TryInfo& outerTry = tryStack.top();
-  AList ret;
-  ret.insertAtTail(new CallExpr(PRIM_MOVE, outerTry.errorVar, castError));
+  TryInfo& outerTry    = tryStack.top();
+  SymExpr* castedError = NULL;
+  AList    ret         = castToError(error, castedError);
+  ret.insertAtTail(new CallExpr(PRIM_MOVE, outerTry.errorVar, castedError));
   ret.insertAtTail(gotoHandler());
 
   return ret;
@@ -589,15 +630,21 @@ static bool shouldEnforceStrict(CallExpr* node) {
 }
 
 
-static Expr* castToError(Symbol* error) {
-  Expr* castError = NULL;
+static AList castToError(Symbol* error, SymExpr* &castedError) {
+  AList ret;
 
-  if (error->type == dtError)
-    castError = new SymExpr(error);
-  else
-    castError = new CallExpr(PRIM_CAST, dtError->symbol, error);
+  if (error->type == dtError) {
+    castedError = new SymExpr(error);
+  } else {
+    VarSymbol* castedErrorVar = newTemp("castedError", dtError);
+    castedError = new SymExpr(castedErrorVar);
 
-  return castError;
+    CallExpr* castError = new CallExpr(PRIM_CAST, dtError->symbol, error);
+    ret.insertAtTail(new DefExpr(castedErrorVar));
+    ret.insertAtTail(new CallExpr(PRIM_MOVE, castedErrorVar, castError));
+  }
+
+  return ret;
 }
 
 class ImplicitThrowsVisitor : public AstVisitorTraverse {
@@ -713,9 +760,10 @@ public:
   ErrorCheckingVisitor(bool inThrowingFn, error_checking_mode_t inMode,
                        implicitThrowsReasons_t* reasons);
 
-  virtual bool enterTryStmt  (TryStmt*   node);
-  virtual void exitTryStmt   (TryStmt*   node);
-  virtual bool enterCallExpr (CallExpr*  node);
+  virtual bool enterTryStmt (TryStmt*   node);
+  virtual void exitTryStmt  (TryStmt*   node);
+  virtual bool enterCallExpr(CallExpr*  node);
+  virtual void exitDeferStmt(DeferStmt* node);
 
 private:
   int  tryDepth;
@@ -844,6 +892,17 @@ bool ErrorCheckingVisitor::enterCallExpr(CallExpr* node) {
   return true;
 }
 
+void ErrorCheckingVisitor::exitDeferStmt(DeferStmt* node) {
+  if (mode == ERROR_MODE_FATAL) {
+
+    // OK, no checking needed
+
+  } else if (canBlockStmtThrow(node->body())) {
+    USR_FATAL_CONT(node, "error handling in defer blocks must be complete");
+    printReason(node, reasons);
+  }
+}
+
 } /* end anon namespace */
 
 
@@ -931,7 +990,9 @@ static error_checking_mode_t computeErrorCheckingMode(FnSymbol* fn)
     // No mode was chosen explicitly, find the default.
 
     ModuleSymbol* mod = fn->getModule();
-    if (mod->hasFlag(FLAG_IMPLICIT_MODULE))
+    if (mod->hasFlag(FLAG_IMPLICIT_MODULE) ||
+        fPermitUnhandledModuleErrors ||
+        mod->hasFlag(FLAG_PROTOTYPE_MODULE))
       mode = ERROR_MODE_FATAL;
     else
       mode = ERROR_MODE_RELAXED;
@@ -942,6 +1003,10 @@ static error_checking_mode_t computeErrorCheckingMode(FnSymbol* fn)
 
 static void checkErrorHandling(FnSymbol* fn, implicitThrowsReasons_t* reasons)
 {
+  if (strcmp(fn->name, "deinit") == 0) {
+    if (fn->throwsError())
+      USR_FATAL_CONT(fn, "deinit is not permitted to throw");
+  }
 
   error_checking_mode_t mode = computeErrorCheckingMode(fn);
   INT_ASSERT(mode != ERROR_MODE_UNKNOWN);

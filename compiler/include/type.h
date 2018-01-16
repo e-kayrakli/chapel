@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -74,11 +74,12 @@ public:
   virtual int            codegenStructure(FILE*       outfile,
                                           const char* baseoffset);
 
-  virtual Symbol*        getField(const char* name, bool fatal = true);
+  virtual Symbol*        getField(const char* name, bool fatal = true)   const;
 
   void                   addSymbol(TypeSymbol* newSymbol);
 
   bool                   isDefaultIntentConst()                          const;
+  bool                   isWidePtrType()                                 const;
 
   // get/set on the type destructor
   bool                   hasDestructor()                                 const;
@@ -100,12 +101,10 @@ public:
   // Used only in PrimitiveType; replace with flag?
   bool                   isInternalType;
 
+  // TODO: can this move to AggregateType?
   Type*                  scalarPromotionType;
 
   SymbolMap              substitutions;
-
-  Vec<Type*>             dispatchChildren;   // dispatch hierarchy
-  Vec<Type*>             dispatchParents;    // dispatch hierarchy
 
   // Only used for LLVM.
   std::map<std::string, int> GEPMap;
@@ -286,6 +285,12 @@ public:
 
   const char* qualStr() const;
 
+  // If isRef() is true, returns a QualifiedType with
+  // a ref type (i.e. with FLAG_REF). This is useful for
+  // working with parts of the compiler that havn't fully
+  // transferred to QualifiedType.
+  QualifiedType refToRefType() const;
+
 private:
   Type*      _type;
   Qualifier  _qual;
@@ -305,7 +310,11 @@ class EnumType : public Type {
   // what integer type contains all of this enum values?
   // if this is NULL it will just be recomputed when needed.
   PrimitiveType* integerType;
+ private:
+  Immediate minConstant;
+  Immediate maxConstant;
 
+ public:
   const char* doc;
 
   EnumType();
@@ -322,6 +331,8 @@ class EnumType : public Type {
   // This will only really work after the function resolution.
   void sizeAndNormalize();
   PrimitiveType* getIntegerType();
+  Immediate* getMinConstant();
+  Immediate* getMaxConstant();
 
   virtual void printDocs(std::ostream *file, unsigned int tabs);
 
@@ -405,7 +416,6 @@ TYPE_EXTERN PrimitiveType*    dtSyncVarAuxFields;
 TYPE_EXTERN PrimitiveType*    dtSingleVarAuxFields;
 
 TYPE_EXTERN PrimitiveType*    dtStringC; // the type of a C string (unowned)
-TYPE_EXTERN PrimitiveType*    dtStringCopy; // the type of a C string (owned)
 TYPE_EXTERN PrimitiveType*    dtCVoidPtr; // the type of a C void* (unowned)
 TYPE_EXTERN PrimitiveType*    dtCFnPtr;   // a C function pointer (unowned)
 
@@ -429,6 +439,8 @@ bool is_complex_type(Type*);
 bool is_enum_type(Type*);
 bool isLegalParamType(Type*);
 int  get_width(Type*);
+int  get_mantissa_width(Type*);
+int  get_exponent_width(Type*);
 bool isClass(Type* t);
 bool isClassOrNil(Type* t);
 bool isRecord(Type* t);
@@ -493,6 +505,7 @@ GenRet codegenImmediate(Immediate* i);
 #define UNION_ID_TYPE dtInt[INT_SIZE_64]
 #define SIZE_TYPE dtInt[INT_SIZE_64]
 #define NODE_ID_TYPE dtInt[INT_SIZE_32]
+#define LOCALE_ID_TYPE dtLocaleID->typeInfo()
 
 #define is_arithmetic_type(t)                        \
         (is_int_type(t)        ||                    \

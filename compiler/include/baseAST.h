@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -639,7 +639,7 @@ static inline const CallExpr* toConstCallExpr(const BaseAST* a)
   case E_ForallStmt:                                                          \
     AST_CALL_LIST (_a, ForallStmt, inductionVariables(),  call, __VA_ARGS__); \
     AST_CALL_LIST (_a, ForallStmt, iteratedExpressions(), call, __VA_ARGS__); \
-    AST_CALL_LIST (_a, ForallStmt, intentVariables(),     call, __VA_ARGS__); \
+    AST_CALL_LIST (_a, ForallStmt, shadowVariables(),     call, __VA_ARGS__); \
     AST_CALL_CHILD(_a, ForallStmt, loopBody(),            call, __VA_ARGS__); \
     break;                                                                    \
   case E_ModuleSymbol:                                                  \

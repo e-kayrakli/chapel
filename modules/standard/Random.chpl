@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -209,18 +209,6 @@ module Random {
     else
       compilerError("Unknown random number generator");
   }
-
-  // remove this deprecation version when appropriate
-  pragma "no doc"
-  pragma "last resort"
-  proc makeRandomStream(seed: int(64) = SeedGenerator.oddCurrentTime,
-                        param parSafe: bool = true,
-                        type eltType = real(64),
-                        param algorithm = defaultRNG) {
-    compilerWarning("Deprecated call to makeRandomStream function. Please fix by passing eltType as the first argument.");
-    return makeRandomStream(eltType, seed, parSafe, algorithm);
-  }
-
 
   /*
 
@@ -552,6 +540,11 @@ module Random {
       type eltType;
 
       /*
+        The seed value for the PRNG.
+      */
+      const seed: int(64);
+
+      /*
         Indicates whether or not the PCGRandomStream needs to be
         parallel-safe by default.  If multiple tasks interact with it in
         an uncoordinated fashion, this must be set to `true`.  If it will
@@ -562,13 +555,7 @@ module Random {
       param parSafe: bool = true;
 
       /*
-        The seed value for the PRNG.
-      */
-      const seed: int(64);
-
-
-      /*
-        Constructs a new stream of random numbers using the specified seed
+        Creates a new stream of random numbers using the specified seed
         and parallel safety.
 
         :arg eltType: The element type to be generated.
@@ -583,32 +570,19 @@ module Random {
         :type parSafe: `bool`
 
       */
-      proc RandomStream(type eltType,
-                        seed: int(64) = SeedGenerator.currentTime,
-                        param parSafe: bool = true) {
+      proc init(type eltType,
+                seed: int(64) = SeedGenerator.currentTime,
+                param parSafe: bool = true) {
+        this.eltType = eltType;
         this.seed = seed;
+        this.parSafe = parSafe;
+        super.init();
         for param i in 1..numGenerators(eltType) {
           param inc = pcg_getvalid_inc(i);
           PCGRandomStreamPrivate_rngs[i].srandom(seed:uint(64), inc);
         }
         PCGRandomStreamPrivate_count = 1;
       }
-
-      // remove this deprecation version when appropriate
-      pragma "no doc"
-      pragma "last resort"
-      proc RandomStream(seed: int(64) = SeedGenerator.currentTime,
-                        param parSafe: bool = true,
-                        type eltType = real(64)) {
-        compilerWarning("Deprecated call to RandomStream constructor. Please fix by passing eltType as the first argument.");
-        this.seed = seed;
-        for param i in 1..numGenerators(eltType) {
-          param inc = pcg_getvalid_inc(i);
-          PCGRandomStreamPrivate_rngs[i].srandom(seed:uint(64), inc);
-        }
-        PCGRandomStreamPrivate_count = 1;
-      }
-
 
       pragma "no doc"
       proc PCGRandomStreamPrivate_getNext_noLock(type resultType=eltType) {
@@ -831,6 +805,7 @@ module Random {
          :return: an iterable expression yielding random `resultType` values
 
        */
+      pragma "fn returns iterator"
       proc iterate(D: domain, type resultType=eltType) {
         if parSafe then
           PCGRandomStreamPrivate_lock$ = true;
@@ -840,6 +815,19 @@ module Random {
         if parSafe then
           PCGRandomStreamPrivate_lock$;
         return PCGRandomPrivate_iterate(resultType, D, seed, start);
+      }
+
+      // Forward the leader iterator as well.
+      pragma "no doc"
+      pragma "fn returns iterator"
+      proc iterate(D: domain, type resultType=real, param tag)
+        where tag == iterKind.leader
+      {
+        // Note that proc iterate() for the serial case (i.e. the one above)
+        // is going to be invoked as well, so we should not be taking
+        // any actions here other than the forwarding.
+        const start = PCGRandomStreamPrivate_count;
+        return PCGRandomPrivate_iterate(resultType, D, seed, start, tag);
       }
 
       pragma "no doc"
@@ -2031,6 +2019,12 @@ module Random {
       type eltType = real(64);
 
       /*
+        The seed value for the PRNG.  It must be an odd integer in the
+        interval [1, 2**46).
+      */
+      const seed: int(64);
+
+      /*
         Indicates whether or not the NPBRandomStream needs to be
         parallel-safe by default.  If multiple tasks interact with it in
         an uncoordinated fashion, this must be set to `true`.  If it will
@@ -2040,15 +2034,9 @@ module Random {
       */
       param parSafe: bool = true;
 
-      /*
-        The seed value for the PRNG.  It must be an odd integer in the
-        interval [1, 2**46).
-      */
-      const seed: int(64);
-
 
       /*
-        Constructs a new stream of random numbers using the specified seed
+        Creates a new stream of random numbers using the specified seed
         and parallel safety.
 
         .. note::
@@ -2068,9 +2056,10 @@ module Random {
         :type parSafe: `bool`
 
       */
-      proc NPBRandomStream(type eltType,
-                           seed: int(64) = SeedGenerator.oddCurrentTime,
-                           param parSafe: bool = true) {
+      proc init(type eltType = real(64),
+                seed: int(64) = SeedGenerator.oddCurrentTime,
+                param parSafe: bool = true) {
+        this.eltType = eltType;
 
         // The mod operation is written in these steps in order
         // to work around an apparent PGI compiler bug.
@@ -2085,40 +2074,8 @@ module Random {
         // Adjust seed to be between 0 and 2**46.
         mod = useed & two_46_mask;
         this.seed = mod:int(64);
-
-        if this.seed % 2 == 0 || this.seed < 1 || this.seed > two_46:int(64) then
-          halt("NPBRandomStream seed must be an odd integer between 0 and 2**46");
-
-        NPBRandomStreamPrivate_cursor = seed;
-        NPBRandomStreamPrivate_count = 1;
-        if eltType == real || eltType == imag || eltType == complex {
-          // OK, supported element type
-        } else {
-          compilerError("NPBRandomStream only supports eltType=real(64), imag(64), or complex(128)");
-        }
-      }
-
-      pragma "no doc"
-      pragma "last resort"
-      proc NPBRandomStream(seed: int(64) = SeedGenerator.oddCurrentTime,
-                           param parSafe: bool = true,
-                           type eltType = real(64)) {
-
-        compilerWarning("Deprecated call to NPBRandomStream constructor. Please fix by passing eltType as the first argument.");
-
-        // The mod operation is written in these steps in order
-        // to work around an apparent PGI compiler bug.
-        // See test/portability/bigmod.test.c
-        var one:uint(64) = 1;
-        var two_46:uint(64) = one << 46;
-        var two_46_mask:uint(64) = two_46 - 1;
-        var useed = seed:uint(64);
-        var mod:uint(64);
-        if useed % 2 == 0 then
-          halt("NPBRandomStream seed must be an odd integer");
-        // Adjust seed to be between 0 and 2**46.
-        mod = useed & two_46_mask;
-        this.seed = mod:int(64);
+        this.parSafe = parSafe;
+        super.init();
 
         if this.seed % 2 == 0 || this.seed < 1 || this.seed > two_46:int(64) then
           halt("NPBRandomStream seed must be an odd integer between 0 and 2**46");
@@ -2242,6 +2199,7 @@ module Random {
          :return: an iterable expression yielding random `resultType` values
 
        */
+      pragma "fn returns iterator"
       proc iterate(D: domain, type resultType=real) {
         if parSafe then
           NPBRandomStreamPrivate_lock$ = true;
@@ -2255,7 +2213,8 @@ module Random {
 
       // Forward the leader iterator as well.
       pragma "no doc"
-      proc iterate(D: domain, param tag, type resultType=real)
+      pragma "fn returns iterator"
+      proc iterate(D: domain, type resultType=real, param tag)
         where tag == iterKind.leader
       {
         // Note that proc iterate() for the serial case (i.e. the one above)

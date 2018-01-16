@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -27,8 +27,10 @@ class CondStmt;
 class DefExpr;
 class Expr;
 class FnSymbol;
+class ForallStmt;
 class LoopStmt;
 class SymExpr;
+class UnresolvedSymExpr;
 
 class InitNormalize {
 public:
@@ -40,9 +42,10 @@ public:
 
 
                   InitNormalize(FnSymbol*  fn);
-                  InitNormalize(BlockStmt* block, const InitNormalize& curr);
-                  InitNormalize(LoopStmt*  loop,  const InitNormalize& curr);
-                  InitNormalize(CondStmt*  cond,  const InitNormalize& curr);
+                  InitNormalize(BlockStmt*  block, const InitNormalize& curr);
+                  InitNormalize(LoopStmt*   loop,  const InitNormalize& curr);
+                  InitNormalize(ForallStmt* loop,  const InitNormalize& curr);
+                  InitNormalize(CondStmt*   cond,  const InitNormalize& curr);
 
   void            merge(const InitNormalize& fork);
 
@@ -70,7 +73,14 @@ public:
   bool            inCondStmt()                                           const;
   bool            inParallelStmt()                                       const;
   bool            inCoforall()                                           const;
+  bool            inForall()                                             const;
   bool            inOn()                                                 const;
+  bool            inOnInLoopBody()                                       const;
+  bool            inOnInCondStmt()                                       const;
+  bool            inOnInParallelStmt()                                   const;
+  bool            inOnInCoforall()                                       const;
+  bool            inOnInForall()                                         const;
+
 
   DefExpr*        currField()                                            const;
 
@@ -93,6 +103,7 @@ private:
     cBlockBegin,
     cBlockCobegin,
     cBlockCoforall,
+    cBlockForall,
     cBlockOn
   };
 
@@ -133,6 +144,7 @@ private:
 
   bool            isFieldAccess(CallExpr* callExpr)                      const;
 
+  void            handleInsertedMethodCall(CallExpr* call)               const;
 
   Expr*           fieldInitFromStmt(CallExpr* stmt, DefExpr* field)      const;
 
@@ -142,15 +154,9 @@ private:
   DefExpr*        toLocalField(SymExpr*  expr)                           const;
   DefExpr*        toLocalField(CallExpr* expr)                           const;
 
-  DefExpr*        toLocalField(AggregateType* at, const char* name)      const;
-  DefExpr*        toLocalField(AggregateType* at, SymExpr*    expr)      const;
-  DefExpr*        toLocalField(AggregateType* at, CallExpr*   expr)      const;
-
   DefExpr*        toSuperField(SymExpr* expr)                            const;
 
   DefExpr*        toSuperField(AggregateType* at, const char* name)      const;
-  DefExpr*        toSuperField(AggregateType* at, SymExpr*    expr)      const;
-  DefExpr*        toSuperField(AggregateType* at, CallExpr*   expr)      const;
 
   void            transformSuperInit(Expr* initStmt);
 
@@ -160,6 +166,7 @@ private:
   DefExpr*        mCurrField;
   InitPhase       mPhase;
   BlockType       mBlockType;
+  BlockType       mPrevBlockType;
 };
 
 #endif

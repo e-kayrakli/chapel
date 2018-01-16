@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -336,4 +336,18 @@ int minimumPrefix(std::string s) {
  */
 std::string ltrimAllLines(std::string s) {
   return erasePrefix(s, minimumPrefix(s));
+}
+
+/*
+ * Gather words from the string and store them into the array.
+ * These words are arguments to a program.
+ */
+void readArgsFromString(std::string s, std::vector<std::string>& args) {
+  if (s != "") {
+    //split s by spaces
+    std::stringstream argsStream(s);
+    std::string word;
+    while(argsStream >> word)
+      args.push_back(word);
+  }
 }

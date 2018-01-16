@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -128,7 +128,7 @@ iter distributedDynamic(param tag:iterKind,
 where tag == iterKind.leader
 {
   compilerAssert(isDomain(c) || isRange(c),
-                 ("DistributedIters: Dynamic iterator (serial): must use a "
+                 ("DistributedIters: Dynamic iterator (leader): must use a "
                   + "valid domain or range"),
                  1);
   assert(chunkSize > 0,
@@ -304,7 +304,7 @@ iter distributedDynamic(param tag:iterKind,
 where tag == iterKind.follower
 {
   compilerAssert(isDomain(c) || isRange(c),
-                 ("DistributedIters: Dynamic iterator (serial): must use a "
+                 ("DistributedIters: Dynamic iterator (follower): must use a "
                   + "valid domain or range"),
                  1);
   const current = if isDomain(c)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,6 +21,7 @@
 
 #include "astutil.h"
 #include "expr.h"
+#include "ForallStmt.h"
 #include "InitNormalize.h"
 #include "passes.h"
 #include "stmt.h"
@@ -35,13 +36,13 @@ enum InitStyle {
   STYLE_BOTH
 };
 
-static bool      isInitStmt (Expr* stmt);
-static bool      isSuperInit(Expr* stmt);
-static bool      isThisInit (Expr* stmt);
+static bool     isInitStmt (Expr* stmt);
+static bool     isSuperInit(Expr* stmt);
+static bool     isThisInit (Expr* stmt);
 
-static bool      isUnacceptableTry(Expr* stmt);
+static bool     isUnacceptableTry(Expr* stmt);
 
-static void      preNormalize(FnSymbol* fn);
+static void     preNormalizeInit(FnSymbol* fn);
 
 static DefExpr* toSuperFieldInit(AggregateType* at, CallExpr* expr);
 static DefExpr* toLocalFieldInit(AggregateType* at, CallExpr* expr);
@@ -77,7 +78,7 @@ void preNormalizeFields(AggregateType* at) {
       Type* type = NULL;
 
       if (Expr* typeExpr = defExpr->exprType) {
-        type = typeForTypeSpecifier(typeExpr);
+        type = typeForTypeSpecifier(typeExpr, false);
 
         // var x, y : Foo
         //   =>
@@ -164,14 +165,14 @@ static AggregateType* typeForNewExpr(CallExpr* newExpr) {
 static bool isReturnVoid(FnSymbol* fn);
 
 void preNormalizeInitMethod(FnSymbol* fn) {
-  if (fn->hasFlag(FLAG_NO_PARENS)   ==  true) {
+  if (fn->hasFlag(FLAG_NO_PARENS) ==  true) {
     USR_FATAL(fn, "an initializer cannot be declared without parentheses");
 
-  } else if (isReturnVoid(fn)       == false) {
+  } else if (isReturnVoid(fn)     == false) {
     USR_FATAL(fn, "an initializer cannot return a non-void result");
 
   } else {
-    preNormalize(fn);
+    preNormalizeInit(fn);
 
     errorOnFieldsInArgList(fn);
   }
@@ -253,9 +254,16 @@ static bool      isThisInit(Expr* stmt);
 static bool      hasReferenceToThis(Expr* expr);
 static bool      isMethodCall(CallExpr* callExpr);
 
-static void preNormalize(FnSymbol* fn) {
-  AggregateType* at         = toAggregateType(fn->_this->type);
+static void preNormalizeInit(FnSymbol* fn) {
+  ArgSymbol*     _this = fn->getFormal(2);
+  AggregateType* at    = toAggregateType(fn->_this->type);
   InitNormalize  state(fn);
+
+  if (_this->intent == INTENT_BLANK) {
+    if (isRecord(at) == true) {
+      _this->intent = INTENT_REF;
+    }
+  }
 
   if (at->isGeneric() == true) {
     fn->_this->addFlag(FLAG_DELAY_GENERIC_EXPANSION);
@@ -326,8 +334,7 @@ static void preNormalize(FnSymbol* fn) {
   // If this is a non-generic class then create a type method
   // to wrap this initializer
   if (isClass(at) == true && at->isGeneric() == false) {
-    FnSymbol* _newFn = buildClassAllocator(fn);
-    normalize(_newFn);
+    buildClassAllocator(fn);
 
     fn->addFlag(FLAG_INLINE);
   }
@@ -413,6 +420,19 @@ static InitNormalize preNormalize(BlockStmt*    block,
             INT_ASSERT(false);
           }
 
+        } else if (state.inForall() == true) {
+          if (isSuperInit(callExpr) == true) {
+            USR_FATAL(stmt,
+                      "use of super.init() call in a forall loop body");
+
+          } else if (isThisInit(callExpr) == true) {
+            USR_FATAL(stmt,
+                      "use of this.init() call in a forall loop body");
+
+          } else {
+            INT_ASSERT(false);
+          }
+
         } else if (state.inOn() == true) {
           if (isSuperInit(callExpr) == true) {
             USR_FATAL(stmt,
@@ -467,29 +487,33 @@ static InitNormalize preNormalize(BlockStmt*    block,
                     "multiple initializations of field \"%s\"",
                     field->sym->name);
 
-        } else if (state.inLoopBody() == true) {
+        } else if (state.inLoopBody() == true ||
+                   state.inOnInLoopBody() == true) {
           USR_FATAL(stmt,
                     "can't initialize field \"%s\" inside a "
                     "loop during phase 1 of initialization",
                     field->sym->name);
 
-        } else if (state.inParallelStmt() == true) {
+        } else if (state.inParallelStmt() == true ||
+                   state.inOnInParallelStmt() == true) {
           USR_FATAL(stmt,
                     "can't initialize field \"%s\" inside a "
                     "parallel statement during phase 1 of initialization",
                     field->sym->name);
 
-        } else if (state.inCoforall() == true) {
+        } else if (state.inCoforall() == true ||
+                   state.inOnInCoforall() == true) {
           USR_FATAL(stmt,
                     "can't initialize field \"%s\" inside a "
                     "coforall during phase 1 of initialization",
                     field->sym->name);
 
 
-        } else if (state.inOn() == true) {
+        } else if (state.inForall() == true ||
+                   state.inOnInForall() == true) {
           USR_FATAL(stmt,
-                    "can't initialize field \"%s\" inside an "
-                    "on block during phase 1 of initialization",
+                    "can't initialize field \"%s\" inside a "
+                    "forall during phase 1 of initialization",
                     field->sym->name);
 
 
@@ -593,6 +617,10 @@ static InitNormalize preNormalize(BlockStmt*    block,
       preNormalize((BlockStmt*) stmt, InitNormalize(loop, state));
       stmt = stmt->next;
 
+    } else if (ForallStmt* forall = toForallStmt(stmt)) {
+      preNormalize(forall->loopBody(), InitNormalize(forall, state));
+      stmt = stmt->next;
+
     } else if (BlockStmt* block = toBlockStmt(stmt)) {
       state.merge(preNormalize(block, InitNormalize(block, state)));
       stmt  = stmt->next;
@@ -652,6 +680,17 @@ static bool isMethodCall(CallExpr* callExpr) {
       if (SymExpr* lhs = toSymExpr(base->get(1))) {
         if (ArgSymbol* arg = toArgSymbol(lhs->symbol())) {
           retval = arg->hasFlag(FLAG_ARG_THIS);
+
+          // Should only happen for the modifications I made earlier.
+          UnresolvedSymExpr* calledSe = toUnresolvedSymExpr(base->get(2));
+          if (calledSe) {
+            if (strstr(calledSe->unresolved, "_if_fn")       != 0 ||
+                strstr(calledSe->unresolved, "_parloopexpr") != 0) {
+              // Only mark it as a method call if it is not a compiler inserted
+              // loop or conditional expression function.
+              retval = false;
+            }
+          }
         }
       }
     }
@@ -659,7 +698,6 @@ static bool isMethodCall(CallExpr* callExpr) {
 
   return retval;
 }
-
 
 /************************************* | **************************************
 *                                                                             *
@@ -978,7 +1016,8 @@ FnSymbol* buildClassAllocator(FnSymbol* initMethod) {
 
   type->addFlag(FLAG_TYPE_VARIABLE);
 
-  fn->addFlag(FLAG_METHOD);
+  fn->setMethod(true);
+
   fn->addFlag(FLAG_COMPILER_GENERATED);
   fn->addFlag(FLAG_LAST_RESORT);
 
@@ -993,7 +1032,7 @@ FnSymbol* buildClassAllocator(FnSymbol* initMethod) {
   //   1) add a corresponding formal to the new type method
   //   2) add that formal to the call to "init"
   //
-  int count = 1;
+  int       count = 1;
   SymbolMap initArgToNewArgMap;
 
   for_formals(formal, initMethod) {
@@ -1032,9 +1071,10 @@ FnSymbol* buildClassAllocator(FnSymbol* initMethod) {
 
   body->insertAtTail(new CallExpr(PRIM_RETURN, newInstance));
 
-
   // Insert the definition in to the tree
   at->symbol->defPoint->insertBefore(new DefExpr(fn));
+
+  normalize(fn);
 
   return fn;
 }

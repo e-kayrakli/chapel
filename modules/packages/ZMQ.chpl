@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -209,11 +209,11 @@ following sources demonstrate a :const:`PUSH`-:const:`PULL` socket pair between
 a Chapel server and a Python client using the
 `PyZMQ Python bindings for ZeroMQ <https://pyzmq.readthedocs.io/en/latest/>`_.
 
-.. literalinclude:: ../../../../test/modules/packages/ZMQ/interop-py/server.chpl
+.. literalinclude:: ../../../../test/library/packages/ZMQ/interop-py/server.chpl
    :language: chapel
    :lines: 10-
 
-.. literalinclude:: ../../../../test/modules/packages/ZMQ/interop-py/client.py
+.. literalinclude:: ../../../../test/library/packages/ZMQ/interop-py/client.py
    :language: python
 
 Tasking-Layer Interaction
@@ -267,7 +267,8 @@ module ZMQ {
   use Reflection;
   use ExplicitRefCount;
 
-  private extern var errno: c_int;
+  private extern proc chpl_macro_int_errno():c_int;
+  private inline proc errno return chpl_macro_int_errno():c_int;
 
   // Types
   pragma "no doc"
@@ -470,9 +471,10 @@ module ZMQ {
     var ctx: c_void_ptr;
     var home: locale;
 
-    proc ContextClass() {
-      this.home = here;
+    proc init() {
       this.ctx = zmq_ctx_new();
+      this.home = here;
+      super.init();
       if this.ctx == nil {
         var errmsg = zmq_strerror(errno):string;
         halt("Error in ContextClass(): %s\n", errmsg);
@@ -502,7 +504,7 @@ module ZMQ {
     /*
       Create a ZMQ context.
      */
-    proc Context() {
+    proc init() {
       acquire(new ContextClass());
     }
 
@@ -571,9 +573,10 @@ module ZMQ {
     var socket: c_void_ptr;
     var home: locale;
 
-    proc SocketClass(ctx: Context, sockType: int) {
-      this.home = here;
+    proc init(ctx: Context, sockType: int) {
       this.socket = zmq_socket(ctx.classRef.ctx, sockType:c_int);
+      this.home = here;
+      super.init();
       if this.socket == nil {
         var errmsg = zmq_strerror(errno):string;
         halt("Error in SocketClass(): %s\n", errmsg);
@@ -604,13 +607,14 @@ module ZMQ {
     var context: Context;
 
     pragma "no doc"
-    proc Socket() {
+    proc init() {
       compilerError("Cannot create Socket directly; try Context.socket()");
     }
 
     pragma "no doc"
-    proc Socket(ctx: Context, sockType: int) {
+    proc init(ctx: Context, sockType: int) {
       context = ctx;
+      super.init();
       on ctx.classRef.home do
         acquire(new SocketClass(ctx, sockType));
     }

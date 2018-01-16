@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -114,7 +114,7 @@ private param _rcErr1 = " must be 'rcDomain' or 'rcDomainBase dmapped Replicated
 private proc _rcTargetLocalesHelper(replicatedVar: [?D])
   where replicatedVar._value.type: ReplicatedArr
 {
-  return replicatedVar._value.dom.dist.targetLocales;
+  return replicatedVar.targetLocales();
 }
 
 pragma "no doc" // documented with the following entry

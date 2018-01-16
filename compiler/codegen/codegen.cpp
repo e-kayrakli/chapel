@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -20,27 +20,35 @@
 #include "codegen.h"
 
 #include "astutil.h"
-#include "stlUtil.h"
+#include "clangBuiltinsWrappedSet.h"
+#include "clangUtil.h"
 #include "config.h"
 #include "driver.h"
 #include "expr.h"
 #include "files.h"
 #include "insertLineNumbers.h"
+#include "llvmDebug.h"
+#include "llvmUtil.h"
+#include "LayeredValueTable.h"
 #include "mysystem.h"
 #include "passes.h"
+#include "stlUtil.h"
 #include "stmt.h"
 #include "stringutil.h"
 #include "symbol.h"
-#include "clangBuiltinsWrappedSet.h"
 #include "virtualDispatch.h"
+
+#ifdef HAVE_LLVM
+// Include relevant LLVM headers
+#include "llvm/IR/Module.h"
+#include "llvm/Pass.h"
+#endif
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
 
 #include <inttypes.h>
-
-#include "llvmDebug.h"
 
 #include <algorithm>
 #include <cctype>
@@ -176,7 +184,7 @@ genGlobalDefClassId(const char* cname, int id, bool isHeader) {
     llvm::Type *id_type = id_type_g.type;
     llvm::GlobalVariable * gv = llvm::cast<llvm::GlobalVariable>(
         info->module->getOrInsertGlobal(name, id_type));
-    gv->setInitializer(info->builder->getInt32(id));
+    gv->setInitializer(info->irBuilder->getInt32(id));
     gv->setConstant(true);
     info->lvt->addGlobalValue(name, gv, GEN_PTR, ! is_signed(CLASS_ID_TYPE));
 #endif
@@ -212,7 +220,7 @@ genGlobalInt(const char* cname, int value, bool isHeader) {
     llvm::GlobalVariable *globalInt = llvm::cast<llvm::GlobalVariable>(
         info->module->getOrInsertGlobal(
           cname, llvm::IntegerType::getInt32Ty(info->module->getContext())));
-    globalInt->setInitializer(info->builder->getInt32(value));
+    globalInt->setInitializer(info->irBuilder->getInt32(value));
     globalInt->setConstant(true);
     info->lvt->addGlobalValue(cname, globalInt, GEN_PTR, false);
 #endif
@@ -228,7 +236,7 @@ static void genGlobalInt32(const char *cname, int value) {
     llvm::GlobalVariable *globalInt =
         llvm::cast<llvm::GlobalVariable>(info->module->getOrInsertGlobal(
             cname, llvm::IntegerType::getInt32Ty(info->module->getContext())));
-    globalInt->setInitializer(info->builder->getInt32(value));
+    globalInt->setInitializer(info->irBuilder->getInt32(value));
     globalInt->setConstant(true);
     info->lvt->addGlobalValue(cname, globalInt, GEN_PTR, false);
 #endif
@@ -272,44 +280,44 @@ struct compareSymbolFunctor {
 
 // Visit class types in depth-first preorder order.
 // Assigns class IDs to classes in that order.
-static void
-preorderVisitClassesComputeIds(TypeSymbol* ts, int* nextNumber)
-{
+static void preorderVisitClassesComputeIds(TypeSymbol* ts, int* nextNumber) {
   typedef std::set<TypeSymbol*, compareSymbolFunctor> children_set;
 
   children_set children;
 
-  if (ts == NULL)
-    return;
+  if (ts != NULL) {
+    AggregateType* at   = toAggregateType(ts->type);
+    int            myN1 = *nextNumber;
 
-  AggregateType* at = toAggregateType(ts->type);
-  INT_ASSERT(at != NULL);
+    INT_ASSERT(at != NULL);
 
-  // visit node
-  int myN1 = *nextNumber;
-  *nextNumber = *nextNumber + 1;
-  at->classId = myN1;
+    *nextNumber = *nextNumber + 1;
+    at->classId = myN1;
 
-  // visit children in order
-  forv_Vec(Type, child, ts->type->dispatchChildren) {
-    if (child)
-      children.insert(child->symbol);
-  }
-  for (children_set::iterator it = children.begin();
-       it != children.end();
-       ++it ) {
-    TypeSymbol* child = *it;
-    preorderVisitClassesComputeIds(child, nextNumber);
+    // visit children in order
+    forv_Vec(AggregateType, child, at->dispatchChildren) {
+      if (child != NULL) {
+        children.insert(child->symbol);
+      }
+    }
+
+    for (children_set::iterator it = children.begin();
+         it != children.end();
+         ++it ) {
+      TypeSymbol* child = *it;
+
+      preorderVisitClassesComputeIds(child, nextNumber);
+    }
   }
 }
 
 static int gMaxClassId = 1;
 
-static
-void assignClassIds()
-{
+static void assignClassIds() {
   int next = 1;
+
   preorderVisitClassesComputeIds(dtObject->symbol, &next);
+
   gMaxClassId = next - 1;
 }
 
@@ -317,39 +325,42 @@ void assignClassIds()
 // Computes a maximum ID of subclasses and stores that in n2.
 // Returns the maximum ID of a subclass.
 // This helps with Schubert numbering
-static
-int computeMaxSubclass(TypeSymbol* ts, std::vector<int> & n2)
-{
-  if (ts == NULL)
-    return 0;
+static int computeMaxSubclass(TypeSymbol* ts, std::vector<int>& n2) {
+  int retval = 0;
 
-  AggregateType* at = toAggregateType(ts->type);
-  INT_ASSERT(at != NULL);
+  if (ts != NULL) {
+    AggregateType* at    = toAggregateType(ts->type);
+    int            myId  = at->classId;
+    int            maxN1 = myId;
 
-  int myId = at->classId;
-  int maxN1 = myId;
-  forv_Vec(Type, child, ts->type->dispatchChildren) {
-    if (child) {
-      int subMax = computeMaxSubclass(child->symbol, n2);
-      if (subMax > maxN1)
-        maxN1 = subMax;
+    forv_Vec(Type, child, at->dispatchChildren) {
+      if (child != NULL) {
+        int subMax = computeMaxSubclass(child->symbol, n2);
+
+        if (subMax > maxN1) {
+          maxN1 = subMax;
+        }
+      }
     }
+
+    if ((size_t) myId >= n2.size()) {
+      n2.resize(myId + 1);
+    }
+
+    // set n2 for node, which is max of this n1
+    // and child n1s.
+    n2[myId] = maxN1;
+    retval   = maxN1;
   }
 
-  if ((size_t) myId >= n2.size())
-    n2.resize(myId + 1);
-
-  // set n2 for node, which is max of this n1
-  // and child n1s.
-  n2[myId] = maxN1;
-
-  return maxN1;
+  return retval;
 }
 
 
-static void
-codegenGlobalConstArray(const char* name, const char* eltType, std::vector<GenRet> * vals, bool isHeader)
-{
+static void codegenGlobalConstArray(const char*          name,
+                                    const char*          eltType,
+                                    std::vector<GenRet>* vals,
+                                    bool                 isHeader) {
   GenInfo* info = gGenInfo;
 
   if(isHeader) {
@@ -542,7 +553,7 @@ genFtable(std::vector<FnSymbol*> & fSymbols, bool isHeader) {
 #ifdef HAVE_LLVM
       INT_ASSERT(funcPtrType.type);
       llvm::Function *func = getFunctionLLVM(fn->cname);
-      gen.val = info->builder->CreatePointerCast(func, funcPtrType.type);
+      gen.val = info->irBuilder->CreatePointerCast(func, funcPtrType.type);
 #endif
     }
     ftable.push_back(gen);
@@ -705,7 +716,7 @@ genVirtualMethodTable(std::vector<TypeSymbol*>& types, bool isHeader) {
 #ifdef HAVE_LLVM
               INT_ASSERT(funcPtrType.type);
               llvm::Function *func = getFunctionLLVM(vfn->cname);
-              fnAddress.val = info->builder->CreatePointerCast(func, funcPtrType.type);
+              fnAddress.val = info->irBuilder->CreatePointerCast(func, funcPtrType.type);
 #endif
             }
 
@@ -1243,7 +1254,7 @@ static void genGlobalSerializeTable(GenInfo* info) {
       INT_ASSERT(se);
 
       global_serializeTable.push_back(llvm::cast<llvm::Constant>(
-            info->builder->CreatePointerCast(
+            info->irBuilder->CreatePointerCast(
               info->lvt->getValue(se->symbol()->cname).val,
               global_serializeTableEntryType)));
     }
@@ -1602,26 +1613,50 @@ static void codegen_header(std::set<const char*> & cnames, std::vector<TypeSymbo
   //
 
   Vec<TypeSymbol*> next, current;
+
   current.add(dtObject->symbol);
+
   while (current.n) {
     forv_Vec(TypeSymbol, ts, current) {
       ts->codegenDef();
-      forv_Vec(Type, child, ts->type->dispatchChildren) {
-        if (child)
-          next.set_add(child->symbol);
+
+      if (AggregateType* at = toAggregateType(ts->type)) {
+        forv_Vec(AggregateType, child, at->dispatchChildren) {
+          if (child != NULL) {
+            next.set_add(child->symbol);
+          }
+        }
       }
     }
+
     current.clear();
     current.move(next);
     current.set_to_vec();
+
     qsort(current.v, current.n, sizeof(current.v[0]), compareSymbol2);
+
     next.clear();
   }
 
   if(!info->cfile) {
     // Codegen any type annotations that are necessary.
+    // Start with primitive types in case they are referenced by
+    // records or classes.
+    forv_Vec(TypeSymbol, typeSymbol, gTypeSymbols) {
+      if (typeSymbol->defPoint->parentExpr == rootModule->block &&
+          isPrimitiveType(typeSymbol->type) &&
+          typeSymbol->llvmType) {
+        typeSymbol->codegenMetadata();
+      }
+    }
     forv_Vec(TypeSymbol, typeSymbol, types) {
       typeSymbol->codegenMetadata();
+    }
+    // Aggregate annotations for class objects must wait until all other
+    // type annotations are defined, because there might be cycles.
+    forv_Vec(TypeSymbol, typeSymbol, types) {
+      if (isClass(typeSymbol->type))
+        typeSymbol->codegenAggMetadata();
     }
   }
 
@@ -1721,15 +1756,15 @@ static void codegen_header(std::set<const char*> & cnames, std::vector<TypeSymbo
 
     std::vector<llvm::Constant *> private_broadcastTable;
     private_broadcastTable.push_back(llvm::cast<llvm::Constant>(
-          info->builder->CreatePointerCast(
+          info->irBuilder->CreatePointerCast(
             info->lvt->getValue("chpl_verbose_comm").val,
             private_broadcastTableEntryType)));
     private_broadcastTable.push_back(llvm::cast<llvm::Constant>(
-          info->builder->CreatePointerCast(
+          info->irBuilder->CreatePointerCast(
             info->lvt->getValue("chpl_comm_diagnostics").val,
             private_broadcastTableEntryType)));
     private_broadcastTable.push_back(llvm::cast<llvm::Constant>(
-          info->builder->CreatePointerCast(
+          info->irBuilder->CreatePointerCast(
             info->lvt->getValue("chpl_verbose_mem").val,
             private_broadcastTableEntryType)));
 
@@ -1740,7 +1775,7 @@ static void codegen_header(std::set<const char*> & cnames, std::vector<TypeSymbo
         INT_ASSERT(se);
 
         private_broadcastTable.push_back(llvm::cast<llvm::Constant>(
-              info->builder->CreatePointerCast(
+              info->irBuilder->CreatePointerCast(
                 info->lvt->getValue(se->symbol()->cname).val,
                 private_broadcastTableEntryType)));
         // To preserve operand order, this should be insertAtTail.
@@ -1853,21 +1888,17 @@ codegen_config() {
     llvm::BasicBlock *createConfigBlock =
       llvm::BasicBlock::Create(info->module->getContext(),
                                "entry", createConfigFunc);
-    info->builder->SetInsertPoint(createConfigBlock);
+    info->irBuilder->SetInsertPoint(createConfigBlock);
 
     llvm::Function *initConfigFunc = getFunctionLLVM("initConfigVarTable");
-#if HAVE_LLVM_VER >= 37
-    info->builder->CreateCall(initConfigFunc, {} );
-#else
-    info->builder->CreateCall(initConfigFunc);
-#endif
+    info->irBuilder->CreateCall(initConfigFunc, {} );
 
     llvm::Function *installConfigFunc = getFunctionLLVM("installConfigVar");
 
     forv_Vec(VarSymbol, var, gVarSymbols) {
       if (var->hasFlag(FLAG_CONFIG) && !var->isType()) {
         std::vector<llvm::Value *> args (3);
-        args[0] = info->builder->CreateLoad(
+        args[0] = info->irBuilder->CreateLoad(
             new_CStringSymbol(var->name)->codegen().val);
 
         Type* type = var->type;
@@ -1880,22 +1911,22 @@ codegen_config() {
         if (type->symbol->hasFlag(FLAG_WIDE_CLASS)) {
           type = type->getField("addr")->type;
         }
-        args[1] = info->builder->CreateLoad(
+        args[1] = info->irBuilder->CreateLoad(
             new_CStringSymbol(type->symbol->name)->codegen().val);
 
         if (var->getModule()->modTag == MOD_INTERNAL) {
-          args[2] = info->builder->CreateLoad(
+          args[2] = info->irBuilder->CreateLoad(
               new_CStringSymbol("Built-in")->codegen().val);
         }
         else {
-          args[2] =info->builder->CreateLoad(
+          args[2] =info->irBuilder->CreateLoad(
               new_CStringSymbol(var->getModule()->name)->codegen().val);
         }
 
-        info->builder->CreateCall(installConfigFunc, args);
+        info->irBuilder->CreateCall(installConfigFunc, args);
       }
     }
-    info->builder->CreateRetVoid();
+    info->irBuilder->CreateRetVoid();
     //llvm::verifyFunction(*createConfigFunc);
 #endif
   }
@@ -1972,6 +2003,38 @@ adjustArgSymbolTypesForIntent(void)
   }
 }
 
+static void convertToRefTypes() {
+#define updateSymbols(SymType) \
+  forv_Vec(SymType, sym, g##SymType##s) { \
+    QualifiedType q = sym->qualType(); \
+    Type* type      = q.type(); \
+    if (q.isRef() && !q.isRefType()) { \
+      type = getOrMakeRefTypeDuringCodegen(type); \
+    } else if (q.isWideRef() && !q.isWideRefType()) { \
+      type = getOrMakeRefTypeDuringCodegen(type); \
+      type = getOrMakeWideTypeDuringCodegen(type); \
+    } \
+    sym->type = type; \
+    if (type->symbol->hasFlag(FLAG_REF)) { \
+      sym->qual = QUAL_REF; \
+    } else if (type->symbol->hasFlag(FLAG_WIDE_REF)) { \
+      sym->qual = QUAL_WIDE_REF; \
+    } \
+  }
+
+  updateSymbols(VarSymbol);
+  updateSymbols(ArgSymbol);
+  updateSymbols(ShadowVarSymbol);
+
+  forv_Vec(FnSymbol, fn, gFnSymbols) {
+    if (fn->getReturnSymbol()) {
+      fn->retType = fn->getReturnSymbol()->type;
+    }
+  }
+
+#undef updateSymbols
+}
+
 extern bool printCppLineno;
 debug_data *debug_info=NULL;
 
@@ -2005,29 +2068,6 @@ void codegen(void) {
     // --llvm-wide-opt is picky about other settings.
     // Check them here.
     if (!llvmCodegen ) USR_FATAL("--llvm-wide-opt requires --llvm");
-    if ( widePointersStruct ) {
-      // generating global pointers of size > 64 bits is not
-      // possible with LLVM 3.3; it might be possible in the future.
-
-      // If we have -fLLVMWideOpt, we must use packed wide
-      // pointers (because optimizations assume pointer size
-      //  is the same - at most 64 bits - for all address spaces.
-      //  'multiple address space' patch series, submitted to LLVM 3.2,
-      //  was backed out mostly for lack of testing. Perhaps the situation
-      //  will be resolved in LLVM 3.4).
-      USR_FATAL("--llvm-wide-opt requires packed wide pointers; " \
-                "try export CHPL_WIDE_POINTERS=node16");
-    }
-  }
-
-  if( widePointersStruct ) {
-    // OK
-  } else {
-    // While the C code generator can emit packed pointers,
-    // it does so only to help make sure that packed pointer code
-    // generation is correct. It is not a "supported configuration".
-    if( ! llvmCodegen )
-      USR_WARN("C code generation for packed pointers not supported");
   }
 
   // Set the executable name if it isn't set already.
@@ -2062,47 +2102,7 @@ void codegen(void) {
 
   adjustArgSymbolTypesForIntent();
 
-  forv_Vec(VarSymbol, sym, gVarSymbols) {
-    QualifiedType q = sym->qualType();
-    Type* type      = q.type();
-
-    if (q.isRef() && !q.isRefType()) {
-      type = getOrMakeRefTypeDuringCodegen(type);
-    } else if (q.isWideRef() && !q.isWideRefType()) {
-      type = getOrMakeRefTypeDuringCodegen(type);
-      type = getOrMakeWideTypeDuringCodegen(type);
-    }
-
-    sym->type = type;
-    if (type->symbol->hasFlag(FLAG_REF)) {
-      sym->qual = QUAL_REF;
-    } else if (type->symbol->hasFlag(FLAG_WIDE_REF)) {
-      sym->qual = QUAL_WIDE_REF;
-    }
-  }
-  forv_Vec(ArgSymbol, sym, gArgSymbols) {
-    QualifiedType q = sym->qualType();
-    Type* type      = q.type();
-
-    if (q.isRef() && !q.isRefType()) {
-      type = getOrMakeRefTypeDuringCodegen(type);
-    } else if (q.isWideRef() && !q.isWideRefType()) {
-      type = getOrMakeRefTypeDuringCodegen(type);
-      type = getOrMakeWideTypeDuringCodegen(type);
-    }
-
-    sym->type = type;
-    if (type->symbol->hasFlag(FLAG_REF)) {
-      sym->qual = QUAL_REF;
-    } else if (type->symbol->hasFlag(FLAG_WIDE_REF)) {
-      sym->qual = QUAL_WIDE_REF;
-    }
-  }
-  forv_Vec(FnSymbol, fn, gFnSymbols) {
-    if (fn->getReturnSymbol()) {
-      fn->retType = fn->getReturnSymbol()->type;
-    }
-  }
+  convertToRefTypes();
 
   // Wrap calls to chosen functions from c library
   if( llvmCodegen ) {
@@ -2198,6 +2198,7 @@ void codegen(void) {
   // just codegen the modules.
   if( llvmCodegen ) {
 #ifdef HAVE_LLVM
+    checkAdjustedDataLayout();
     forv_Vec(ModuleSymbol, currentModule, allModules) {
       mysystem(astr("# codegen-ing module", currentModule->name),
                "generating comment for --print-commands option");
@@ -2276,65 +2277,19 @@ void makeBinary(void) {
   }
 }
 
-#ifdef HAVE_LLVM
-GenInfo::GenInfo(
-    std::string clangCcIn,
-    std::string clangCxxIn,
-    std::string compilelineIn,
-    std::vector<std::string> clangCCArgsIn,
-    std::vector<std::string> clangLDArgsIn,
-    std::vector<std::string> clangOtherArgsIn,
-    bool parseOnlyIn )
-       :   cfile(NULL), cLocalDecls(), cStatements(),
-           lineno(-1), filename(NULL), parseOnly(parseOnlyIn),
-           // the rest of these are only in GenInfo with HAVE_LLVM
-           module(NULL), builder(NULL), lvt(NULL),
-           clangCC(clangCcIn),
-           clangCXX(clangCxxIn),
-           compileline(compilelineIn),
-           clangCCArgs(clangCCArgsIn), clangLDArgs(clangLDArgsIn),
-           clangOtherArgs(clangOtherArgsIn),
-           codegenOptions(), diagOptions(NULL),
-           DiagClient(NULL),
-           DiagID(NULL),
-           Diags(NULL),
-           Clang(NULL), clangTargetOptions(), clangLangOptions(),
-           moduleName("root"), llvmContext(), Ctx(NULL),
-           targetData(NULL), cgBuilder(NULL), cgAction(NULL),
-           tbaaRootNode(NULL),
-           targetLayout(), globalToWideInfo(),
-           FPM_postgen(NULL)
-{
-  std::string home(CHPL_HOME);
-  std::string rtmain = home + "/runtime/etc/rtmain.c";
-
-  setupClang(this, rtmain);
-
-  // Create a new LLVM module, IRBuilder, and LayeredValueTable.
-  if( ! parseOnly ) {
-    module = new llvm::Module(moduleName, llvmContext);
-    builder = new llvm::IRBuilder<>(module->getContext());
-  }
-
-  lvt = new LayeredValueTable();
-
-  // These are initialized only after we have types
-  // for everything and are deciding what calls to make.
-  // these are set by setupClangContext from CCodeGenAction.
-  Ctx = NULL;
-  targetData = NULL;
-  cgBuilder = NULL;
-}
-#endif
-// No LLVM
 GenInfo::GenInfo()
          :   cfile(NULL), cLocalDecls(), cStatements(),
-             lineno(-1), filename(NULL), parseOnly(false)
+             lineno(-1), filename(NULL)
 #ifdef HAVE_LLVM
-             // Could set more of these to NULL, but the real
-             // point is to just core-dump if we end up trying
-             // to use them....
-             , module(NULL), builder(NULL), lvt(NULL)
+             ,
+             lvt(NULL), module(NULL), irBuilder(NULL), mdBuilder(NULL),
+             loopStack(),
+             llvmContext(),
+             tbaaRootNode(NULL),
+             tbaaUnionsNode(NULL),
+             globalToWideInfo(),
+             FPM_postgen(NULL),
+             clangInfo(NULL)
 #endif
 {
 }

@@ -104,8 +104,8 @@ esac
 # Gather the version number for the Chapel binary.
 export CHPL_HOST_PLATFORM=`"$CHPL_HOME"/util/chplenv/chpl_platform.py host`
 VERS=`$CHPL_HOME/bin/$CHPL_HOST_PLATFORM/chpl --version`
-# Remove the "chpl Version " part
-VERS=${VERS#chpl Version }
+# Remove the "chpl version " part
+VERS=${VERS#chpl version }
 # Replace the periods with spaces.
 VERS=${VERS//./ }
 VERS_ARRAY=($VERS)
@@ -152,26 +152,78 @@ myinstalldir () {
   FROM="$CHPL_HOME/$1"
   TO="$2"
   #echo myinstalldir $FROM $TO
-  mkdir -p $TO
-  ( cd $FROM ; tar cf - . ) | ( cd $TO ; tar xf - )
-  return $?
+  mkdir -p "$TO"
+
+  if [ ! -d "$FROM" ]
+  then
+    echo "Error: source directory '$FROM' missing"
+    exit -1
+  fi
+  if [ ! -d "$TO" ]
+  then
+    echo "Error: could not find/create destination directory '$TO'"
+    exit -1
+  fi
+
+  ( cd "$FROM" ; tar cf - . ) | ( cd "$TO" ; tar xf - )
+
+  if [ $? -ne 0 ]
+  then
+    echo "Error: failed directory copy '$FROM' '$TO'"
+    exit -1
+  fi
 }
 
 myinstallfile () {
   FROM="$CHPL_HOME/$1"
   TO="$2"
-  mkdir -p $TO
+
+  mkdir -p "$TO"
+
+  if [ ! -f "$FROM" ]
+  then
+    echo "Error: source file '$FROM' missing"
+    exit -1
+  fi
+  if [ ! -d "$TO" ]
+  then
+    echo "Error: could not find/create destination directory '$TO'"
+    exit -1
+  fi
+
   #echo myinstallfile $FROM $TO
-  cp $FROM $TO
-  return $?
+  cp "$FROM" "$TO"
+
+  if [ $? -ne 0 ]
+  then
+    echo "Error: failed cp '$FROM' '$TO'"
+    exit -1
+  fi
 }
 
 myinstallfileto () {
   FROM="$CHPL_HOME/$1"
   TO="$2"
   #echo myinstallfile $FROM $TO
-  cp $FROM $TO
-  return $?
+  if [ ! -f "$FROM" ]
+  then
+    echo "Error: source file '$FROM' missing"
+    exit -1
+  fi
+
+  cp "$FROM" "$TO"
+
+  if [ $? -ne 0 ]
+  then
+    echo "Error: failed cp '$FROM' '$TO'"
+    exit -1
+  fi
+
+  if [ ! -f "$TO" ]
+  then
+    echo "Error: could not install to '$TO'"
+    exit -1
+  fi
 }
 
 
@@ -206,7 +258,7 @@ myinstallfile README.rst              "$DEST_CHPL_HOME"
 # copy modules
 myinstalldir  modules                 "$DEST_CHPL_HOME"/modules
 
-# copy util/printchplenv 
+# copy util/printchplenv
 myinstallfile util/printchplenv       "$DEST_CHPL_HOME"/util/
 
 # copy util/chplenv
@@ -264,6 +316,18 @@ done
 
 # copy utf8-decoder header
 myinstallfile third-party/utf8-decoder/utf8-decoder.h "$DEST_THIRD_PARTY"/utf8-decoder/
+
+# copy mason
+if [ -f tools/mason/mason ]
+then
+  if [ ! -z "$PREFIX" ]
+  then
+    myinstallfile tools/mason/mason "$PREFIX/bin"
+  else
+    myinstallfile tools/mason/mason "$DEST_CHPL_HOME/tools/mason"
+    ln -s "$DEST_CHPL_HOME/tools/mason/mason" "$DEST_DIR/bin/$CHPL_HOST_PLATFORM"/mason
+  fi
+fi
 
 # copy chplconfig
 if [ -f chplconfig ]

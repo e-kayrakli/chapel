@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -120,6 +120,7 @@ void checkPrimitives()
      case PRIM_FIELD_BY_NUM:
      case PRIM_ENUM_MIN_BITS:
      case PRIM_ENUM_IS_SIGNED:
+     case PRIM_IS_RECORD_TYPE:
      case PRIM_IS_UNION_TYPE:
      case PRIM_IS_ATOMIC_TYPE:
      case PRIM_IS_TUPLE_TYPE:
@@ -275,7 +276,6 @@ void checkPrimitives()
      case PRIM_BLOCK_COFORALL_ON:
      case PRIM_BLOCK_LOCAL:             // BlockStmt::blockInfo - local block
      case PRIM_BLOCK_UNLOCAL:           // BlockStmt::blockInfo - unlocal local block
-     case PRIM_DELETE:
      case PRIM_CALL_DESTRUCTOR:         // call destructor on type (do not free)
      case PRIM_LOGICAL_FOLDER:          // Help fold logical && and ||
      case PRIM_WIDE_GET_LOCALE:         // Returns the "locale" portion of a wide pointer.

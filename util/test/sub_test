@@ -257,7 +257,7 @@ def ReadFileWithComments(f, ignoreLeadingSpace=True):
     if os.access(f, os.X_OK):
         try:
             # grab the chplenv so it can be stuffed into the subprocess env
-            env_cmd = [os.path.join(utildir, 'printchplenv'), '--simple']
+            env_cmd = [os.path.join(utildir, 'printchplenv'), '--all', '--simple', '--no-tidy', '--internal']
             chpl_env = subprocess.Popen(env_cmd, stdout=subprocess.PIPE).communicate()[0]
             chpl_env = dict(map(lambda l: l.split('='), chpl_env.splitlines()))
             file_env = os.environ.copy()
@@ -798,6 +798,8 @@ if (os.getenv('CHPL_TEST_VGRND_EXE')=='on' and vgrbin):
     valgrindbinopts = chpl_valgrind_opts.split()+['-q']
     if (chplcomm!='none'):
         valgrindbinopts+=['--trace-children=yes']
+        if (chplcomm=='gasnet'):
+            valgrindbinopts+=['--suppressions=%s/third-party/gasnet/gasnet-src/other/contrib/gasnet.supp'%(chpl_home)]
 else:
     valgrindbin = None
     valgrindbinopts = None
@@ -1856,7 +1858,7 @@ for testname in testsrc:
                 exec_limiter = execution_limiter.NoLock()
                 if os.getenv("CHPL_TEST_LIMIT_RUNNING_EXECUTABLES") is not None:
                     exec_name = os.path.join(localdir, test_filename)
-                    exec_limiter = execution_limiter.FileLock(exec_name, timeout)
+                    exec_limiter = execution_limiter.FileLock()
 
                 with exec_limiter:
                     exectimeout = False  # 'exectimeout' is specific to one trial of one execopt setting
@@ -2102,6 +2104,12 @@ for testname in testsrc:
                             for s in err_strings:
                                 if re.search(s, output, re.IGNORECASE) != None:
                                     extra_msg = '(possible JIRA 274) '
+                                    break
+
+                            err_strings = ['Clock skew detected']
+                            for s in err_strings:
+                                if re.search(s, output, re.IGNORECASE) != None:
+                                    extra_msg = '(possible JIRA 287) '
                                     break
 
                             sys.stdout.write('%s[Error %s'%(futuretest, extra_msg))

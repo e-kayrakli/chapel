@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -150,8 +150,28 @@ BlockStmt::copyInner(SymbolMap* map) {
   _this->byrefVars = COPY_INT(byrefVars);
   _this->forallIntents = COPY_INT(forallIntents);
 
-  for_alist(expr, body)
-    _this->insertAtTail(COPY_INT(expr));
+  for_alist(expr, body) {
+    Expr* copy = COPY_INT(expr);
+    _this->insertAtTail(copy);
+
+    if (DefExpr* def = toDefExpr(copy)) {
+      if (TypeSymbol* ts = toTypeSymbol(def->sym)) {
+        if (EnumType* et = toEnumType(ts->type)) {
+          // ensure we have the size, cast functions, etc.
+          // Lydia NOTE: This relies on making no copies of enum types prior to
+          // buildDefaultFunctions().  The creation must happen here because
+          // otherwise the EnumType will not have the correct symbol, and the
+          // symbol will not be in the tree.
+
+          // Also, NOTE: This does not generate new assignment and enumerate
+          // functions for the enum, as those are already local to the function
+          // being instantiated and so will get copied independently and
+          // updated when we replace the old type reference with the new one.
+          buildFarScopeEnumFunctions(et);
+        }
+      }
+    }
+  }
 
   return _this;
 }
@@ -1002,6 +1022,7 @@ ForwardingStmt::ForwardingStmt(DefExpr* toFnDef) :
   toFnDef(toFnDef),
   fnReturningForwarding(NULL),
   type(NULL),
+  scratchFn(NULL),
   named(),
   renamed(),
   except(false)
@@ -1018,6 +1039,7 @@ ForwardingStmt::ForwardingStmt(DefExpr* toFnDef, std::set<const char*>* args, bo
   toFnDef(toFnDef),
   fnReturningForwarding(NULL),
   type(NULL),
+  scratchFn(NULL),
   named(),
   renamed(),
   except(exclude)

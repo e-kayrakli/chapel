@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -22,8 +22,13 @@
 
 #include <string>
 
-// need llvm::Value, Type
-#include "llvmUtil.h"
+#ifdef HAVE_LLVM
+namespace llvm {
+  class MDNode;
+  class Value;
+  class Type;
+}
+#endif
 
 #define GEN_VAL      0
 #define GEN_PTR      1
@@ -92,10 +97,16 @@ public:
   // one of the following is set when generating LLVM
   llvm::Value *val; // use val->getType() to obtain LLVM type
   llvm::Type *type; // set when generating a type only
+  Type *surroundingStruct; // surrounding structure, if this is a field
+  uint64_t fieldOffset; // byte offset of this field within struct
+  llvm::MDNode *fieldTbaaTypeDescriptor;
 #else
   // Keeping same layout for non-LLVM builds
   void* val;
   void* type;
+  void* surroundingStruct;
+  uint64_t fieldOffset;
+  void* fieldTbaaTypeDescriptor;
 #endif
 
   // Used to mark variables as const after they are stored
@@ -128,7 +139,7 @@ public:
                    // called type, since LLVM native integer types do not
                    // include signed-ness.
                    
-  GenRet() : c(), val(NULL), type(NULL), canBeMarkedAsConstAfterStore(false), alreadyStored(false), chplType(NULL), isLVPtr(GEN_VAL), isUnsigned(false) { }
+  GenRet() : c(), val(NULL), type(NULL), surroundingStruct(NULL), fieldOffset(0), fieldTbaaTypeDescriptor(NULL), canBeMarkedAsConstAfterStore(false), alreadyStored(false), chplType(NULL), isLVPtr(GEN_VAL), isUnsigned(false) { }
   // Allow implicit conversion from AST elements.
   GenRet(BaseAST* ast) {
     *this = baseASTCodegen(ast);

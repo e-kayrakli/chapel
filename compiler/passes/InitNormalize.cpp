@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -20,12 +20,15 @@
 #include "InitNormalize.h"
 
 #include "stmt.h"
+#include "ForallStmt.h"
 
 static bool isSuperInit(Expr* stmt);
 static bool isThisInit (Expr* stmt);
 
 static bool isStringLiteral(Expr* expr, const char* name);
 static bool isSymbolThis(Expr* expr);
+
+static bool mightBeSyncSingleExpr(DefExpr* field);
 
 static bool isAssignment(CallExpr* callExpr);
 static bool isSimpleAssignment(CallExpr* callExpr);
@@ -38,16 +41,17 @@ static bool isCompoundAssignment(CallExpr* callExpr);
 ************************************** | *************************************/
 
 InitNormalize::InitNormalize(FnSymbol* fn) {
-  mFn         = fn;
-  mCurrField  = firstField(fn);
-  mPhase      = startPhase(fn);
-  mBlockType  = cBlockNormal;
+  mFn            = fn;
+  mCurrField     = firstField(fn);
+  mPhase         = startPhase(fn);
+  mBlockType     = cBlockNormal;
+  mPrevBlockType = cBlockNormal;
 }
 
 InitNormalize::InitNormalize(BlockStmt* block, const InitNormalize& curr) {
-  mFn         = curr.mFn;
-  mCurrField  = curr.mCurrField;
-  mPhase      = curr.mPhase;
+  mFn            = curr.mFn;
+  mCurrField     = curr.mCurrField;
+  mPhase         = curr.mPhase;
 
   if (CallExpr* blockInfo = block->blockInfoGet()) {
     if        (blockInfo->isPrimitive(PRIM_BLOCK_BEGIN)       == true ||
@@ -73,20 +77,51 @@ InitNormalize::InitNormalize(BlockStmt* block, const InitNormalize& curr) {
   } else {
     mBlockType = curr.mBlockType;
   }
+
+  if (mBlockType != curr.mBlockType) {
+    mPrevBlockType = curr.mBlockType;
+  } else {
+    mPrevBlockType = curr.mPrevBlockType;
+  }
 }
 
 InitNormalize::InitNormalize(CondStmt* cond, const InitNormalize& curr) {
-  mFn         = curr.mFn;
-  mCurrField  = curr.mCurrField;
-  mPhase      = curr.mPhase;
-  mBlockType  = cBlockCond;
+  mFn            = curr.mFn;
+  mCurrField     = curr.mCurrField;
+  mPhase         = curr.mPhase;
+  mBlockType     = cBlockCond;
+
+  if (mBlockType != curr.mBlockType) {
+    mPrevBlockType = curr.mBlockType;
+  } else {
+    mPrevBlockType = curr.mPrevBlockType;
+  }
 }
 
 InitNormalize::InitNormalize(LoopStmt* loop, const InitNormalize& curr) {
-  mFn         = curr.mFn;
-  mCurrField  = curr.mCurrField;
-  mPhase      = curr.mPhase;
-  mBlockType  = cBlockLoop;
+  mFn            = curr.mFn;
+  mCurrField     = curr.mCurrField;
+  mPhase         = curr.mPhase;
+  mBlockType     = cBlockLoop;
+
+  if (mBlockType != curr.mBlockType) {
+    mPrevBlockType = curr.mBlockType;
+  } else {
+    mPrevBlockType = curr.mPrevBlockType;
+  }
+}
+
+InitNormalize::InitNormalize(ForallStmt* loop, const InitNormalize& curr) {
+  mFn            = curr.mFn;
+  mCurrField     = curr.mCurrField;
+  mPhase         = curr.mPhase;
+  mBlockType     = cBlockForall;
+
+  if (mBlockType != curr.mBlockType) {
+    mPrevBlockType = curr.mBlockType;
+  } else {
+    mPrevBlockType = curr.mPrevBlockType;
+  }
 }
 
 
@@ -170,8 +205,33 @@ bool InitNormalize::inCoforall() const {
   return mBlockType == cBlockCoforall;
 }
 
+bool InitNormalize::inForall() const {
+  return mBlockType == cBlockForall;
+}
+
 bool InitNormalize::inOn() const {
   return mBlockType == cBlockOn;
+}
+
+bool InitNormalize::inOnInLoopBody() const {
+  return inOn() && mPrevBlockType == cBlockLoop;
+}
+
+bool InitNormalize::inOnInCondStmt() const {
+  return inOn() && mPrevBlockType == cBlockCond;
+}
+
+bool InitNormalize::inOnInParallelStmt() const {
+  return inOn() && (mPrevBlockType == cBlockBegin   ||
+                    mPrevBlockType == cBlockCobegin  );
+}
+
+bool InitNormalize::inOnInCoforall() const {
+  return inOn() && mPrevBlockType == cBlockCoforall;
+}
+
+bool InitNormalize::inOnInForall() const {
+  return inOn() && mPrevBlockType == cBlockForall;
 }
 
 /************************************* | **************************************
@@ -668,6 +728,25 @@ void InitNormalize::fieldInitTypeWithInit(Expr*    insertBefore,
       insertBefore->insertBefore(fieldSet);
     }
 
+  } else if (theFn()->hasFlag(FLAG_COMPILER_GENERATED) &&
+             field->init == NULL &&
+             mightBeSyncSingleExpr(field)) {
+    // The type of the field depends on something that hasn't been determined
+    // yet.  It is entirely possible that the type will end up as a sync or
+    // single and so we need to flag this field initialization for resolution to
+    // handle
+    Symbol*    _this     = mFn->_this;
+    Symbol*    name      = new_CStringSymbol(field->sym->name);
+    CallExpr* fieldSet = new CallExpr(PRIM_INIT_MAYBE_SYNC_SINGLE_FIELD,
+                                      _this, name, initExpr);
+    if (isFieldAccessible(initExpr) == false) {
+      INT_ASSERT(false);
+    }
+
+    updateFieldsMember(initExpr);
+
+    insertBefore->insertBefore(fieldSet);
+
   } else {
     VarSymbol* tmp       = newTemp("tmp", type);
     DefExpr*   tmpDefn   = new DefExpr(tmp);
@@ -816,7 +895,7 @@ bool InitNormalize::isFieldAccessible(Expr* expr) const {
     if (sym->isImmediate() == true) {
       retval = true;
 
-    } else if (DefExpr* field = toLocalField(at, symExpr)) {
+    } else if (DefExpr* field = at->toLocalField(symExpr)) {
       if (isFieldInitialized(field) == true) {
         retval = true;
       } else {
@@ -825,7 +904,7 @@ bool InitNormalize::isFieldAccessible(Expr* expr) const {
                   field->sym->name);
       }
 
-    } else if (DefExpr* field = toSuperField(at, symExpr)) {
+    } else if (DefExpr* field = at->toSuperField(symExpr)) {
       if (isPhase2() == true) {
         retval = true;
       } else {
@@ -839,7 +918,7 @@ bool InitNormalize::isFieldAccessible(Expr* expr) const {
     }
 
   } else if (CallExpr* callExpr = toCallExpr(expr)) {
-    if (DefExpr* field = toLocalField(at, callExpr)) {
+    if (DefExpr* field = at->toLocalField(callExpr)) {
       if (isFieldInitialized(field) == true) {
         retval = true;
       } else {
@@ -848,7 +927,7 @@ bool InitNormalize::isFieldAccessible(Expr* expr) const {
                   field->sym->name);
       }
 
-    } else if (DefExpr* field = toSuperField(at, callExpr)) {
+    } else if (DefExpr* field = at->toSuperField(callExpr)) {
       if (isPhase2() == true) {
         retval = true;
       } else {
@@ -911,6 +990,8 @@ void InitNormalize::updateFieldsMember(Expr* expr) const {
 
   } else if (CallExpr* callExpr = toCallExpr(expr)) {
     if (isFieldAccess(callExpr) == false) {
+      handleInsertedMethodCall(callExpr);
+
       for_actuals(actual, callExpr) {
         updateFieldsMember(actual);
       }
@@ -946,78 +1027,57 @@ bool InitNormalize::isFieldAccess(CallExpr* callExpr) const {
 }
 
 /************************************* | **************************************
+* If the call is to a method on our type, we need to transform it into        *
+*  something we'll recognize as a method call.                                *
+*                                                                             *
+* This is necessary so that later we can see the if and loop expr "method     *
+* calls" written for field initialization and let them work properly.         *
+*                                                                             *
+************************************** | *************************************/
+
+void InitNormalize::handleInsertedMethodCall(CallExpr* call) const {
+  if (UnresolvedSymExpr* us = toUnresolvedSymExpr(call->baseExpr)) {
+    bool alreadyMethod = false;
+    if (call->numActuals() > 0) {
+      SymExpr* firstArg = toSymExpr(call->get(1));
+      if (firstArg && firstArg->symbol() == gMethodToken) {
+        alreadyMethod = true;
+      }
+    }
+
+    if (alreadyMethod == false) {
+      AggregateType* at      = type();
+      bool           matches = false;
+
+      // Note: doesn't handle inherited methods.
+      forv_Vec(FnSymbol, fn, at->methods) {
+        if (strcmp(us->unresolved, fn->name) == 0) {
+          matches = true;
+          break;
+        }
+      }
+
+      if (matches) {
+        CallExpr* replacement = new CallExpr(astrSdot, mFn->_this);
+        replacement->insertAtTail(us);
+        call->baseExpr = replacement;
+      }
+    }
+  }
+}
+
+/************************************* | **************************************
 *                                                                             *
 *                                                                             *
 *                                                                             *
 ************************************** | *************************************/
 
 DefExpr* InitNormalize::toLocalField(SymExpr* expr) const {
-  return toLocalField(type(), expr);
+  return type()->toLocalField(expr);
 }
 
 DefExpr* InitNormalize::toLocalField(CallExpr* expr) const {
-  return toLocalField(type(), expr);
-}
-
-DefExpr* InitNormalize::toLocalField(AggregateType* at,
-                                     const char*    name) const {
-  Expr*    currField = at->fields.head;
-  DefExpr* retval    = NULL;
-
-  while (currField != NULL && retval == NULL) {
-    DefExpr*   defExpr = toDefExpr(currField);
-    VarSymbol* var     = toVarSymbol(defExpr->sym);
-
-    if (strcmp(var->name, name) == 0) {
-      retval    = defExpr;
-    } else {
-      currField = currField->next;
-    }
-  }
-
-  return retval;
-}
-
-DefExpr* InitNormalize::toLocalField(AggregateType* at, SymExpr* expr) const {
-  Expr*    currField = at->fields.head;
-  Symbol*  sym       = expr->symbol();
-  DefExpr* retval    = NULL;
-
-  while (currField != NULL && retval == NULL) {
-    DefExpr* defExpr = toDefExpr(currField);
-
-    if (sym == defExpr->sym) {
-      retval    = defExpr;
-    } else {
-      currField = currField->next;
-    }
-  }
-
-  return retval;
-}
-
-DefExpr* InitNormalize::toLocalField(AggregateType* at, CallExpr* expr) const {
-  DefExpr* retval = NULL;
-
-  if (expr->isNamed(".") == true) {
-    SymExpr* base = toSymExpr(expr->get(1));
-    SymExpr* name = toSymExpr(expr->get(2));
-
-    if (base != NULL && name != NULL) {
-      VarSymbol* var = toVarSymbol(name->symbol());
-
-      // The base is <this> and the slot is a fieldName
-      if (base->symbol()->hasFlag(FLAG_ARG_THIS) == true &&
-
-          var                                    != NULL &&
-          var->immediate                         != NULL &&
-          var->immediate->const_kind             == CONST_KIND_STRING) {
-        retval = toLocalField(at, var->immediate->v_string);
-      }
-    }
-  }
-
-  return retval;
+  return type()->toLocalField(expr);
 }
 
 /************************************* | **************************************
@@ -1027,38 +1087,14 @@ DefExpr* InitNormalize::toLocalField(AggregateType* at, CallExpr* expr) const {
 ************************************** | *************************************/
 
 DefExpr* InitNormalize::toSuperField(SymExpr* expr) const {
-  return toSuperField(type(), expr);
+  return type()->toSuperField(expr);
 }
 
 DefExpr* InitNormalize::toSuperField(AggregateType* at,
                                      const char*    name) const {
   forv_Vec(Type, t, at->dispatchParents) {
     if (AggregateType* pt = toAggregateType(t)) {
-      if (DefExpr* field = toLocalField(pt, name)) {
-        return field;
-      }
-    }
-  }
-
-  return NULL;
-}
-
-DefExpr* InitNormalize::toSuperField(AggregateType* at, SymExpr*  expr) const {
-  forv_Vec(Type, t, at->dispatchParents) {
-    if (AggregateType* pt = toAggregateType(t)) {
-      if (DefExpr* field = toLocalField(pt, expr)) {
-        return field;
-      }
-    }
-  }
-
-  return NULL;
-}
-
-DefExpr* InitNormalize::toSuperField(AggregateType* at, CallExpr* expr) const {
-  forv_Vec(Type, t, at->dispatchParents) {
-    if (AggregateType* pt = toAggregateType(t)) {
-      if (DefExpr* field = toLocalField(pt, expr)) {
+      if (DefExpr* field = pt->toLocalField(name)) {
         return field;
       }
     }
@@ -1179,6 +1215,15 @@ InitNormalize::InitPhase InitNormalize::startPhase(BlockStmt* block) const {
 
     } else if (BlockStmt* block = toBlockStmt(stmt)) {
       InitPhase phase = startPhase(block);
+
+      if (phase != cPhase2) {
+        retval = phase;
+      } else {
+        stmt   = stmt->next;
+      }
+
+    } else if (ForallStmt* block = toForallStmt(stmt)) {
+      InitPhase phase = startPhase(block->loopBody());
 
       if (phase != cPhase2) {
         retval = phase;
@@ -1376,7 +1421,7 @@ bool InitNormalize::fieldUsedBeforeInitialized(CallExpr* callExpr) const {
   if (isAssignment(callExpr) == true) {
     retval = fieldUsedBeforeInitialized(callExpr->get(2));
 
-  } else if (DefExpr* field = toLocalField(type(), callExpr)) {
+  } else if (DefExpr* field = type()->toLocalField(callExpr)) {
     retval = isFieldInitialized(field) == true ? false : true;
 
   } else {
@@ -1429,6 +1474,10 @@ void InitNormalize::describe(int offset) const {
 
     case cBlockCoforall:
       printf("coforall\n");
+      break;
+
+    case cBlockForall:
+      printf("forall\n");
       break;
 
     case cBlockOn:
@@ -1538,6 +1587,31 @@ static const char* initName(CallExpr* expr) {
   return retval;
 }
 
+// The type of the field is not yet determined either due to being entirely a
+// type alias, or due to being a call to a function that returns a type.
+// Therefore, we must be cautious and marking this field initialization as
+// potentially a sync or single, so that when we know its type at resolution,
+// we can respond appropriately.
+static bool mightBeSyncSingleExpr(DefExpr* field) {
+  bool retval = false;
+
+  if (SymExpr* typeSym = toSymExpr(field->exprType)) {
+    if (typeSym->symbol()->hasFlag(FLAG_TYPE_VARIABLE)) {
+      retval = true;
+    }
+  } else if (CallExpr* typeCall = toCallExpr(field->exprType)) {
+    /*if (typeCall->isPrimitive(PRIM_QUERY_TYPE_FIELD)) { // might be necessary
+      retval = true;
+    } else */
+    if (typeCall->isPrimitive() == false) {
+      // The call is not a known primitive.  We have to assume that it is a type
+      // function being called, and type functions could return a sync or single
+      // type.
+      retval = true;
+    }
+  }
+  return retval;
+}
 
 static bool isAssignment(CallExpr* callExpr) {
   bool retval = false;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -25,6 +25,7 @@
 #include "expandVarArgs.h"
 #include "expr.h"
 #include "resolution.h"
+#include "resolveFunction.h"
 #include "stmt.h"
 #include "stringutil.h"
 #include "symbol.h"
@@ -126,7 +127,7 @@ void ResolutionCandidate::resolveTypeConstructor(CallInfo& info) {
 
     INT_ASSERT(typeConstructorCall->isResolved());
 
-    resolveFns(typeConstructorCall->resolvedFunction());
+    resolveFunction(typeConstructorCall->resolvedFunction());
 
     fn->_this->type = typeConstructorCall->resolvedFunction()->retType;
 
@@ -478,12 +479,26 @@ void ResolutionCandidate::computeSubstitutions() {
       // check for field with specified generic type
       //
       if (formal->hasFlag(FLAG_TYPE_VARIABLE) == false &&
-          formal->type                        != dtAny &&
-          strcmp(formal->name, "outer")       != 0     &&
-          formal->hasFlag(FLAG_IS_MEME)       == false &&
-          (fn->hasFlag(FLAG_DEFAULT_CONSTRUCTOR) == true ||
-           fn->hasFlag(FLAG_TYPE_CONSTRUCTOR)    == true)) {
-        USR_FATAL(formal, "invalid generic type specification on class field");
+          formal->type                        != dtAny) {
+        if (strcmp(formal->name, "outer")       != 0     &&
+            formal->hasFlag(FLAG_IS_MEME)       == false &&
+            (fn->hasFlag(FLAG_DEFAULT_CONSTRUCTOR) == true ||
+             fn->hasFlag(FLAG_TYPE_CONSTRUCTOR)    == true)) {
+          USR_FATAL(formal,
+                    "invalid generic type specification on class field");
+
+        } else if (fn->isMethod()                       == true  &&
+                   strcmp(fn->name, "init")             == 0     &&
+                   fn->hasFlag(FLAG_COMPILER_GENERATED) == true  &&
+                   fn->hasFlag(FLAG_DEFAULT_COPY_INIT)  == false &&
+                   !(formal->hasFlag(FLAG_ARG_THIS)                == true  &&
+                     formal->hasFlag(FLAG_DELAY_GENERIC_EXPANSION) == true)) {
+          // This is a compiler generated initializer, so the argument with
+          // a generic type corresponds with a class field.
+          USR_FATAL(formal,
+                    "invalid generic type specification on class field");
+
+        }
       }
 
       if (formalIdxToActual[i] != NULL) {
@@ -628,7 +643,7 @@ bool ResolutionCandidate::checkResolveFormalsWhereClauses() {
    * A derived generic type will use the type of its parent,
    * and expects this to be instantiated before it is.
    */
-  resolveFormals(fn);
+  resolveSignature(fn);
 
   for_formals(formal, fn) {
     if (Symbol* actual = formalIdxToActual[++coindex]) {
@@ -645,6 +660,7 @@ bool ResolutionCandidate::checkResolveFormalsWhereClauses() {
                              actual,
                              formal->type,
                              fn,
+                             NULL,
                              NULL,
                              formalIsParam) == false) {
         return false;
@@ -695,6 +711,7 @@ bool ResolutionCandidate::checkGenericFormals() {
                            actual,
                            formal->type,
                            fn,
+                           NULL,
                            NULL,
                            formalIsParam) == false) {
             return false;

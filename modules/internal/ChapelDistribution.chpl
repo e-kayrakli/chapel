@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -377,10 +377,6 @@ module ChapelDistribution {
       // this is a bug workaround
     }
 
-    proc dsiClear() {
-      halt("clear not implemented for this distribution");
-    }
-
     proc dsiAdd(x) {
       compilerError("Cannot add indices to a rectangular domain");
       return 0;
@@ -421,7 +417,7 @@ module ChapelDistribution {
 
     // TODO: Would ChapelArray.resizeAllocRange() be too expensive?
     //       - would have to put the conditional outside of the call
-    /* Grow domain if necesary */
+    /* Grow domain if necessary */
     inline proc _grow(size: int, factor=arrayAsVecGrowthFactor) {
       const oldNNZDomSize = nnzDom.size;
       if (size > oldNNZDomSize) {
@@ -814,16 +810,10 @@ module ChapelDistribution {
     proc dsiSupportsPrivatization() param return false;
     proc dsiRequiresPrivatization() param return false;
 
-    proc dsiSupportsBulkTransfer() param return false;
-    proc doiCanBulkTransfer() param return false;
-    proc doiBulkTransfer(B, viewDom) {
-      halt("This array type does not support bulk transfer.");
-    }
-
     proc dsiDisplayRepresentation() { writeln("<no way to display representation>"); }
     proc isDefaultRectangular() param return false;
-    proc dsiSupportsBulkTransferInterface() param return false;
-    proc doiCanBulkTransferStride(viewDom) param return false;
+
+    proc doiCanBulkTransferRankChange() param return false;
   }
 
   /* BaseArrOverRectangularDom has this signature so that dsiReallocate
@@ -883,6 +873,7 @@ module ChapelDistribution {
 
     // NOTE I tried to put `data` in `BaseSparseArrImpl`. However, it wasn't
     // clear how to initialize this in that class.
+    pragma "local field"
     var data: [dom.nnzDom] eltType;
 
     proc dsiGetBaseDom() return dom;

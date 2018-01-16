@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -285,7 +285,7 @@ module DefaultAssociative {
       return _findFilledSlot(idx)(1);
     }
   
-    proc dsiAdd(idx){
+    proc dsiAdd(idx) {
       // add helpers will return a tuple like (slotNum, numIndicesAdded);
 
       // these two seemingly redundant lines were necessary to work around a
@@ -338,6 +338,10 @@ module DefaultAssociative {
         table[slotNum].status = chpl__hash_status.full;
         table[slotNum].idx = idx;
         numEntries.add(1);
+
+        // default initialize newly added array elements
+        for a in _arrs do
+          a.clearEntry(idx);
       } else {
         if (slotNum < 0) {
           halt("couldn't add ", idx, " -- ", numEntries.read(), " / ", tableSize, " taken");
@@ -847,6 +851,31 @@ module DefaultAssociative {
   
   inline proc chpl__defaultHash(o: object): uint {
     return _gen_key(__primitive( "object2int", o));
+  }
+
+  //
+  // Implementation of chpl__defaultHash for ranges, in case the 'idxType'
+  // contains a range in some way (e.g. tuple of ranges).
+  //
+  // Need to skip '_promotionType' to avoid bizarre compiler errors.
+  //
+  inline proc chpl__defaultHash(r : range): uint {
+    use Reflection;
+    var ret : uint;
+    for param i in 1..numFields(r.type) {
+      if isParam(getField(r, i)) == false &&
+         isType(getField(r, i)) == false &&
+         isVoidType(getField(r, i).type) == false &&
+         getFieldName(r.type, i) != "_promotionType" {
+        const ref field = getField(r, i);
+        const fieldHash = chpl__defaultHash(field);
+        if i == 1 then
+          ret = fieldHash;
+        else
+          ret = chpl__defaultHashCombine(fieldHash, ret, i);
+      }
+    }
+    return ret;
   }
   
   // Is 'idxType' legal to create a default associative domain with?

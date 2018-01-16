@@ -33,7 +33,7 @@ CHPL_HOME
 
     .. code-block:: sh
 
-        export CHPL_HOME=~/chapel-1.15.0
+        export CHPL_HOME=~/chapel-1.16.0
 
    .. note::
      This, and all other examples in the Chapel documentation, assumes you're
@@ -490,8 +490,8 @@ CHPL_GMP
 CHPL_HWLOC
 ~~~~~~~~~~
    Optionally, the ``CHPL_HWLOC`` environment variable can select between
-   no hwloc support, using the hwloc package distributed with Chapel in
-   third-party, or using a system jemalloc.
+   no hwloc support or using the hwloc package distributed with Chapel in
+   third-party.
 
        ======== ==============================================================
        Value    Description
@@ -624,52 +624,16 @@ CHPL_LLVM
    If unset, ``CHPL_LLVM`` defaults to ``llvm`` if you've already installed
    llvm in third-party and ``none`` otherwise.
 
-   Chapel currently supports LLVM 3.7.
+   Chapel currently supports LLVM 3.7 through 4.0.
 
    .. note::
 
-       We have had success with these commands to install LLVM 3.7 dependencies
+       We have had success with these commands to install LLVM 4.0 dependencies
 
         .. code-block:: sh
 
-            # Fedora 25
-            dnf install llvm3.7 llvm3.7-devel llvm3.7-static zlib-static
-
             # Ubuntu 16.04
-            apt-get install llvm-3.7-dev llvm-3.7 clang-3.7 libclang-3.7-dev libedit-dev
-
-
-.. _readme-chplenv.CHPL_WIDE_POINTERS:
-
-CHPL_WIDE_POINTERS
-~~~~~~~~~~~~~~~~~~
-   Optionally, the ``CHPL_WIDE_POINTERS`` environment variable can be used to
-   specify the wide pointer format for multilocale programs.  Current options
-   are:
-
-       ======== =============================================================
-       Value    Description
-       ======== =============================================================
-       struct   store wide pointers in structures which may span more than
-                one word
-       nodeN    ("N" a number, 2 <= N <= 60) store wide pointers in single
-                words, with N bits used to store the node (top level locale)
-                number and the rest containing the address on that node
-       ======== =============================================================
-
-   ``CHPL_WIDE_POINTERS`` is used to select between two modes of operation.  One is
-   universally applicable; the other has restricted applicability but may
-   reduce remote communication.
-
-   If unset, ``CHPL_WIDE_POINTERS`` defaults to ``struct``.  This setting works in
-   all situations and in particular, it is compatible with all locale models
-   including the hierarchical ones.  The ``nodeN`` option does not work with
-   hierarchical locale models and is only useful with the LLVM backend, which
-   is currently experimental.  However, when used, it allows LLVM to understand
-   and optimize remote transfers, potentially reducing the amount of
-   communication a program performs.  See :ref:`readme-llvm` for more
-   information about ``CHPL_WIDE_POINTERS=nodeN``.
-
+            apt-get install llvm-4.0-dev llvm-4.0 clang-4.0 libclang-4.0-dev libedit-dev
 
 .. _readme-chplenv.CHPL_UNWIND:
 
@@ -749,19 +713,23 @@ Below is an example of a Chapel configuration file with comments:
     CHPL_GMP=system
 
 
+To confirm the configuration file is written correctly, you can run
+``printchplenv --all --overrides``, which will show a list of variables that are
+currently being overridden. Values followed by a
+``+`` have been overridden by the Chapel configuration file, whereas
+values followed by a ``*`` have been overridden by an environment variable.
 
 Generating Configuration Files
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-To generate a configuration file, use ``printchplenv`` or
-``./configure``.
+To generate a configuration file based on the current configuration, use
+``printchplenv`` or ``./configure``.
 
-When using ``printchplenv``, run it with ``--simple`` or
-``--overrides`` to get a format compatible with Chapel configuration
-files.
+When using ``printchplenv``, run it with the ``--simple`` format flag to get a
+format compatible with Chapel configuration files.
 
-The ``printchplenv --overrides`` flag can be used to print the variables
+The ``--overrides`` filter flag can be used to print only the variables
 currently overridden by either environment variables or Chapel
 configuration file.
 
@@ -769,15 +737,17 @@ For example, to save the current overrides into a Chapel configuration file:
 
 .. code-block:: sh
 
-    printchplenv --overrides > ~/.chplconfig
+    printchplenv --all --simple --overrides > ~/.chplconfig
 
-The ``printchplenv --simple`` flag can be used to print all the variables
+The ``printchplenv --all --simple`` flag can be used to print all the variables
 of the current configuration. For example:
 
 .. code-block:: sh
 
-    printchplenv --simple > ~/.chplconfig
+    printchplenv --all --simple > ~/.chplconfig
 
+For more information on using ``printchplenv``, see the ``printchplenv -h``
+output.
 
 Alternatively, the ``./configure`` script will generate a ``chplconfig``
 file. See :ref:`readme-installing`.

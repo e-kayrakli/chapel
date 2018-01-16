@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -35,7 +35,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-static const char* help_url = "http://chapel.cray.com/bugs.html";
+static const char* help_url = "https://chapel-lang.org/bugs.html";
 
 // Support for internal errors, adopted from ZPL compiler
 
@@ -164,7 +164,7 @@ static void print_user_internal_error() {
 
   get_version(version);
 
-  fprintf(stderr, "chpl Version %s", version);
+  fprintf(stderr, "chpl version %s", version);
 }
 
 

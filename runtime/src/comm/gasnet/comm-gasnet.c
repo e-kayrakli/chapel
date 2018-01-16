@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -768,8 +768,11 @@ static void set_max_segsize() {
 
   // Use 90% of the available memory as the maximum segment size,
   // heuristically
-  if ((size = chpl_bytesAvailOnThisLocale()) != 0) {
-    set_max_segsize_env_var((size_t) (0.9 * size));
+  if ((size = chpl_sys_availMemoryBytes()) != 0) {
+    size_t dst_size = 0.9 * size;
+    if (dst_size < 1000 || dst_size > chpl_sys_physicalMemoryBytes())
+      chpl_internal_error("Overflow/underflow determining max segment size");
+    set_max_segsize_env_var(dst_size);
     return;
   }
 
@@ -793,11 +796,13 @@ static void set_num_comm_domains() {
     chpl_error("Cannot setenv(\"GASNET_AM_DOMAIN_POLL_MASK\")", 0, 0);
   }
 
-  // for some reason a higher GASNET_DOMAIN_COUNT increases the exit time
+  // GASNET_DOMAIN_COUNT increases the shutdown time. Work around this for now.
+  // See https://github.com/chapel-lang/chapel/issues/7251 and
+  // https://upc-bugs.lbl.gov/bugzilla/show_bug.cgi?id=3621
   if (setenv("GASNET_EXITTIMEOUT_FACTOR", "0.5", 0) != 0) {
     chpl_error("Cannot setenv(\"GASNET_EXITTIMEOUT_FACTOR\")", 0, 0);
   }
-  if (setenv("GASNET_EXITTIMEOUT_MIN", "5.0", 0) != 0) {
+  if (setenv("GASNET_EXITTIMEOUT_MIN", "10.0", 0) != 0) {
     chpl_error("Cannot setenv(\"GASNET_EXITTIMEOUT_MIN\")", 0, 0);
   }
 #endif

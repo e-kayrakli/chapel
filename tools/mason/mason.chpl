@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,11 +21,13 @@
  */
 
 
+use MasonUtils;
+use MasonHelp;
+use MasonEnv;
 use MasonNew;
 use MasonBuild;
 use MasonUpdate;
-use MasonUtils;
-use MasonHelp;
+use MasonSearch;
 use FileSystem;
 
 /*
@@ -51,7 +53,7 @@ The Design of Mason
            Contains necessary build information
            Serialized directed acyclic graph of the dependencies build options
            from the manifest
-  4) Dependency Code:  ``$MASON_HOME/.mason/src``
+  4) Dependency Code:  ``$MASON_HOME/src``
            Local dependencies downloaded by mason after the user lists them in
            a project manifest.
 
@@ -72,6 +74,8 @@ proc main(args: [] string) {
     when 'build' do masonBuild(args);
     when 'update' do UpdateLock(args);
     when 'run' do masonRun(args);
+    when 'search' do masonSearch(args);
+    when 'env' do masonEnv(args);
     when 'doc' do masonDoc(args);
     when 'clean' do masonClean();
     when '--list' do masonList();
@@ -98,20 +102,20 @@ proc masonRun(args) {
     for arg in args[2..] {
       if arg == '-h' || arg == '--help' {
         masonRunHelp();
-	exit();
+        exit();
       }
       else if arg == '--build' {
-	masonBuild(['mason', 'build']);
+        masonBuild(['mason', 'build']);
       }
       else if arg == '--show' {
-	show = true;
+        show = true;
       }
       else {
-	execopts.push_back(arg);
+        execopts.push_back(arg);
       }
-    }  
+    }
   }
-  // Find the Binary and execute 
+  // Find the Binary and execute
   if isDir('target') {
     var execs = ' '.join(execopts);
     var command = "target/debug/" + toRun + ' ' + execs;
@@ -140,7 +144,7 @@ proc masonClean() {
   runCommand('rm -rf target');
 }
 
- 
+
 proc masonDoc(args) {
   var toDoc = basename(getEnv('PWD'));
   var project = toDoc + '.chpl';
@@ -156,13 +160,6 @@ proc masonDoc(args) {
     runCommand('chpldoc');
   }
 }
-
-
-
-// TODO
-proc masonInit(args) {}
-
-
 
 proc printVersion() {
   writeln('mason 0.1.0');

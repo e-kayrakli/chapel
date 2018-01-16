@@ -1,4 +1,4 @@
-# Copyright 2004-2017 Cray Inc.
+# Copyright 2004-2018 Cray Inc.
 # Other additional copyright holders may be indicated within.
 #
 # The entirety of this work is licensed under the Apache License,
@@ -24,6 +24,7 @@ RESOLUTION_SRCS =                                              \
                   cullOverReferences.cpp                       \
                   expandVarArgs.cpp                            \
                   implementForallIntents.cpp                   \
+                  implementForallIntents2.cpp                  \
                   generics.cpp                                 \
                   functionResolution.cpp                       \
                   initializerResolution.cpp                    \
@@ -31,6 +32,7 @@ RESOLUTION_SRCS =                                              \
                   postFold.cpp                                 \
                   preFold.cpp                                  \
                   ResolutionCandidate.cpp                      \
+                  resolveFunction.cpp                          \
                   tuples.cpp                                   \
                   typeSpecifier.cpp                            \
                   virtualDispatch.cpp                          \

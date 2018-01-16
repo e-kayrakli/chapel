@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -663,22 +663,6 @@ module ChapelArray {
   }
 
   //
-  // Return a domain with a rank equivalent to chpl__getActualArray(arr).rank.
-  // This domain is no larger than the innermost array's domain. It represents
-  // the 'active' indices that the top-level ArrayView works with. For example:
-  //
-  //   var A : [1..10, 1..10];
-  //   var B => A[1, 1..10];
-  //   writeln(chpl__getViewDom(B)); // {1..1, 1..10}
-  //
-  // TODO: Can this be written to accept a full-fledge array OR a BaseArr?
-  //
-  proc chpl__getViewDom(arr: []) {
-    if chpl__isArrayView(arr._value) then return arr._value._getViewDom();
-    else return arr.domain;
-  }
-
-  //
   // Return the innermost array class (e.g., a DefaultRectangular).
   //
   // 'arr' can be a full-fledged array or a BaseArr-inheriting class
@@ -897,6 +881,8 @@ module ChapelArray {
       }
     }
 
+    forwarding _value except these, targetLocales;
+
     inline proc _do_destroy() {
       if ! _unowned && ! _instance.singleton() {
         on _instance {
@@ -1040,6 +1026,8 @@ module ChapelArray {
       }
     }
 
+    forwarding _value except these;
+
     pragma "no doc"
     proc chpl__serialize() where this._value.type : DefaultRectangularDom {
       return this.dims();
@@ -1102,7 +1090,7 @@ module ChapelArray {
 
     pragma "no doc"
     proc stridable param where isSparseDom(this) {
-      compilerError("sparse domains do not currently support .stridable");
+      return _value.parentDom.stridable;
     }
 
     pragma "no doc"
@@ -1120,16 +1108,38 @@ module ChapelArray {
       compilerError("associative domains do not support .stridable");
     }
 
-    pragma "no doc"
-    inline proc these() {
-      return _value.these();
+    iter these() {
+      for i in _value.these() {
+        yield i;
+      }
+    }
+    iter these(param tag: iterKind)
+      where tag == iterKind.standalone &&
+            __primitive("method call resolves", _value, "these", tag=tag) {
+      for i in _value.these(tag) do
+        yield i;
+    }
+    iter these(param tag: iterKind)
+      where tag == iterKind.leader {
+      // If I use forall here, it says
+      //   error: user invocation of a parallel iterator should not supply tag
+      //   arguments -- they are added implicitly by the compiler
+      for followThis in _value.these(tag) do
+        yield followThis;
+    }
+    iter these(param tag: iterKind, followThis, param fast: bool = false)
+      where tag == iterKind.follower {
+
+      if __primitive("method call resolves", _value, "these",
+                     tag=tag, followThis, fast=fast) {
+        for i in _value.these(tag=tag, followThis, fast=fast) do
+          yield i;
+      } else {
+        for i in _value.these(tag, followThis) do
+          yield i;
+      }
     }
 
-    pragma "no doc"
-    inline proc these(param tag) where
-        (tag == iterKind.leader || tag == iterKind.standalone) &&
-        __primitive("method call resolves", _value, "these", tag=tag)
-      return _value.these(tag=tag);
 
     // see comments for the same method in _array
     //
@@ -1286,7 +1296,37 @@ module ChapelArray {
 
       return _newArray(x);
     }
+
+    pragma "no doc"
+    pragma "no copy return"
+    proc buildArrayWith(type eltType, data:_ddata(eltType), allocSize:int) {
+      if eltType == void {
+        compilerError("array element type cannot be void");
+      }
+      var x = _value.dsiBuildArrayWith(eltType, data, allocSize);
+      pragma "dont disable remote value forwarding"
+      proc help() {
+        _value.add_arr(x);
+      }
+      help();
+
+      chpl_incRefCountsForDomainsInArrayEltTypes(x, x.eltType);
+
+      return _newArray(x);
+    }
+
     /* Remove all indices from this domain, leaving it empty */
+
+    // For rectangular domains, create an empty domain and assign it to this
+    // one to make sure that we leverage all of the array's normal resizing
+    // machinery.
+    proc clear() where isRectangularDom(this) {
+      var emptyDom: this.type;
+      this = emptyDom;
+    }
+
+    // For other domain types, the implementation probably knows the most
+    // efficient way to clear its index set, so make a dsiClear() call.
     proc clear() {
       _value.dsiClear();
     }
@@ -1410,16 +1450,6 @@ module ChapelArray {
        return false. */
     proc member(i: _value.idxType ...rank) {
       return member(i);
-    }
-
-    pragma "no doc"
-    pragma "reference to const when const this"
-    pragma "new alias fn"
-    proc newAlias() {
-      var x = _value;
-      pragma "no copy"
-      var ret = _getDomain(x);
-      return ret;
     }
 
     /* Return true if this domain is a subset of ``super``. Otherwise
@@ -1636,6 +1666,11 @@ module ChapelArray {
        for i in 1..rank do
          offTup(i) = off;
        return translate(offTup);
+     }
+
+     /* Return true if the domain has no indices */
+     proc isEmpty(): bool {
+       return this.size == 0;
      }
 
     //
@@ -2018,6 +2053,10 @@ module ChapelArray {
       }
     }
 
+    forwarding _value except these,
+                      doiBulkTransferFromKnown, doiBulkTransferToKnown,
+                      doiBulkTransferFromAny,  doiBulkTransferToAny;
+
     inline proc _do_destroy() {
       if ! _unowned {
         on _instance {
@@ -2307,33 +2346,44 @@ module ChapelArray {
       return localSlice((...d.getIndices()));
     }
 
-    pragma "no doc"
-    inline proc these() {
-      return _value.these();
+    pragma "reference to const when const this"
+    iter these() ref {
+      for i in _value.these() {
+        yield i;
+      }
     }
 
-    pragma "no doc"
-    inline proc these(param tag) where
-        (tag == iterKind.leader || tag == iterKind.standalone) &&
-        __primitive("method call resolves", _value, "these", tag=tag)
-      return _value.these(tag=tag);
+    pragma "reference to const when const this"
+    iter these(param tag: iterKind) ref
+      where tag == iterKind.standalone &&
+            __primitive("method call resolves", _value, "these", tag=tag) {
+      for i in _value.these(tag) do
+        yield i;
+    }
+    iter these(param tag: iterKind)
+      where tag == iterKind.leader {
+      for followThis in _value.these(tag) do
+        yield followThis;
+    }
+    pragma "reference to const when const this"
+    iter these(param tag: iterKind, followThis, param fast: bool = false) ref
+      where tag == iterKind.follower {
+
+      if __primitive("method call resolves", _value, "these",
+                     tag=tag, followThis, fast=fast) {
+        for i in _value.these(tag=tag, followThis, fast=fast) do
+          yield i;
+      } else {
+        for i in _value.these(tag, followThis) do
+          yield i;
+      }
+    }
 
     // 1/5/10: do we need this since it always returns domain.numIndices?
     /* Return the number of elements in the array */
     proc numElements return _value.dom.dsiNumIndices;
     /* Return the number of elements in the array */
     proc size return numElements;
-
-    pragma "no doc"
-    pragma "reference to const when const this"
-    pragma "new alias fn"
-    pragma "fn returns aliasing array"
-    proc newAlias() {
-      var x = _value;
-      pragma "no copy"
-      var ret = _getArray(x);
-      return ret;
-    }
 
     //
     // This routine determines whether an actual array argument
@@ -2446,20 +2496,15 @@ module ChapelArray {
         if newDims(i).length != _value.dom.dsiDim(i).length then
           halt("extent in dimension ", i, " does not match actual");
 
-      //
-      // TODO: Currently, the domain created to represent the
-      // rank-change domain is non-distributed.  Ultimately, we need
-      // to create a domain view class that supports a rank-change
-      // view on a higher-dimensional domain as in the original array
-      // view attempt.
-      //
       const thisDomClass = this._value.dom;
       const (dom, dompid) = (thisDomClass, thisDomClass.pid);
 
       pragma "no auto destroy"
       const updom = {(...newDims)};
 
-      const redist = new ArrayViewReindexDist(downdist = thisDomClass.dist,
+
+      const redist = new ArrayViewReindexDist(downDistPid = this.domain.dist._pid,
+                                              downDistInst=this.domain.dist._instance,
                                               updom = updom._value,
                                               downdomPid = dompid,
                                               downdomInst = dom);
@@ -2661,8 +2706,8 @@ module ChapelArray {
 
     pragma "no doc"
     /* Internal helper method to reallocate an array */
-    proc reallocateArray(newRange: range, param direction=1,
-                         debugMsg="reallocateArray")
+    inline proc reallocateArray(newRange: range, param direction=1,
+                                debugMsg="reallocateArray")
     {
       on this._value {
         const check = if direction > 0 then newRange.high else newRange.low;
@@ -2893,9 +2938,10 @@ module ChapelArray {
 
       const shift = vals.size,
             shiftRange = pos..this.domain.high,
-            newRange = this.domain.low..(this.domain.high + vals.size);
+            newRange = this.domain.low..(this.domain.high + vals.size),
+            validInsertRange = this.domain.low..(this.domain.high + 1);
 
-      if boundsChecking && !newRange.member(pos) then
+      if boundsChecking && !validInsertRange.member(pos) then
         halt("insert at position " + pos + " out of bounds");
 
       reallocateArray(newRange, debugMsg="insert reallocate");
@@ -3087,7 +3133,7 @@ module ChapelArray {
     // true everywhere
     //
     if isArrayType(this.eltType) {
-      var ret: bool;
+      var ret = true;
       forall (thisArr, thatArr) in zip(this, that) with (&& reduce ret) do
         ret &&= thisArr.equals(thatArr);
       return ret;
@@ -3547,19 +3593,9 @@ module ChapelArray {
 
   // This must be a param function
   proc chpl__compatibleForBulkTransfer(a:[], b:[]) param {
+    if !useBulkTransfer then return false;
     if a.eltType != b.eltType then return false;
     if !chpl__supportedDataTypeForBulkTransfer(a.eltType) then return false;
-    if a._value.type != b._value.type then return false;
-    if !a._value.dsiSupportsBulkTransfer() then return false;
-    return true;
-  }
-
-  proc chpl__compatibleForBulkTransferStride(a:[], b:[]) param {
-    if a.eltType != b.eltType then return false;
-    if !chpl__supportedDataTypeForBulkTransfer(a.eltType) then return false;
-    if !chpl__supportedDataTypeForBulkTransfer(b.eltType) then return false;
-    if !a._value.dsiSupportsBulkTransferInterface() then return false;
-    if !b._value.dsiSupportsBulkTransferInterface() then return false;
     return true;
   }
 
@@ -3590,51 +3626,6 @@ module ChapelArray {
   proc chpl__supportedDataTypeForBulkTransfer(x: ?t) param where isUnionType(t) return false;
   proc chpl__supportedDataTypeForBulkTransfer(x: object) param return false;
   proc chpl__supportedDataTypeForBulkTransfer(x) param return true;
-
-  proc chpl__useBulkTransfer(a:[], b:[]) {
-    //if debugDefaultDistBulkTransfer then writeln("chpl__useBulkTransfer");
-
-    // constraints specific to a particular domain map array type
-    if !a._value.doiCanBulkTransfer(chpl__getViewDom(a)) then return false;
-    if !b._value.doiCanBulkTransfer(chpl__getViewDom(b)) then return false;
-    if !a._value.doiUseBulkTransfer(b) then return false;
-
-    return true;
-  }
-
-  //NOTE: This function also checks for equal lengths in all dimensions,
-  //as the previous one (chpl__useBulkTransfer) so depending on the order they
-  //are called, this can be factored out.
-  proc chpl__useBulkTransferStride(a:[], b:[]) {
-    //if debugDefaultDistBulkTransfer then writeln("chpl__useBulkTransferStride");
-
-    // constraints specific to a particular domain map array type
-    if !a._value.doiCanBulkTransferStride(chpl__getViewDom(a)) then return false;
-    if !b._value.doiCanBulkTransferStride(chpl__getViewDom(b)) then return false;
-    if !a._value.doiUseBulkTransferStride(b) then return false;
-
-    return true;
-  }
-
-  inline proc chpl__bulkTransferHelper(a, b) {
-    if chpl__isDROrDRView(a) {
-      if chpl__isDROrDRView(b) {
-        // implemented in DefaultRectangular
-        a._value.doiBulkTransferStride(b, chpl__getViewDom(a));
-      }
-      else
-        // b's domain map must implement this
-        b._value.doiBulkTransferToDR(a, chpl__getViewDom(b));
-    } else {
-      if chpl__isDROrDRView(b) then
-        // a's domain map must implement this
-        a._value.doiBulkTransferFromDR(b, chpl__getViewDom(a));
-      else
-        // a's domain map must implement this,
-        // possibly using b._value.doiBulkTransferToDR()
-        a._value.doiBulkTransferFrom(b, chpl__getViewDom(a));
-    }
- }
 
   pragma "no doc"
   proc checkArrayShapesUponAssignment(a: [], b: []) {
@@ -3676,34 +3667,63 @@ module ChapelArray {
     if boundsChecking then
       checkArrayShapesUponAssignment(a, b);
 
-    // try bulk transfer
-    if !chpl__serializeAssignment(a, b) then
-      // Do bulk transfer.
-      chpl__bulkTransferArray(a, b);
-    else
-      // Do non-bulk transfer.
-      chpl__transferArray(a, b);
+    chpl__uncheckedArrayTransfer(a, b);
   }
 
-  inline proc chpl__bulkTransferArray(ref a: [], const ref b) {
-    if (useBulkTransfer &&
-        chpl__compatibleForBulkTransfer(a, b) &&
-        chpl__useBulkTransfer(a, b))
-    {
-      a._value.doiBulkTransfer(b, chpl__getViewDom(a));
-    }
-    else if (useBulkTransferStride &&
-        chpl__compatibleForBulkTransferStride(a, b) &&
-        chpl__useBulkTransferStride(a, b))
-    {
-      chpl__bulkTransferHelper(a, b);
-    }
-    else {
-      if debugBulkTransfer {
-        chpl_debug_writeln("proc =(a:[],b): bulk transfer did not happen");
+  inline proc chpl__uncheckedArrayTransfer(ref a: [], b:[]) {
+    if !chpl__serializeAssignment(a, b) && chpl__compatibleForBulkTransfer(a, b) {
+      if chpl__bulkTransferArray(a, b) == false {
+        chpl__transferArray(a, b);
       }
+    } else {
       chpl__transferArray(a, b);
     }
+  }
+
+  inline proc chpl__bulkTransferArray(ref a: [?AD], b : [?BD]) {
+    return chpl__bulkTransferArray(a, AD, b, BD);
+  }
+  inline proc chpl__bulkTransferArray(ref a: [], AD : domain, const ref b: [], BD : domain) {
+    return chpl__bulkTransferArray(a._value, AD, b._value, BD);
+  }
+
+  inline proc chpl__bulkTransferArray(destClass, destDom : domain, srcClass, srcDom : domain) {
+    use Reflection;
+    var success = false;
+
+    inline proc bulkTransferDebug(msg:string) {
+      if debugBulkTransfer then chpl_debug_writeln("proc =(a:[],b:[]): ", msg);
+    }
+
+    bulkTransferDebug("in chpl__bulkTransferArray");
+
+    //
+    // BHARSH TODO: I would prefer to hoist these 'canResolveMethod' calls into
+    // param bools before the if/else chain, but the compiler complains about
+    // hitting the instantiation limit for 'canResolveMethod'...
+    //
+    // TODO: should we attempt other bulk transfer methods if one fails?
+    //
+    if canResolveMethod(destClass, "doiBulkTransferFromKnown", destDom, srcClass, srcDom) {
+      bulkTransferDebug("attempting doiBulkTransferFromKnown");
+      success = destClass.doiBulkTransferFromKnown(destDom, srcClass, srcDom);
+    } else if canResolveMethod(srcClass, "doiBulkTransferToKnown", srcDom, destClass, destDom) {
+      bulkTransferDebug("attempting doiBulkTransferToKnown");
+      success = srcClass.doiBulkTransferToKnown(srcDom, destClass, destDom);
+    } else if canResolveMethod(destClass, "doiBulkTransferFromAny", destDom, srcClass, srcDom) {
+      bulkTransferDebug("attempting doiBulkTransferFromAny");
+      success = destClass.doiBulkTransferFromAny(destDom, srcClass, srcDom);
+    } else if canResolveMethod(srcClass, "doiBulkTransferToAny", srcDom, destClass, destDom) {
+      bulkTransferDebug("attempting doiBulkTransferToAny");
+      success = srcClass.doiBulkTransferToAny(srcDom, destClass, destDom);
+    }
+
+    if success then
+      bulkTransferDebug("successfully completed bulk transfer");
+    else
+      bulkTransferDebug("bulk transfer did not happen");
+
+    return success;
   }
 
   inline proc chpl__transferArray(ref a: [], const ref b) {
@@ -3712,10 +3732,6 @@ module ChapelArray {
       forall aa in a do
         aa = b;
     } else if chpl__serializeAssignment(a, b) {
-// commenting this out to remove testing noise.
-// this is always printed out if it's on, because chpl__transferArray
-// is now called from array auto-copy.
-//      compilerWarning("whole array assignment has been serialized (see issue #5760)");
       for (aa,bb) in zip(a,b) do
         aa = bb;
     } else if chpl__tryToken { // try to parallelize using leader and follower iterators
@@ -3930,13 +3946,7 @@ module ChapelArray {
   proc chpl__initCopy(const ref a: []) {
     var b : [a._dom] a.eltType;
 
-    // Try bulk transfer.
-    if !chpl__serializeAssignment(b, a) {
-      chpl__bulkTransferArray(b, a);
-      return b;
-    }
-
-    chpl__transferArray(b, a);
+    chpl__uncheckedArrayTransfer(b, a);
     return b;
   }
 
@@ -3955,6 +3965,16 @@ module ChapelArray {
     pragma "no auto destroy" var ret = x;
     return ret;
   }
+
+  pragma "no copy return"
+  pragma "unref fn"
+  proc chpl__unref(ir: _iteratorRecord) {
+    pragma "no auto destroy"
+    pragma "no copy"
+    var toArray = chpl__initCopy(ir); // call iterator -> array copy fn
+    return toArray;
+  }
+
 
   // Intended to return whatever it gets without copying
   // Not marked with "unref fn" because this version shouldn't
@@ -4009,49 +4029,117 @@ module ChapelArray {
   pragma "init copy fn"
   proc chpl__initCopy(ir: _iteratorRecord) {
 
-    // The use of an explicit initCopy() is required
-    // to support nested for/forall expressions.
-    iter _ir_copy_recursive(ir) {
-      for e in ir {
-        pragma "no copy"
-        var ee = chpl__initCopy(e);
+    // We'd like to know the yielded type of the record, but we can't
+    // access the (runtime) component of that until we actually yield
+    // something.
+    //
+    // The below is a work-around that creates a 1-D array by
+    // filling in a ddata and then handing the data to DefaultRectangularArr.
+    // Besides breaking the catch-22 with the runtime type, the other
+    // advantage of this approach is that it moves the yielded value
+    // in to the array instead of assigning it. Alternatives to this strategy
+    // include creating a no-inited array with the static type that the
+    // iterator yields.
+    //
+    // Of course, in the future, we'd like this to support
+    // creating multidimensional arrays - but that requires storing
+    // the yielded shape in the iterator record which doesn't seem close
+    // at hand...
+    //
+    // The resulting array grows dynamically. That wouldn't always be
+    // necessary if we had better shape information in iterator records.
+    // Additionally, the dynamic growing limits parallelism here, so
+    // adding better shape information would allow it to be parallel and
+    // thus enable better performance.
 
-        yield ee;
+    var i  = 0;
+    var size:size_t = 0;
+    var data:_ddata(iteratorToArrayElementType(ir.type)) = nil;
+
+    var callAgain: bool;
+    var subloc = c_sublocid_none;
+
+    for elt in ir {
+
+      // Future: we should generally remove this copy.
+      // Note though that in some cases it invokes this function
+      // recursively - in that case it shouldn't be removed!
+      pragma "no auto destroy"
+      pragma "no copy"
+      var eltCopy = chpl__initCopy(elt);
+
+      if i >= size {
+        // Allocate a new buffer and then copy.
+        var oldSize = size;
+        var oldData = data;
+
+        if size == 0 then
+          size = 4;
+        else
+          size = 2 * size;
+
+        // data allocation should match DefaultRectangular
+        __primitive("array_alloc", data, size, subloc,
+                    c_ptrTo(callAgain), c_nil);
+
+        // Now copy the data over
+        for i in 0..#oldSize {
+          // this is a move, transfering ownership
+          __primitive("=", data[i], oldData[i]);
+        }
+
+        // Then, free the old data
+        _ddata_free(oldData, oldSize);
       }
+
+      // Now move the element to the array
+      // The intent here is to transfer ownership to the array.
+      __primitive("=", data[i], eltCopy);
+
+      i += 1;
     }
 
-    pragma "no copy"
-    var irc  = _ir_copy_recursive(ir);
 
-    var i    = 1;
-    var size = 4;
+    if data != nil {
 
-    pragma "insert auto destroy"
-    var D    = {1..size};
+      // let the comm layer adjust array allocation
+      if callAgain then
+        __primitive("array_alloc", data, size, subloc, c_nil, data);
 
-    // note that _getIterator is called in order to copy the iterator
-    // class since for arrays we need to iterate once to get the
-    // element type (at least for now); this also means that if this
-    // iterator has side effects, we will see them; a better way to
-    // handle this may be to get the static type (not initialize the
-    // array) and use a primitive to set the array's element; that may
-    // also handle skyline arrays
-    var A: [D] iteratorIndexType(irc);
+      // Now construct a DefaultRectangular array using the data
+      pragma "insert auto destroy"
+      var D = { 1 .. #i };
 
-    for e in irc {
-      // The resulting array grows dynamically
-      if i > size {
-        size = 2 * size;
-        D    = { 1 .. size };
-      }
+      var A = D.buildArrayWith(data[0].type, data, size:int);
 
-      A(i) = e;
-      i    = i + 1;
+      // Normally, the sub-arrays share a domain with the
+      // parent, but that's not the case for the arrays created
+      // by this routine. Instead, each sub-array owns its own domain.
+      // That allows them to have different runtime sizes.
+      chpl_decRefCountsForDomainsInArrayEltTypes(A._value, data[0].type);
+      A._value._decEltRefCounts = false;
+      return A;
+
+    } else {
+      // Construct an empty array that has a reasonable eltType
+      pragma "insert auto destroy"
+      var D = { 1 .. 0 };
+
+      // Create space for 1 element as a placeholder.
+      __primitive("array_alloc", data, 1, subloc, c_ptrTo(callAgain), c_nil);
+      if callAgain then
+        __primitive("array_alloc", data, 1, subloc, c_nil, data);
+
+      // TODO: this use of data[0].type will result in nil pointer
+      // dereferences in the event that we're converting a iterator
+      // returning arrays of arrays but that returned no elements.
+      // We need to be able to construct the runtime portion of the type
+      // in that event.
+      var A = D.buildArrayWith(data[0].type, data, size:int);
+
+      return A;
+
     }
-
-    D = { 1 .. i - 1 };
-
-    return A;
   }
 
   /* ================================================

@@ -1,5 +1,18 @@
+use ExampleErrors;
+
 class MyError : Error {
+  var msg:string = "";
   var x = 1;
+  proc init(x:int) {
+    this.msg = x:string;
+    this.x = x;
+    super.init();
+  }
+  proc init(msg:string) {
+    this.msg = msg;
+    this.x = 1;
+    super.init();
+  }
 }
 
 proc test() {
@@ -9,7 +22,7 @@ proc test() {
       if i < 3 then
         throw new MyError("test error");
       else
-        throw new Error("other error");
+        throw new StringError("other error");
     }
     writeln("after coforall block");
   } catch errors: TaskErrors {
@@ -26,7 +39,7 @@ proc test() {
         writeln(error);
     }
   } catch e {
-    writeln("Caught other error ", e.msg);
+    writeln("Caught other error ", e.message());
   }
 }
 

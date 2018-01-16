@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -50,6 +50,7 @@ static child type could end up calling something in the parent.
 #include "expr.h"
 #include "iterator.h"
 #include "resolution.h"
+#include "resolveFunction.h"
 #include "stmt.h"
 #include "symbol.h"
 
@@ -58,12 +59,25 @@ static child type could end up calling something in the parent.
 
 bool                            inDynamicDispatchResolution = false;
 
-Map<FnSymbol*, int>             virtualMethodMap;
-Map<Type*,     Vec<FnSymbol*>*> virtualMethodTable;
-Map<FnSymbol*, Vec<FnSymbol*>*> virtualChildrenMap;
 Map<FnSymbol*, Vec<FnSymbol*>*> virtualRootsMap;
 
-static bool isSubType(Type* sub, Type* super);
+Map<FnSymbol*, Vec<FnSymbol*>*> virtualChildrenMap;
+
+Map<Type*,     Vec<FnSymbol*>*> virtualMethodTable;
+
+Map<FnSymbol*, int>             virtualMethodMap;
+
+static bool buildVirtualMaps();
+
+static void clearRootsAndChildren();
+
+static void buildVirtualMethodTable();
+
+static void buildVirtualMethodMap();
+
+static void filterVirtualChildren();
+
+static void printDispatchInfo();
 
 /************************************* | **************************************
 *                                                                             *
@@ -71,68 +85,437 @@ static bool isSubType(Type* sub, Type* super);
 *                                                                             *
 ************************************** | *************************************/
 
-static void buildVirtualMaps();
+void resolveDynamicDispatches() {
+  inDynamicDispatchResolution = true;
 
-static void addAllToVirtualMaps(FnSymbol* fn,  AggregateType* pct);
+  // Repeat until maps are stable
+  while (buildVirtualMaps() == false) {
+    clearRootsAndChildren();
+  }
 
-static void addToVirtualMaps   (FnSymbol* pfn, AggregateType* ct);
+  buildVirtualMethodTable();
 
-static void collectMethodsForVirtualMaps(Vec<FnSymbol*>& methods,
-                                         AggregateType*  at,
-                                         FnSymbol*       pfn);
+  buildVirtualMethodMap();
 
-static void collectInstantiatedAggregateTypes(
-                                        std::vector<AggregateType*>& icts,
-                                        AggregateType*               at);
+  filterVirtualChildren();
+
+  if (fPrintDispatch == true) {
+    printDispatchInfo();
+  }
+
+  inDynamicDispatchResolution = false;
+}
+
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
+
+static void addAllToVirtualMaps(FnSymbol*      pfn,
+                                AggregateType* pct);
+
+static void addToVirtualMaps(FnSymbol*      pfn,
+                             AggregateType* ct,
+                             FnSymbol*      cfn);
+
+static void collectMethods(FnSymbol*               pfn,
+                           AggregateType*          ct,
+                           std::vector<FnSymbol*>& methods);
+
+static bool possibleSignatureMatch(FnSymbol* fn, FnSymbol* gn);
+
+static void resolveOverride(FnSymbol* pfn, FnSymbol* cfn);
+
+static void overrideIterator(FnSymbol* pfn, FnSymbol* cfn);
+
+static void virtualDispatchUpdate(FnSymbol* pfn, FnSymbol* cfn);
+
+static void virtualDispatchUpdateChildren(FnSymbol* pfn, FnSymbol* cfn);
+
+static void virtualDispatchUpdateRoots(FnSymbol* pfn, FnSymbol* cfn);
+
+static bool isVirtualChild(FnSymbol* child, FnSymbol* parent);
+
+static bool isSubType(Type* sub, Type* super);
+
+// Returns true if the maps are "stable" i.e. set of types is unchanged
+static bool buildVirtualMaps() {
+  int numTypes = gTypeSymbols.n;
+
+  forv_Vec(FnSymbol, fn, gFnSymbols) {
+    if (AggregateType* at = fn->getReceiver()) {
+      if (at->isClass() == true) {
+        if (at->isGeneric() == false) {
+          if (fn->isResolved()            == true      &&
+
+              fn->hasFlag(FLAG_WRAPPER)   == false     &&
+              fn->hasFlag(FLAG_NO_PARENS) == false     &&
+
+              fn->retTag                  != RET_PARAM &&
+              fn->retTag                  != RET_TYPE) {
+            addAllToVirtualMaps(fn, at);
+          }
+        }
+      }
+    }
+  }
+
+  return (numTypes == gTypeSymbols.n) ? true : false;
+}
+
+// Add overrides of pfn to virtual maps down the inheritance hierarchy
+static void addAllToVirtualMaps(FnSymbol* pfn, AggregateType* pct) {
+  forv_Vec(AggregateType, ct, pct->dispatchChildren) {
+    if (ct->isGeneric() == false) {
+      if (ct->mayHaveInstances() == true) {
+        std::vector<FnSymbol*> methods;
+
+        collectMethods(pfn, ct, methods);
+
+        for_vector(FnSymbol, cfn, methods) {
+          addToVirtualMaps(pfn, ct, cfn);
+        }
+      }
+
+      // Recurse over this child's children
+      addAllToVirtualMaps(pfn, ct);
+    }
+  }
+}
+
+static void addToVirtualMaps(FnSymbol*      pfn,
+                             AggregateType* ct,
+                             FnSymbol*      cfn) {
+  ArgSymbol*     _this   = cfn->getFormal(2);
+  AggregateType* _thisAt = toAggregateType(_this->type);
+  SymbolMap      subs;
+
+  if (_thisAt->isGeneric() == true) {
+    subs.put(_this, ct->symbol);
+  }
+
+  for (int i = 3; i <= cfn->numFormals(); i++) {
+    ArgSymbol* carg = cfn->getFormal(i);
+    ArgSymbol* parg = pfn->getFormal(i);
+
+    if (carg->intent == INTENT_PARAM) {
+      subs.put(carg, paramMap.get(parg));
+
+    } else if (carg->type->symbol->hasFlag(FLAG_GENERIC) == true) {
+      subs.put(carg, parg->type->symbol);
+    }
+  }
+
+  if (subs.n == 0) {
+    resolveOverride(pfn, cfn);
+
+  } else {
+    FnSymbol* fn = instantiate(cfn, subs);
+
+    if (ct->hasInitializers() == false) {
+      FnSymbol*  typeConstr         = ct->defaultTypeConstructor;
+      BlockStmt* instantiationPoint = typeConstr->instantiationPoint;
+
+      if (instantiationPoint == NULL) {
+        instantiationPoint = toBlockStmt(typeConstr->defPoint->parentExpr);
+      }
+
+      fn->instantiationPoint = instantiationPoint;
+    }
+
+    resolveOverride(pfn, fn);
+  }
+}
+
+static void collectMethods(FnSymbol*               pfn,
+                           AggregateType*          pct,
+                           std::vector<FnSymbol*>& methods) {
+  AggregateType* fromType = pct;
+
+  while (fromType != NULL) {
+    forv_Vec(FnSymbol, cfn, fromType->methods) {
+      if (cfn->instantiatedFrom == NULL) {
+        if (possibleSignatureMatch(pfn, cfn) == true) {
+          methods.push_back(cfn);
+        }
+      }
+    }
+
+    fromType = fromType->instantiatedFrom;
+  }
+}
+
+static bool possibleSignatureMatch(FnSymbol* fn, FnSymbol* gn) {
+  bool retval = true;
+
+  if (fn->name != gn->name) {
+    retval = false;
+
+  } else if (fn->numFormals() != gn->numFormals()) {
+    retval = false;
+
+  } else {
+    for (int i = 3; i <= fn->numFormals() && retval == true; i++) {
+      ArgSymbol* fa = fn->getFormal(i);
+      ArgSymbol* ga = gn->getFormal(i);
+
+      if (strcmp(fa->name, ga->name) != 0) {
+        retval = false;
+      }
+    }
+  }
+
+  return retval;
+}
+
+static void resolveOverride(FnSymbol* pfn, FnSymbol* cfn) {
+  resolveSignature(cfn);
+
+  if (signatureMatch(pfn, cfn) == true && evaluateWhereClause(cfn) == true) {
+    resolveFunction(cfn);
+
+    if (cfn->retType->symbol->hasFlag(FLAG_ITERATOR_RECORD) == true &&
+        pfn->retType->symbol->hasFlag(FLAG_ITERATOR_RECORD) == true) {
+      overrideIterator(pfn, cfn);
+
+    } else if (isSubType(cfn->retType, pfn->retType) == false) {
+      USR_FATAL_CONT(pfn,
+                     "conflicting return type specified for '%s: %s'",
+                     toString(pfn),
+                     pfn->retType->symbol->name);
+
+      USR_FATAL_CONT(cfn,
+                     "  overridden by '%s: %s'",
+                     toString(cfn),
+                     cfn->retType->symbol->name);
+
+      USR_STOP();
+
+    } else if (cfn->throwsError() != pfn->throwsError()) {
+      const char* pfnThrowing = NULL;
+      const char* cfnThrowing = NULL;
+
+      if (pfn->throwsError()) {
+        pfnThrowing = "throwing";
+        cfnThrowing = "non-throwing";
+
+      } else {
+        pfnThrowing = "non-throwing";
+        cfnThrowing = "throwing";
+      }
+
+      USR_FATAL_CONT(cfn, "conflicting throws for '%s'", toString(cfn));
+
+      USR_FATAL_CONT(pfn, "%s function '%s'", pfnThrowing, toString(pfn));
+
+      USR_FATAL_CONT(cfn,
+                     "overridden by %s function '%s'",
+                     cfnThrowing,
+                     toString(cfn));
+
+      USR_STOP();
+
+    } else {
+      virtualDispatchUpdate(pfn, cfn);
+    }
+  }
+}
+
+static void overrideIterator(FnSymbol* pfn, FnSymbol* cfn) {
+  AggregateType* pfnRetType = toAggregateType(pfn->retType);
+  IteratorInfo*  pfnInfo    = pfnRetType->iteratorInfo;
+  FnSymbol*      pfnValue   = pfnInfo->getValue;
+
+  AggregateType* cfnRetType = toAggregateType(cfn->retType);
+  IteratorInfo*  cfnInfo    = cfnRetType->iteratorInfo;
+  FnSymbol*      cfnValue   = cfnInfo->getValue;
+
+  if (isSubType(cfnValue->retType, pfnValue->retType) == true) {
+    AggregateType* pic          = pfnInfo->iclass;
+    AggregateType* cic          = cfnInfo->iclass;
+
+    Type*          pthisType    = pfnInfo->iterator->_this->typeInfo();
+    Type*          cthisType    = cfnInfo->iterator->_this->typeInfo();
+
+    AggregateType* atPfnRetType = toAggregateType(pfn->retType);
+    AggregateType* atCfnRetType = toAggregateType(cfn->retType);
+
+    AggregateType* atCthisType  = toAggregateType(cthisType);
+
+    INT_ASSERT(atPfnRetType != NULL);
+    INT_ASSERT(atCfnRetType != NULL);
+    INT_ASSERT(atCthisType  != NULL);
+
+    atPfnRetType->dispatchChildren.add_exclusive(atCfnRetType);
+    atCfnRetType->dispatchParents.add_exclusive(atPfnRetType);
+
+    INT_ASSERT(cic->symbol->hasFlag(FLAG_ITERATOR_CLASS) == true);
+    INT_ASSERT(atCthisType->dispatchParents.n              == 1);
+
+    if (atCthisType->dispatchParents.only() == pthisType) {
+      AggregateType* parent = cic->dispatchParents.only();
+
+      INT_ASSERT(cic->dispatchParents.n == 1);
+
+      if (parent == dtObject) {
+        AggregateType* atCic = toAggregateType(cic);
+
+        INT_ASSERT(atCic != NULL);
+
+        int            item  = parent->dispatchChildren.index(atCic);
+
+        parent->dispatchChildren.remove(item);
+
+        cic->dispatchParents.remove(0);
+      }
+
+      AggregateType* atCic = toAggregateType(cic);
+      AggregateType* atPic = toAggregateType(pic);
+
+      INT_ASSERT(atCic != NULL);
+      INT_ASSERT(atPic != NULL);
+
+      pic->dispatchChildren.add_exclusive(atCic);
+      cic->dispatchParents.add_exclusive(atPic);
+    }
+
+  } else {
+    USR_FATAL_CONT(pfn,
+                   "conflicting return type specified for '%s: %s'",
+                   toString(pfn),
+                   pfnInfo->getValue->retType->symbol->name);
+
+    USR_FATAL_CONT(cfn,
+                   "  overridden by '%s: %s'",
+                   toString(cfn),
+                   cfnInfo->getValue->retType->symbol->name);
+
+    USR_STOP();
+  }
+}
+
+static bool isSubType(Type* sub, Type* super) {
+  bool retval = false;
+
+  if (sub == super) {
+    retval = true;
+
+  } else if (AggregateType* atSub = toAggregateType(sub)) {
+    forv_Vec(AggregateType, parent, atSub->dispatchParents) {
+      if (isSubType(parent, super) == true) {
+        retval = true;
+        break;
+      }
+    }
+  }
+
+  return retval;
+}
+
+static void virtualDispatchUpdate(FnSymbol* pfn, FnSymbol* cfn) {
+  cfn->addFlag(FLAG_VIRTUAL);
+  pfn->addFlag(FLAG_VIRTUAL);
+
+  // There is the potential for a data dependency between these
+  virtualDispatchUpdateChildren(pfn, cfn);
+  virtualDispatchUpdateRoots(pfn, cfn);
+}
+
+static void virtualDispatchUpdateChildren(FnSymbol* pfn, FnSymbol* cfn) {
+  Vec<FnSymbol*>* fns = virtualChildrenMap.get(pfn);
+
+  if (fns == NULL) {
+    fns = new Vec<FnSymbol*>();
+  }
+
+  fns->add(cfn);
+
+  virtualChildrenMap.put(pfn, fns);
+}
+
+static void virtualDispatchUpdateRoots(FnSymbol* pfn, FnSymbol* cfn) {
+  Vec<FnSymbol*>* fns = virtualRootsMap.get(cfn);
+
+  if (fns == NULL) {
+    fns = new Vec<FnSymbol*>();
+
+    fns->add(pfn);
+
+  } else {
+    bool added = false;
+
+    // check if parent or child already exists in vector
+    for (int i = 0; i < fns->n && added == false; i++) {
+      if (isVirtualChild(pfn, fns->v[i]) == true) {
+        added = true;
+
+      } else if (isVirtualChild(fns->v[i], pfn) == true) {
+        fns->v[i] = pfn;
+        added     = true;
+      }
+    }
+
+    if (added == false) {
+      fns->add(pfn);
+    }
+  }
+
+  virtualRootsMap.put(cfn, fns);
+}
+
+// return true if child overrides parent in dispatch table
+static bool isVirtualChild(FnSymbol* child, FnSymbol* parent) {
+  bool retval = false;
+
+  if (Vec<FnSymbol*>* children = virtualChildrenMap.get(parent)) {
+    forv_Vec(FnSymbol*, candidateChild, *children) {
+      if (candidateChild == child) {
+        retval = true;
+        break;
+      }
+    }
+  }
+
+  return retval;
+}
+
+static void clearRootsAndChildren() {
+  Vec<Vec<FnSymbol*>*> rootValues;
+  Vec<Vec<FnSymbol*>*> childValues;
+
+  virtualRootsMap.get_values(rootValues);
+  virtualChildrenMap.get_values(childValues);
+
+  forv_Vec(Vec<FnSymbol*>, value, rootValues)  {
+    delete value;
+  }
+
+  forv_Vec(Vec<FnSymbol*>, value, childValues) {
+    delete value;
+  }
+
+  virtualRootsMap.clear();
+  virtualChildrenMap.clear();
+}
+
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
 
 static void addVirtualMethodTableEntry(Type*     type,
                                        FnSymbol* fn,
                                        bool      exclusive);
 
-static void filterVirtualChildren();
+static void buildVirtualMethodTable() {
+  Vec<Type*> ctq;
 
-static bool isVirtualChild(FnSymbol* child, FnSymbol* parent);
-
-static bool possibleSignatureMatch(FnSymbol* fn, FnSymbol* gn);
-
-void resolveDynamicDispatches() {
-  int numTypes = 0;
-
-  inDynamicDispatchResolution = true;
-
-  do {
-    numTypes = gTypeSymbols.n;
-
-    {
-      Vec<Vec<FnSymbol*>*> values;
-
-      virtualChildrenMap.get_values(values);
-
-      forv_Vec(Vec<FnSymbol*>, value, values) {
-        delete value;
-      }
-    }
-
-    virtualChildrenMap.clear();
-
-    {
-      Vec<Vec<FnSymbol*>*> values;
-
-      virtualRootsMap.get_values(values);
-
-      forv_Vec(Vec<FnSymbol*>, value, values) {
-        delete value;
-      }
-    }
-
-    virtualRootsMap.clear();
-
-    buildVirtualMaps();
-
-  } while (numTypes != gTypeSymbols.n);
+  ctq.add(dtObject);
 
   for (int i = 0; i < virtualRootsMap.n; i++) {
-    if (virtualRootsMap.v[i].key) {
+    if (virtualRootsMap.v[i].key != NULL) {
       for (int j = 0; j < virtualRootsMap.v[i].value->n; j++) {
         FnSymbol* root = virtualRootsMap.v[i].value->v[j];
 
@@ -141,410 +524,158 @@ void resolveDynamicDispatches() {
     }
   }
 
-  Vec<Type*> ctq;
-
-  ctq.add(dtObject);
-
-  forv_Vec(Type, ct, ctq) {
-    if (Vec<FnSymbol*>* parentFns = virtualMethodTable.get(ct)) {
+  forv_Vec(Type, t, ctq) {
+    if (Vec<FnSymbol*>* parentFns = virtualMethodTable.get(t)) {
       forv_Vec(FnSymbol, pfn, *parentFns) {
-        // Each subtype can contribute only one function to the
-        // virtual method table.
         Vec<Type*> childSet;
 
         if (Vec<FnSymbol*>* childFns = virtualChildrenMap.get(pfn)) {
           forv_Vec(FnSymbol, cfn, *childFns) {
-            forv_Vec(Type, pt, cfn->_this->type->dispatchParents) {
-              if (pt == ct) {
-                if (!childSet.set_in(cfn->_this->type)) {
-                  addVirtualMethodTableEntry(cfn->_this->type, cfn, false);
+            if (AggregateType* at = toAggregateType(cfn->_this->type)) {
+              forv_Vec(AggregateType, pt, at->dispatchParents) {
+                if (pt == t) {
+                  if (childSet.set_in(at) == NULL) {
+                    addVirtualMethodTableEntry(at, cfn, false);
 
-                  childSet.set_add(cfn->_this->type);
+                    childSet.set_add(at);
+                  }
+
+                  break;
                 }
-
-                break;
               }
             }
           }
         }
 
-        forv_Vec(Type, childType, ct->dispatchChildren) {
-          if (!childSet.set_in(childType)) {
-            addVirtualMethodTableEntry(childType, pfn, false);
+        if (AggregateType* at = toAggregateType(t)) {
+          forv_Vec(AggregateType, childType, at->dispatchChildren) {
+            if (childSet.set_in(childType) == NULL) {
+              addVirtualMethodTableEntry(childType, pfn, false);
+            }
           }
         }
       }
     }
 
-    forv_Vec(Type, child, ct->dispatchChildren) {
-      ctq.add(child);
+    if (AggregateType* at = toAggregateType(t)) {
+      forv_Vec(AggregateType, child, at->dispatchChildren) {
+        ctq.add(child);
+      }
     }
   }
 
-  // reverse the entries in the virtual method table
-  // populate the virtualMethodMap
+  // Reverse each value
+  for (int i = 0; i < virtualMethodTable.n; i++) {
+    if (virtualMethodTable.v[i].key != NULL) {
+      virtualMethodTable.v[i].value->reverse();
+    }
+  }
+}
+
+// If exclusive == true, check for fn already existing in the virtual method
+// table and do not add it a second time if it is already present.
+static void addVirtualMethodTableEntry(Type*     type,
+                                       FnSymbol* fn,
+                                       bool      exclusive) {
+  Vec<FnSymbol*>* fns   = virtualMethodTable.get(type);
+  bool            found = false;
+
+  if (fns == NULL) {
+    fns = new Vec<FnSymbol*>();
+
+  } else if (exclusive == true) {
+    forv_Vec(FnSymbol, f, *fns) {
+      if (f == fn) {
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (found == false) {
+    fns->add(fn);
+
+    virtualMethodTable.put(type, fns);
+  }
+}
+
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
+
+static void buildVirtualMethodMap() {
   for (int i = 0; i < virtualMethodTable.n; i++) {
     if (virtualMethodTable.v[i].key) {
-      virtualMethodTable.v[i].value->reverse();
-
       for (int j = 0; j < virtualMethodTable.v[i].value->n; j++) {
         virtualMethodMap.put(virtualMethodTable.v[i].value->v[j], j);
       }
     }
   }
-
-  // remove entries in virtualChildrenMap that are not in
-  // virtualMethodTable. When a parent has a generic method and
-  // a subclass has a specific one, the virtualChildrenMap might
-  // get multiple entries while the logic above with childSet
-  // ensures that the virtualMethodTable only has one entry.
-  filterVirtualChildren();
-
-  inDynamicDispatchResolution = false;
-
-  if (fPrintDispatch) {
-    printf("Dynamic dispatch table:\n");
-    for (int i = 0; i < virtualMethodTable.n; i++) {
-      if (Type* t = virtualMethodTable.v[i].key) {
-        printf("  %s\n", toString(t));
-        for (int j = 0; j < virtualMethodTable.v[i].value->n; j++) {
-          FnSymbol* fn = virtualMethodTable.v[i].value->v[j];
-          printf("    %s", toString(fn));
-          if (developer) {
-            int index = virtualMethodMap.get(fn);
-            printf(" index %i", index);
-            if ( fn->getFormal(2)->typeInfo() == t ) {
-              // print dispatch children if the function is
-              // the method in type t (and not, say, the version in
-              // some parent class e.g. object).
-              Vec<FnSymbol*>* childFns = virtualChildrenMap.get(fn);
-              if (childFns) {
-                printf(" %i children:\n", childFns->n);
-                for (int k = 0; k < childFns->n; k++) {
-                  FnSymbol* childFn = childFns->v[k];
-                  printf("      %s\n", toString(childFn));
-                }
-              }
-              if( childFns == NULL || childFns->n == 0 ) printf("\n");
-            } else {
-              printf(" inherited\n");
-            }
-          }
-          printf("\n");
-        }
-        if (developer)
-          printf("\n");
-      }
-    }
-  }
 }
 
-static void buildVirtualMaps() {
-  forv_Vec(FnSymbol, fn, gFnSymbols) {
-    if (fn->hasFlag(FLAG_WRAPPER))
-      // Only "true" functions are used to populate virtual maps.
-      continue;
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
 
-    if (! fn->isResolved())
-      // Only functions that are actually used go into the virtual map.
-      continue;
+static void printDispatchInfo() {
+  printf("Dynamic dispatch table:\n");
 
-    if (fn->hasFlag(FLAG_NO_PARENS))
-      // Parentheses-less functions are statically bound; that is, they are not
-      // dispatched through the virtual table.
-      continue;
+  for (int i = 0; i < virtualMethodTable.n; i++) {
+    if (Type* t = virtualMethodTable.v[i].key) {
+      printf("  %s\n", toString(t));
 
-    if (fn->retTag == RET_PARAM || fn->retTag == RET_TYPE)
-      // Only run-time functions populate the virtual map.
-      continue;
+      for (int j = 0; j < virtualMethodTable.v[i].value->n; j++) {
+        FnSymbol* fn = virtualMethodTable.v[i].value->v[j];
 
-    if (fn->numFormals() > 1 && fn->getFormal(1)->type == dtMethodToken) {
-      // Only methods go in the virtual function table.
-      if (AggregateType* pt = toAggregateType(fn->getFormal(2)->type)) {
+        printf("    %s", toString(fn));
 
-        if (isClass(pt) && !pt->symbol->hasFlag(FLAG_GENERIC)) {
-          // MPF - note the check for generic seemed to originate
-          // in SVN revision 7103
-          addAllToVirtualMaps(fn, pt);
-        }
-      }
-    }
-  }
-}
+        if (developer == true) {
+          int index = virtualMethodMap.get(fn);
 
-// Add overrides of fn to virtual maps down the inheritance hierarchy
-static void addAllToVirtualMaps(FnSymbol* fn, AggregateType* pct) {
-  forv_Vec(Type, t, pct->dispatchChildren) {
-    AggregateType* ct = toAggregateType(t);
+          printf(" index %i", index);
 
-    if (ct->defaultTypeConstructor &&
-        (ct->defaultTypeConstructor->hasFlag(FLAG_GENERIC) ||
-         ct->defaultTypeConstructor->isResolved())) {
-      addToVirtualMaps(fn, ct);
-    }
+          if (fn->getFormal(2)->typeInfo() == t) {
+            // print dispatch children if the function is the method in type t
+            // (and not, say, the version in some parent class e.g. object).
+            Vec<FnSymbol*>* childFns = virtualChildrenMap.get(fn);
 
-    // add overrides of method fn by children of ct to virtual maps
-    addAllToVirtualMaps(fn, ct);
-  }
-}
+            if (childFns != NULL) {
+              printf(" %i children:\n", childFns->n);
 
-// addToVirtualMaps itself goes through each method in ct and if
-// that method could override pfn, adds it to the virtual maps
-static void addToVirtualMaps(FnSymbol* pfn, AggregateType* ct) {
-  // Collect methods from ct and ct->instantiatedFrom.
-  // Does not include generic instantiations - sometimes we
-  // have to make the instantiation here, so we always run
-  // through a code path that instantiates.
-  Vec<FnSymbol*> methods;
+              for (int k = 0; k < childFns->n; k++) {
+                FnSymbol* childFn = childFns->v[k];
 
-  collectMethodsForVirtualMaps(methods, ct, pfn);
-
-  forv_Vec(FnSymbol, cfn, methods) {
-    if (cfn != NULL && cfn->instantiatedFrom == NULL) {
-      std::vector<AggregateType*> types;
-
-      if (ct->symbol->hasFlag(FLAG_GENERIC)) {
-        collectInstantiatedAggregateTypes(types, ct);
-      } else {
-        types.push_back(ct);
-      }
-
-      forv_Vec(AggregateType, type, types) {
-        SymbolMap subs;
-
-        if (ct->symbol->hasFlag(FLAG_GENERIC) ||
-            cfn->getFormal(2)->type->symbol->hasFlag(FLAG_GENERIC)) {
-          // instantiateSignature handles subs from formal to a type
-          subs.put(cfn->getFormal(2), type->symbol);
-        }
-
-        for (int i = 3; i <= cfn->numFormals(); i++) {
-          ArgSymbol* arg = cfn->getFormal(i);
-
-          if (arg->intent == INTENT_PARAM) {
-            subs.put(arg, paramMap.get(pfn->getFormal(i)));
-          } else if (arg->type->symbol->hasFlag(FLAG_GENERIC)) {
-            subs.put(arg, pfn->getFormal(i)->type->symbol);
-          }
-        }
-
-        FnSymbol* fn = cfn;
-
-        if (subs.n) {
-          fn = instantiate(fn, subs);
-
-          if (fn) {
-            if (type->defaultTypeConstructor->instantiationPoint)
-              fn->instantiationPoint = type->defaultTypeConstructor->instantiationPoint;
-            else
-              fn->instantiationPoint = toBlockStmt(type->defaultTypeConstructor->defPoint->parentExpr);
-            INT_ASSERT(fn->instantiationPoint);
-          }
-        }
-
-        if (fn) {
-          resolveFormals(fn);
-
-          if (signatureMatch(pfn, fn) && evaluateWhereClause(fn)) {
-            resolveFns(fn);
-
-            if (fn->retType->symbol->hasFlag(FLAG_ITERATOR_RECORD) &&
-                pfn->retType->symbol->hasFlag(FLAG_ITERATOR_RECORD)) {
-              AggregateType* fnRetType  = toAggregateType(fn->retType);
-              IteratorInfo*  fnInfo     = fnRetType->iteratorInfo;
-              AggregateType* pfnRetType = toAggregateType(pfn->retType);
-              IteratorInfo*  pfnInfo    = pfnRetType->iteratorInfo;
-
-              if (!isSubType(fnInfo->getValue->retType,
-                             pfnInfo->getValue->retType)) {
-                USR_FATAL_CONT(pfn, "conflicting return type specified for '%s: %s'", toString(pfn),
-                               pfnInfo->getValue->retType->symbol->name);
-
-                USR_FATAL_CONT(fn, "  overridden by '%s: %s'", toString(fn),
-                               fnInfo->getValue->retType->symbol->name);
-                USR_STOP();
-
-              } else {
-                pfn->retType->dispatchChildren.add_exclusive(fn->retType);
-                fn->retType->dispatchParents.add_exclusive(pfn->retType);
-                Type* pic = pfnInfo->iclass;
-                Type* ic = fnInfo->iclass;
-                INT_ASSERT(ic->symbol->hasFlag(FLAG_ITERATOR_CLASS));
-
-                // Iterator classes are created as normal top-level classes (inheriting
-                // from dtObject).  Here, we want to re-parent ic with pic, so
-                // we need to remove and replace the object base class.
-                INT_ASSERT(ic->dispatchParents.n == 1);
-                Type* parent = ic->dispatchParents.only();
-                if (parent == dtObject)
-                {
-                  int item = parent->dispatchChildren.index(ic);
-                  parent->dispatchChildren.remove(item);
-                  ic->dispatchParents.remove(0);
-                }
-                pic->dispatchChildren.add_exclusive(ic);
-                ic->dispatchParents.add_exclusive(pic);
-                continue; // do not add to virtualChildrenMap; handle in _getIterator
+                printf("      %s\n", toString(childFn));
               }
-            } else if (!isSubType(fn->retType, pfn->retType)) {
-              USR_FATAL_CONT(pfn, "conflicting return type specified for '%s: %s'", toString(pfn), pfn->retType->symbol->name);
-              USR_FATAL_CONT(fn, "  overridden by '%s: %s'", toString(fn), fn->retType->symbol->name);
-              USR_STOP();
-            } else if (fn->throwsError() != pfn->throwsError()) {
-              USR_FATAL_CONT(fn, "conflicting throws for '%s'", toString(fn));
-              const char* pfnThrowing = NULL;
-              const char* fnThrowing = NULL;
-
-              if (pfn->throwsError()) {
-                pfnThrowing = "throwing";
-                fnThrowing = "non-throwing";
-              } else {
-                pfnThrowing = "non-throwing";
-                fnThrowing = "throwing";
-              }
-
-              USR_FATAL_CONT(pfn, "%s function '%s'",pfnThrowing,toString(pfn));
-              USR_FATAL_CONT(fn, "overridden by %s function '%s'",
-                             fnThrowing, toString(fn));
-              USR_STOP();
             }
 
-            {
-              Vec<FnSymbol*>* fns = virtualChildrenMap.get(pfn);
-              if (!fns) fns = new Vec<FnSymbol*>();
-              fns->add(fn);
-              virtualChildrenMap.put(pfn, fns);
-              fn->addFlag(FLAG_VIRTUAL);
-              pfn->addFlag(FLAG_VIRTUAL);
+            if (childFns == NULL || childFns->n == 0) {
+              printf("\n");
             }
-            {
-              Vec<FnSymbol*>* fns = virtualRootsMap.get(fn);
-              if (!fns) fns = new Vec<FnSymbol*>();
-              bool added = false;
 
-              //
-              // check if parent or child already exists in vector
-              //
-              for (int i = 0; i < fns->n; i++) {
-                //
-                // if parent already exists, do not add child to vector
-                //
-                if (isVirtualChild(pfn, fns->v[i])) {
-                  added = true;
-                  break;
-                }
-
-                //
-                // if child already exists, replace with parent
-                //
-                if (isVirtualChild(fns->v[i], pfn)) {
-                    fns->v[i] = pfn;
-                    added = true;
-                    break;
-                }
-              }
-
-              if (!added)
-                fns->add(pfn);
-
-              virtualRootsMap.put(fn, fns);
-            }
+          } else {
+            printf(" inherited\n");
           }
         }
+        printf("\n");
+      }
+
+      if (developer == true) {
+        printf("\n");
       }
     }
   }
 }
 
-//
-// add methods that possibly match pfn to vector,
-// but does not add instantiated generics, since addToVirtualMaps
-// will instantiate again.
-static void collectMethodsForVirtualMaps(Vec<FnSymbol*>& methods,
-                                         AggregateType*  ct,
-                                         FnSymbol*       pfn) {
-  Vec<FnSymbol*>      tmp;
-  std::set<FnSymbol*> generics;
-
-  // Gather the generic, concrete, instantiated methods
-  for (AggregateType* fromType = ct;
-       fromType != NULL;
-       fromType = fromType->instantiatedFrom) {
-
-    forv_Vec(FnSymbol, cfn, fromType->methods) {
-      if (cfn != NULL && possibleSignatureMatch(pfn, cfn) == true) {
-        tmp.add(cfn);
-      }
-    }
-  }
-
-  // Don't add instantiations of generics if we were already
-  // going to add the generic version. addToVirtualMaps will
-  // re-instantiate.
-
-  // So, gather a set of generic versions.
-  forv_Vec(FnSymbol, cfn, tmp) {
-    if (cfn->hasFlag(FLAG_GENERIC) == true) {
-      generics.insert(cfn);
-    }
-  }
-
-  // Then, add anything not instantiated from something in
-  // the set.
-  forv_Vec(FnSymbol, cfn, tmp) {
-    if (cfn->instantiatedFrom                 == NULL ||
-        generics.count(cfn->instantiatedFrom) ==    0) {
-      methods.add(cfn);
-    }
-  }
-}
-
-//
-// add to vector icts all types instantiated from ct
-//
-static void collectInstantiatedAggregateTypes(
-                                        std::vector<AggregateType*>& icts,
-                                        AggregateType*               at) {
-  forv_Vec(TypeSymbol, ts, gTypeSymbols) {
-    if (AggregateType* instanceT = toAggregateType(ts->type)) {
-
-      if (FnSymbol* fn = instanceT->defaultTypeConstructor) {
-        if (ts->hasFlag(FLAG_GENERIC) == false &&
-            fn->instantiatedFrom      == at->defaultTypeConstructor) {
-          icts.push_back(instanceT);
-
-          INT_ASSERT(isInstantiation(instanceT, at));
-          INT_ASSERT(instanceT->instantiatedFrom == at);
-        }
-      }
-    }
-  }
-}
-
-// if exclusive=true, check for fn already existing in the virtual method
-// table and do not add it a second time if it is already present.
-static void addVirtualMethodTableEntry(Type*     type,
-                                       FnSymbol* fn,
-                                       bool      exclusive) {
-  Vec<FnSymbol*>* fns = virtualMethodTable.get(type);
-
-  if (fns == NULL) {
-    fns = new Vec<FnSymbol*>();
-  }
-
-  if (exclusive) {
-    forv_Vec(FnSymbol, f, *fns) {
-      if (f == fn) {
-        return;
-      }
-    }
-  }
-
-  fns->add(fn);
-
-  virtualMethodTable.put(type, fns);
-}
-
+/************************************* | **************************************
+*                                                                             *
+*                                                                             *
+*                                                                             *
+************************************** | *************************************/
 
 // removes entries in virtualChildrenMap that are not in virtualMethodTable.
 // such entries could not be called and should be dead-code eliminated.
@@ -578,69 +709,6 @@ static void filterVirtualChildren() {
       delete oldV;
     }
   }
-}
-
-//
-// return true if child overrides parent in dispatch table
-//
-static bool isVirtualChild(FnSymbol* child, FnSymbol* parent) {
-  if (Vec<FnSymbol*>* children = virtualChildrenMap.get(parent)) {
-    forv_Vec(FnSymbol*, candidateChild, *children) {
-      if (candidateChild == child) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-// Checks that types match.
-// Note - does not currently check that instantiated params match.
-bool signatureMatch(FnSymbol* fn, FnSymbol* gn) {
-  if (fn->name != gn->name) {
-    return false;
-  }
-
-  if (fn->numFormals() != gn->numFormals()) {
-    return false;
-  }
-
-  for (int i = 3; i <= fn->numFormals(); i++) {
-    ArgSymbol* fa = fn->getFormal(i);
-    ArgSymbol* ga = gn->getFormal(i);
-
-    if (strcmp(fa->name, ga->name)) {
-      return false;
-    }
-
-    if (fa->type != ga->type) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-static bool possibleSignatureMatch(FnSymbol* fn, FnSymbol* gn) {
-  if (fn->name != gn->name) {
-    return false;
-  }
-
-  if (fn->numFormals() != gn->numFormals()) {
-    return false;
-  }
-
-  for (int i = 3; i <= fn->numFormals(); i++) {
-    ArgSymbol* fa = fn->getFormal(i);
-    ArgSymbol* ga = gn->getFormal(i);
-
-    if (strcmp(fa->name, ga->name)) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 /************************************* | **************************************
@@ -711,24 +779,3 @@ static bool wasSuperDot(CallExpr* call) {
 
   return retval;
 }
-
-/************************************* | **************************************
-*                                                                             *
-*                                                                             *
-*                                                                             *
-************************************** | *************************************/
-
-static bool isSubType(Type* sub, Type* super) {
-  if (sub == super)
-    return true;
-
-  forv_Vec(Type, parent, sub->dispatchParents) {
-    if (isSubType(parent, super))
-      return true;
-  }
-
-  return false;
-}
-
-
-

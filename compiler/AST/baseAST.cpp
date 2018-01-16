@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -227,11 +227,13 @@ void cleanAst() {
       }
     }
 
-    for(int i = 0; i < ts->type->dispatchChildren.n; i++) {
-      Type* type = ts->type->dispatchChildren.v[i];
-
-      if (type && !isAlive(type)) {
-        ts->type->dispatchChildren.v[i] = NULL;
+    if (AggregateType* at = toAggregateType(ts->type)) {
+      for (int i = 0; i < at->dispatchChildren.n; i++) {
+        if (AggregateType* type = at->dispatchChildren.v[i]) {
+          if (isAlive(type) == false) {
+            at->dispatchChildren.v[i] = NULL;
+          }
+        }
       }
     }
   }
@@ -645,6 +647,11 @@ void update_symbols(BaseAST* ast, SymbolMap* map) {
         ls->continueLabelSet(y);
       }
     }
+
+  } else if (ForallStmt* forall = toForallStmt(ast)) {
+    if (forall->fContinueLabel)
+      if (LabelSymbol* y = toLabelSymbol(map->get(forall->fContinueLabel)))
+          forall->fContinueLabel = y;
 
   } else if (VarSymbol* ps = toVarSymbol(ast)) {
     SUB_TYPE(ps->type);

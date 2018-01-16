@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -118,6 +118,7 @@ module ArrayViewRankChange {
  class ArrayViewRankChangeDom: BaseRectangularDom {
     // the lower-dimensional index set that we represent upwards
     var upDom: DefaultRectangularDom(rank, idxType, stridable);
+    forwarding upDom except these;
 
     // the collapsed dimensions and indices in those dimensions
     //
@@ -175,57 +176,6 @@ module ArrayViewRankChange {
                                         ownsArrInstance=true);
     }
 
-    // TODO: Use delegation feature for these?
-    // TODO: Can't all these be implemented in ChapelArray given dsiDim()?
-
-    proc dsiNumIndices {
-      return upDom.dsiNumIndices;
-    }
-
-    proc dsiLow {
-      return upDom.dsiLow;
-    }
-
-    proc dsiHigh {
-      return upDom.dsiHigh;
-    }
-
-    proc dsiAlignedLow {
-      return upDom.dsiAlignedLow;
-    }
-
-    proc dsiAlignedHigh {
-      return upDom.dsiAlignedHigh;
-    }
-
-    proc dsiStride {
-      return upDom.dsiStride;
-    }
-
-    proc dsiAlignment {
-      return upDom.dsiAlignment;
-    }
-
-    proc dsiFirst {
-      return upDom.dsiFirst;
-    }
-
-    proc dsiLast {
-      return upDom.dsiLast;
-    }
-
-    proc dsiDim(upDim: int) {
-      return upDom.dsiDim(upDim);
-    }
-
-    proc dsiDims() {
-      return upDom.dsiDims();
-    }
-
-    proc dsiGetIndices() {
-      return upDom.dsiGetIndices();
-    }
-
     proc dsiSetIndices(inds) {
       // Free underlying domains if necessary
       this.dsiDestroyDom();
@@ -251,10 +201,6 @@ module ArrayViewRankChange {
       chpl_assignDomainWithGetSetIndices(this, rhs);
     }
 
-    proc dsiMember(i) {
-      return upDom.dsiMember(i);
-    }
-
     iter these() {
       if chpl__isDROrDRView(downDom) {
         for i in upDom do
@@ -270,7 +216,7 @@ module ArrayViewRankChange {
       && chpl__isDROrDRView(downDom)
       && __primitive("method call resolves", upDom, "these", tag)
     {
-      for i in upDom.these(tag) do
+      forall i in upDom do
         yield i;
     }
 
@@ -279,7 +225,7 @@ module ArrayViewRankChange {
       && !chpl__isDROrDRView(downDom)
       && __primitive("method call resolves", downDom, "these", tag)
     {
-      for i in downDom.these(tag) do
+      forall i in downDom do
         yield downIdxToUpIdx(i);
     }
 
@@ -496,6 +442,11 @@ module ArrayViewRankChange {
 
     const ownsArrInstance = false;
 
+    // Forward all unhandled methods to underlying privatized array
+    forwarding arr except these,
+                      doiBulkTransferFromKnown, doiBulkTransferToKnown,
+                      doiBulkTransferFromAny,  doiBulkTransferToAny;
+
 
     //
     // standard generic aspects of arrays
@@ -549,7 +500,7 @@ module ArrayViewRankChange {
     iter these(param tag: iterKind) ref
       where tag == iterKind.standalone && !localeModelHasSublocales &&
            __primitive("method call resolves", privDom, "these", tag) {
-      for i in privDom.these(tag) {
+      forall i in privDom {
         yield if shouldUseIndexCache()
                 then indexCache.getDataElem(indexCache.getDataIndex(i))
                 else arr.dsiAccess(chpl_rankChangeConvertIdx(i, collapsedDim, idx));
@@ -673,28 +624,11 @@ module ArrayViewRankChange {
     // locality-oriented queries
     //
 
-    proc dsiTargetLocales() {
-      //
-      // See commentary on ArrayViewRankChangeDom.dsiTargetLocales() above.
-      //
-      return arr.dsiTargetLocales();
-    }
-
     proc dsiHasSingleLocalSubdomain() param
       return privDom.dsiHasSingleLocalSubdomain();
 
     proc dsiLocalSubdomain() {
       return privDom.dsiLocalSubdomain();
-    }
-
-    proc dsiNoFluffView() {
-      // For now avoid implementing 'noFluffView' on each class and use
-      // 'canResolve' to print a better error message.
-      if canResolveMethod(arr, "dsiNoFluffView") {
-        return arr.dsiNoFluffView();
-      } else {
-        compilerError("noFluffView is not supported on this array type.");
-      }
     }
 
     //
@@ -719,80 +653,6 @@ module ArrayViewRankChange {
                                         collapsedDim=privatizeData(5),
                                         idx=privatizeData(6));
     }
-
-
-    //
-    // bulk-transfer
-    //
-
-    proc dsiSupportsBulkTransfer() param {
-      return arr.dsiSupportsBulkTransfer();
-    }
-
-    proc dsiSupportsBulkTransferInterface() param
-      return arr.dsiSupportsBulkTransferInterface();
-
-    // Recursively builds up the view-domain given an initial tuple of
-    // dimensions. Handles nested rank-changes.
-    proc _viewHelper(dims) {
-      // If 'dims.size != arr.rank', assume that we still need to do the
-      // conversion for the current rank-change.
-      var goodDims = if dims.size != arr.rank
-        then chpl_rankChangeConvertDom(dims, rank, collapsedDim, idx).dims() else dims;
-      if goodDims.size != arr.rank {
-        compilerError("Error while composing view domain for rank-change view.");
-      }
-      if _containsRCRE() {
-        var nextView = arr._getRCREView();
-        return nextView._viewHelper(goodDims);
-      } else {
-        return {(...goodDims)};
-      }
-    }
-
-    proc _getViewDom() {
-      return _viewHelper(dom.dsiDims());
-    }
-
-    // contiguous transfer support
-    proc doiUseBulkTransfer(B) {
-      return arr.doiUseBulkTransfer(B);
-    }
-
-    proc doiCanBulkTransfer(viewDom) {
-      return arr.doiCanBulkTransfer(viewDom);
-    }
-
-    proc doiBulkTransfer(B, viewDom) {
-      arr.doiBulkTransfer(B, viewDom);
-    }
-
-    // strided transfer support
-    proc doiUseBulkTransferStride(B) {
-      return arr.doiUseBulkTransferStride(B);
-    }
-
-    proc doiCanBulkTransferStride(viewDom) {
-      return arr.doiCanBulkTransferStride(viewDom);
-    }
-
-    proc doiBulkTransferStride(B, viewDom) {
-      arr.doiBulkTransferStride(B, viewDom);
-    }
-
-    // distributed transfer support
-    proc doiBulkTransferToDR(B, viewDom) {
-      arr.doiBulkTransferToDR(B, viewDom);
-    }
-
-    proc doiBulkTransferFromDR(B, viewDom) {
-      arr.doiBulkTransferFromDR(B, viewDom);
-    }
-
-    proc doiBulkTransferFrom(B, viewDom) {
-      arr.doiBulkTransferFrom(B, viewDom);
-    }
-
 
     //
     // utility functions used to set up the index cache
@@ -873,6 +733,29 @@ module ArrayViewRankChange {
         _delete_arr(_ArrInstance, _isPrivatized(_ArrInstance));
       }
     }
+
+    //
+    // A RankChange will only attempt a bulk-transfer if its underlying array
+    // has explicitly opted-in by implementing the param method
+    // ``doiCanBulkTransferRankChange`` that returns true. This will help
+    // domain-map authors avoid this tricky case without any effort on their
+    // part.
+    //
+
+    proc doiCanBulkTransferRankChange() param
+      return arr.doiCanBulkTransferRankChange();
+
+    proc doiBulkTransferFromKnown(destDom, srcClass, srcDom) : bool
+    where this.arr.doiCanBulkTransferRankChange() {
+      const shifted = chpl_rankChangeConvertDom(destDom.dims(), destDom.rank, this.dom.collapsedDim, this.dom.idx);
+      return chpl__bulkTransferArray(this.arr, shifted, srcClass, srcDom);
+    }
+
+    proc doiBulkTransferToKnown(srcDom, destClass, destDom) : bool
+    where this.arr.doiCanBulkTransferRankChange() {
+      const shifted = chpl_rankChangeConvertDom(srcDom.dims(), srcDom.rank, this.dom.collapsedDim, this.dom.idx);
+      return chpl__bulkTransferArray(destClass, destDom, this.arr, shifted);
+    }
   }  // end of class ArrayViewRankChangeArr
 
 
@@ -951,6 +834,4 @@ module ArrayViewRankChange {
     }
     return {(...ranges)};
   }
-
-
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -61,8 +61,14 @@ checkResolved() {
     if (fn->retType->symbol->hasFlag(FLAG_ITERATOR_RECORD) &&
         !fn->isIterator()) {
       IteratorInfo* ii = toAggregateType(fn->retType)->iteratorInfo;
-      if (ii && ii->iterator && ii->iterator->defPoint->parentSymbol == fn)
+      if (ii && ii->iterator && ii->iterator->defPoint->parentSymbol == fn) {
+        // This error isn't really possible in regular code anymore,
+        // since you have to have FLAG_FN_RETURNS_ITERATOR / that pragma
+        // to generate it. (Otherwise the iterator expression is turned
+        // into an array in the process of being returned).
+        // If we remove FLAG_FN_RETURNS_ITERATOR, we should remove this error.
         USR_FATAL_CONT(fn, "functions cannot return nested iterators or loop expressions");
+      }
     }
     if (fn->hasFlag(FLAG_ASSIGNOP) && fn->retType != dtVoid)
       USR_FATAL(fn, "The return value of an assignment operator must be 'void'.");
@@ -243,21 +249,22 @@ returnsRefArgumentByRef(CallExpr* returnedCall, FnSymbol* fn)
 // This function finds the original Symbol that a local array
 // refers to (through aliasing or slicing).
 // It returns the number of Exprs added to sources.
-static int
-findOriginalArrays(FnSymbol* fn, Symbol* sym, std::set<Expr*> & sources)
-{
+static int findOriginalArrays(FnSymbol*        fn,
+                              Symbol*          sym,
+                              std::set<Expr*>& sources) {
   int ret = 0;
 
   for_SymbolSymExprs(se, sym) {
     Expr* stmt = se->getStmtExpr();
 
     if (CallExpr* call = toCallExpr(stmt)) {
-      if (call->isPrimitive(PRIM_MOVE) ||
-          call->isPrimitive(PRIM_ASSIGN)) {
+      if (call->isPrimitive(PRIM_MOVE)   == true  ||
+          call->isPrimitive(PRIM_ASSIGN) == true) {
         Expr* lhs = call->get(1);
-        Expr* rhs = call->get(2);
 
         if (se == lhs) {
+          Expr* rhs = call->get(2);
+
           // Handle the following cases:
           //   rhs is a call_tmp -> recurse on the call_tmp
           //   rhs is a call to a function returning an aliasing array ->
@@ -267,9 +274,9 @@ findOriginalArrays(FnSymbol* fn, Symbol* sym, std::set<Expr*> & sources)
             // is RHS a local variable (user or temp)?
             // if so, find the definitions for that, and further
             // traverse if they are aliases.
-            if (rhsSym && rhsSym->defPoint->getFunction() == fn &&
-                (rhsSym->hasFlag(FLAG_TEMP) ||
-                 rhsSym->hasFlag(FLAG_ARRAY_ALIAS))) {
+            if (rhsSym                          != NULL &&
+                rhsSym->defPoint->getFunction() ==   fn &&
+                rhsSym->hasFlag(FLAG_TEMP)      == true) {
               ret += findOriginalArrays(fn, rhsSym, sources);
             }
 
@@ -435,14 +442,20 @@ checkBadAddrOf(CallExpr* call)
         bool lhsRef   = lhs && lhs->symbol()->hasFlag(FLAG_REF_VAR);
         bool lhsConst = lhs && lhs->symbol()->hasFlag(FLAG_CONST);
 
-        if (lhsRef && !lhsConst) {
+        bool rhsType = rhs->symbol()->hasFlag(FLAG_TYPE_VARIABLE);
+        bool rhsParam = rhs->symbol()->isParameter();
+        // Also detect runtime type variables
+        if (rhs->symbol()->type->symbol->hasFlag(FLAG_RUNTIME_TYPE_VALUE))
+          rhsType = true;
+
+        if (lhsRef && rhsType) {
+          USR_FATAL_CONT(call, "Cannot set a reference to a type variable.");
+        } else if (lhsRef && rhsParam) {
+          USR_FATAL_CONT(call, "Cannot set a reference to a param variable.");
+        } else if (lhsRef && !lhsConst) {
           if (rhs->symbol()->hasFlag(FLAG_EXPR_TEMP) ||
-              rhs->symbol()->isConstant() || rhs->symbol()->isParameter()) {
-            if (rhs->symbol()->isImmediate()) {
-              USR_FATAL_CONT(call, "Cannot set a non-const reference to a literal value.");
-            } else {
-              USR_FATAL_CONT(call, "Cannot set a non-const reference to a const variable.");
-            }
+              rhs->symbol()->isConstant()) {
+            USR_FATAL_CONT(call, "Cannot set a non-const reference to a const variable.");
           }
         }
       }

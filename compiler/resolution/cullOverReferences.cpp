@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -1347,7 +1347,6 @@ void cullOverReferences() {
                        node.variable->id, node.fieldIndex);
                 
                 printf("for iterator %i\n", iterator->id);
-
                 */
 
                 gatherLoopDetails(forLoop, isForall, leaderDetails,
@@ -1387,7 +1386,8 @@ void cullOverReferences() {
                   // and modifying the index variable should make us
                   // consider the array to be "set".
                   if (iteratorFn->isMethod() &&
-                      isArrayClass(iteratorFn->getFormal(1)->type))
+                      (isArrayClass(iteratorFn->getFormal(1)->type) ||
+                       iteratorFn->hasFlag(FLAG_REF_TO_CONST_WHEN_CONST_THIS)))
                       iteratorYieldsConstWhenConstThis = true;
 
                   // Note, if we wanted to use the return intent
@@ -1983,7 +1983,6 @@ void lowerContextCall(ContextCallExpr* cc, choose_type_t which)
 
       if (requiresImplicitDestroy(useCall)) {
         if (isUserDefinedRecord(useFn->retType) == false) {
-          tmp->addFlag(FLAG_INSERT_AUTO_COPY);
           tmp->addFlag(FLAG_INSERT_AUTO_DESTROY);
         } else {
           tmp->addFlag(FLAG_INSERT_AUTO_DESTROY);

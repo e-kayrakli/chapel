@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2017 Cray Inc.
+ * Copyright 2004-2018 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -201,6 +201,7 @@ bool SafeExprAnalysis::fnHasNoSideEffects(FnSymbol* fnSym) {
     case PRIM_FIELD_NUM_TO_NAME:
     case PRIM_FIELD_NAME_TO_NUM:
     case PRIM_FIELD_BY_NUM:
+    case PRIM_IS_RECORD_TYPE:
     case PRIM_IS_UNION_TYPE:
     case PRIM_IS_ATOMIC_TYPE:
     case PRIM_IS_REF_ITER_TYPE:
