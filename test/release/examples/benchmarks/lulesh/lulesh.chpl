@@ -71,8 +71,13 @@ config param useBlockDist = (CHPL_COMM != "none"),
              printWarnings = true;
 
 
+use CommDiagnostics;
 config param handPrefetch = false;
 config const useLocal = false;
+config const commDiag = false;
+
+config const hpStartRatio = 0.6;
+config const hpLenRatio = 2.5;
 //
 // Sanity check to ensure that input files aren't used with the 3D
 // representation
@@ -282,42 +287,60 @@ var localizedXds: [localizedArrsDom] [NodeSpace] real;
 var localizedYds: [localizedArrsDom] [NodeSpace] real;
 var localizedZds: [localizedArrsDom] [NodeSpace] real;
 
-proc myX ref {
+/*var localizedStartRatios: [localizedArrsDom] real;*/
+/*var localizedLenRatios: [localizedArrsDom] real;*/
+/*var localizedSizes: [localizedArrsDom] real;*/
+var localizationRanges: [localizedArrsDom] range;
+
+proc initLocalizationVars() {
+  if handPrefetch {
+    coforall l in Locales do on l {
+      const myId = here.id;
+      const startRatio = hpStartRatio;
+      const lenRatio = hpLenRatio;
+      const myLen = x.localSubdomain().size;
+      localizationRanges[here.id] =
+        (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
+    }
+  }
+}
+
+inline proc myX ref {
   if handPrefetch then
     return localizedXs[here.id];
   else
     return x;
 }
 
-proc myY ref {
+inline proc myY ref {
   if handPrefetch then
     return localizedYs[here.id];
   else
     return y;
 }
 
-proc myZ ref {
+inline proc myZ ref {
   if handPrefetch then
     return localizedZs[here.id];
   else
     return z;
 }
 
-proc myXd ref {
+inline proc myXd ref {
   if handPrefetch then
     return localizedXds[here.id];
   else
     return xd;
 }
 
-proc myYd ref {
+inline proc myYd ref {
   if handPrefetch then
     return localizedYds[here.id];
   else
     return yd;
 }
 
-proc myZd ref {
+inline proc myZd ref {
   if handPrefetch then
     return localizedZds[here.id];
   else
@@ -332,62 +355,78 @@ var time = 0.0,          // current time
 
     cycle = 0;           // iteration count for simulation
 
-config const hpStartRatio = 0.6;
-config const hpLenRatio = 2.5;
+
+config const verboseComm = false;
+inline proc startCommDiags() {
+  if commDiag then
+    if !verboseComm then
+      startCommDiagnostics();
+    else
+      startVerboseComm();
+}
+
+inline proc stopCommDiags() {
+  if commDiag then
+    if !verboseComm then
+      stopCommDiagnostics();
+    else
+      stopVerboseComm();
+}
+
+inline proc printCommDiags() {
+  if commDiag && !verboseComm then writeln(getCommDiagnostics());
+}
 
 proc initLocalizedDisplacements() {
   if handPrefetch {
+    startCommDiags();
     coforall l in Locales do on l {
-      const myId = here.id;
-      /*if myId == 0 {*/
-        /*myXd = xd;*/
-        /*myYd = yd;*/
-        /*myZd = zd;*/
-      /*}*/
-      /*else {*/
-        const startRatio = hpStartRatio;
-        const lenRatio = hpLenRatio;
-        const myLen = x.localSubdomain().size;
-        const cpRange = 
-          (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
-        const cpDom = x.domain[cpRange];
-        myXd[cpDom] = xd[cpDom];
-        myYd[cpDom] = yd[cpDom];
-        myZd[cpDom] = zd[cpDom];
-      /*}*/
+      /*const myId = here.id;*/
+      /*const startRatio = localizedStartRatios[myId];*/
+      /*const lenRatio = localizedLenRatios[myId];*/
+      /*const myLen = localizedSizes[myId];*/
+      /*const cpRange =*/
+        /*(myLen*startRatio*myId):int..#(myLen*lenRatio):int;*/
+      /*startVerboseCommHere();*/
+      const locRange = localizationRanges[here.id];
+      /*stopVerboseCommHere();*/
+      myXd[locRange] = xd[locRange];
+      myYd[locRange] = yd[locRange];
+      myZd[locRange] = zd[locRange];
     }
+    stopCommDiags();
   }
 }
 
 proc initLocalizedCoords() {
 
   if handPrefetch {
+    startCommDiags();
     coforall l in Locales do on l {
-      const myId = here.id;
-      /*if myId == 0 {*/
-        /*myX = x;*/
-        /*myY = y;*/
-        /*myZ = z;*/
-      /*}*/
-      /*else {*/
-        const startRatio = hpStartRatio;
-        const lenRatio = hpLenRatio;
-        const myLen = x.localSubdomain().size;
-        const cpRange = 
-          (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
-        const cpDom = x.domain[cpRange];
-        myX[cpDom] = x[cpDom];
-        myY[cpDom] = y[cpDom];
-        myZ[cpDom] = z[cpDom];
-      /*}*/
+      /*const myId = here.id;*/
+      /*const startRatio = localizedStartRatios[myId];*/
+      /*const lenRatio = localizedLenRatios[myId];*/
+      /*const myLen = localizedSizes[myId];*/
+      /*const cpRange =*/
+        /*(myLen*startRatio*myId):int..#(myLen*lenRatio):int;*/
+      /*startVerboseCommHere();*/
+      const locRange = localizationRanges[here.id];
+      /*stopVerboseCommHere();*/
+      myX[locRange] = x[locRange];
+      myY[locRange] = y[locRange];
+      myZ[locRange] = z[locRange];
     }
+    stopCommDiags();
   }
 }
 
 proc main() {
   if debug then writeln("Lulesh -- Problem Size = ", numElems);
 
+  initLocalizationVars();
+
   initLulesh();
+
 
   initLocalizedCoords();
   initLocalizedDisplacements();
@@ -420,6 +459,7 @@ proc main() {
     writeln("Time/Cycle: ", (et-st)/cycle);
   }
   writeln("Number of cycles: ", cycle);
+  printCommDiags();
 
   if printCoords {
     var outfile = open("coords.out", iomode.cw);
