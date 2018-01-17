@@ -934,7 +934,7 @@ proc BlockArr.dsiDestroyArr() {
 }
 
 inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
-  if accessLogging then logAccess(i);
+  if enableAccessLogs && accessLogging then logAccess(i);
   return myLocArr.this(i);
 }
 
@@ -947,7 +947,7 @@ inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
 // fast/local path and get better performance.
 //
 inline proc BlockArr.dsiAccess(const in idx: rank*idxType) ref {
-  if accessLogging then logAccess(idx);
+  if enableAccessLogs && accessLogging then logAccess(idx);
   local {
     if myLocArr != nil && myLocArr.locDom.member(idx) then
       return myLocArr.this(idx);

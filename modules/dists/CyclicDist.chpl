@@ -758,7 +758,7 @@ inline proc _remoteAccessData.getDataIndex(
 }
 
 proc CyclicArr.dsiAccess(i:rank*idxType) ref {
-  if accessLogging then logAccess(i);
+  if enableAccessLogs && accessLogging then logAccess(i);
   local {
     if myLocArr != nil && myLocArr.locDom.member(i) then
       return myLocArr.this(i);

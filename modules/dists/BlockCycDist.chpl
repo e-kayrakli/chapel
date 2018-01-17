@@ -833,7 +833,7 @@ proc BlockCyclicArr.dsiPrivatize(privatizeData) {
 // TODO: Do we need a global bounds check here or in idxToLocaleind?
 //
 proc BlockCyclicArr.dsiAccess(i: idxType) ref where rank == 1 {
-  if accessLogging then logAccess(i);
+  if enableAccessLogs && accessLogging then logAccess(i);
   if myLocArr then /* TODO: reenable */ /* local */ {
     if myLocArr.indexDom.myStarts.member(i) then  // TODO: This could be beefed up; true for indices other than starts
       return myLocArr.this(i);
@@ -854,7 +854,7 @@ proc BlockCyclicArr.dsiAccess(i: rank*idxType) ref {
   if rank == 1 {
     return dsiAccess(i(1));
   } else {
-    if accessLogging then logAccess(i);
+    if enableAccessLogs && accessLogging then logAccess(i);
     return locArr(dom.dist.idxToLocaleInd(i))(i);
   }
 }

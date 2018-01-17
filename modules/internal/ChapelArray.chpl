@@ -198,6 +198,8 @@ module ChapelArray {
   pragma "no doc"
   config param debugArrayAsVec = false;
 
+  config param enableAccessLogs = false;
+
   pragma "privatized class"
   proc _isPrivatized(value) param
     return !_local && ((_privatization && value.dsiSupportsPrivatization()) || value.dsiRequiresPrivatization());
@@ -2101,9 +2103,12 @@ module ChapelArray {
     proc rank param return this.domain.rank;
 
     inline proc enableAccessLogging(fileName) {
-      var accessLogDir = _value.initAccessLoggingMeta(fileName);
-      coforall l in Locales do on l {
-        _value.enableAccessLogging(fileName, this.domain, accessLogDir);
+      if enableAccessLogs {
+        var accessLogDir = _value.initAccessLoggingMeta(fileName);
+        coforall l in Locales do on l {
+          _value.enableAccessLogging(fileName, this.domain,
+                                     accessLogDir);
+        }
       }
     }
 
