@@ -62,22 +62,36 @@ proc initProblemSize() {
 
 // read/compute the coordinates
 
-proc initCoordinates(X, Y, Z) {
+/*proc initCoordinates(X, Y, Z) {*/
+  /*if (initFromFile) {*/
+    /*for (x,y,z) in zip(X,Y,Z) do*/
+      /*reader.read(x, y, z);*/
+  /*} else {*/
+    /*forall (num, x, y, z) in zip(X.domain, X, Y, Z) {*/
+      /*const (i,j,k) = nodeIdxTo3D(num);*/
+      /*x = initialWidth * k / elemsPerEdge;*/
+      /*y = initialWidth * j / elemsPerEdge;*/
+      /*z = initialWidth * i / elemsPerEdge;*/
+    /*}*/
+  /*}*/
+
+  /*if debugInit then*/
+    /*for (x,y,z) in zip(X,Y,Z) do*/
+      /*writef("%6dr %6dr %6dr\n", x, y, z);*/
+/*}*/
+
+proc initCoordinates(coords) {
   if (initFromFile) {
-    for (x,y,z) in zip(X,Y,Z) do
-      reader.read(x, y, z);
+    halt("Trivial but not implemented");
   } else {
-    forall (num, x, y, z) in zip(X.domain, X, Y, Z) {
+    forall (num, c) in zip(coords.domain, coords) {
       const (i,j,k) = nodeIdxTo3D(num);
-      x = initialWidth * k / elemsPerEdge;
-      y = initialWidth * j / elemsPerEdge;
-      z = initialWidth * i / elemsPerEdge;
+      c.x = initialWidth * k / elemsPerEdge;
+      c.y = initialWidth * j / elemsPerEdge;
+      c.z = initialWidth * i / elemsPerEdge;
     }
   }
 
-  if debugInit then
-    for (x,y,z) in zip(X,Y,Z) do
-      writef("%6dr %6dr %6dr\n", x, y, z);
 }
 
 

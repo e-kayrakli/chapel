@@ -146,14 +146,19 @@ const Elems = if useBlockDist then ElemSpace dmapped Block(ElemSpace)
       Nodes = if useBlockDist then NodeSpace dmapped Block(NodeSpace)
                               else NodeSpace;
 
+record xyz_type {
+  var x, y, z: real;
+}
 
 /* The coordinates */
 
-var x, y, z: [Nodes] real;
+/*var x, y, z: [Nodes] real;*/
+
+var coords: [Nodes] xyz_type;
                               
 config const accessLog = false;
-if accessLog then
-  x.enableAccessLogging("x");
+/*if accessLog then*/
+  /*x.enableAccessLogging("x");*/
 
 /*proc myX { return x; }*/
 
@@ -270,22 +275,28 @@ var elemBC: [Elems] int,
 
 /* Nodal fields */
 
-var xd, yd, zd: [Nodes] real, // velocities
+/*var xd, yd, zd: [Nodes] real, // velocities*/
 
-    xdd, ydd, zdd: [Nodes] real, // acceleration
+var xdd, ydd, zdd: [Nodes] real, // acceleration
 
     fx, fy, fz: [Nodes] atomic real, // forces
 
     nodalMass: [Nodes] real; // mass
 
-var localizedArrsDom = Locales.domain dmapped Block(Locales.domain);
-var localizedXs: [localizedArrsDom] [NodeSpace] real;
-var localizedYs: [localizedArrsDom] [NodeSpace] real;
-var localizedZs: [localizedArrsDom] [NodeSpace] real;
+var displs: [Nodes] xyz_type;
 
-var localizedXds: [localizedArrsDom] [NodeSpace] real;
-var localizedYds: [localizedArrsDom] [NodeSpace] real;
-var localizedZds: [localizedArrsDom] [NodeSpace] real;
+var localizedArrsDom = Locales.domain dmapped Block(Locales.domain);
+/*var localizedXs: [localizedArrsDom] [NodeSpace] real;*/
+/*var localizedYs: [localizedArrsDom] [NodeSpace] real;*/
+/*var localizedZs: [localizedArrsDom] [NodeSpace] real;*/
+
+var localizedCoords: [localizedArrsDom] [NodeSpace] xyz_type;
+
+/*var localizedXds: [localizedArrsDom] [NodeSpace] real;*/
+/*var localizedYds: [localizedArrsDom] [NodeSpace] real;*/
+/*var localizedZds: [localizedArrsDom] [NodeSpace] real;*/
+
+var localizedDispls: [localizedArrsDom] [NodeSpace] xyz_type;
 
 /*var localizedStartRatios: [localizedArrsDom] real;*/
 /*var localizedLenRatios: [localizedArrsDom] real;*/
@@ -298,54 +309,68 @@ proc initLocalizationVars() {
       const myId = here.id;
       const startRatio = hpStartRatio;
       const lenRatio = hpLenRatio;
-      const myLen = x.localSubdomain().size;
+      const myLen = coords.localSubdomain().size;
       localizationRanges[here.id] =
         (myLen*startRatio*myId):int..#(myLen*lenRatio):int;
     }
   }
 }
 
-inline proc myX ref {
+inline proc myCoords ref {
   if handPrefetch then
-    return localizedXs[here.id];
+    return localizedCoords[here.id];
   else
-    return x;
+    return coords;
 }
 
-inline proc myY ref {
+inline proc myDispls ref {
   if handPrefetch then
-    return localizedYs[here.id];
+    return localizedDispls[here.id];
   else
-    return y;
+    return displs;
 }
 
-inline proc myZ ref {
-  if handPrefetch then
-    return localizedZs[here.id];
-  else
-    return z;
-}
+/*inline proc myX ref {*/
+  /*if handPrefetch then*/
+    /*return localizedXs[here.id];*/
+  /*else*/
+    /*return x;*/
+/*}*/
 
-inline proc myXd ref {
-  if handPrefetch then
-    return localizedXds[here.id];
-  else
-    return xd;
-}
+/*inline proc myY ref {*/
+  /*if handPrefetch then*/
+    /*return localizedYs[here.id];*/
+  /*else*/
+    /*return y;*/
+/*}*/
 
-inline proc myYd ref {
-  if handPrefetch then
-    return localizedYds[here.id];
-  else
-    return yd;
-}
+/*inline proc myZ ref {*/
+  /*if handPrefetch then*/
+    /*return localizedZs[here.id];*/
+  /*else*/
+    /*return z;*/
+/*}*/
 
-inline proc myZd ref {
-  if handPrefetch then
-    return localizedZds[here.id];
-  else
-    return zd;
-}
+/*inline proc myXd ref {*/
+  /*if handPrefetch then*/
+    /*return localizedXds[here.id];*/
+  /*else*/
+    /*return xd;*/
+/*}*/
+
+/*inline proc myYd ref {*/
+  /*if handPrefetch then*/
+    /*return localizedYds[here.id];*/
+  /*else*/
+    /*return yd;*/
+/*}*/
+
+/*inline proc myZd ref {*/
+  /*if handPrefetch then*/
+    /*return localizedZds[here.id];*/
+  /*else*/
+    /*return zd;*/
+/*}*/
 /* Parameters */
 
 var time = 0.0,          // current time
@@ -390,9 +415,10 @@ proc initLocalizedDisplacements() {
       /*startVerboseCommHere();*/
       const locRange = localizationRanges[here.id];
       /*stopVerboseCommHere();*/
-      myXd[locRange] = xd[locRange];
-      myYd[locRange] = yd[locRange];
-      myZd[locRange] = zd[locRange];
+      myDispls[locRange] = displs[locRange];
+      /*myXd[locRange] = xd[locRange];*/
+      /*myYd[locRange] = yd[locRange];*/
+      /*myZd[locRange] = zd[locRange];*/
     }
     stopCommDiags();
   }
@@ -412,9 +438,10 @@ proc initLocalizedCoords() {
       /*startVerboseCommHere();*/
       const locRange = localizationRanges[here.id];
       /*stopVerboseCommHere();*/
-      myX[locRange] = x[locRange];
-      myY[locRange] = y[locRange];
-      myZ[locRange] = z[locRange];
+      myCoords[locRange] = coords[locRange];
+      /*myX[locRange] = x[locRange];*/
+      /*myY[locRange] = y[locRange];*/
+      /*myZ[locRange] = z[locRange];*/
     }
     stopCommDiags();
   }
@@ -440,11 +467,11 @@ proc main() {
 
     LagrangeLeapFrog();
 
-    if debug {
-      deprintatomic("[[ Forces ]]", fx, fy, fz);
-      deprint("[[ Positions ]]", x, y, z);
-      deprint("[[ p, e, q ]]", p, e, q);
-    }
+    /*if debug {*/
+      /*deprintatomic("[[ Forces ]]", fx, fy, fz);*/
+      /*deprint("[[ Positions ]]", x, y, z);*/
+      /*deprint("[[ p, e, q ]]", p, e, q);*/
+    /*}*/
     if showProgress then
       writef("time = %er, dt=%er, %s", time, deltatime,
              if doTiming then ", elapsed = " + (getCurrentTime()-iterTime) +"\n"
@@ -461,16 +488,16 @@ proc main() {
   writeln("Number of cycles: ", cycle);
   printCommDiags();
 
-  if printCoords {
-    var outfile = open("coords.out", iomode.cw);
-    var writer = outfile.writer();
-    var fmtstr = if debug then "%1.9re %1.9er %1.9er\n" 
-                          else "%1.4er %1.4er %1.4er\n";
-    for i in Nodes do
-      writer.writef(fmtstr, x[i], y[i], z[i]);
-    writer.close();
-    outfile.close();
-  }
+  /*if printCoords {*/
+    /*var outfile = open("coords.out", iomode.cw);*/
+    /*var writer = outfile.writer();*/
+    /*var fmtstr = if debug then "%1.9re %1.9er %1.9er\n" */
+                          /*else "%1.4er %1.4er %1.4er\n";*/
+    /*for i in Nodes do*/
+      /*writer.writef(fmtstr, x[i], y[i], z[i]);*/
+    /*writer.close();*/
+    /*outfile.close();*/
+  /*}*/
 }
 
 
@@ -478,7 +505,8 @@ proc main() {
 
 proc initLulesh() {
   // initialize the coordinates
-  initCoordinates(x,y,z);
+  /*initCoordinates(x,y,z);*/
+  initCoordinates(coords);
   initLocalizedCoords();
 
   // initialize the element to node mapping
@@ -515,7 +543,7 @@ proc initMasses() {
   /*writeln("initMasses");*/
   forall eli in Elems {
     var x_local, y_local, z_local: 8*real;
-    localizeNeighborNodes(eli, myX, x_local, myY, y_local, myZ, z_local);
+    localizeNeighborNodes(eli, myCoords, x_local, y_local, z_local);
 
     const volume = CalcElemVolume(x_local, y_local, z_local);
     volo[eli] = volume;
@@ -625,19 +653,37 @@ proc initBoundaryConditions() {
 
 /* Helper functions */
 
+/*inline proc localizeNeighborNodes(eli: index(Elems),*/
+                                  /*x: [] real, ref x_local: 8*real,*/
+                                  /*y: [] real, ref y_local: 8*real,*/
+                                  /*z: [] real, ref z_local: 8*real) {*/
+
+  /*for i in 1..nodesPerElem {*/
+    /*const noi = elemToNode[eli][i];*/
+
+    /*[>writeln(here, " Localizing ", noi);<]*/
+    /*local useLocal {*/
+      /*x_local[i] = x[noi];*/
+      /*y_local[i] = y[noi];*/
+      /*z_local[i] = z[noi];*/
+    /*}*/
+  /*}*/
+/*}*/
+
 inline proc localizeNeighborNodes(eli: index(Elems),
-                                  x: [] real, ref x_local: 8*real,
-                                  y: [] real, ref y_local: 8*real,
-                                  z: [] real, ref z_local: 8*real) {
+                                  nodes: [] xyz_type,
+                                  ref x_local: 8*real,
+                                  ref y_local: 8*real,
+                                  ref z_local: 8*real) {
 
   for i in 1..nodesPerElem {
     const noi = elemToNode[eli][i];
 
     /*writeln(here, " Localizing ", noi);*/
     local useLocal {
-      x_local[i] = x[noi];
-      y_local[i] = y[noi];
-      z_local[i] = z[noi];
+      x_local[i] = nodes[noi].x;
+      y_local[i] = nodes[noi].y;
+      z_local[i] = nodes[noi].z;
     }
   }
 }
@@ -1166,7 +1212,7 @@ proc IntegrateStressForElems(sigxx, sigyy, sigzz, determ) {
   forall k in Elems {
     var b_x, b_y, b_z: 8*real;
     var x_local, y_local, z_local: 8*real;
-    localizeNeighborNodes(k, myX, x_local, myY, y_local, myZ, z_local);
+    localizeNeighborNodes(k, myCoords, x_local, y_local, z_local);
 
     var fx_local, fy_local, fz_local: 8*real;
 
@@ -1198,7 +1244,7 @@ proc CalcHourglassControlForElems(determ) {
   forall eli in Elems {
     /* Collect domain nodes to elem nodes */
     var x1, y1, z1: 8*real;
-    localizeNeighborNodes(eli, myX, x1, myY, y1, myZ, z1);
+    localizeNeighborNodes(eli, myCoords, x1, y1, z1);
     var pfx, pfy, pfz: 8*real;
 
     local {
@@ -1244,7 +1290,7 @@ proc CalcFBHourglassForceForElems(determ, x8n, y8n, z8n, dvdx, dvdy, dvdz) {
     var coefficient: real;
 
     var xd1, yd1, zd1: 8*real;
-    localizeNeighborNodes(eli, myXd, xd1, myYd, yd1, myZd, zd1);
+    localizeNeighborNodes(eli, myDispls, xd1, yd1, zd1);
 
     /* TODO: Can we enable this local block? */
     // local {
@@ -1310,25 +1356,25 @@ proc ApplyAccelerationBoundaryConditionsForNodes() {
 
 proc CalcVelocityForNodes(dt: real, u_cut: real) {
   forall i in Nodes do local {
-    var xdtmp = xd[i] + xdd[i] * dt,
-        ydtmp = yd[i] + ydd[i] * dt,
-        zdtmp = zd[i] + zdd[i] * dt;
+    var xdtmp = displs[i].x + xdd[i] * dt,
+        ydtmp = displs[i].y + ydd[i] * dt,
+        zdtmp = displs[i].z + zdd[i] * dt;
     if abs(xdtmp) < u_cut then xdtmp = 0.0;
     if abs(ydtmp) < u_cut then ydtmp = 0.0;
     if abs(zdtmp) < u_cut then zdtmp = 0.0;
-    xd[i] = xdtmp;
-    yd[i] = ydtmp;
-    zd[i] = zdtmp;
+    displs[i].x = xdtmp;
+    displs[i].y = ydtmp;
+    displs[i].z = zdtmp;
   }
   initLocalizedDisplacements();
 }
 
 
 proc CalcPositionForNodes(dt: real) {
-  forall ijk in Nodes {
-    x[ijk] += xd[ijk] * dt;
-    y[ijk] += yd[ijk] * dt;
-    z[ijk] += zd[ijk] * dt;
+  forall i in Nodes {
+    coords[i].x += displs[i].x * dt;
+    coords[i].y += displs[i].y * dt;
+    coords[i].z += displs[i].z * dt;
   }
   initLocalizedCoords();
 }
@@ -1367,11 +1413,11 @@ proc CalcKinematicsForElems(dxx, dyy, dzz, const dt: real) {
 
     //get nodal coordinates from global arrays and copy into local arrays
     var x_local, y_local, z_local: 8*real;
-    localizeNeighborNodes(k, myX, x_local, myY, y_local, myZ, z_local);
+    localizeNeighborNodes(k, myCoords, x_local, y_local, z_local);
 
     //get nodal velocities from global arrays and copy into local arrays
     var xd_local, yd_local, zd_local: 8*real;
-    localizeNeighborNodes(k, myXd, xd_local, myYd, yd_local, myZd, zd_local);
+    localizeNeighborNodes(k, myDispls, xd_local, yd_local, zd_local);
     var dt2 = 0.5 * dt; //wish this was local, too...
 
     local {
@@ -1481,9 +1527,9 @@ proc CalcMonotonicQGradientsForElems(delv_xi, delv_eta, delv_zeta,
   forall eli in Elems {
     const ptiny = 1.0e-36;
     var xl, yl, zl: 8*real;
-    localizeNeighborNodes(eli, myX, xl, myY, yl, myZ, zl);
+    localizeNeighborNodes(eli, myCoords, xl, yl, zl);
     var xvl, yvl, zvl: 8*real;
-    localizeNeighborNodes(eli, myXd, xvl, myYd, yvl, myZd, zvl);
+    localizeNeighborNodes(eli, myDispls, xvl, yvl, zvl);
 
     local {
       const vol = volo[eli] * vnew[eli],
