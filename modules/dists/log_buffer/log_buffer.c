@@ -12,13 +12,13 @@
 
 
 void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
-                     uint8_t rank) {
+                     uint8_t rank, int byte_buf_size) {
 
   int i;
   lbuf->num_buffers = num_buffers;
   lbuf->bufs = malloc(num_buffers * sizeof(byte_buffer_t));
   for(i = 0 ; i < num_buffers ; i++) {
-    init_byte_buffer(&(lbuf->bufs[i]), i, 1000000);
+    init_byte_buffer(&(lbuf->bufs[i]), i, byte_buf_size);
   }
 
   lbuf->global_scratch_pad = malloc(num_buffers*SCRATCH_PAD_SIZE);

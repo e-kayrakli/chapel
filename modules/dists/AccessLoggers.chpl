@@ -14,16 +14,19 @@ require "/home/ngnk/code/chapel/versions/fork_dev2/chapel/modules/dists/log_buff
 
 extern type log_buffer_t;
 extern proc init_log_buffer(ref lbuf, num_buffers: uint(32),
-                            rank: uint(8));
+                            rank: uint(8), byte_buf_size: c_int);
 extern proc destroy_log_buffer(ref lbuf);
 extern proc flush_buffer(ref lbuf);
 extern proc append_index(ref lbuf, args...);
 
+config const defaultByteBufferSize = 10000000;
 class AccessLogger {
   var buf: log_buffer_t;
 
-  proc init(rank, numBuffers=here.maxTaskPar) {
-    init_log_buffer(buf, numBuffers:uint(32), rank:uint(8));
+  proc init(rank, numBuffers=here.maxTaskPar,
+      byteBufferSize=defaultByteBufferSize) {
+    init_log_buffer(buf, numBuffers:uint(32), rank:uint(8),
+                    byteBufferSize:int(32));
   }
 
   proc destroy() {

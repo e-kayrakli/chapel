@@ -34,7 +34,7 @@ typedef struct log_buffer {
 } log_buffer_t;
 
 void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
-                     uint8_t rank);
+                     uint8_t rank, int byte_buf_size);
 void destroy_log_buffer(log_buffer_t *lbuf);
 void flush_buffer(log_buffer_t *lbuf);
 void append_index(log_buffer_t *lbuf, ...);
