@@ -55,7 +55,6 @@ void check_err(size_t code, const char* msg) {
 }
 
 size_t compress(byte_buffer_t *buf) {
-  printf("Compressing %d bytes\n", buf->size);
   // create the compression context
   LZ4F_compressionContext_t ctx;
   LZ4F_createCompressionContext(&ctx, LZ4F_VERSION);
@@ -90,7 +89,6 @@ size_t compress(byte_buffer_t *buf) {
   comp_off += footer_size;
 
   LZ4F_freeCompressionContext(ctx);
-  printf("Compressed to %d bytes\n", comp_off);
   return comp_off;
 }
 
