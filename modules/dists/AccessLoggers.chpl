@@ -1,6 +1,8 @@
 require "/home/ngnk/code/chapel/versions/fork_dev2/chapel/modules/dists/log_buffer/byte_buffer.c", 
         "/home/ngnk/code/chapel/versions/fork_dev2/chapel/modules/dists/log_buffer/log_buffer.c",
         "/home/ngnk/code/chapel/versions/fork_dev2/chapel/modules/dists/log_buffer/log_buffer.h",
+        "/home/ngnk/code/chapel/versions/fork_dev2/chapel/modules/dists/log_buffer/compress.c",
+        "/home/ngnk/code/chapel/versions/fork_dev2/chapel/modules/dists/log_buffer/compress.h",
         "/home/ngnk/build/lz4/lib/lz4.c",
         "/home/ngnk/build/lz4/lib/lz4frame.c",
         "/home/ngnk/build/lz4/lib/lz4hc.c",
@@ -18,6 +20,8 @@ extern proc init_log_buffer(ref lbuf, num_buffers: uint(32),
 extern proc destroy_log_buffer(ref lbuf);
 extern proc flush_buffer(ref lbuf);
 extern proc append_index(ref lbuf, args...);
+extern proc get_compression_stats(ref lbuf, 
+                                  ref uncomp_size, ref comp_size): c_int;
 
 config const defaultByteBufferSize = 10000000;
 class AccessLogger {
@@ -41,6 +45,16 @@ class AccessLogger {
   }
 
   proc destroy() {
+    flush();
+    var uncompSize: size_t;
+    var compSize: size_t;
+    var collected = get_compression_stats(buf, uncompSize, compSize);
+    if collected {
+      writeln(here);
+      writeln("Uncompressed size : ", uncompSize);
+      writeln("Compressed size : ", compSize);
+      writeln("Compression ratio : ", 1.0*compSize/uncompSize);
+    }
     destroy_log_buffer(buf);
   }
 

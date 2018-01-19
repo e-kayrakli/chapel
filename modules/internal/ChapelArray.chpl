@@ -2114,7 +2114,9 @@ module ChapelArray {
     
     proc finishAccessLogging() {
       if enableAccessLogs {
-      _value.finishAccessLogging();
+        for l in Locales do on l {
+          _value.finishAccessLogging();
+        }
       }
     }
 

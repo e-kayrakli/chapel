@@ -38,5 +38,7 @@ void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
 void destroy_log_buffer(log_buffer_t *lbuf);
 void flush_buffer(log_buffer_t *lbuf);
 void append_index(log_buffer_t *lbuf, ...);
+int get_compression_stats(log_buffer_t *lbuf,
+                          size_t *uncomp_size, size_t *comp_size);
 
 #endif

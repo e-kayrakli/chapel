@@ -39,8 +39,29 @@ void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
   /*printf("Inited log buffer %p\n", lbuf);*/
 }
 
+int get_compression_stats(log_buffer_t *lbuf,
+                          size_t *uncomp_size, size_t *comp_size) {
+
+#ifdef GENERATE_COMPRESSION_STATS
+  int i;
+  size_t tot_uncomp_size = 0;
+  size_t tot_comp_size = 0;
+
+  for(i = 0 ; i < lbuf->num_buffers ; i++) {
+    tot_uncomp_size += lbuf->bufs[i].comp_stats.uncomp_size;
+    tot_comp_size += lbuf->bufs[i].comp_stats.comp_size;
+  }
+  *uncomp_size = tot_uncomp_size;
+  *comp_size = tot_comp_size;
+  return 1;
+#else
+  return 0;
+#endif
+}
+
 void destroy_log_buffer(log_buffer_t *lbuf) {
   int i;
+
 
   for(i = 0 ; i < lbuf->num_buffers ; i++) {
     destroy_byte_buffer(&(lbuf->bufs[i]));

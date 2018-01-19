@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,6 +6,7 @@
 #include <pthread.h>
 
 #include "byte_buffer.h"
+#include "compress.h"
 
 #define IN_DELIM ' '
 #define OUT_DELIM '\n'
@@ -23,12 +23,14 @@ void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap) {
   buf->cap = cap;
   buf->size = 0;
 
-  buf->max_c_sz = LZ4F_compressBound(cap, &lz4_preferences) +
+  buf->c_size = LZ4F_compressBound(cap, &lz4_preferences) +
                   LZ4_HEADER_SIZE +
                   LZ4_FOOTER_SIZE;
-  buf->c_data = malloc(buf->max_c_sz);
+  buf->c_data = malloc(buf->c_size);
 
   buf->file_count = 0;
+
+  init_compress_stats(&(buf->comp_stats));
 
 #ifdef BYTE_BUFFER_PARSAFE
   pthread_mutex_init(buf->lock, NULL);
@@ -47,55 +49,11 @@ static inline void unlock(byte_buffer_t *buf) {
 #endif
 }
 
-void check_err(size_t code, const char* msg) {
-  if(LZ4F_isError(code)) {
-    fprintf(stderr, msg);
-    exit(1);
-  }
-}
-
-size_t compress(byte_buffer_t *buf) {
-  // create the compression context
-  LZ4F_compressionContext_t ctx;
-  LZ4F_createCompressionContext(&ctx, LZ4F_VERSION);
-
-  size_t comp_off = 0;
-
-  // generate frame header (?)
-  size_t header_size = LZ4F_compressBegin(ctx, buf->c_data,
-                                          buf->max_c_sz,
-                                          &lz4_preferences);
-
-  check_err(header_size, "Cannot begin compression\n");
-  comp_off += header_size;
-
-  // compress the actual data
-  size_t data_size = LZ4F_compressUpdate(ctx,
-                                         buf->c_data + comp_off, 
-                                         buf->max_c_sz - comp_off,
-                                         buf->data, buf->size,
-                                         NULL);
-
-  check_err(data_size, "Cannot update compression\n");
-  comp_off += data_size;
-
-  // end the frame
-  size_t footer_size = LZ4F_compressEnd(ctx,
-                                        buf->c_data + comp_off, 
-                                        buf->max_c_sz - comp_off,
-                                        NULL);
-
-  check_err(footer_size , "Cannot end compression\n");
-  comp_off += footer_size;
-
-  LZ4F_freeCompressionContext(ctx);
-  return comp_off;
-}
-
-
 void compress_and_dump(byte_buffer_t *buf) {
     // compress
-    const int compressed_size = compress(buf);
+    const int compressed_size = compress(buf->data, buf->size,
+                                         buf->c_data, buf->c_size,
+                                         &(buf->comp_stats));
 
     // dump into a file
     char *filename = calloc(1, 32);
