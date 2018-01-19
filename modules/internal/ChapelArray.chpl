@@ -2111,9 +2111,17 @@ module ChapelArray {
         }
       }
     }
+    
+    proc finishAccessLogging() {
+      if enableAccessLogs {
+      _value.finishAccessLogging();
+      }
+    }
 
     inline proc logAccess(i) {
-      _value.logAccess(i);
+      if enableAccessLogs {
+        _value.logAccess(i);
+      }
     }
 
     // array element access

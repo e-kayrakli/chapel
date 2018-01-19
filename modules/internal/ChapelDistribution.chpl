@@ -21,6 +21,9 @@ module ChapelDistribution {
 
   use List;
   use IO;
+  use AccessLoggers;
+
+  config const smartLog = true;
 
   extern proc chpl_task_yield();
 
@@ -649,6 +652,7 @@ module ChapelDistribution {
     var accessLogChannel: channel(writing=true,
                                   kind=iokind.dynamic,
                                   locking=true);
+    var accessLogger: AccessLogger;
 
     proc initAccessLoggingMeta(fileName) {
       use FileSystem;
@@ -683,6 +687,7 @@ module ChapelDistribution {
         accessLogging = true;
         accessLogChannel = open(fullFileName+"locale_"+here.id,
             iomode.cw).writer();
+        accessLogger = new AccessLogger(rank=d.rank);
 
         //log some metadata regarding the domain
         /*accessLogChannel.writeln(d.rank);*/
@@ -702,7 +707,16 @@ module ChapelDistribution {
     }
     
     inline proc logAccess(i) {
-      accessLogChannel.writeln(i, error=ENOERR:syserr);
+      /*logBag.add((here.id, (...i)));*/
+
+      if smartLog then
+        accessLogger.log(i);
+      else
+        accessLogChannel.writeln(i, error=ENOERR:syserr);
+    }
+
+    proc finishAccessLogging() {
+      accessLogger.destroy();
     }
 
     proc isSliceArrayView() param {

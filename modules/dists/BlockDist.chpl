@@ -43,6 +43,7 @@ use ChapelUtil;
 use CommDiagnostics;
 use SparseBlockDist;
 use LayoutCS;
+use AccessLoggers;
 //
 // These flags are used to output debug information and run extra
 // checks when using Block.  Should these be promoted so that they can
@@ -933,8 +934,18 @@ proc BlockArr.dsiDestroyArr() {
   }
 }
 
+/*inline proc BlockArr.finishAccessLogging() {*/
+  /*writeln("Finish called");*/
+  /*[>coforall l in Locales do on l {<]*/
+  /*on Locales[1] {*/
+    /*for log in logBag {*/
+      /*accessLogChannel.writeln(log, error=ENOERR:syserr);*/
+    /*}*/
+  /*}*/
+/*}*/
+
 inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
-  if enableAccessLogs && accessLogging then logAccess(i);
+  if accessLogging then logAccess(i);
   return myLocArr.this(i);
 }
 
@@ -947,7 +958,7 @@ inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
 // fast/local path and get better performance.
 //
 inline proc BlockArr.dsiAccess(const in idx: rank*idxType) ref {
-  if enableAccessLogs && accessLogging then logAccess(idx);
+  if accessLogging then logAccess(idx);
   local {
     if myLocArr != nil && myLocArr.locDom.member(idx) then
       return myLocArr.this(idx);
