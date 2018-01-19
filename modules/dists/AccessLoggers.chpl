@@ -23,21 +23,38 @@ config const defaultByteBufferSize = 10000000;
 class AccessLogger {
   var buf: log_buffer_t;
 
+  var samplingCounter = 0;
+  var samplingPeriod = 1;
+
   proc init(rank, numBuffers=here.maxTaskPar,
-      byteBufferSize=defaultByteBufferSize) {
+            byteBufferSize=defaultByteBufferSize, samplingRate) {
+
+    if samplingRate <= 0 then
+      halt("sampling rate must be positive and <=1.0");
+    if samplingRate > 1.0 then
+      halt("sampling rate must be positive and <=1.0");
+
     init_log_buffer(buf, numBuffers:uint(32), rank:uint(8),
                     byteBufferSize:int(32));
+
+    samplingPeriod = (1/samplingRate):int;
   }
 
   proc destroy() {
     destroy_log_buffer(buf);
   }
 
-  inline proc log(idx) where isTuple(idx) {
+  inline proc log(idx) {
+    if samplingCounter % samplingPeriod == 0 then
+      __do_log(idx);
+    samplingCounter += 1;
+  }
+
+  inline proc __do_log(idx) where isTuple(idx) {
     append_index(buf, (...idx));
   }
 
-  inline proc log(idx) where !isTuple(idx) {
+  inline proc __do_log(idx) where !isTuple(idx) {
     append_index(buf, idx);
   }
 

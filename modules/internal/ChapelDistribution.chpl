@@ -668,7 +668,8 @@ module ChapelDistribution {
       return accessLogDir;
     }
 
-    inline proc enableAccessLogging(fileName, d, const ref accessLogDir) {
+    inline proc enableAccessLogging(fileName, d, const ref accessLogDir,
+                                    samplingRate) {
 
       var fullFileName = accessLogDir+"/"+fileName;
       if here.id == 0 {
@@ -687,7 +688,8 @@ module ChapelDistribution {
         accessLogging = true;
         accessLogChannel = open(fullFileName+"locale_"+here.id,
             iomode.cw).writer();
-        accessLogger = new AccessLogger(rank=d.rank);
+        accessLogger = new AccessLogger(rank=d.rank,
+                                        samplingRate=samplingRate);
 
         //log some metadata regarding the domain
         /*accessLogChannel.writeln(d.rank);*/

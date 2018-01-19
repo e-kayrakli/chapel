@@ -2102,12 +2102,12 @@ module ChapelArray {
     /* The number of dimensions in the array */
     proc rank param return this.domain.rank;
 
-    inline proc enableAccessLogging(fileName) {
+    inline proc enableAccessLogging(fileName, samplingRate=1.0) {
       if enableAccessLogs {
         var accessLogDir = _value.initAccessLoggingMeta(fileName);
         coforall l in Locales do on l {
           _value.enableAccessLogging(fileName, this.domain,
-                                     accessLogDir);
+                                     accessLogDir, samplingRate);
         }
       }
     }
