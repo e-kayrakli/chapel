@@ -37,7 +37,7 @@ config param debugCyclicDistBulkTransfer = false;
 // used or not.  This is used in regression testing to ensure that the
 // 'fast follower' optimization is working.
 //
-config param testFastFollowerOptimization = true;
+config param testFastFollowerOptimization = false;
 
 //
 // This flag is used to disable lazy initialization of the RAD cache.

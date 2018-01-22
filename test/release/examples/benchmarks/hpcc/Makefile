@@ -1,49 +1,20 @@
+CHPL=chpl
+CHPLFLAGS=--fast --ieee-float
 
-CHPL = chpl
+all: fft fft_log fft_log_stat
 
-CHPL_FLAGS = --fast
+fft: fft.chpl
+	$(CHPL) $(CHPLFLAGS) -o ./bin/$@ $^
 
-TARGETS = \
-	stream \
-	stream-ep \
-	ra \
-	ra-atomics \
-	fft \
-	ptrans \
-	hpl \
+fft_log: fft.chpl
+	$(CHPL) $(CHPLFLAGS) -senableAccessLogs=true -o ./bin/$@ $^
 
-REALS = $(TARGETS:%=%_real)
+fft_log_stat: fft.chpl
+	$(CHPL) $(CHPLFLAGS) -senableAccessLogs=true -o ./bin/$@ $^ --ccflags -DGENERATE_COMPRESSION_STATS
 
-default: all variants
+cleanout:
+	rm -f {err,out}/fft*
 
-all: $(TARGETS)
+clean:
+	rm -f {bin,err,out}/fft* 
 
-clean: FORCE
-	rm -f $(TARGETS) $(REALS)
-	cd variants && $(MAKE) clean
-
-stream: stream.chpl HPCCProblemSize.chpl
-	+$(CHPL) -o $@ $(CHPL_FLAGS) $<
-
-stream-ep: stream-ep.chpl HPCCProblemSize.chpl
-	+$(CHPL) -o $@ $(CHPL_FLAGS) $<
-
-ra: ra.chpl HPCCProblemSize.chpl RARandomStream.chpl
-	+$(CHPL) -o $@ $(CHPL_FLAGS) $<
-
-ra-atomics: ra-atomics.chpl HPCCProblemSize.chpl RARandomStream.chpl
-	+$(CHPL) -o $@ $(CHPL_FLAGS) $<
-
-fft: fft.chpl HPCCProblemSize.chpl
-	+$(CHPL) -o $@ $(CHPL_FLAGS) $<
-
-ptrans: ptrans.chpl HPCCProblemSize.chpl
-	+$(CHPL) -o $@ $(CHPL_FLAGS) $<
-
-hpl: hpl.chpl HPCCProblemSize.chpl
-	+$(CHPL) -o $@ $(CHPL_FLAGS) $<
-
-variants: FORCE
-	cd variants && $(MAKE)
-
-FORCE:

@@ -19,6 +19,7 @@ use BitOps, Random, Time, BlockDist, CyclicDist;
 use HPCCProblemSize;
 
 config const accessLog = false;
+config const samplingRate = 1.0;
 
 const radix = 4;               // the radix of this FFT implementation
 
@@ -104,11 +105,9 @@ proc main() {
 
   initVectors(Twiddles, z);            // initialize twiddles and input vector z
 
-  if accessLog {
-    z.enableAccessLogging("fft_z");
-    Zblk.enableAccessLogging("fft_Zblk");
-    Zcyc.enableAccessLogging("fft_Zcyc");
-  }
+  
+  Zblk.enableAccessLogging("fft_Zblk", samplingRate=samplingRate);
+  Zcyc.enableAccessLogging("fft_Zcyc", samplingRate=samplingRate);
 
   const startTime = getCurrentTime();  // capture the start time
 
@@ -126,6 +125,8 @@ proc main() {
     b = c;
 
   const execTime = getCurrentTime() - startTime;     // store the elapsed time
+  Zblk.finishAccessLogging();
+  Zcyc.finishAccessLogging();
 
   const validAnswer = verifyResults(z, Zblk, Zcyc, Twiddles); // validate answer
   printResults(validAnswer, execTime);               // print the results
