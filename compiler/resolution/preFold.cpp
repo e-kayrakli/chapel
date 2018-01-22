@@ -33,6 +33,8 @@
 #include "typeSpecifier.h"
 #include "visibleFunctions.h"
 
+#include "view.h"
+
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
@@ -431,6 +433,16 @@ static Expr* preFoldPrimOp(CallExpr* call) {
                 "primitive string does not match any environment variable");
     }
 
+  } else if (call->isPrimitive(PRIM_GET_VAR_NAME)) {
+    
+    SymExpr* se = toSymExpr(call->get(1));
+    print_view(se);
+    Symbol* s = se->symbol();
+
+    retval = new SymExpr(new_StringSymbol(s->name));
+
+    call->replace(retval);
+  
   } else if (call->isPrimitive(PRIM_GET_SVEC_MEMBER)) {
     // Convert these to PRIM_GET_SVEC_MEMBER_VALUE if the
     // field in question is a reference.
