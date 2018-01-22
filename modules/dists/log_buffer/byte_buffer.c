@@ -77,7 +77,7 @@ void destroy_byte_buffer(byte_buffer_t *buf) {
 }
 
 // In current design this is not parallel-safe
-void check_cap(byte_buffer_t *buf, size_t incoming) {
+static inline void check_cap(byte_buffer_t *buf, size_t incoming) {
 
   // check if there is still capacity
   if(buf->size + incoming > buf->cap - 1) {
