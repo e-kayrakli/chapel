@@ -199,6 +199,8 @@ module ChapelArray {
   config param debugArrayAsVec = false;
 
   config param enableAccessLogs = false;
+  config param logAllDistributedArrays = false;
+  config param defaultLogSamplingRate = 1.0;
 
   pragma "privatized class"
   proc _isPrivatized(value) param
@@ -334,12 +336,21 @@ module ChapelArray {
   }
 
   pragma "no copy return"
-  proc _newArray(value) {
+  inline proc _newArray(value) {
     if _isPrivatized(value) then
       return new _array(_newPrivatizedClass(value), value);
     else
       return new _array(nullPid, value);
   }
+
+  /*pragma "no copy return"*/
+  /*proc _newArray(value) {*/
+    /*var arr = _newArray_helper(value);*/
+    /*[>if logAllDistributedArrays {<]*/
+      /*[>arr.enableAccessLogging([> what is the filename <]);<]*/
+    /*[>}<]*/
+    /*return arr;*/
+  /*}*/
 
   pragma "no copy return"
   proc _getArray(value) {
