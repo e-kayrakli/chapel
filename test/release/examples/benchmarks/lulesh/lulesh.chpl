@@ -157,8 +157,8 @@ record xyz_type {
 var coords: [Nodes] xyz_type;
                               
 config const accessLog = false;
-/*if accessLog then*/
-  /*x.enableAccessLogging("x");*/
+config const samplingRate = 1.0;
+coords.enableAccessLogging("x", samplingRate=samplingRate);
 
 /*proc myX { return x; }*/
 
@@ -477,6 +477,7 @@ proc main() {
              if doTiming then ", elapsed = " + (getCurrentTime()-iterTime) +"\n"
                          else "\n");
   }
+  coords.finishAccessLogging();
   if (cycle == maxcycles) {
     writeln("Stopped early due to reaching maxnumsteps");
   }

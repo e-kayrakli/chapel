@@ -1,21 +1,20 @@
+CHPL=chpl
+CHPLFLAGS=--fast -suseSparseMaterials=false
 
-CHPL = chpl
+all: lulesh lulesh_log lulesh_log_stat
 
-CHPL_FLAGS = --fast -suseSparseMaterials=false
+lulesh: lulesh.chpl
+	$(CHPL) $(CHPLFLAGS) -o ./bin/$@ $^
 
-TARGETS = \
-	lulesh
+lulesh_log: lulesh.chpl
+	$(CHPL) $(CHPLFLAGS) -senableAccessLogs=true -o ./bin/$@ $^
 
-REALS = $(TARGETS:%=%_real)
+lulesh_log_stat: lulesh.chpl
+	$(CHPL) $(CHPLFLAGS) -senableAccessLogs=true -o ./bin/$@ $^ --ccflags -DGENERATE_COMPRESSION_STATS
 
-default: all
+cleanout:
+	rm -f {err,out}/lulesh*
 
-all: $(TARGETS)
+clean:
+	rm -f {bin,err,out}/lulesh* 
 
-clean: FORCE
-	rm -f $(TARGETS) $(REALS)
-
-lulesh: lulesh.chpl luleshInit.chpl
-	+$(CHPL) -o $@ $(CHPL_FLAGS) $<
-
-FORCE:
