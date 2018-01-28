@@ -167,11 +167,28 @@ class LogHandler(object):
             pattern += end+'$'
             return pattern
 
+        ## init helpers
+        def __gen_ssv_pattern(start, item, end, count=-1):
+            if count == -1:
+                count = self.rank
+            pattern = r"^" + start
+            pattern += item
+            for r in range(count-1):
+                pattern += ' ' + item
+            pattern += end+'$'
+            return pattern
+
         def __gen_idx_pattern(rank):
             return __gen_csv_pattern(
                     start='\(',
                     item ='([0-9]+)',
                     end  ='\)')
+
+        def __gen_comp_idx_pattern(rank):
+            return __gen_ssv_pattern(
+                    start='',
+                    item ='([0-9]+)',
+                    end  ='')
 
         def __gen_dom_pattern(rank):
             return __gen_csv_pattern(
@@ -182,6 +199,7 @@ class LogHandler(object):
         self.rank = rank
         self.domain_pattern = __gen_dom_pattern(self.rank)
         self.index_pattern = __gen_idx_pattern(self.rank)
+        self.comp_index_pattern = __gen_comp_idx_pattern(self.rank)
     # endof init
 
     def generate_domain(self, limit_tuple):
@@ -221,16 +239,51 @@ class LogHandler(object):
             return None
 
     # TODO maybe change to get_tuple ?
-    def get_index(self, line):
-        match = re.match(self.index_pattern, line)
+    def get_index(self, line, compressed=False):
+        if compressed:
+            match = re.match(self.comp_index_pattern, line)
+        else:
+            match = re.match(self.index_pattern, line)
         if match:
             return tuple([int(g) for g in match.groups()])
-            # if self.rank == 1:
-                # return (int(match.group(1)), )
-            # elif self.rank == 2:
-                # return (int(match.group(1)), int(match.group(2)))
         else:
             print('Invalid index : ', line) 
+
+    def compressed_indices(self, file_prefix):
+        from pathlib import Path
+        import lz4.frame
+
+        file_frmt = file_prefix+'_buf{}_dump{}.lz4'
+        buf_counter = 0
+        # run infinite loop for multiple buffers
+        while True:
+            dump_counter = 0
+            # check if dump0 exists, break if false
+            cur_file_path = file_frmt.format(buf_counter, 
+                                             dump_counter)
+            cur_file = Path(cur_file_path)
+            if not cur_file.exists():
+                break
+
+            # run infinite loop for multiple dumps
+            while True:
+                # check if file exists, break if false
+                cur_file_path = file_frmt.format(buf_counter,
+                                                 dump_counter)
+                cur_file = Path(cur_file_path)
+                if not cur_file.exists():
+                    break
+
+                # decompress and decode into a string
+                uncomp = lz4.frame.decompress(cur_file.read_bytes()).decode('utf-8')
+
+                # read string line by line
+                for l in uncomp.splitlines():
+                    yield self.get_index(l, compressed=True)
+
+                dump_counter += 1
+            buf_counter += 1
+
 
 class MetaLog(object):
 
@@ -248,7 +301,7 @@ class LocaleLog(object):
 
         self.__lh = LogHandler(rank)
 
-        with open(filename) as f:
+        with open(filename+'_meta') as f:
             whole = self.__lh.get_dom(f.readline())
 
             # now start reading subdomain(s). At this point we do not know
@@ -272,25 +325,19 @@ class LocaleLog(object):
             access_mat_shape = whole.shape()
             access_mat = np.zeros(access_mat_shape)
 
-            if debug:
-                print_access_mat(access_mat)
-                print()
+        # read compressed indices
+        if debug:
+            print_access_mat(access_mat)
+            print()
 
-            max_access = 0
-            for line in f:
-                index = self.__lh.get_index(line)
-                # if rank == 1:
-                    # index = (real_index[0]-offsets[0], 0)
-                # elif rank == 2:
-                    # index = (real_index[0]-offsets[0],
-                             # real_index[1]-offsets[1])
+        max_access = 0
+        for index in self.__lh.compressed_indices(filename):
+            access_mat[index] += 1
+            if access_mat[index] > max_access:
+                max_access = access_mat[index] 
 
-                access_mat[index] += 1
-                if access_mat[index] > max_access:
-                    max_access = access_mat[index] 
-
-            if debug:
-                print_access_mat(access_mat)
+        if debug:
+            print_access_mat(access_mat)
 
         # TODO fix this
         self.rank = rank
