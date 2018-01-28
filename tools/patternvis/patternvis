@@ -80,10 +80,11 @@ class Display(object):
         for sd in self.subdoms:
             rs = self.gen_rectangle_from_dom(sd)
             for r in rs:
-                r.set_fill(True)
-                r.set_color('green')
-                r.set_alpha(0.7)
-                # r.set_hatch('///')
+                r.set_fill(False)
+                r.set_color('blue')
+                r.set_linewidth(2)
+                r.set_alpha(1)
+                r.set_hatch('///')
                 yield r
 
 
