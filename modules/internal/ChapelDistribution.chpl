@@ -719,6 +719,7 @@ module ChapelDistribution {
 
     proc finishAccessLogging() {
       accessLogger.destroy();
+      accessLogging = false;
     }
 
     proc isSliceArrayView() param {
