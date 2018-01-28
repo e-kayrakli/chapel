@@ -14,7 +14,7 @@
 void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap, 
                       const char *file_format) {
   buf->uid = uid;
-  buf->cuid = calloc(1,32);
+  buf->cuid = calloc(1,32); // deprecated ?
   itoa(buf->uid, buf->cuid);
 
   buf->data = malloc(cap);
@@ -64,10 +64,8 @@ void compress_and_dump(byte_buffer_t *buf) {
                                          &(buf->comp_stats));
 
     // dump into a file
-    char *filename = calloc(1, 32);
-    itoa(buf->file_count, filename);
-    strcat(filename, buf->cuid);
-    strcat(filename, ".lz4");
+    char *filename = calloc(1, 64); // not sure how safe 64 is
+    sprintf(filename, buf->file_format, buf->uid, buf->file_count);
 
     FILE* f = fopen(filename, "wb");
     size_t written_size = fwrite(buf->c_data, 1, compressed_size, f);
@@ -81,7 +79,10 @@ void compress_and_dump(byte_buffer_t *buf) {
 }
 
 void destroy_byte_buffer(byte_buffer_t *buf) {
-  compress_and_dump(buf);
+  if(buf->size > 0)
+    compress_and_dump(buf);
+
+  // TODO reclaim memory?
 }
 
 // In current design this is not parallel-safe
