@@ -120,7 +120,7 @@ class Display(object):
             if subdom_rank == 1:
                 return [Rectangle((x,y), width, height), ]
             else:
-                return [Rectangle((y,x), height, width), ]
+                return [Rectangle((x,y), width, height), ]
         else:
             up_lim = int(dom[0].high*self.ratio)
             stride = int(dom[0].stride*self.ratio)
