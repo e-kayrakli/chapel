@@ -12,13 +12,23 @@
 
 
 void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
-                     uint8_t rank, int byte_buf_size) {
+                     uint8_t rank, int byte_buf_size, int locale_id,
+                     const char *file_prefix) {
+
+  // build the file format string first so that it can be passed to
+  // individual byte buffers
+  const size_t prefix_len = strlen(file_prefix);
+  const size_t full_len = prefix_len + 32; // prolly too conservative
+  lbuf->file_format = calloc(full_len, sizeof(char));
+  strcpy(lbuf->file_format, file_prefix);
+  strcat(lbuf->file_format, "_buf%d_dump%d");
 
   int i;
   lbuf->num_buffers = num_buffers;
   lbuf->bufs = malloc(num_buffers * sizeof(byte_buffer_t));
   for(i = 0 ; i < num_buffers ; i++) {
-    init_byte_buffer(&(lbuf->bufs[i]), i, byte_buf_size);
+    init_byte_buffer(&(lbuf->bufs[i]), i, byte_buf_size,
+                     lbuf->file_format);
   }
 
   lbuf->global_scratch_pad = malloc(num_buffers*SCRATCH_PAD_SIZE);
@@ -29,8 +39,8 @@ void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
   }
 
   lbuf->cur_buf = 0;
-
   lbuf->rank = rank;
+  lbuf->locale_id = locale_id;
 
   lbuf->locks = malloc(num_buffers * sizeof(pthread_mutex_t));
   for(i = 0 ; i < num_buffers ; i++) {

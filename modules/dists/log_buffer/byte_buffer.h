@@ -26,11 +26,14 @@ typedef struct byte_buffer {
 
   int file_count;
 
+  char *file_format;
+
   compress_stats_t comp_stats;
   pthread_mutex_t *lock;
 } byte_buffer_t;
 
-void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap);
+void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap,
+                      const char *file_format);
 void destroy_byte_buffer(byte_buffer_t *buf);
 void compress_and_dump(byte_buffer_t *buf);
 void append_byte(byte_buffer_t *buf, const char byte);

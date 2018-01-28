@@ -29,12 +29,22 @@ typedef struct log_buffer {
   // info about the indices to be expected
   uint8_t rank;
 
+  // log buffers need to know which locale are they so they know where
+  // to store the data
+  int locale_id;
+
+  // file format string that is partially received from the internal
+  // modules and concatanated with _buf%d_dump%d in order to sprintf
+  // each time dumping a file
+  char *file_format;
+
   pthread_mutex_t *locks;
 
 } log_buffer_t;
 
 void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
-                     uint8_t rank, int byte_buf_size);
+                     uint8_t rank, int byte_buf_size,
+                     int locale_id, const char *file_format);
 void destroy_log_buffer(log_buffer_t *lbuf);
 void flush_buffer(log_buffer_t *lbuf);
 void append_index(log_buffer_t *lbuf, ...);

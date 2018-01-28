@@ -11,7 +11,8 @@
 #define IN_DELIM ' '
 #define OUT_DELIM '\n'
 
-void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap) {
+void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap, 
+                      const char *file_format) {
   buf->uid = uid;
   buf->cuid = calloc(1,32);
   itoa(buf->uid, buf->cuid);
@@ -29,6 +30,13 @@ void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap) {
   buf->c_data = malloc(buf->c_size);
 
   buf->file_count = 0;
+
+  buf->file_format = calloc(strlen(file_format)+4, sizeof(char)); //.lz4
+
+  strcpy(buf->file_format, file_format);
+  strcat(buf->file_format, ".lz4");
+
+  printf(buf->file_format, 0, 0);
 
   init_compress_stats(&(buf->comp_stats));
 

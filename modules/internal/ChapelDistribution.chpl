@@ -686,10 +686,11 @@ module ChapelDistribution {
       }
       try {
         accessLogging = true;
-        accessLogChannel = open(fullFileName+"locale_"+here.id,
-            iomode.cw).writer();
+        const fullPrefix = fullFileName+"locale_"+here.id;
+        accessLogChannel = open(fullPrefix+"_meta", iomode.cw).writer();
         accessLogger = new AccessLogger(rank=d.rank,
-                                        samplingRate=samplingRate);
+                                        samplingRate=samplingRate,
+                                        filePrefix = fullPrefix);
 
         //log some metadata regarding the domain
         /*accessLogChannel.writeln(d.rank);*/

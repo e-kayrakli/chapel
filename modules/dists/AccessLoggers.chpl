@@ -16,7 +16,8 @@ require "/home/ngnk/code/chapel/versions/fork_dev2/chapel/modules/dists/log_buff
 
 extern type log_buffer_t;
 extern proc init_log_buffer(ref lbuf, num_buffers: uint(32),
-                            rank: uint(8), byte_buf_size: c_int);
+                            rank: uint(8), byte_buf_size: c_int,
+                            locale_id:c_int, file_prefix: c_string);
 extern proc destroy_log_buffer(ref lbuf);
 extern proc flush_buffer(ref lbuf);
 extern proc append_index(ref lbuf, args...);
@@ -31,7 +32,8 @@ class AccessLogger {
   var samplingPeriod = 1;
 
   proc init(rank, numBuffers=here.maxTaskPar,
-            byteBufferSize=defaultByteBufferSize, samplingRate) {
+            byteBufferSize=defaultByteBufferSize, samplingRate,
+            filePrefix) {
 
     if samplingRate <= 0 then
       halt("sampling rate must be positive and <=1.0");
@@ -39,7 +41,8 @@ class AccessLogger {
       halt("sampling rate must be positive and <=1.0");
 
     init_log_buffer(buf, numBuffers:uint(32), rank:uint(8),
-                    byteBufferSize:int(32));
+                    byteBufferSize:int(32), here.id:int(32),
+                    filePrefix.c_str());
 
     samplingPeriod = (1/samplingRate):int;
   }
