@@ -459,7 +459,7 @@ def main():
         access_mem_ratio(llhs)
         rar(llhs)
         pairwise_access_bbox(llhs)
-        pwise_access_efficiency(llhs)
+        # pwise_access_efficiency(llhs)
         total_access(llhs)
     if plot:
         do_plot(mlh, llhs)

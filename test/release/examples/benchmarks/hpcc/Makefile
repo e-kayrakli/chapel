@@ -1,20 +1,20 @@
 CHPL=chpl
-CHPLFLAGS=--fast --ieee-float
+CHPLFLAGS=--fast 
 
-all: fft fft_log fft_log_stat
+all: ptrans ptrans_log ptrans_log_stat
 
-fft: fft.chpl
+ptrans: ptrans.chpl
 	$(CHPL) $(CHPLFLAGS) -o ./bin/$@ $^
 
-fft_log: fft.chpl
+ptrans_log: ptrans.chpl
 	$(CHPL) $(CHPLFLAGS) -senableAccessLogs=true -o ./bin/$@ $^
 
-fft_log_stat: fft.chpl
+ptrans_log_stat: ptrans.chpl
 	$(CHPL) $(CHPLFLAGS) -senableAccessLogs=true -o ./bin/$@ $^ --ccflags -DGENERATE_COMPRESSION_STATS
 
 cleanout:
-	rm -f {err,out}/fft*
+	rm -f {err,out}/ptrans*
 
 clean:
-	rm -f {bin,err,out}/fft* 
+	rm -f {bin,err,out}/ptrans* 
 

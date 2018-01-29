@@ -279,6 +279,7 @@ class LogHandler(object):
 
                 # read string line by line
                 for l in uncomp.splitlines():
+                    print('read line ' + l)
                     yield self.get_index(l, compressed=True)
 
                 dump_counter += 1
@@ -332,9 +333,13 @@ class LocaleLog(object):
 
         max_access = 0
         for index in self.__lh.compressed_indices(filename):
-            access_mat[index] += 1
-            if access_mat[index] > max_access:
-                max_access = access_mat[index] 
+            if rank == 1:
+                offset_index = index - offsets[0]
+            else:
+                offset_index = tuple([i-o for i,o in zip(index, offsets)])
+            access_mat[offset_index] += 1
+            if access_mat[offset_index] > max_access:
+                max_access = access_mat[offset_index] 
 
         if debug:
             print_access_mat(access_mat)

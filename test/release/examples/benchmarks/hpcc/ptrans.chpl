@@ -85,8 +85,7 @@ proc main() {
   var A                  : [MatrixDom   ] eltType, 
       C                  : [TransposeDom] eltType;
 
-  if accessLog then
-    A.enableAccessLogging("ptrans_A_input");
+  A.enableAccessLogging("ptrans_A_input");
 
   const error_tolerance = initArrays(A, C);
 
@@ -108,6 +107,7 @@ proc main() {
     forall (i,j) in TransposeDom do
       C[i,j] = beta * C[i,j]  +  A[j,i];
 
+  A.finishAccessLogging();
   const execTime = getCurrentTime() - startTime;
   
   const validAnswer = verifyResults(C, error_tolerance);
