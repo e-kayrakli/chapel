@@ -121,7 +121,8 @@ class Display(object):
             if subdom_rank == 1:
                 return [Rectangle((x,y), width, height), ]
             else:
-                return [Rectangle((x,y), width, height), ]
+                # return [Rectangle((x,y), width, height), ]
+                return [Rectangle((y,x), height, width), ]
         else:
             up_lim = int(dom[0].high*self.ratio)
             stride = int(dom[0].stride*self.ratio)
@@ -232,7 +233,7 @@ class Display(object):
                             for j in range(idx[1]*r, (idx[1]+1)*r):
                                 # if image[i][j] == (1.0, 1.0, 1.0):
                                     # image[i][j] = (0.0, 1.0, 0.0)
-                                image[i][j] = inc_color(image[i][j],
+                                image[j][i] = inc_color(image[j][i],
                                         per_access_delta*acc_cnt)
         
         elif binning and not scaleup:
