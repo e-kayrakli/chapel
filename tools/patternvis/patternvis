@@ -156,8 +156,8 @@ class Display(object):
             
             for i,j in it.product(range(h), range(w)):
                 image[i][j] = (1.0,
-                              image[i][j][1]/largest,
-                              image[i][j][2]/largest)
+                               1.0-image[i][j][1]/largest,
+                               1.0-image[i][j][2]/largest)
 
             return image
 
@@ -318,7 +318,10 @@ def gen_plot(a, locale_log, lid):
     fontsize = 50 if only_locale != None else 12
 
     tmp_lid = lid[0] if isinstance(lid, tuple) else lid
-    a.set_title('LOCALE {}'.format(tmp_lid), size=fontsize)
+    title_loc = 'center' if d.rank==2 else 'left'
+    if d.rank==2:
+        a.set_title('LOCALE {}'.format(tmp_lid), size=fontsize,
+                    loc=title_loc)
 
     a.set_xlim(0.0, d.x.max());
     a.set_ylim(0., d.y.max());
