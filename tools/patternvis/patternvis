@@ -314,6 +314,9 @@ def gen_plot(a, locale_log, lid):
     img_shape = (d.x.min(), d.x.max(),
         d.y.min(), d.y.max())
 
+    tmp_lid = lid[0] if isinstance(lid, tuple) else lid
+    a.set_title('LOCALE {}'.format(tmp_lid), size=12)
+
     a.set_xlim(0.0, d.x.max());
     a.set_ylim(0., d.y.max());
 
@@ -328,8 +331,8 @@ def gen_plot(a, locale_log, lid):
     a.set_ylim(a.get_ylim()[::-1])
     a.set_xticks(d.get_ticks('x'))
     a.set_yticks(d.get_ticks('y'))
-    a.set_xticklabels(d.get_tick_labels('x'), fontsize=8)
-    a.set_yticklabels(d.get_tick_labels('y'), fontsize=8)
+    a.set_xticklabels(d.get_tick_labels('x'), fontsize=14)
+    a.set_yticklabels(d.get_tick_labels('y'), fontsize=14)
     a.grid(linestyle='dotted')
 
 def do_plot(metalog_handler, ll_handlers):
@@ -355,8 +358,11 @@ def do_plot(metalog_handler, ll_handlers):
     else:
         fig1, axes = plt.subplots(plot_dist[0], plot_dist[1])
         # TODO maybe change the order of the iterands
-        for llh,(idx,a) in zip(ll_handlers, np.ndenumerate(axes)):
+        for llh,(idx,a) in zip(ll_handlers,
+                               np.ndenumerate(axes.flatten())):
             gen_plot(a, llh, idx)
+        plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=-0.5)
+
 
     # plt.figsize=(8,8)
     # ax.set_aspect('equal', adjustable='box', anchor='C')
