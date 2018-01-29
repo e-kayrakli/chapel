@@ -82,9 +82,9 @@ class Display(object):
             for r in rs:
                 r.set_fill(False)
                 r.set_color('blue')
-                r.set_linewidth(2)
-                r.set_alpha(1)
-                r.set_hatch('///')
+                r.set_linewidth(5)
+                r.set_alpha(0.7)
+                # r.set_hatch('///')
                 yield r
 
 
@@ -315,8 +315,10 @@ def gen_plot(a, locale_log, lid):
     img_shape = (d.x.min(), d.x.max(),
         d.y.min(), d.y.max())
 
+    fontsize = 50 if only_locale != None else 12
+
     tmp_lid = lid[0] if isinstance(lid, tuple) else lid
-    a.set_title('LOCALE {}'.format(tmp_lid), size=12)
+    a.set_title('LOCALE {}'.format(tmp_lid), size=fontsize)
 
     a.set_xlim(0.0, d.x.max());
     a.set_ylim(0., d.y.max());
@@ -332,8 +334,8 @@ def gen_plot(a, locale_log, lid):
     a.set_ylim(a.get_ylim()[::-1])
     a.set_xticks(d.get_ticks('x'))
     a.set_yticks(d.get_ticks('y'))
-    a.set_xticklabels(d.get_tick_labels('x'), fontsize=14)
-    a.set_yticklabels(d.get_tick_labels('y'), fontsize=14)
+    a.set_xticklabels(d.get_tick_labels('x'), fontsize=fontsize)
+    a.set_yticklabels(d.get_tick_labels('y'), fontsize=fontsize)
     a.grid(linestyle='dotted')
 
 def do_plot(metalog_handler, ll_handlers):
