@@ -36,7 +36,7 @@ void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap,
   strcpy(buf->file_format, file_format);
   strcat(buf->file_format, ".lz4");
 
-  printf(buf->file_format, 0, 0);
+  /*printf(buf->file_format, 0, 0);*/
 
   init_compress_stats(&(buf->comp_stats));
 
