@@ -50,7 +50,7 @@ def create_plots(versions, plot_name_prefix):
     suffix = "_ss"
     filename = (plot_path + "/" +
         plot_name_prefix + suffix)
-    d_fig = plt.figure(figsize=(5,6))
+    d_fig = plt.figure(figsize=(5,4))
     d_ax = d_fig.add_axes(rect)
     max_y = 0
     for v in versions:
