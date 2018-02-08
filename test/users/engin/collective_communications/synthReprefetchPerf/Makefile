@@ -1,5 +1,6 @@
 FLAGS=--fast --cache-remote
 MISCFLAGS=
+PYFLAGS=
 
 MAIN=synthReprefetchPerf
 
@@ -23,4 +24,4 @@ plotlocal:
 runslurm:
 	python scripts/run.py --slurm RUN $(SIZE) $(NUMTRIES)
 plotslurm:
-	python scripts/run.py --slurm PLOT $(SIZE) $(NUMTRIES)
+	python scripts/run.py --slurm PLOT $(SIZE) $(NUMTRIES) $(PYFLAGS)

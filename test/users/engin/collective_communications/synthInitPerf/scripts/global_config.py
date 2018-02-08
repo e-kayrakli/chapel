@@ -4,11 +4,13 @@ plot_path = './'
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--slurm", action="store_true")
+parser.add_argument("--no_legend", action="store_true")
 parser.add_argument("mode", choices=['RUN', 'PLOT'])
 parser.add_argument("size")
 parser.add_argument("num_tries", type=int, default=5)
 
 args = parser.parse_args()
+no_legend = args.no_legend
 s=args.size
 control_s = int(s) # make sure its actually an int
 
