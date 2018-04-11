@@ -2,6 +2,22 @@ import re
 import itertools as it
 import numpy as np
 
+def init_log_handlers(meta_log_name, locale_log_prefix):
+    metalog_handler = MetaLog(meta_log_name)
+
+    target_loc_shape = metalog_handler.target_loc_shape
+    rank = len(target_loc_shape)
+    num_locs = 1
+    for t in target_loc_shape:
+        num_locs *= t
+
+    lls = []
+    for i in range(num_locs):
+        lls.append(LocaleLog(filename=locale_log_prefix+str(i),
+                             rank=metalog_handler.rank))
+
+    return (metalog_handler, lls)
+
 class chpl_range(object):
     def __init__(self, low, high, stride=1):
         self.low = low

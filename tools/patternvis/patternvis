@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import itertools as it
 from matplotlib.patches import Rectangle
-from log_parser import LocaleLog, MetaLog
+from log_parser import LocaleLog, MetaLog, init_log_handlers
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
@@ -23,6 +23,8 @@ only_locale = args.only_locale
 for_training = args.for_training
 no_local_subdomains = args.no_local_subdomains
 no_pwise_access = args.no_pwise_access
+
+# FIXME these filename-related variables should be refactored
 filename = args.filename
 dirname = args.basedir+'/'+filename
 meta_log_name= dirname+'/'+filename+'meta'
@@ -402,22 +404,6 @@ def do_plot(metalog_handler, ll_handlers):
     plt.margins(0,0)
     plt.show()
 
-def init_log_handlers():
-    metalog_handler = MetaLog(meta_log_name)
-
-    target_loc_shape = metalog_handler.target_loc_shape
-    rank = len(target_loc_shape)
-    num_locs = 1
-    for t in target_loc_shape:
-        num_locs *= t
-
-    lls = []
-    for i in range(num_locs):
-        lls.append(LocaleLog(filename=locale_log_prefix+str(i),
-                             rank=metalog_handler.rank))
-
-    return (metalog_handler, lls)
-
 def total_access(llhs):
     print('Total number of accesses')
     for (i, ll) in enumerate(llhs):
@@ -464,7 +450,7 @@ def access_bbox_efficiency(llhs):
         print('LOCALE{}\t\t{}'.format(i, ll.gen_access_bbox_efficiency()))
 
 def main():
-    mlh, llhs = init_log_handlers()
+    mlh, llhs = init_log_handlers(meta_log_name, locale_log_prefix)
     if for_training:
         training_data(llhs)
     else:
