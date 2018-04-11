@@ -10,6 +10,7 @@ from log_parser import LocaleLog, MetaLog
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('filename')
+arg_parser.add_argument('--basedir', default='__aal')
 arg_parser.add_argument('--only-locale', type=int)
 arg_parser.add_argument('--no-local-subdomains', action='store_true')
 arg_parser.add_argument('--no-pwise-access', action='store_true')
@@ -23,7 +24,7 @@ for_training = args.for_training
 no_local_subdomains = args.no_local_subdomains
 no_pwise_access = args.no_pwise_access
 filename = args.filename
-dirname = '__aal/'+filename
+dirname = args.basedir+'/'+filename
 meta_log_name= dirname+'/'+filename+'meta'
 locale_log_prefix = dirname+'/'+filename+'locale_'
 plot = args.plot

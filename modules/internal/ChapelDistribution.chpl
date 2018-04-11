@@ -24,6 +24,7 @@ module ChapelDistribution {
   use AccessLoggers;
 
   config const smartLog = true;
+  config const accessLogBaseDir = "__aal";
 
   extern proc chpl_task_yield();
 
@@ -658,7 +659,7 @@ module ChapelDistribution {
       use FileSystem;
       var accessLogDir = "";
       try {
-        accessLogDir = "__aal/"+fileName;
+        accessLogDir = accessLogBaseDir+"/"+fileName;
         mkdir(accessLogDir, parents=true);
       }
       catch {
