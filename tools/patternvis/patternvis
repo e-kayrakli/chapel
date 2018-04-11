@@ -15,9 +15,11 @@ arg_parser.add_argument('--no-local-subdomains', action='store_true')
 arg_parser.add_argument('--no-pwise-access', action='store_true')
 arg_parser.add_argument('--plot', action='store_true')
 arg_parser.add_argument('--no-analysis', action='store_true')
+arg_parser.add_argument('--for-training', action='store_true')
 
 args = arg_parser.parse_args()
 only_locale = args.only_locale
+for_training = args.for_training
 no_local_subdomains = args.no_local_subdomains
 no_pwise_access = args.no_pwise_access
 filename = args.filename
@@ -430,6 +432,13 @@ def access_bbox(llhs):
     for (i, ll) in enumerate(llhs):
         print('LOCALE{}\t\t{}'.format(i, ll.gen_access_bbox()))
 
+def training_data(llhs):
+    print('Training data test')
+    for (i, ll) in enumerate(llhs):
+        print((*ll.gen_access_bbox().tuple_for_training(),
+                             *ll.whole.tuple_for_training()))
+
+
 def pairwise_access_bbox(llhs):
     print('Pairwise access box')
     for (i, ll) in enumerate(llhs):
@@ -456,16 +465,19 @@ def access_bbox_efficiency(llhs):
 
 def main():
     mlh, llhs = init_log_handlers()
-    if analysis:
-        access_bbox(llhs)
-        access_bbox_efficiency(llhs)
-        access_mem_ratio(llhs)
-        rar(llhs)
-        pairwise_access_bbox(llhs)
-        # pwise_access_efficiency(llhs)
-        total_access(llhs)
-    if plot:
-        do_plot(mlh, llhs)
+    if for_training:
+        training_data(llhs)
+    else:
+        if analysis:
+            access_bbox(llhs)
+            access_bbox_efficiency(llhs)
+            access_mem_ratio(llhs)
+            rar(llhs)
+            pairwise_access_bbox(llhs)
+            # pwise_access_efficiency(llhs)
+            total_access(llhs)
+        if plot:
+            do_plot(mlh, llhs)
 
 if __name__=="__main__":
     main()

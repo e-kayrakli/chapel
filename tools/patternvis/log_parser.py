@@ -80,6 +80,11 @@ class chpl_domain(object):
                                   # self.ranges[1]):
                 # yield (i,j)
 
+    def tuple_for_training(self):
+        return tuple(it.chain.from_iterable(
+                        (r.low, r.high) for r in self.ranges)
+                    )
+
     def is_positive(self):
         for r in self.ranges:
             if r.low < 0 or r.high < 0:
