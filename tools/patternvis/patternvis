@@ -438,7 +438,6 @@ def training_data(llhs):
         print((*ll.gen_access_bbox().tuple_for_training(),
                              *ll.whole.tuple_for_training()))
 
-
 def pairwise_access_bbox(llhs):
     print('Pairwise access box')
     for (i, ll) in enumerate(llhs):
