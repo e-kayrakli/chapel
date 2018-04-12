@@ -105,6 +105,9 @@ void append_index(log_buffer_t *lbuf, ...) {
   /*printf("Appending %d\n", index[0]);*/
 
   byte_buffer_t *my_buf = &lbuf->bufs[my_buf_idx];
+#ifdef APAT_NO_ENCODE
+  append_bytes(my_buf, (char *)(&(index[0])), sizeof(index));
+#else
   char *my_sp = lbuf->scratch_pads[my_buf_idx];
 
   // create the scratch pad from reverse
@@ -124,6 +127,7 @@ void append_index(log_buffer_t *lbuf, ...) {
   size_t digits = (SCRATCH_PAD_SIZE-1)-my_sp_off;
 
   append_bytes(my_buf, &my_sp[my_sp_off+1], digits);
+#endif
 
   // release the buffer -- unlock the mutex
   pthread_mutex_unlock(&(lbuf->locks[my_buf_idx]));
