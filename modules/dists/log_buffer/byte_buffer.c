@@ -31,7 +31,7 @@ void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap,
 
   buf->file_count = 0;
 
-  buf->file_format = calloc(strlen(file_format)+4, sizeof(char)); //.lz4
+  buf->file_format = calloc(strlen(file_format)+5, sizeof(char)); //.lz4
 
   strcpy(buf->file_format, file_format);
   strcat(buf->file_format, ".lz4");

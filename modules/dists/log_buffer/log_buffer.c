@@ -18,7 +18,7 @@ void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
   // build the file format string first so that it can be passed to
   // individual byte buffers
   const size_t prefix_len = strlen(file_prefix);
-  const size_t full_len = prefix_len + 32; // prolly too conservative
+  const size_t full_len = prefix_len + 64; // prolly too conservative
   lbuf->file_format = calloc(full_len, sizeof(char));
   strcpy(lbuf->file_format, file_prefix);
   strcat(lbuf->file_format, "_buf%d_dump%d");
