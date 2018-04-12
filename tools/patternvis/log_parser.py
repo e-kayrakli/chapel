@@ -96,6 +96,10 @@ class chpl_domain(object):
                                   # self.ranges[1]):
                 # yield (i,j)
 
+    def transpose(self):
+        assert self.rank == 2
+        return chpl_domain([self.ranges[1], self.ranges[0]])
+
     def tuple_for_training(self):
         return tuple(it.chain.from_iterable(
                         (r.low, r.high) for r in self.ranges)
@@ -409,7 +413,7 @@ class LocaleLog(object):
 
         return float(num_rem)/self.get_num_loc_idxs()
 
-    def gen_access_bbox(self):
+    def gen_access_bbox(self, try_transpose=False):
         acc_bbox = chpl_domain([chpl_range(-1,-1)
                                 for r in range(self.rank)])
 
@@ -419,7 +423,10 @@ class LocaleLog(object):
 
         self.acc_bbox = acc_bbox
 
-        return acc_bbox
+        if try_transpose and acc_bbox.rank==2:
+            return acc_bbox.transpose()
+        else:
+            return acc_bbox
 
     def gen_access_bbox_efficiency(self):
         bbox = self.acc_bbox
