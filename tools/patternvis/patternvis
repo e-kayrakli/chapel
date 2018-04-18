@@ -3,9 +3,7 @@ import sys
 import argparse
 import math
 import numpy as np
-import matplotlib.pyplot as plt
 import itertools as it
-from matplotlib.patches import Rectangle
 from log_parser import LocaleLog, MetaLog, init_log_handlers
 
 arg_parser = argparse.ArgumentParser()
@@ -23,6 +21,10 @@ only_locale = args.only_locale
 for_training = args.for_training
 no_local_subdomains = args.no_local_subdomains
 no_pwise_access = args.no_pwise_access
+
+if not for_training:
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
 
 # FIXME these filename-related variables should be refactored
 filename = args.filename
