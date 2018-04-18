@@ -2,7 +2,6 @@
 import sys
 import argparse
 import math
-import numpy as np
 import itertools as it
 from log_parser import LocaleLog, MetaLog, init_log_handlers
 
@@ -26,6 +25,8 @@ no_numpy = args.no_numpy
 
 if no_numpy:
     assert for_training
+else:
+    import numpy as np
 
 if not for_training:
     import matplotlib.pyplot as plt

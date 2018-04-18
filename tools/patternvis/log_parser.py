@@ -1,6 +1,5 @@
 import re
 import itertools as it
-import numpy as np
 
 # simple wrapper around numpy or python multid arrays/lists
 class AccessMat(object):
@@ -69,11 +68,15 @@ class AccessMat(object):
                                  self.__mat):
                 yield idx, item
         else:
-            for idx, item in np.enumerate(self.__mat):
+            import numpy as np
+            for idx, item in np.ndenumerate(self.__mat):
                 yield idx, item
 
 
 def init_log_handlers(meta_log_name, locale_log_prefix, no_numpy):
+    if not no_numpy:
+        import numpy as np
+
     metalog_handler = MetaLog(meta_log_name)
 
     target_loc_shape = metalog_handler.target_loc_shape
