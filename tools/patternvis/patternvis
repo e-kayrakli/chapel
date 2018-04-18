@@ -15,12 +15,17 @@ arg_parser.add_argument('--no-pwise-access', action='store_true')
 arg_parser.add_argument('--plot', action='store_true')
 arg_parser.add_argument('--no-analysis', action='store_true')
 arg_parser.add_argument('--for-training', action='store_true')
+arg_parser.add_argument('--no-numpy', action='store_true')
 
 args = arg_parser.parse_args()
 only_locale = args.only_locale
 for_training = args.for_training
 no_local_subdomains = args.no_local_subdomains
 no_pwise_access = args.no_pwise_access
+no_numpy = args.no_numpy
+
+if no_numpy:
+    assert for_training
 
 if not for_training:
     import matplotlib.pyplot as plt
@@ -452,7 +457,8 @@ def access_bbox_efficiency(llhs):
         print('LOCALE{}\t\t{}'.format(i, ll.gen_access_bbox_efficiency()))
 
 def main():
-    mlh, llhs = init_log_handlers(meta_log_name, locale_log_prefix)
+    mlh, llhs = init_log_handlers(meta_log_name, locale_log_prefix,
+                                  no_numpy)
     if for_training:
         training_data(llhs)
     else:

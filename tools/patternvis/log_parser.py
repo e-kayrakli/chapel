@@ -2,7 +2,78 @@ import re
 import itertools as it
 import numpy as np
 
-def init_log_handlers(meta_log_name, locale_log_prefix):
+# simple wrapper around numpy or python multid arrays/lists
+class AccessMat(object):
+
+    def __init__(self, shape, no_numpy):
+        self.shape = shape
+        self.ndims = len(shape)
+
+        self.no_numpy = no_numpy
+
+        if self.no_numpy:
+            if self.ndims == 1:
+                self.__mat = [0 for i in range(self.shape[0])]
+            elif self.ndims == 2:
+                self.__mat = [0 for i in range(self.shape[0]) for j in
+                        range(self.shape[1])]
+            else:
+                print(self.ndims, ' dimensional arrays are only supported via numpy')
+                assert False
+        else:
+            import numpy as np
+            self.__mat = np.zeros(self.shape)
+
+    def __getitem__(self, idx):
+
+        if self.no_numpy:
+            if isinstance(idx, int):
+                assert self.ndims == 1
+
+                return self.__mat[idx]
+            elif isinstance(idx, tuple):
+                assert len(idx) == self.ndims
+
+                if self.ndims == 1:
+                    return self.__mat[idx[0]]
+                else:  # must be 2
+                    assert self.ndims == 2
+
+                    return self.__mat[idx[0]*self.shape[1]+idx[1]]
+        else:
+            return self.__mat[idx]
+
+    def __setitem__(self, idx, value):
+
+        if self.no_numpy:
+            if isinstance(idx, int):
+                assert self.ndims == 1
+
+                self.__mat[idx] = value
+            elif isinstance(idx, tuple):
+                assert len(idx) == self.ndims
+
+                if self.ndims == 1:
+                    self.__mat[idx[0]] = value
+                else:  # must be 2
+                    assert self.ndims == 2
+
+                    self.__mat[idx[0]*self.shape[1]+idx[1]] = value
+        else:
+            self.__mat[idx] = value
+
+    def enum(self):
+        if self.no_numpy:
+            for idx, item in zip(it.product(range(self.shape[0]),
+                                            range(self.shape[1])),
+                                 self.__mat):
+                yield idx, item
+        else:
+            for idx, item in np.enumerate(self.__mat):
+                yield idx, item
+
+
+def init_log_handlers(meta_log_name, locale_log_prefix, no_numpy):
     metalog_handler = MetaLog(meta_log_name)
 
     target_loc_shape = metalog_handler.target_loc_shape
@@ -14,7 +85,8 @@ def init_log_handlers(meta_log_name, locale_log_prefix):
     lls = []
     for i in range(num_locs):
         lls.append(LocaleLog(filename=locale_log_prefix+str(i),
-                             rank=metalog_handler.rank))
+                             rank=metalog_handler.rank,
+                             no_numpy=no_numpy))
 
     return (metalog_handler, lls)
 
@@ -322,9 +394,11 @@ class MetaLog(object):
 class LocaleLog(object):
 
     # TODO rank needs to go
-    def __init__(self, filename, rank, debug=False):
+    def __init__(self, filename, rank, no_numpy, debug=False):
 
         self.__lh = LogHandler(rank)
+
+        self.no_numpy = no_numpy
 
         with open(filename+'_meta') as f:
             whole = self.__lh.get_dom(f.readline())
@@ -348,7 +422,8 @@ class LocaleLog(object):
 
             offsets = [r.low for r in whole.ranges]
             access_mat_shape = whole.shape()
-            access_mat = np.zeros(access_mat_shape)
+            # access_mat = np.zeros(access_mat_shape)
+            access_mat = AccessMat(access_mat_shape, self.no_numpy)
 
         # read compressed indices
         if debug:
@@ -376,9 +451,11 @@ class LocaleLog(object):
         self.max_access = max_access
 
     def gen_total_access(self):
+        assert not self.no_numpy
         return int(sum([c for _,c in np.ndenumerate(self.access_mat)]))
 
     def gen_rar(self):
+        assert not self.no_numpy
         num_loc = 0
         num_rem = 0
         for idx,acc_cnt in np.ndenumerate(self.access_mat):
@@ -398,6 +475,7 @@ class LocaleLog(object):
         return sum([d.size() for d in self.subdoms])
 
     def gen_access_mem_ratio(self):
+        assert not self.no_numpy
         num_rem = 0
         for idx,acc_cnt in np.ndenumerate(self.access_mat):
             if acc_cnt == 0:
@@ -417,7 +495,8 @@ class LocaleLog(object):
         acc_bbox = chpl_domain([chpl_range(-1,-1)
                                 for r in range(self.rank)])
 
-        for idx,acc_cnt in np.ndenumerate(self.access_mat):
+        # for idx,acc_cnt in np.ndenumerate(self.access_mat):
+        for idx,acc_cnt in self.access_mat.enum():
             if acc_cnt > 0:
                 acc_bbox = acc_bbox.bbox_expansion(idx)
 
@@ -429,6 +508,7 @@ class LocaleLog(object):
             return acc_bbox
 
     def gen_access_bbox_efficiency(self):
+        assert not self.no_numpy
         bbox = self.acc_bbox
 
         accessed = 0
@@ -439,6 +519,8 @@ class LocaleLog(object):
         return float(accessed)/bbox.size()
 
     def gen_pairwise_access_bbox(self, llhs):
+        assert not self.no_numpy
+
         self.pwise_bboxes = []
         for ll in llhs:
             acc_bbox = chpl_domain([chpl_range(-1,-1)
@@ -455,6 +537,8 @@ class LocaleLog(object):
         return self.pwise_bboxes
 
     def gen_pwise_access_efficiency(self, llhs):
+        assert not self.no_numpy
+
         pwae = []
 
         num_contained = 0.
@@ -485,4 +569,5 @@ class LocaleLog(object):
         return pwae
                     
     def print_access_mat(self, mat):
+        assert not self.no_numpy
         print(self.access_mat)
