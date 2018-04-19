@@ -433,7 +433,7 @@ def training_data(llhs):
     for (i, ll) in enumerate(llhs):
         assert len(ll.subdoms) == 1
         print((*ll.subdoms[0].tuple_for_training(),
-                             *ll.whole.tuple_for_training()),
+               *ll.whole.tuple_for_training()), ':',
                ll.gen_access_bbox(try_transpose=True).tuple_for_training())
 
 def pairwise_access_bbox(llhs):
