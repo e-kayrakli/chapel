@@ -428,10 +428,13 @@ def access_bbox(llhs):
         print('LOCALE{}\t\t{}'.format(i, ll.gen_access_bbox()))
 
 def training_data(llhs):
-    print('Training data test')
+    # print('Training data test')
+
     for (i, ll) in enumerate(llhs):
-        print((*ll.gen_access_bbox().tuple_for_training(),
-                             *ll.whole.tuple_for_training()))
+        assert len(ll.subdoms) == 1
+        print((*ll.subdoms[0].tuple_for_training(),
+                             *ll.whole.tuple_for_training()),
+               ll.gen_access_bbox(try_transpose=True).tuple_for_training())
 
 def pairwise_access_bbox(llhs):
     print('Pairwise access box')
