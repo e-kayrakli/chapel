@@ -88,6 +88,74 @@ proc BlockArr.customPrefetch(consistent=true, descTable,
   }
 }
 
+proc getPred(locdom, whole) {
+  use Spawn;
+  proc domToTup(dom) {
+    var retval: 2*dom.rank*int;
+    var counter = 0;
+    for r in dom.dims() {
+      retval[2*counter+1] = r.low;
+      retval[2*counter+2] = r.high;
+      counter += 1;
+    }
+    return retval;
+  }
+
+  var locdomRepr = domToTup(locdom):string;
+  var wholeRepr = domToTup(whole):string;
+
+  var sub = spawn(["python", "/home/ngnk/code/nn_for_lapps/predict.py",
+                   locdomRepr,
+                   wholeRepr,
+                   "--pred-only"],
+                   stderr=PIPE, stdout=PIPE);
+
+  var ranges: locdom.rank*range;
+
+  var dim = 1;
+  while true {
+    var line:string;
+    if !sub.stdout.readline(line) then
+      break;
+    var lo = line:int;
+    sub.stdout.readline(line);
+    var hi = line:int;
+    ranges[dim] = lo..hi;
+    dim += 1;
+  }
+
+  sub.wait();
+
+  return {(...ranges)};
+}
+
+proc BlockArr.autoPrefetch(consistent=true, staticDomain=false) {
+  coforall l in Locales do on l {
+    var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+    const localeIdx = locIdxFromId(l.id);
+    const accDom = getPred(dsiLocalSubdomain(), this.dom.whole);
+    for sourceId in 0..#numLocales {
+      const sourceIdx = locIdxFromId(sourceId);
+      const toPrefetch =
+        accDom[privCopy.locArr[sourceIdx].locDom.myBlock];
+
+      writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);
+
+      __prefetchFrom(localeIdx, sourceIdx, toPrefetch, consistent,
+          staticDomain);
+    }
+  }
+
+  proc locIdxFromId(id) {
+    for (i,l) in zip(dom.dist.targetLocDom, dom.dist.targetLocales) do
+      if l.id == id then
+        return chpl__tuplify(i);
+
+    var dummy: rank*int;
+    return dummy;
+  }
+}
+
 // number of locales must be square
 proc BlockArr.transposePrefetch(consistent=true, staticDomain=false) {
 
