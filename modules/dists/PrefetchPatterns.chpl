@@ -1,6 +1,9 @@
 use BlockDist;
 use BlockCycDist;
 
+config const predictorScriptPath =
+          "/home/ngnk/code/nn_for_lapps/predict.py";
+
 inline proc BlockArr.updatePrefetch() {
   coforall localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
@@ -104,7 +107,7 @@ proc getPred(locdom, whole) {
   var locdomRepr = domToTup(locdom):string;
   var wholeRepr = domToTup(whole):string;
 
-  var sub = spawn(["python", "/home/ngnk/code/nn_for_lapps/predict.py",
+  var sub = spawn(["python", predictorScriptPath,
                    locdomRepr,
                    wholeRepr,
                    "--pred-only"],
