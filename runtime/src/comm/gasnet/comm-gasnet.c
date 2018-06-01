@@ -1179,8 +1179,8 @@ void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
     }
 
     if (chpl_verbose_comm && !chpl_comm_no_debug_private)
-      printf("%d: %s:%d: remote get from %d\n", chpl_nodeID,
-             chpl_lookupFilename(fn), ln, node);
+      printf("%d: %s:%d: remote get from %d of size %ld\n", chpl_nodeID,
+             chpl_lookupFilename(fn), ln, node, size);
     if (chpl_comm_diagnostics && !chpl_comm_no_debug_private) {
       chpl_sync_lock(&chpl_comm_diagnostics_sync);
       chpl_comm_commDiagnostics.get++;
