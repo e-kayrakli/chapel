@@ -3,6 +3,7 @@ use BlockCycDist;
 
 config const predictorScriptPath =
           "/home/ngnk/code/nn_for_lapps/predict.py";
+config const predictorModelPath = "";
 
 inline proc BlockArr.updatePrefetch() {
   coforall localeIdx in dom.dist.targetLocDom {
@@ -108,6 +109,7 @@ proc getPred(locdom, whole) {
   var wholeRepr = domToTup(whole):string;
 
   var sub = spawn(["python", predictorScriptPath,
+                   predictorModelPath,
                    locdomRepr,
                    wholeRepr,
                    "--pred-only"],
