@@ -105,16 +105,23 @@ proc getPred(locdom, whole) {
     return retval;
   }
 
+  /*writeln(here, " locdom ", locdom);*/
+  /*writeln(here, " whole ", whole);*/
+
   var locdomRepr = domToTup(locdom):string;
   var wholeRepr = domToTup(whole):string;
 
+  /*writeln(here, " locdomRepr ", locdomRepr);*/
+  /*writeln(here, " wholeRepr ", wholeRepr);*/
   var sub = spawn(["python", predictorScriptPath,
                    predictorModelPath,
                    locdomRepr,
                    wholeRepr,
                    "--pred-only"],
-                   stderr=PIPE, stdout=PIPE);
+                   stderr=PIPE,
+                   stdout=PIPE);
 
+  /*writeln(sub.stderr);*/
   var ranges: locdom.rank*range;
 
   var dim = 1;
@@ -122,8 +129,10 @@ proc getPred(locdom, whole) {
     var line:string;
     if !sub.stdout.readline(line) then
       break;
+    /*writeln("From predictor: ", line);*/
     var lo = line:int;
     sub.stdout.readline(line);
+    /*writeln("From predictor: ", line);*/
     var hi = line:int;
     ranges[dim] = lo..hi;
     dim += 1;
@@ -138,7 +147,7 @@ proc BlockArr.autoPrefetch(consistent=true, staticDomain=false) {
   coforall l in Locales do on l {
     var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
     const localeIdx = locIdxFromId(l.id);
-    const accDom = getPred(dsiLocalSubdomain(), this.dom.whole);
+    const accDom = getPred(dom.dsiLocalSubdomain(), this.dom.whole);
     for sourceId in 0..#numLocales {
       const sourceIdx = locIdxFromId(sourceId);
       const toPrefetch =

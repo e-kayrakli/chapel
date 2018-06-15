@@ -2807,8 +2807,8 @@ void chpl_cache_comm_put(void* addr, c_nodeid_t node, void* raddr,
                chpl_nodeID, (int)chpl_task_getId(), chpl_lookupFilename(fn), ln,
                (int)size, node, raddr, addr));
   if (chpl_verbose_comm)
-    printf("%d: %s:%d: remote get from %d\n", chpl_nodeID,
-           chpl_lookupFilename(fn), ln, node);
+    printf("%d: %s:%d: remote get from %d of size %ld\n", chpl_nodeID,
+           chpl_lookupFilename(fn), ln, node, size);
 
 #ifdef DUMP
   chpl_cache_print();
@@ -2833,8 +2833,8 @@ void chpl_cache_comm_get(void *addr, c_nodeid_t node, void* raddr,
                chpl_nodeID, (int)chpl_task_getId(), chpl_lookupFilename(fn), ln,
                (int)size, node, raddr, addr));
   if (chpl_verbose_comm)
-    printf("%d: %s:%d: remote put to (chpl_cache_comm_get) %d %p\n", 
-        chpl_nodeID, chpl_lookupFilename(fn), ln, node, raddr);
+    printf("%d: %s:%d: remote put to (chpl_cache_comm_get) %d %p of size %ld\n", 
+        chpl_nodeID, chpl_lookupFilename(fn), ln, node, raddr, size);
 
 #ifdef DUMP
   chpl_cache_print();
