@@ -118,7 +118,7 @@ proc getPred(locdom, whole) {
                    locdomRepr,
                    wholeRepr,
                    "--pred-only"],
-                   stderr=PIPE,
+                   /*stderr=PIPE,*/
                    stdout=PIPE);
 
   /*writeln(sub.stderr);*/
@@ -144,10 +144,25 @@ proc getPred(locdom, whole) {
 }
 
 proc BlockArr.autoPrefetch(consistent=true, staticDomain=false) {
+  var accDoms: [Locales.domain] domain(this.rank);
+
+  // 1. this is very centralized and likely unscalable. In the future,
+  //    when tinydnn or a similar library is used, this needs to be done
+  //    in a decentralized way
+  // 2. Internally, the predict script predicts only for a single data
+  //    point. If we are moving forward in this direction, then the data
+  //    can be passed to predict in one go significantly reducing the
+  //    initialization time of keras.
+  for l in Locales {
+    const locId = l.id;
+    const locIdx = locIdxFromId(locId);
+    accDoms[locId] = getPred(dom.locDoms[locIdx].myBlock,
+                             this.dom.whole);
+  }
   coforall l in Locales do on l {
     var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
     const localeIdx = locIdxFromId(l.id);
-    const accDom = getPred(dom.dsiLocalSubdomain(), this.dom.whole);
+    const accDom = accDoms[l.id];
     for sourceId in 0..#numLocales {
       const sourceIdx = locIdxFromId(sourceId);
       const toPrefetch =
