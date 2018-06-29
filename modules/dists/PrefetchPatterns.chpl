@@ -50,6 +50,7 @@ inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
     consistent, staticDomain=false) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
+  writeln(here, " prefetch from LOCALE", sourceIdx, " the slice ", sliceDesc);
   locArr[localeIdx].prefetchHook.requestPrefetch( sourceIdx,
       privCopy.locArr[sourceIdx], sliceDesc,
       locArr[sourceIdx].locDom.myBlock, consistent, staticDomain);
@@ -117,28 +118,33 @@ proc getPred(locdom, whole) {
                    predictorModelPath,
                    locdomRepr,
                    wholeRepr,
+                   "--write-to-file",
                    "--pred-only"],
-                   /*stderr=PIPE,*/
-                   stdout=PIPE);
+                   stderr=FORWARD,
+                   stdout=FORWARD);
 
+  sub.wait();
   /*writeln(sub.stderr);*/
   var ranges: locdom.rank*range;
 
+  var predFile = open("prediction", iomode.r);
+  var predFileChannel = predFile.reader();
   var dim = 1;
   while true {
-    var line:string;
-    if !sub.stdout.readline(line) then
+
+    /*var line:string;*/
+    var x: int;
+    if !predFileChannel.read(x) then
       break;
     /*writeln("From predictor: ", line);*/
-    var lo = line:int;
-    sub.stdout.readline(line);
+    var lo = x;
+    predFileChannel.read(x);
     /*writeln("From predictor: ", line);*/
-    var hi = line:int;
+    var hi = x;
     ranges[dim] = lo..hi;
     dim += 1;
   }
 
-  sub.wait();
 
   return {(...ranges)};
 }
