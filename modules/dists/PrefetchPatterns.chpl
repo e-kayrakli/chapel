@@ -50,7 +50,7 @@ inline proc SparseBlockArr.__prefetchFrom(localeIdx, sourceIdx,
 inline proc BlockArr.__prefetchFrom(localeIdx, sourceIdx, sliceDesc,
     consistent, staticDomain=false) {
   var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
-  writeln(here, " prefetch from LOCALE", sourceIdx, " the slice ", sliceDesc);
+  /*writeln(here, " prefetch from LOCALE", sourceIdx, " the slice ", sliceDesc);*/
   locArr[localeIdx].prefetchHook.requestPrefetch( sourceIdx,
       privCopy.locArr[sourceIdx], sliceDesc,
       locArr[sourceIdx].locDom.myBlock, consistent, staticDomain);
