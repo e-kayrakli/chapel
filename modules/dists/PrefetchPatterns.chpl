@@ -4,6 +4,7 @@ use BlockCycDist;
 config const predictorScriptPath =
           "/home/ngnk/code/nn_for_lapps/predict.py";
 config const predictorModelPath = "";
+config const tinyDNN = true;
 
 inline proc BlockArr.updatePrefetch() {
   coforall localeIdx in dom.dist.targetLocDom {
@@ -106,25 +107,52 @@ proc getPred(locdom, whole) {
     return retval;
   }
 
+  proc domToTinyDNNString(dom) {
+    var retval = "";
+    for r in dom.dims() {
+      retval += r.low;
+      retval += " ";
+      retval += r.high;
+      retval += " ";
+    }
+
+    return retval.strip();
+  }
+
   /*writeln(here, " locdom ", locdom);*/
   /*writeln(here, " whole ", whole);*/
 
-  var locdomRepr = domToTup(locdom):string;
-  var wholeRepr = domToTup(whole):string;
+  var locdomRepr : string;
+  var wholeRepr : string;
 
-  /*writeln(here, " locdomRepr ", locdomRepr);*/
-  /*writeln(here, " wholeRepr ", wholeRepr);*/
-  var sub = spawn(["python", predictorScriptPath,
-                   predictorModelPath,
-                   locdomRepr,
-                   wholeRepr,
-                   "--write-to-file",
-                   "--pred-only"],
-                   stderr=FORWARD,
-                   stdout=FORWARD);
+  var trainCmdList = new list(string);
 
+  if tinyDNN {
+    locdomRepr = domToTinyDNNString(locdom):string + " ";
+    wholeRepr = domToTinyDNNString(whole):string;
+    trainCmdList.append("/home/ngnk/code/test-tiny-dnn/bin/predict",
+                         locdomRepr,
+                         wholeRepr);
+  }
+  else {
+    locdomRepr = domToTup(locdom):string;
+    wholeRepr = domToTup(whole):string;
+    trainCmdList.append("python", predictorScriptPath,
+                        predictorModelPath,
+                        locdomRepr,
+                        wholeRepr,
+                        "--write-to-file",
+                        "--pred-only");
+  }
+
+  var trainCmd: [{0..#trainCmdList.size}] trainCmdList.eltType;
+
+  for (c,l) in zip(trainCmd, trainCmdList) {
+    c = l;
+  }
+
+  var sub = spawn(trainCmd, stdout=FORWARD, stderr=FORWARD);
   sub.wait();
-  /*writeln(sub.stderr);*/
   var ranges: locdom.rank*range;
 
   var predFile = open("prediction", iomode.r);
@@ -174,7 +202,7 @@ proc BlockArr.autoPrefetch(consistent=true, staticDomain=false) {
       const toPrefetch =
         accDom[privCopy.locArr[sourceIdx].locDom.myBlock];
 
-      /*writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);*/
+      writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);
 
       __prefetchFrom(localeIdx, sourceIdx, toPrefetch, consistent,
           staticDomain);
