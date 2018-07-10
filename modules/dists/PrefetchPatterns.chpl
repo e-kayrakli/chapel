@@ -5,6 +5,9 @@ config const predictorScriptPath =
           "/home/ngnk/code/nn_for_lapps/predict.py";
 config const predictorModelPath = "";
 config const tinyDNN = true;
+config const tinyDNNPredictorPath = 
+          "/home/ngnk/code/test-tiny-dnn/bin/predict";
+config const tinyDNNModelPath = "";
 
 inline proc BlockArr.updatePrefetch() {
   coforall localeIdx in dom.dist.targetLocDom {
@@ -130,9 +133,10 @@ proc getPred(locdom, whole) {
   if tinyDNN {
     locdomRepr = domToTinyDNNString(locdom):string + " ";
     wholeRepr = domToTinyDNNString(whole):string;
-    trainCmdList.append("/home/ngnk/code/test-tiny-dnn/bin/predict",
-                         locdomRepr,
-                         wholeRepr);
+    trainCmdList.append("/home/ngnk/code/test-tiny-dnn/bin/predict " +
+                        "$(/home/ngnk/code/test-tiny-dnn/unpack.sh "+ tinyDNNModelPath + ") " +
+                        "\"" + locdomRepr + "\" "+
+                        "\"" + wholeRepr + "\"");
   }
   else {
     locdomRepr = domToTup(locdom):string;
@@ -151,8 +155,15 @@ proc getPred(locdom, whole) {
     c = l;
   }
 
-  var sub = spawn(trainCmd, stdout=FORWARD, stderr=FORWARD);
+  var sub = if tinyDNN then
+              spawnshell(trainCmd[0], stdout=FORWARD, stderr=FORWARD)
+            else
+              spawn(trainCmd, stdout=FORWARD, stderr=FORWARD);
+
   sub.wait();
+  if sub.exit_status != 0 then
+    halt("There was an error running ", trainCmd);
+
   var ranges: locdom.rank*range;
 
   var predFile = open("prediction", iomode.r);
