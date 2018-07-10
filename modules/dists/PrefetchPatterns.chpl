@@ -202,7 +202,7 @@ proc BlockArr.autoPrefetch(consistent=true, staticDomain=false) {
       const toPrefetch =
         accDom[privCopy.locArr[sourceIdx].locDom.myBlock];
 
-      writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);
+      /*writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);*/
 
       __prefetchFrom(localeIdx, sourceIdx, toPrefetch, consistent,
           staticDomain);
