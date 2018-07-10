@@ -94,17 +94,29 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
   /*var high = getElementArrayAtOffset(data, getSize(rank,idxType), */
       /*idxType);*/
 
+  //idx is a tuple, metadata is a c array
   const elemCount =
     if rank == 1 then
-      /*idx[1]-low[1]*/
-      idx[1]-metadata[0]
+      if idx[1] >= metadata[0]+metadata[1] then
+        -1
+      else if idx[1] < metadata[0] then
+        -1
+      else
+        idx[1]-metadata[0]
     else if rank == 2 then
-      /*(idx[1]-low[1])*(size[2])+(idx[2]-low[2]);*/
-      (idx[1]-metadata[0])*(metadata[3])+(idx[2]-metadata[1])
+      if idx[1] >= metadata[0]+metadata[2] || idx[2] >= metadata[1]+metadata[3] then
+        -1
+      else if idx[1] < metadata[0] || idx[2] < metadata[1] then
+        -1
+      else
+        (idx[1]-metadata[0])*(metadata[3])+(idx[2]-metadata[1])
     else
       (idx[3]-metadata[2]) +
       (idx[2]-metadata[1])*metadata[5]+
       (idx[1]-metadata[0])*metadata[5]*metadata[4];
+
+  if rank == 3 then
+    compilerError("Not ready to autoPrefetch where rank==3");
 
   // TODO TODO TODO
   /*if elemCount < 0 then return -1:size_t;*/
