@@ -5,8 +5,7 @@ config const predictorScriptPath =
           "/home/ngnk/code/nn_for_lapps/predict.py";
 config const predictorModelPath = "";
 config const tinyDNN = true;
-config const tinyDNNPredictorPath = 
-          "/home/ngnk/code/test-tiny-dnn/bin/predict";
+config const tinyDNNPath = "/home/ngnk/code/test-tiny-dnn/";
 config const tinyDNNModelPath = "";
 
 inline proc BlockArr.updatePrefetch() {
@@ -133,8 +132,8 @@ proc getPred(locdom, whole) {
   if tinyDNN {
     locdomRepr = domToTinyDNNString(locdom):string + " ";
     wholeRepr = domToTinyDNNString(whole):string;
-    trainCmdList.append("/home/ngnk/code/test-tiny-dnn/bin/predict " +
-                        "$(/home/ngnk/code/test-tiny-dnn/unpack.sh "+ tinyDNNModelPath + ") " +
+    trainCmdList.append(tinyDNNPath + "/bin/predict " +
+                        "$(" + tinyDNNPath + "/unpack.sh "+ tinyDNNModelPath + ") " +
                         "\"" + locdomRepr + "\" "+
                         "\"" + wholeRepr + "\"");
   }
