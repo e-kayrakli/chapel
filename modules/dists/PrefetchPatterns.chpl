@@ -1,12 +1,19 @@
 use BlockDist;
 use BlockCycDist;
 
-config const predictorScriptPath =
-          "/home/ngnk/code/nn_for_lapps/predict.py";
-config const predictorModelPath = "";
+// for checking whether paths are correct
+use FileSystem;
+
+/*config const predictorScriptPath =*/
+          /*"/home/ngnk/code/nn_for_lapps/predict.py";*/
+/*config const predictorModelPath = "";*/
+/*config const tinyDNNPath = "/home/ngnk/code/test-tiny-dnn/";*/
+/*config const tinyDNNModelPath = "";*/
+
 config const tinyDNN = true;
-config const tinyDNNPath = "/home/ngnk/code/test-tiny-dnn/";
-config const tinyDNNModelPath = "";
+config const autoPrefetchPredictorPath = "";
+config const autoPrefetchUnpackerPath = "";
+config const autoPrefetchModelPath = "";
 
 inline proc BlockArr.updatePrefetch() {
   coforall localeIdx in dom.dist.targetLocDom {
@@ -129,19 +136,35 @@ proc getPred(locdom, whole) {
 
   var trainCmdList = new list(string);
 
+  if autoPrefetchPredictorPath == "" then
+    halt("autoPrefetchPredictorPath cannot be empty");
+  if autoPrefetchModelPath == "" then
+    halt("autoPrefetchPredictorPath cannot be empty");
+  if !exists(autoPrefetchPredictorPath) then
+    halt("autoPrefetchPredictorPath invalid");
+  if !exists(autoPrefetchModelPath) then
+    halt("autoPrefetchModelPath invalid");
+
+
   if tinyDNN {
+    if autoPrefetchUnpackerPath == "" then
+      halt("autoPrefetchUnpackerPath cannot be empty");
+    if !exists(autoPrefetchUnpackerPath) then
+      halt("autoPrefetchUnpackerPath invalid");
+
     locdomRepr = domToTinyDNNString(locdom):string + " ";
     wholeRepr = domToTinyDNNString(whole):string;
-    trainCmdList.append(tinyDNNPath + "/bin/predict " +
-                        "$(" + tinyDNNPath + "/unpack.sh "+ tinyDNNModelPath + ") " +
+    trainCmdList.append(autoPrefetchPredictorPath + " " +
+                        "$(" + autoPrefetchUnpackerPath +  " " +
+                            autoPrefetchModelPath + ") " +
                         "\"" + locdomRepr + "\" "+
                         "\"" + wholeRepr + "\"");
   }
   else {
     locdomRepr = domToTup(locdom):string;
     wholeRepr = domToTup(whole):string;
-    trainCmdList.append("python", predictorScriptPath,
-                        predictorModelPath,
+    trainCmdList.append("python", autoPrefetchPredictorPath,
+                        autoPrefetchModelPath,
                         locdomRepr,
                         wholeRepr,
                         "--write-to-file",
