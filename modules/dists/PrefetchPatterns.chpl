@@ -152,7 +152,7 @@ proc getPred(locdom, whole) {
     if !exists(autoPrefetchUnpackerPath) then
       halt("autoPrefetchUnpackerPath invalid");
 
-    locdomRepr = domToTinyDNNString(locdom):string + " ";
+    locdomRepr = domToTinyDNNString(locdom):string;
     wholeRepr = domToTinyDNNString(whole):string;
     trainCmdList.append(autoPrefetchPredictorPath + " " +
                         "$(" + autoPrefetchUnpackerPath +  " " +
