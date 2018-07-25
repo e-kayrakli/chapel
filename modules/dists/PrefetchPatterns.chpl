@@ -156,7 +156,7 @@ proc getPred(locdom, whole) {
     wholeRepr = domToTinyDNNString(whole):string;
     trainCmdList.append(autoPrefetchPredictorPath + " " +
                         "$(" + autoPrefetchUnpackerPath +  " " +
-                            autoPrefetchModelPath + ") " +
+                            autoPrefetchModelPath + " loc" + here.id + ") " +
                         "\"" + locdomRepr + "\" "+
                         "\"" + wholeRepr + "\"");
   }
@@ -220,16 +220,10 @@ proc BlockArr.autoPrefetch(consistent=true, staticDomain=false) {
   //    point. If we are moving forward in this direction, then the data
   //    can be passed to predict in one go significantly reducing the
   //    initialization time of keras.
-  for l in Locales {
-    const locId = l.id;
-    const locIdx = locIdxFromId(locId);
-    accDoms[locId] = getPred(dom.locDoms[locIdx].myBlock,
-                             this.dom.whole);
-  }
   coforall l in Locales do on l {
     var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
     const localeIdx = locIdxFromId(l.id);
-    const accDom = accDoms[l.id];
+    const accDom = getPred(dom.dsiLocalSubdomain(), this.dom.whole);
     for sourceId in 0..#numLocales {
       const sourceIdx = locIdxFromId(sourceId);
       const toPrefetch =
