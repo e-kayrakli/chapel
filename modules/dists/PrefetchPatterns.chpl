@@ -156,7 +156,7 @@ proc getPred(locdom, whole) {
     wholeRepr = domToTinyDNNString(whole):string;
     trainCmdList.append(autoPrefetchPredictorPath + " " +
                         "$(" + autoPrefetchUnpackerPath +  " " +
-                            autoPrefetchModelPath + " loc" + here.id + ") " +
+                            autoPrefetchModelPath + " loc" + here.id + ")/modelbest " +
                         "\"" + locdomRepr + "\" "+
                         "\"" + wholeRepr + "\"");
   }
