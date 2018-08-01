@@ -103,7 +103,7 @@ proc BlockArr.customPrefetch(consistent=true, descTable,
   }
 }
 
-proc getPred(locdom, whole) {
+proc getPred(arr_name, locdom, whole) {
   use Spawn;
   proc domToTup(dom) {
     var retval: 2*dom.rank*int;
@@ -156,7 +156,8 @@ proc getPred(locdom, whole) {
     wholeRepr = domToTinyDNNString(whole):string;
     trainCmdList.append(autoPrefetchPredictorPath + " " +
                         "$(" + autoPrefetchUnpackerPath +  " " +
-                            autoPrefetchModelPath + " loc" + here.id + ")/modelbest " +
+                            autoPrefetchModelPath + " loc" + here.id + 
+                            ")/arr"+arr_name+"_modelbest " +
                         "\"" + locdomRepr + "\" "+
                         "\"" + wholeRepr + "\"");
   }
@@ -210,7 +211,7 @@ proc getPred(locdom, whole) {
   return {(...ranges)};
 }
 
-proc BlockArr.autoPrefetch(consistent=true, staticDomain=false) {
+proc BlockArr.autoPrefetch(arr_name, consistent=true, staticDomain=false) {
   var accDoms: [Locales.domain] domain(this.rank);
 
   // 1. this is very centralized and likely unscalable. In the future,
@@ -223,7 +224,7 @@ proc BlockArr.autoPrefetch(consistent=true, staticDomain=false) {
   coforall l in Locales do on l {
     var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
     const localeIdx = locIdxFromId(l.id);
-    const accDom = getPred(dom.dsiLocalSubdomain(), this.dom.whole);
+    const accDom = getPred(arr_name, dom.dsiLocalSubdomain(), this.dom.whole);
     for sourceId in 0..#numLocales {
       const sourceIdx = locIdxFromId(sourceId);
       const toPrefetch =
