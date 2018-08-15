@@ -141,9 +141,9 @@ proc getPred(arr_name, locdom, whole) {
   if autoPrefetchModelPath == "" then
     halt("autoPrefetchPredictorPath cannot be empty");
   if !exists(autoPrefetchPredictorPath) then
-    halt("autoPrefetchPredictorPath invalid");
+    halt("autoPrefetchPredictorPath invalid ", autoPrefetchPredictorPath);
   if !exists(autoPrefetchModelPath) then
-    halt("autoPrefetchModelPath invalid");
+    halt("autoPrefetchModelPath invalid", autoPrefetchModelPath);
 
 
   if tinyDNN {
@@ -213,6 +213,9 @@ proc getPred(arr_name, locdom, whole) {
 
 proc BlockArr.autoPrefetch(arr_name, consistent=true, staticDomain=false) {
   var accDoms: [Locales.domain] domain(this.rank);
+  for l in Locales do on l {
+    accDoms[l.id] = getPred(arr_name, dom.dsiLocalSubdomain(), this.dom.whole);
+  }
 
   // 1. this is very centralized and likely unscalable. In the future,
   //    when tinydnn or a similar library is used, this needs to be done
@@ -224,13 +227,14 @@ proc BlockArr.autoPrefetch(arr_name, consistent=true, staticDomain=false) {
   coforall l in Locales do on l {
     var privCopy = chpl_getPrivatizedCopy(this.type, this.pid);
     const localeIdx = locIdxFromId(l.id);
-    const accDom = getPred(arr_name, dom.dsiLocalSubdomain(), this.dom.whole);
+    /*const accDom = getPred(arr_name, dom.dsiLocalSubdomain(), this.dom.whole);*/
+    const accDom = accDoms[l.id];
     for sourceId in 0..#numLocales {
       const sourceIdx = locIdxFromId(sourceId);
       const toPrefetch =
         accDom[privCopy.locArr[sourceIdx].locDom.myBlock];
 
-      /*writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);*/
+      writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);
 
       __prefetchFrom(localeIdx, sourceIdx, toPrefetch, consistent,
           staticDomain);
