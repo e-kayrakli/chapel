@@ -459,7 +459,7 @@ class LocaleLog(object):
 
         # stop_time = time.time()
 
-        print('Read time ', stop_time-start_time)
+        # print('Read time ', stop_time-start_time)
         # import sys
         # sys.exit()
 
