@@ -1,5 +1,7 @@
 import re
 import itertools as it
+from pathlib import Path
+import lz4.frame
 
 # simple wrapper around numpy or python multid arrays/lists
 class AccessMat(object):
@@ -345,13 +347,18 @@ class LogHandler(object):
         else:
             match = re.match(self.index_pattern, line)
         if match:
-            return tuple([int(g) for g in match.groups()])
+            if self.rank == 1:
+                return int(match.group(1))
+            elif self.rank == 2:
+                # t = match.groups()
+                return (int(match.group(1)), int(match.group(2)))
+                # return (int(t[0]), int(t[1]))
+            else:
+                return tuple(int(g) for g in match.groups())
         else:
             print('Invalid index : ', line) 
 
     def compressed_indices(self, file_prefix):
-        from pathlib import Path
-        import lz4.frame
 
         file_frmt = file_prefix+'_buf{}_dump{}.lz4'
         buf_counter = 0
@@ -434,14 +441,27 @@ class LocaleLog(object):
             print()
 
         max_access = 0
+        # import time
+        # start_time = time.time()
         for index in self.__lh.compressed_indices(filename):
             if rank == 1:
                 offset_index = index[0] - offsets[0]
+            elif rank == 2:
+                offset_index = (index[0] - offsets[0],
+                                index[1] - offsets[1])
             else:
-                offset_index = tuple([i-o for i,o in zip(index, offsets)])
-            access_mat[offset_index] += 1
-            if access_mat[offset_index] > max_access:
-                max_access = access_mat[offset_index] 
+                offset_index = tuple(i-o for i,o in zip(index, offsets))
+
+            new_val = access_mat[offset_index]+1
+            access_mat[offset_index] = new_val
+            if new_val > max_access:
+                max_access = new_val
+
+        # stop_time = time.time()
+
+        print('Read time ', stop_time-start_time)
+        # import sys
+        # sys.exit()
 
         if debug:
             print_access_mat(access_mat)
