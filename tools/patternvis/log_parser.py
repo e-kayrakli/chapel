@@ -162,6 +162,9 @@ class chpl_domain(object):
         s += '}'
         return s
 
+    def __repr__(self):
+        return self.__str__()
+
     def __iter__(self):
         for idx in it.product(*self.ranges):
             yield idx
@@ -541,7 +544,7 @@ class LocaleLog(object):
 
         return float(accessed)/bbox.size()
 
-    def gen_pairwise_access_bbox(self, llhs):
+    def gen_pairwise_access_bbox(self, llhs, try_transpose=False):
         assert not self.no_numpy
 
         self.pwise_bboxes = []
@@ -553,6 +556,8 @@ class LocaleLog(object):
                 for idx_nz in subdom:
                     idx = to_zero_based(idx_nz, self.whole)
                     if self.access_mat[idx] > 0:
+                        if try_transpose and len(idx) == 2:
+                            idx = (idx[1],idx[0])
                         acc_bbox = acc_bbox.bbox_expansion(idx)
 
             self.pwise_bboxes.append(acc_bbox)
