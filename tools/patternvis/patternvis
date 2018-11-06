@@ -14,11 +14,13 @@ arg_parser.add_argument('--no-pwise-access', action='store_true')
 arg_parser.add_argument('--plot', action='store_true')
 arg_parser.add_argument('--no-analysis', action='store_true')
 arg_parser.add_argument('--for-training', action='store_true')
+arg_parser.add_argument('--pairwise-training', action='store_true')
 arg_parser.add_argument('--no-numpy', action='store_true')
 
 args = arg_parser.parse_args()
 only_locale = args.only_locale
 for_training = args.for_training
+pairwise_training = args.pairwise_training
 no_local_subdomains = args.no_local_subdomains
 no_pwise_access = args.no_pwise_access
 no_numpy = args.no_numpy
@@ -178,7 +180,7 @@ class Display(object):
         # self.x = np.linspace(xstart, xend, self.width)
         # self.y = np.linspace(ystart, yend, self.height)
 
-        am_ndim = self.access_mat.ndim
+        am_ndim = self.access_mat.ndims
         assert am_ndim < 3
         am_shape = self.access_mat.shape
 
@@ -432,9 +434,18 @@ def training_data(llhs):
 
     for (i, ll) in enumerate(llhs):
         assert len(ll.subdoms) == 1
-        print((*ll.subdoms[0].tuple_for_training(),
-               *ll.whole.tuple_for_training()), ':',
-               ll.gen_access_bbox(try_transpose=True).tuple_for_training())
+        if pairwise_training:
+            ll.gen_pairwise_access_bbox(llhs, try_transpose=True)
+            for idx, pwise_bbox in enumerate(ll.pwise_bboxes):
+                print((*ll.subdoms[0].tuple_for_training(),
+                       *llhs[idx].subdoms[0].tuple_for_training(),
+                       *ll.whole.tuple_for_training()), ':',
+                       pwise_bbox.tuple_for_training())
+            pass
+        else:
+            print((*ll.subdoms[0].tuple_for_training(),
+                   *ll.whole.tuple_for_training()), ':',
+                   ll.gen_access_bbox(try_transpose=True).tuple_for_training())
 
 def pairwise_access_bbox(llhs):
     print('Pairwise access box')
