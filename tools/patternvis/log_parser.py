@@ -82,6 +82,9 @@ def init_log_handlers(meta_log_name, locale_log_prefix, no_numpy):
     metalog_handler = MetaLog(meta_log_name)
 
     target_loc_shape = metalog_handler.target_loc_shape
+    if isinstance(target_loc_shape, int):
+        target_loc_shape = (target_loc_shape, )
+
     rank = len(target_loc_shape)
     num_locs = 1
     for t in target_loc_shape:
@@ -351,7 +354,7 @@ class LogHandler(object):
             match = re.match(self.index_pattern, line)
         if match:
             if self.rank == 1:
-                return int(match.group(1))
+                return (int(match.group(1)), )
             elif self.rank == 2:
                 # t = match.groups()
                 return (int(match.group(1)), int(match.group(2)))
