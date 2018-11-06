@@ -435,7 +435,8 @@ def training_data(llhs):
     for (i, ll) in enumerate(llhs):
         assert len(ll.subdoms) == 1
         if pairwise_training:
-            ll.gen_pairwise_access_bbox(llhs, try_transpose=True)
+            ll.gen_pairwise_access_bbox(llhs, return_zero_based=False,
+                                        try_transpose=True)
             for idx, pwise_bbox in enumerate(ll.pwise_bboxes):
                 print((*ll.subdoms[0].tuple_for_training(),
                        *llhs[idx].subdoms[0].tuple_for_training(),
@@ -445,7 +446,8 @@ def training_data(llhs):
         else:
             print((*ll.subdoms[0].tuple_for_training(),
                    *ll.whole.tuple_for_training()), ':',
-                   ll.gen_access_bbox(try_transpose=True).tuple_for_training())
+                   ll.gen_access_bbox(return_zero_based=False,
+                                      try_transpose=True).tuple_for_training())
 
 def pairwise_access_bbox(llhs):
     print('Pairwise access box')

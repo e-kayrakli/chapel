@@ -259,6 +259,22 @@ def to_zero_based(index, domain):
         assert domain.rank == 1
         return index - domain.ranges[0].low
 
+def to_nonzero_based(index, domain):
+    if isinstance(index, tuple):
+        num = len(index)
+        assert num == domain.rank
+        loc_index = []
+
+        # for tup_idx, idx in enumerate(index):
+        for i,r in zip(index, domain.ranges):
+            loc_index.append(i+r.low)
+
+        return tuple(loc_index)
+    else:
+        assert domain.rank == 1
+        return index + domain.ranges[0].low
+
+
 
 class LogHandler(object):
 
@@ -520,12 +536,17 @@ class LocaleLog(object):
 
         return float(num_rem)/self.get_num_loc_idxs()
 
-    def gen_access_bbox(self, try_transpose=False):
+    def gen_access_bbox(self, return_zero_based=True, try_transpose=False):
         acc_bbox = chpl_domain([chpl_range(-1,-1)
                                 for r in range(self.rank)])
 
         # for idx,acc_cnt in np.ndenumerate(self.access_mat):
-        for idx,acc_cnt in self.access_mat.enum():
+        for _idx,acc_cnt in self.access_mat.enum():
+            if return_zero_based:
+                idx = _idx
+            else:
+                idx = to_nonzero_based(_idx, self.whole)
+
             if acc_cnt > 0:
                 acc_bbox = acc_bbox.bbox_expansion(idx)
 
@@ -547,7 +568,8 @@ class LocaleLog(object):
 
         return float(accessed)/bbox.size()
 
-    def gen_pairwise_access_bbox(self, llhs, try_transpose=False):
+    def gen_pairwise_access_bbox(self, llhs, return_zero_based=True,
+                                 try_transpose=False):
         assert not self.no_numpy
 
         self.pwise_bboxes = []
@@ -559,9 +581,17 @@ class LocaleLog(object):
                 for idx_nz in subdom:
                     idx = to_zero_based(idx_nz, self.whole)
                     if self.access_mat[idx] > 0:
-                        if try_transpose and len(idx) == 2:
-                            idx = (idx[1],idx[0])
-                        acc_bbox = acc_bbox.bbox_expansion(idx)
+                        # at this point we already checked with the access_mat,
+                        # so we need to choose whether we need zero-based
+                        # indices or not
+                        if return_zero_based:
+                            idx_to_add = idx
+                        else:
+                            idx_to_add = idx_nz
+
+                        if try_transpose and len(idx_to_add) == 2:
+                            idx_to_add = (idx_to_add[1],idx_to_add[0])
+                        acc_bbox = acc_bbox.bbox_expansion(idx_to_add)
 
             self.pwise_bboxes.append(acc_bbox)
 
