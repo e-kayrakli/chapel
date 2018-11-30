@@ -26,6 +26,7 @@ static const LZ4F_preferences_t lz4_preferences = {
   },
   0,   /* compression level */
   0,   /* autoflush */
-  { 0, 0, 0, 0 },  /* reserved, must be set to 0 */
+  0,
+  //{ 0, 0, 0, 0 },  [> reserved, must be set to 0 <]
 };
 #endif
