@@ -104,19 +104,31 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
       else
         idx[1]-metadata[0]
     else if rank == 2 then
-      if idx[1] >= metadata[0]+metadata[2] || idx[2] >= metadata[1]+metadata[3] then
+      if idx[1] >= metadata[0]+metadata[2] ||
+         idx[2] >= metadata[1]+metadata[3] then
         -1
-      else if idx[1] < metadata[0] || idx[2] < metadata[1] then
+      else if idx[1] < metadata[0] ||
+              idx[2] < metadata[1] then
         -1
       else
-        (idx[1]-metadata[0])*(metadata[3])+(idx[2]-metadata[1])
+        (idx[1]-metadata[0])*(metadata[3])+
+        (idx[2]-metadata[1])
+    else if rank == 3 then
+      if idx[1] >= metadata[0]+metadata[2] ||
+         idx[2] >= metadata[1]+metadata[3] ||
+         idx[3] >= metadata[2]+metadata[4] then
+        -1
+      else if idx[1] < metadata[0] ||
+              idx[2] < metadata[1] ||
+              idx[3] < metadata[2] then
+        -1
+      else
+        (idx[1]-metadata[0])*(metadata[4]*metadata[5])+
+        (idx[2]-metadata[1])*(metadata[5])+
+        (idx[3]-metadata[2])
     else
-      (idx[3]-metadata[2]) +
-      (idx[2]-metadata[1])*metadata[5]+
-      (idx[1]-metadata[0])*metadata[5]*metadata[4];
+      compilerError("Not ready to prefetch where rank>3");
 
-  if rank == 3 then
-    compilerError("Not ready to autoPrefetch where rank==3");
 
   // TODO TODO TODO
   /*if elemCount < 0 then return -1:size_t;*/
