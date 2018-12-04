@@ -500,6 +500,59 @@ proc BlockArr.luleshStencilPrefetch3d(consistent=true,
   }
   finalizePrefetch();
 }
+
+proc BlockArr.MGPrefetch(consistent=true, staticDomain=false) {
+  const tldShape = dom.dist.targetLocDom.shape;
+
+  coforall localeIdx in dom.dist.targetLocDom {
+    on dom.dist.targetLocales(localeIdx) {
+
+      const myDom = dom.locDoms[localeIdx].myBlock;
+      const whole = dom.whole;
+
+      inline proc getSrcAndRanges(param dim, param neg) {
+        // calculate the source idx
+        var offTuple = (0,0,0);
+        offTuple[dim] = if neg then -1 else 1;
+        const sourceIdx = ((localeIdx+offTuple)+tldShape)%tldShape;
+
+        // calculate the wrapped index
+        var wrappedIdx: int;
+        if neg {
+          const bound = whole.dim(dim).low;
+          wrappedIdx = myDom.dim(dim).low-1;
+          if wrappedIdx < bound then
+            wrappedIdx += whole.dim(dim).size;
+        }
+        else {
+          const bound = whole.dim(dim).high;
+          wrappedIdx = myDom.dim(dim).high+1;
+          if wrappedIdx > bound then
+            wrappedIdx -= whole.dim(dim).size;
+        }
+
+        var ranges = (myDom.dim(1), myDom.dim(2), myDom.dim(3));
+        ranges[dim] = wrappedIdx..wrappedIdx;
+
+        return (sourceIdx, ranges);
+      }
+
+      for param d in 1..3 {
+        for param _n in 0..1 {
+          param n = _n==0;
+          const (sourceIdx, _r) = getSrcAndRanges(dim=d, neg=n);
+          var sliceDesc: domain(3);
+          sliceDesc = {(..._r)};
+          writeln(here, " will get " , sliceDesc, " from ",
+              dom.dist.targetLocales(sourceIdx));
+          __prefetchFrom(localeIdx, sourceIdx, sliceDesc, consistent,
+              staticDomain);
+        }
+      }
+    }
+  }
+}
+
 proc BlockArr.stencilPrefetch3d(consistent=true, staticDomain=false) {
 
   if rank != 3 then
