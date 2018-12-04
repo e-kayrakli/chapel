@@ -15,8 +15,8 @@ proc LocBlockArr.getIdxFromData(data: c_void_ptr, offset) {
     return ((eltCount/metadata[3])+metadata[0],
             (eltCount%metadata[3])+metadata[1]);
   if rank == 3 {
-    return (0,0,0);
     halt("No WT yet for 3D arrays");
+    return (0,0,0);
   }
 }
 
@@ -114,9 +114,9 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
         (idx[1]-metadata[0])*(metadata[3])+
         (idx[2]-metadata[1])
     else if rank == 3 then
-      if idx[1] >= metadata[0]+metadata[2] ||
-         idx[2] >= metadata[1]+metadata[3] ||
-         idx[3] >= metadata[2]+metadata[4] then
+      if idx[1] >= metadata[0]+metadata[3] ||
+         idx[2] >= metadata[1]+metadata[4] ||
+         idx[3] >= metadata[2]+metadata[5] then
         -1
       else if idx[1] < metadata[0] ||
               idx[2] < metadata[1] ||
@@ -128,6 +128,8 @@ inline proc LocBlockArr.getByteIndex(data: c_void_ptr, idx:rank*idxType) {
         (idx[3]-metadata[2])
     else
       compilerError("Not ready to prefetch where rank>3");
+
+  /*writeln(idx, " : ", elemCount);*/
 
 
   // TODO TODO TODO
