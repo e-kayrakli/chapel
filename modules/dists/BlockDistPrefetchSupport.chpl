@@ -5,8 +5,8 @@ proc LocBlockArr.getIdxFromData(data: c_void_ptr, offset) {
 
   var metadata = getElementArrayAtOffset(data, 0, idxType);
 
-  writeln("Offset in data : ", offsetInData);
-  writeln("metadata[1] : ", metadata[0]);
+  /*writeln("Offset in data : ", offsetInData);*/
+  /*writeln("metadata[1] : ", metadata[0]);*/
   const eltSize = getSize(1, eltType):int;
   const eltCount = offsetInData/eltSize;
   if rank == 1 then

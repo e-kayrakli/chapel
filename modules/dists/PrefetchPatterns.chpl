@@ -231,10 +231,9 @@ proc BlockArr.autoPrefetch(arr_name, consistent=true, staticDomain=false) {
     const accDom = accDoms[l.id];
     for sourceId in 0..#numLocales {
       const sourceIdx = locIdxFromId(sourceId);
-      const toPrefetch =
-        accDom[privCopy.locArr[sourceIdx].locDom.myBlock];
+      const toPrefetch = accDom[privCopy.locArr[sourceIdx].locDom.myBlock];
 
-      writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);
+      /*writeln(here, " will prefetch ", toPrefetch, " from ", sourceId);*/
 
       __prefetchFrom(localeIdx, sourceIdx, toPrefetch, consistent,
           staticDomain);
