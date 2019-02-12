@@ -580,6 +580,9 @@ class LocaleLog(object):
         return float(num_rem)/self.get_num_loc_idxs()
 
     def gen_access_bbox(self, return_zero_based=True, try_transpose=False):
+        if self.acc_bbox is not None:
+            return self.acc_bbox
+
         acc_bbox = chpl_domain([chpl_range(-1,-1)
                                 for r in range(self.rank)])
 
