@@ -32,12 +32,12 @@ typedef struct byte_buffer {
   pthread_mutex_t *lock;
 } byte_buffer_t;
 
-void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap,
+void init_subbuf(byte_buffer_t *buf, int uid, size_t cap,
                       const char *file_format);
-void destroy_byte_buffer(byte_buffer_t *buf);
-void compress_and_dump(byte_buffer_t *buf);
+void destroy_subbuf(byte_buffer_t *buf);
+void dump_subbuf(byte_buffer_t *buf);
 void append_byte(byte_buffer_t *buf, const char byte);
-void append_bytes(byte_buffer_t *buf, char *bytes, int num_bytes);
+void append_to_subbuf(byte_buffer_t *buf, char *bytes, int num_bytes);
 
 
 // This doesn't do any size-checking. Buyer beware

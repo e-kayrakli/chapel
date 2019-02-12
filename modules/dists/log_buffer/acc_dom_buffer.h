@@ -19,10 +19,10 @@ void init_range(range_t *r);
 void expand(range_t *r, int idx);
 void print(range_t *r, FILE *f);
 
-void init_acc_dom_buffer(acc_dom_buffer_t *b, int dim);
-void expand(acc_dom_buffer_t *b, ...);
-void flush_acc_dom_buffer(acc_dom_buffer_t *b);
-void destroy_acc_dom_buffer(acc_dom_buffer_t *b);
+void init_subbuf(acc_dom_buffer_t *b, int dim);
+void append_to_subbuf(acc_dom_buffer_t *b, ...);
+void dump_subbuf(acc_dom_buffer_t *b);
+void destroy_subbuf(acc_dom_buffer_t *b);
 
 
 

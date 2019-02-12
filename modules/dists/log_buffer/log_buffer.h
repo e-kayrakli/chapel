@@ -16,6 +16,8 @@
 // in bytes (chars)
 #define SCRATCH_PAD_SIZE 32
 
+#define ACC_DOM_BUFFER 1
+
 typedef struct log_buffer {
   uint32_t num_buffers;
   byte_buffer_t *bufs;

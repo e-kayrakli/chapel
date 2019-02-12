@@ -11,7 +11,7 @@
 #define IN_DELIM ' '
 #define OUT_DELIM '\n'
 
-void init_byte_buffer(byte_buffer_t *buf, int uid, size_t cap, 
+void init_subbuf(byte_buffer_t *buf, int uid, size_t cap, 
                       const char *file_format) {
   buf->uid = uid;
   buf->cuid = calloc(1,32); // deprecated ?
@@ -57,7 +57,7 @@ static inline void unlock(byte_buffer_t *buf) {
 #endif
 }
 
-void compress_and_dump(byte_buffer_t *buf) {
+void dump_subbuf(byte_buffer_t *buf) {
     // compress
     const int compressed_size = compress(buf->data, buf->size,
                                          buf->c_data, buf->c_size,
@@ -78,9 +78,9 @@ void compress_and_dump(byte_buffer_t *buf) {
     buf->file_count++;
 }
 
-void destroy_byte_buffer(byte_buffer_t *buf) {
+void destroy_subbuf(byte_buffer_t *buf) {
   if(buf->size > 0)
-    compress_and_dump(buf);
+    dump_subbuf(buf);
 
   // TODO reclaim memory?
 }
@@ -91,7 +91,7 @@ static inline void check_cap(byte_buffer_t *buf, size_t incoming) {
   // check if there is still capacity
   if(buf->size + incoming > buf->cap - 1) {
     // if not compress, dump into a file, reset, increment fcounter
-    compress_and_dump(buf);
+    dump_subbuf(buf);
   }
 }
 
@@ -107,7 +107,7 @@ void append_byte(byte_buffer_t *buf, const char byte) {
   unlock(buf);
 }
 
-void append_bytes(byte_buffer_t *buf, char *bytes, int num_bytes) {
+void append_to_subbuf(byte_buffer_t *buf, char *bytes, int num_bytes) {
 
   lock(buf);
   check_cap(buf, num_bytes);

@@ -27,8 +27,7 @@ void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
   lbuf->num_buffers = num_buffers;
   lbuf->bufs = malloc(num_buffers * sizeof(byte_buffer_t));
   for(i = 0 ; i < num_buffers ; i++) {
-    init_byte_buffer(&(lbuf->bufs[i]), i, byte_buf_size,
-                     lbuf->file_format);
+    init_subbuf(&(lbuf->bufs[i]), i, byte_buf_size, lbuf->file_format);
   }
 
   lbuf->global_scratch_pad = malloc(num_buffers*SCRATCH_PAD_SIZE);
@@ -74,7 +73,7 @@ void destroy_log_buffer(log_buffer_t *lbuf) {
 
 
   for(i = 0 ; i < lbuf->num_buffers ; i++) {
-    destroy_byte_buffer(&(lbuf->bufs[i]));
+    destroy_subbuf(&(lbuf->bufs[i]));
     pthread_mutex_destroy(&(lbuf->locks[i]));
   }
 
@@ -106,7 +105,7 @@ void append_index(log_buffer_t *lbuf, ...) {
 
   byte_buffer_t *my_buf = &lbuf->bufs[my_buf_idx];
 #ifdef APAT_NO_ENCODE
-  append_bytes(my_buf, (char *)(&(index[0])), sizeof(index));
+  append_to_subbuf(my_buf, (char *)(&(index[0])), sizeof(index));
 #else
   char *my_sp = lbuf->scratch_pads[my_buf_idx];
 
@@ -126,7 +125,7 @@ void append_index(log_buffer_t *lbuf, ...) {
 
   size_t digits = (SCRATCH_PAD_SIZE-1)-my_sp_off;
 
-  append_bytes(my_buf, &my_sp[my_sp_off+1], digits);
+  append_to_subbuf(my_buf, &my_sp[my_sp_off+1], digits);
 #endif
 
   // release the buffer -- unlock the mutex
@@ -136,6 +135,6 @@ void append_index(log_buffer_t *lbuf, ...) {
 void flush_buffer(log_buffer_t *lbuf) {
   int i;
   for(i = 0 ; i < lbuf->num_buffers ; i++) {
-    compress_and_dump(&(lbuf->bufs[i]));
+    dump_subbuf(&(lbuf->bufs[i]));
   }
 }
