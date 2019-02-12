@@ -11,8 +11,8 @@ void init_range(range_t *r) {
 }
 
 void expand(range_t *r, int idx) {
-  r->low = r->low ? r->low < idx : idx;
-  r->high = r->high ? r->high < idx : idx;
+  r->low = r->low < idx ? r->low : idx;
+  r->high = r->high > idx ? r->high : idx;
 }
 
 void print(range_t *r, FILE *f) {
