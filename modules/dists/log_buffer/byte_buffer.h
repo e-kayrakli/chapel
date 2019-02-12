@@ -32,7 +32,7 @@ typedef struct byte_buffer {
   pthread_mutex_t *lock;
 } byte_buffer_t;
 
-void init_subbuf(byte_buffer_t *buf, int uid, size_t cap,
+void init_subbuf(byte_buffer_t *buf, int uid, size_t cap, int dim,
                       const char *file_format);
 void destroy_subbuf(byte_buffer_t *buf);
 void dump_subbuf(byte_buffer_t *buf);

@@ -11,7 +11,7 @@
 #define IN_DELIM ' '
 #define OUT_DELIM '\n'
 
-void init_subbuf(byte_buffer_t *buf, int uid, size_t cap, 
+void init_subbuf(byte_buffer_t *buf, int uid, size_t cap, int dim,
                       const char *file_format) {
   buf->uid = uid;
   buf->cuid = calloc(1,32); // deprecated ?

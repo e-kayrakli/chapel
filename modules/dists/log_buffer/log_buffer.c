@@ -8,8 +8,6 @@
 #include <stdint.h>
 
 #include "log_buffer.h"
-#include "byte_buffer.h"
-
 
 void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
                      uint8_t rank, int byte_buf_size, int locale_id,
@@ -25,9 +23,9 @@ void init_log_buffer(log_buffer_t *lbuf, uint32_t num_buffers,
 
   int i;
   lbuf->num_buffers = num_buffers;
-  lbuf->bufs = malloc(num_buffers * sizeof(byte_buffer_t));
+  lbuf->bufs = malloc(num_buffers * sizeof(subbuf_t));
   for(i = 0 ; i < num_buffers ; i++) {
-    init_subbuf(&(lbuf->bufs[i]), i, byte_buf_size, lbuf->file_format);
+    init_subbuf(&(lbuf->bufs[i]), i, byte_buf_size, rank, lbuf->file_format);
   }
 
   lbuf->global_scratch_pad = malloc(num_buffers*SCRATCH_PAD_SIZE);
@@ -86,7 +84,7 @@ void append_index(log_buffer_t *lbuf, ...) {
   /*printf("Appending log buffer %p\n", lbuf);*/
   // process varargs
   va_list ap;
-  va_start(ap, lbuf->rank);
+  va_start(ap, lbuf);
   int index[lbuf->rank];
 
   int i;
@@ -103,7 +101,10 @@ void append_index(log_buffer_t *lbuf, ...) {
 
   /*printf("Appending %d\n", index[0]);*/
 
-  byte_buffer_t *my_buf = &lbuf->bufs[my_buf_idx];
+  subbuf_t *my_buf = &lbuf->bufs[my_buf_idx];
+#ifdef ACC_DOM_BUFFER
+  append_to_subbuf(my_buf, index);
+#else
 #ifdef APAT_NO_ENCODE
   append_to_subbuf(my_buf, (char *)(&(index[0])), sizeof(index));
 #else
@@ -126,6 +127,7 @@ void append_index(log_buffer_t *lbuf, ...) {
   size_t digits = (SCRATCH_PAD_SIZE-1)-my_sp_off;
 
   append_to_subbuf(my_buf, &my_sp[my_sp_off+1], digits);
+#endif
 #endif
 
   // release the buffer -- unlock the mutex

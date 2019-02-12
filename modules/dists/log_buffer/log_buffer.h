@@ -11,16 +11,24 @@
 #include <stdarg.h>
 #include <stdint.h>
 
-#include "byte_buffer.h"
 
 // in bytes (chars)
 #define SCRATCH_PAD_SIZE 32
 
 #define ACC_DOM_BUFFER 1
 
+#ifdef ACC_DOM_BUFFER
+#include "acc_dom_buffer.h"
+typedef acc_dom_buffer_t subbuf_t;
+#else
+#include "byte_buffer.h"
+typedef byte_buffer_t subbuf_t;
+#endif
+
+
 typedef struct log_buffer {
   uint32_t num_buffers;
-  byte_buffer_t *bufs;
+  subbuf_t *bufs;
 
   char *global_scratch_pad;
   char **scratch_pads;

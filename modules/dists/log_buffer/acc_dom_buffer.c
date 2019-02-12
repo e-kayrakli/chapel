@@ -1,10 +1,13 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <limits.h>
 
 #include "acc_dom_buffer.h"
 
 void init_range(range_t *r) {
-  r->low = MAX_INT;
-  r->high = MIN_INT;
+  r->low = INT_MAX;
+  r->high = INT_MIN;
 }
 
 void expand(range_t *r, int idx) {
@@ -12,7 +15,11 @@ void expand(range_t *r, int idx) {
   r->high = r->high ? r->high < idx : idx;
 }
 
-void init_acc_dom_buffer(acc_dom_buffer_t *b, int uid, int dim,
+void print(range_t *r, FILE *f) {
+  fprintf(f, "%d %d", r->low, r->high);
+}
+
+void init_subbuf(acc_dom_buffer_t *b, int uid, size_t cap, int dim,
                          const char *file_format) {
   b->uid = uid;
   b->dim = dim;
@@ -28,17 +35,17 @@ void init_acc_dom_buffer(acc_dom_buffer_t *b, int uid, int dim,
   strcat(b->file_format, ".dom");
 }
 
-void expand(acc_dom_buffer_t *b, int *idx) {
+void append_to_subbuf(acc_dom_buffer_t *b, int *idx) {
   int i;
   for(i = 0 ; i < b->dim ; i++) {
     expand(&(b->ranges[i]), idx[i]);
   }
 }
 
-void flush_acc_dom_buffer(acc_dom_buffer_t *b) {
+void dump_subbuf(acc_dom_buffer_t *b) {
     // dump into a file
     char *filename = calloc(1, 64); // not sure how safe 64 is
-    sprintf(filename, b->file_format, b->uid, b->file_count);
+    sprintf(filename, b->file_format, b->uid, 0);
 
     FILE* f = fopen(filename, "w");
     int i;
@@ -48,8 +55,8 @@ void flush_acc_dom_buffer(acc_dom_buffer_t *b) {
     }
 }
 
-void destroy_acc_dom_buffer(acc_dom_buffer_t *b) {
-  flush_acc_dom_buffer(b);
+void destroy_subbuf(acc_dom_buffer_t *b) {
+  dump_subbuf(b);
   free(b->ranges);
   free(b->file_format);
 }
