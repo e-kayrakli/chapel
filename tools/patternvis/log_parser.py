@@ -1,4 +1,5 @@
 import re
+import math
 import itertools as it
 from pathlib import Path
 import lz4.frame
@@ -380,6 +381,46 @@ class LogHandler(object):
         else:
             print('Invalid index : ', line) 
 
+    def access_bbox(self, file_prefix):
+
+        file_frmt = file_prefix+'_buf{}_dump{}.dom'
+        buf_counter = 0
+
+
+        dlows = [+math.inf for _ in range(self.rank)]
+        dhighs = [-math.inf for _ in range(self.rank)]
+        # run infinite loop for multiple buffers
+        while True:
+            dump_counter = 0
+            # check if dump0 exists, break if false
+            cur_file_path = file_frmt.format(buf_counter, 
+                                             dump_counter)
+            cur_file = Path(cur_file_path)
+            if not cur_file.exists():
+                break
+
+            # run infinite loop for multiple dumps
+            while True:
+                # check if file exists, break if false
+                cur_file_path = file_frmt.format(buf_counter,
+                                                 dump_counter)
+                cur_file = Path(cur_file_path)
+                if not cur_file.exists():
+                    break
+
+                with open(cur_file_path, 'r') as f:
+                    l = f.readline()
+                    nums = [int(s) for s in l.split()]
+                    ranges = []
+                    for d in range(0, len(nums), 2):
+                        dlows[d//2] = min(nums[d], dlows[d//2])
+                        dhighs[d//2] = max(nums[d+1], dhighs[d//2])
+
+                dump_counter += 1
+            buf_counter += 1
+
+        return chpl_domain([chpl_range(l,h) for l,h in zip(dlows, dhighs)])
+
     def compressed_indices(self, file_prefix):
 
         file_frmt = file_prefix+'_buf{}_dump{}.lz4'
@@ -465,6 +506,8 @@ class LocaleLog(object):
         max_access = 0
         # import time
         # start_time = time.time()
+        self.acc_bbox = self.__lh.access_bbox(filename)
+        print('Access bbox ', self.acc_bbox)
         for index in self.__lh.compressed_indices(filename):
             if rank == 1:
                 offset_index = index[0] - offsets[0]
