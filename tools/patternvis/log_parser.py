@@ -513,7 +513,6 @@ class LocaleLog(object):
         # import time
         # start_time = time.time()
         self.acc_bbox = self.__lh.access_bbox(filename)
-        print('Access bbox ', self.acc_bbox)
         for index in self.__lh.compressed_indices(filename):
             if rank == 1:
                 offset_index = index[0] - offsets[0]
