@@ -65,10 +65,16 @@ class AccessMat(object):
 
     def enum(self):
         if self.no_numpy:
-            for idx, item in zip(it.product(range(self.shape[0]),
-                                            range(self.shape[1])),
-                                 self.__mat):
-                yield idx, item
+            if self.ndims == 1:
+                for idx, item in zip(range(self.shape[0]), self.__mat):
+                    yield idx, item
+            elif self.ndims == 2:
+                for idx, item in zip(it.product(range(self.shape[0]),
+                                                range(self.shape[1])),
+                                     self.__mat):
+                    yield idx, item
+            else:
+                assert False, 'invalid ndims'
         else:
             import numpy as np
             for idx, item in np.ndenumerate(self.__mat):
