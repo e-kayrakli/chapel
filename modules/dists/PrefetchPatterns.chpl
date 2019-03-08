@@ -142,8 +142,8 @@ proc getPred(arr_name, locdom, whole) {
     halt("autoPrefetchPredictorPath cannot be empty");
   if !exists(autoPrefetchPredictorPath) then
     halt("autoPrefetchPredictorPath invalid ", autoPrefetchPredictorPath);
-  if !exists(autoPrefetchModelPath) then
-    halt("autoPrefetchModelPath invalid", autoPrefetchModelPath);
+  /*if !exists(autoPrefetchModelPath) then*/
+    /*halt("autoPrefetchModelPath invalid", autoPrefetchModelPath);*/
 
 
   if tinyDNN {
