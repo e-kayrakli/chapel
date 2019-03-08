@@ -10,7 +10,7 @@ void init_range(range_t *r) {
   r->high = INT_MIN;
 }
 
-void expand(range_t *r, int idx) {
+void expand_range(range_t *r, int idx) {
   r->low = r->low < idx ? r->low : idx;
   r->high = r->high > idx ? r->high : idx;
 }
@@ -38,7 +38,7 @@ void init_subbuf(acc_dom_buffer_t *b, int uid, size_t cap, int dim,
 void append_to_subbuf(acc_dom_buffer_t *b, int *idx) {
   int i;
   for(i = 0 ; i < b->dim ; i++) {
-    expand(&(b->ranges[i]), idx[i]);
+    expand_range(&(b->ranges[i]), idx[i]);
   }
 }
 

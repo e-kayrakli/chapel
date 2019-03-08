@@ -16,7 +16,7 @@ typedef struct acc_dom_buffer {
 } acc_dom_buffer_t;
 
 void init_range(range_t *r);
-void expand(range_t *r, int idx);
+void expand_range(range_t *r, int idx);
 void print(range_t *r, FILE *f);
 
 void init_subbuf(acc_dom_buffer_t *b, int uid, size_t cap, int dim,
