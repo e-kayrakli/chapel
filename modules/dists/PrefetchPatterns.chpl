@@ -10,7 +10,7 @@ use FileSystem;
 /*config const tinyDNNPath = "/home/ngnk/code/test-tiny-dnn/";*/
 /*config const tinyDNNModelPath = "";*/
 
-config const tinyDNN = true;
+config const tinyDNN = false;
 config const autoPrefetchPredictorPath = "";
 config const autoPrefetchUnpackerPath = "";
 config const autoPrefetchModelPath = "";
@@ -164,8 +164,8 @@ proc getPred(arr_name, locdom, whole) {
   else {
     locdomRepr = domToTup(locdom):string;
     wholeRepr = domToTup(whole):string;
-    trainCmdList.append("python", autoPrefetchPredictorPath,
-                        autoPrefetchModelPath,
+    trainCmdList.append("/mnt/lustre_server/users/engin/miniconda3/envs/nn/bin/python", autoPrefetchPredictorPath,
+                        arr_name,
                         locdomRepr,
                         wholeRepr,
                         "--write-to-file",
@@ -208,13 +208,16 @@ proc getPred(arr_name, locdom, whole) {
   }
 
 
-  return {(...ranges)};
+
+  const rawDom = {(...ranges)}.expand(20);
+  return rawDom[whole];
 }
 
 proc BlockArr.autoPrefetch(arr_name, consistent=true, staticDomain=false) {
   var accDoms: [Locales.domain] domain(this.rank);
   for l in Locales do on l {
     accDoms[l.id] = getPred(arr_name, dom.dsiLocalSubdomain(), this.dom.whole);
+    writeln(here, " access domain: ", accDoms[l.id]);
   }
 
   // 1. this is very centralized and likely unscalable. In the future,
