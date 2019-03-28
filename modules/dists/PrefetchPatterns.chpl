@@ -209,7 +209,7 @@ proc getPred(arr_name, locdom, whole) {
 
 
 
-  const rawDom = {(...ranges)}.expand(20);
+  const rawDom = {(...ranges)}.expand((whole.dim(1).size*0.01):int);
   return rawDom[whole];
 }
 
