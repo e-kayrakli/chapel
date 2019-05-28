@@ -491,10 +491,10 @@ int chpl_launch(int argc, char* argv[], int32_t numLocales) {
   }
   // otherwise generate the batch file or srun command and execute it
   else {
-    retcode = chpl_launch_using_system(chpl_launch_create_command(argc, argv,
-          numLocales), argv[0]);
-  
+    char* cmd = chpl_launch_create_command(argc, argv, numLocales);
+    retcode = chpl_launch_using_system(cmd, argv[0]);
     chpl_launch_cleanup();
+    chpl_mem_free(cmd, 0, 0);
   }
   return retcode;
 }
