@@ -39,6 +39,12 @@ OPT_CFLAGS = -O3
 PROFILE_CFLAGS = -pg
 PROFILE_LFLAGS = -pg
 
+ifdef CHPL_SANITIZE_ADDRESS
+CFLAGS += -fsanitize=address -fno-omit-frame-pointer -O1
+LDFLAGS += -fsanitize=address
+CHPL_MAKE_BASE_LFLAGS += -fsanitize=address
+endif
+
 ifdef CHPL_GCOV
 CFLAGS += -fprofile-arcs -ftest-coverage
 LDFLAGS += -fprofile-arcs
