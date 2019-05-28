@@ -40,7 +40,15 @@ PROFILE_CFLAGS = -pg
 PROFILE_LFLAGS = -pg
 
 ifdef CHPL_SANITIZE_ADDRESS
-CFLAGS += -fsanitize=address -fno-omit-frame-pointer -O1 -g
+# Note gcc has leak sanitizer on by default, which isn't that helpful ATM.
+# Disable with `export ASAN_OPTIONS=detect_leaks=0`
+CFLAGS += -fsanitize=address
+CXXFLAGS += -fsanitize=address
+# This produces way more helpful error messages, but has more overhead
+ifndef CHPL_SANITIZE_ADDRESS_FAST
+CFLAGS += -fno-omit-frame-pointer -O1 -g
+CXXFLAGS += -fno-omit-frame-pointer -O1 -g
+endif
 LDFLAGS += -fsanitize=address
 CHPL_MAKE_BASE_LFLAGS += -fsanitize=address
 endif
