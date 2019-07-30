@@ -21,6 +21,7 @@ module ChapelDistribution {
 
   private use ChapelArray, ChapelLocks, ChapelRange;
   use LinkedLists;
+  use Lists;
 
   //
   // Abstract distribution class
@@ -534,7 +535,38 @@ module ChapelDistribution {
 
   }
 
-  record SparseIndexBuffer {
+  record UnboundedSparseIndexBuffer {
+    param rank: int;
+    var obj: BaseSparseDom;
+
+    type idxType = if rank==1 then int else rank*int;
+
+    var buf: list(idxType);
+
+    proc init(param rank: int, obj) {
+      this.rank = rank;
+      this.obj = obj;
+
+      buf = new list(idxType);
+    }
+
+    proc add(idx: idxType) {
+      buf.append(idx);
+    }
+
+    proc commit() {
+      if buf.size > 0 {
+        obj.dsiBulkAdd(buf.toArray());
+      }
+    }
+
+    proc deinit() {
+      commit();
+    }
+
+  }
+
+  record BoundedSparseIndexBuffer {
     param rank: int;
     var obj: BaseSparseDom;
 
@@ -543,7 +575,7 @@ module ChapelDistribution {
     var buf: [bufDom] idxType;
     var cur = 0;
 
-    proc init(size, param rank: int, obj) {
+    proc init(param rank: int, obj, size) {
       this.rank = rank;
       this.obj = obj;
       bufDom = {0..#size};
@@ -629,8 +661,12 @@ module ChapelDistribution {
     proc dsiAlignedLow { return parentDom.alignedLow; }
     proc dsiAlignedHigh { return parentDom.alignedHigh; }
 
+    proc dsiMakeIndexBuffer() {
+      return new UnboundedSparseIndexBuffer(rank=this.rank, obj=this);
+    }
+
     proc dsiMakeIndexBuffer(size) {
-      return new SparseIndexBuffer(rank=this.rank, obj=this, size=size);
+      return new BoundedSparseIndexBuffer(rank=this.rank, obj=this, size=size);
     }
 
   } // end BaseSparseDom
