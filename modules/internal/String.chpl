@@ -553,11 +553,11 @@ module String {
       underlying buffer is not freed if the `c_string` is not copied in.
      */
     // This initializer can cause a leak if isowned = false and needToCopy = true
-    proc init(buff: bufferType, length: int, size: int,
+    proc init(buff: loc_bufferType, length: int, size: int,
                 isowned: bool = true, needToCopy: bool = true) {
       this.isowned = isowned;
       this.complete();
-      this.reinitString(buff, length, size, needToCopy);
+      this.reinitString(buff:bufferType, length, size, needToCopy);
     }
 
     pragma "no doc"
@@ -568,7 +568,7 @@ module String {
       if isowned && this.buff != nil {
         on __primitive("chpl_on_locale_num",
                        chpl_buildLocaleID(this.locale_id, c_sublocid_any)) {
-          chpl_here_free(this.buff);
+          freeBuffer(this.buff);
         }
       }
     }
@@ -577,7 +577,8 @@ module String {
     proc chpl__serialize() {
       var data : chpl__inPlaceBuffer;
       if len <= CHPL_SHORT_STRING_SIZE {
-        chpl_string_comm_get(chpl__getInPlaceBufferDataForWrite(data), locale_id, buff, len);
+        chpl_string_comm_get(chpl__getInPlaceBufferDataForWrite(data), locale_id,
+            addr(buff), len);
       }
       return new __serializeHelper(len, buff, _size, locale_id, data);
     }
@@ -590,11 +591,11 @@ module String {
                             data.size, isowned=true, needToCopy=true);
         } else {
           var localBuff = copyRemoteBuffer(data.locale_id, data.buff, data.len);
-          return new string(localBuff, data.len, data.size,
+          return new string(addr(localBuff), data.len, data.size,
                             isowned=true, needToCopy=false);
         }
       } else {
-        return new string(data.buff, data.len, data.size, isowned = false, needToCopy=false);
+        return new string(addr(data.buff), data.len, data.size, isowned = false, needToCopy=false);
       }
     }
 
@@ -781,7 +782,7 @@ module String {
       while i < localThis.len {
         var cp: int(32);
         var nbytes: c_int;
-        var multibytes = (localThis.buff + i): c_string;
+        var multibytes = (addr(localThis.buff)+i): c_string;
         var maxbytes = (localThis.len - i): ssize_t;
         qio_decode_char_buf(cp, nbytes, multibytes, maxbytes);
         yield cp;
@@ -816,7 +817,7 @@ module String {
       while i < localThis.len {
         var cp: int(32);
         var nbytes: c_int;
-        var multibytes = (localThis.buff + i): c_string;
+        var multibytes = (addr(localThis.buff)+i): c_string;
         var maxbytes = (localThis.len - i): ssize_t;
         qio_decode_char_buf(cp, nbytes, multibytes, maxbytes);
         yield (cp:int(32), (i + 1):byteIndex, nbytes:int);
@@ -881,7 +882,7 @@ module String {
 
       var cp: int(32);
       var nbytes: c_int;
-      var multibytes = localThis.buff: c_string;
+      var multibytes = addr(localThis.buff): c_string;
       var maxbytes = localThis.len: ssize_t;
       qio_decode_char_buf(cp, nbytes, multibytes, maxbytes);
 
@@ -933,7 +934,7 @@ module String {
       ret.buff = newBuff;
       ret.isowned = true;
 
-      var multibytes = ret.buff;
+      var multibytes = addr(ret.buff);
       var cp: int(32);
       var nbytes: c_int;
       qio_decode_char_buf(cp, nbytes, multibytes:c_string, maxbytes);
@@ -1151,7 +1152,7 @@ module String {
                   nCodepoints += 1;
                   var cp: int(32);
                   var nbytes: c_int;
-                  var multibytes = (this.buff + i-1): c_string;
+                  var multibytes = (addr(this.buff)+i-1): c_string;
                   var maxbytes = (this.len - (i-1)): ssize_t;
                   qio_decode_char_buf(cp, nbytes, multibytes, maxbytes);
                   nextIdx = i-1 + nbytes;
@@ -1656,14 +1657,14 @@ module String {
       while i < result.len {
         var cp: int(32);
         var nbytes: c_int;
-        var multibytes = (result.buff + i): c_string;
+        var multibytes = (addr(result.buff)+i): c_string;
         var maxbytes = (result.len - i): ssize_t;
         qio_decode_char_buf(cp, nbytes, multibytes, maxbytes);
         var lowCodepoint = codepoint_toLower(cp);
         if lowCodepoint != cp && qio_nbytes_char(lowCodepoint) == nbytes {
           // Use the MacOS approach everywhere:  only change the case if
           // the result does not change the number of encoded bytes.
-          qio_encode_char_buf(result.buff + i, lowCodepoint);
+          qio_encode_char_buf(addr(result.buff)+i, lowCodepoint);
         }
         i += nbytes;
       }
@@ -1689,14 +1690,14 @@ module String {
       while i < result.len {
         var cp: int(32);
         var nbytes: c_int;
-        var multibytes = (result.buff + i): c_string;
+        var multibytes = (addr(result.buff)+i): c_string;
         var maxbytes = (result.len - i): ssize_t;
         qio_decode_char_buf(cp, nbytes, multibytes, maxbytes);
         var upCodepoint = codepoint_toUpper(cp);
         if upCodepoint != cp && qio_nbytes_char(upCodepoint) == nbytes {
           // Use the MacOS approach everywhere:  only change the case if
           // the result does not change the number of encoded bytes.
-          qio_encode_char_buf(result.buff + i, upCodepoint);
+          qio_encode_char_buf(addr(result.buff)+i, upCodepoint);
         }
         i += nbytes;
       }
@@ -1725,7 +1726,7 @@ module String {
       while i < result.len {
         var cp: int(32);
         var nbytes: c_int;
-        var multibytes = (result.buff + i): c_string;
+        var multibytes = (addr(result.buff)+i): c_string;
         var maxbytes = (result.len - i): ssize_t;
         qio_decode_char_buf(cp, nbytes, multibytes, maxbytes);
         if codepoint_isAlpha(cp) {
@@ -1735,14 +1736,14 @@ module String {
             if upCodepoint != cp && qio_nbytes_char(upCodepoint) == nbytes {
               // Use the MacOS approach everywhere:  only change the case if
               // the result does not change the number of encoded bytes.
-              qio_encode_char_buf(result.buff + i, upCodepoint);
+              qio_encode_char_buf(addr(result.buff)+i, upCodepoint);
             }
           } else { // last == LETTER
             var lowCodepoint = codepoint_toLower(cp);
             if lowCodepoint != cp && qio_nbytes_char(lowCodepoint) == nbytes {
               // Use the MacOS approach everywhere:  only change the case if
               // the result does not change the number of encoded bytes.
-              qio_encode_char_buf(result.buff + i, lowCodepoint);
+              qio_encode_char_buf(addr(result.buff)+i, lowCodepoint);
             }
           }
         } else {
@@ -1766,14 +1767,14 @@ module String {
 
       var cp: int(32);
       var nbytes: c_int;
-      var multibytes = result.buff: c_string;
+      var multibytes = addr(result.buff): c_string;
       var maxbytes = result.len: ssize_t;
       qio_decode_char_buf(cp, nbytes, multibytes, maxbytes);
       var upCodepoint = codepoint_toUpper(cp);
       if upCodepoint != cp && qio_nbytes_char(upCodepoint) == nbytes {
         // Use the MacOS approach everywhere:  only change the case if
         // the result does not change the number of encoded bytes.
-        qio_encode_char_buf(result.buff, upCodepoint);
+        qio_encode_char_buf(addr(result.buff), upCodepoint);
       }
       return result;
     }
@@ -2127,9 +2128,9 @@ module String {
   inline proc codepointToString(i: int(32)) {
     const mblength = qio_nbytes_char(i): int;
     var (buffer, mbsize) = allocBuffer(mblength+1);
-    qio_encode_char_buf(buffer, i);
+    qio_encode_char_buf(addr(buffer), i);
     buffer[mblength] = 0;
-    var s = new string(buffer, mblength, mbsize, isowned=true, needToCopy=false);
+    var s = new string(addr(buffer), mblength, mbsize, isowned=true, needToCopy=false);
     return s;
   }
 

@@ -134,7 +134,7 @@ module Bytes {
       if isowned && this.buff != nil {
         on __primitive("chpl_on_locale_num",
                        chpl_buildLocaleID(this.locale_id, c_sublocid_any)) {
-          chpl_here_free(this.buff);
+          freeBuffer(this.buff);
         }
       }
     }
@@ -204,7 +204,7 @@ module Bytes {
       //any type
       this.isowned = isowned;
       this.complete();
-      this.reinitString(buff, length, size, needToCopy);
+      this.reinitString(buff:bufferType, length, size, needToCopy);
     }
 
     // This is assumed to be called from this.locale
@@ -304,7 +304,7 @@ module Bytes {
         then halt("index out of bounds of bytes: ", i);
       var (buf, size) = copyChunk(buf=this.buff, off=i-1, len=1,
                                   loc=this.locale_id);
-      return new _bytes(buf, length=1, size=size, needToCopy=false);
+      return new _bytes(addr(buf), length=1, size=size, needToCopy=false);
     }
 
     /*
@@ -717,7 +717,7 @@ module Bytes {
       while thisIdx < localThis.len {
         var cp: int(32);
         var nbytes: c_int;
-        var bufToDecode = (localThis.buff + thisIdx): c_string;
+        var bufToDecode = (addr(localThis.buff)+thisIdx): c_string;
         var maxbytes = (localThis.len - thisIdx): ssize_t;
         qio_decode_char_buf(cp, nbytes, bufToDecode, maxbytes);
 

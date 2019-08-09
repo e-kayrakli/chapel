@@ -8,7 +8,7 @@ module BytesStringCommon {
 
   proc get_c_str(const ref x: ?t): c_string where isBytesOrStringType(t) {
     inline proc _cast(type t:c_string, b:bufferType) {
-      return __primitive("cast", t, b);
+      return __primitive("cast", t, addr(b));
     }
 
     if _local == false && x.locale_id != chpl_nodeID then

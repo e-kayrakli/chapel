@@ -4,7 +4,8 @@ module ByteBufferHelpers {
   pragma "no doc"
   type byteType = uint(8);
   pragma "no doc"
-  type bufferType = c_ptr(uint(8));
+  type bufferType = _ddata(uint(8));
+  type loc_bufferType = c_ptr(uint(8));
 
   // Growth factor to use when extending the buffer for appends
   config param chpl_stringGrowthFactor = 1.5;
@@ -40,8 +41,12 @@ module ByteBufferHelpers {
     return CHPL_RT_MD_STR_COPY_REMOTE - chpl_memhook_md_num();
   }
 
-  inline proc chpl_string_comm_get(dest: bufferType, src_loc_id: int(64),
-                                   src_addr: bufferType, len: integral) {
+  private inline proc _cast(type t: loc_bufferType, v: bufferType) {
+    return __primitive("_wide_get_addr", v):loc_bufferType;
+  }
+
+  inline proc chpl_string_comm_get(dest: loc_bufferType, src_loc_id: int(64),
+                                   src_addr: loc_bufferType, len: integral) {
     __primitive("chpl_comm_get", dest, src_loc_id, src_addr, len.safeCast(size_t));
   }
 
@@ -62,7 +67,7 @@ module ByteBufferHelpers {
   proc reallocBuffer(buf, requestedSize) {
     const allocSize = max(chpl_here_good_alloc_size(requestedSize+1),
                           chpl_string_min_alloc_size);
-    var newBuff = chpl_here_realloc(buf, allocSize,
+    var newBuff = chpl_here_realloc(buf:loc_bufferType, allocSize,
                                 offset_STR_COPY_DATA): bufferType;
     return (newBuff, allocSize);
   }
@@ -70,7 +75,8 @@ module ByteBufferHelpers {
   proc copyRemoteBuffer(src_loc_id: int(64), src_addr: bufferType,
                                 len: int): bufferType {
       const dest = chpl_here_alloc(len+1, offset_STR_COPY_REMOTE): bufferType;
-      chpl_string_comm_get(dest, src_loc_id, src_addr, len);
+      chpl_string_comm_get(dest:loc_bufferType, src_loc_id,
+                           src_addr:loc_bufferType, len);
       dest[len] = 0;
       return dest;
   }
@@ -84,7 +90,7 @@ module ByteBufferHelpers {
   private inline proc _strcmp_local(buf1, len1, buf2, len2) : int {
     // Assumes a and b are on same locale and not empty.
     const size = min(len1, len2);
-    const result =  c_memcmp(buf1, buf2, size);
+    const result =  c_memcmp(buf1:loc_bufferType, buf2:loc_bufferType, size);
 
     if (result == 0) {
       // Handle cases where one string is the beginning of the other
@@ -114,14 +120,22 @@ module ByteBufferHelpers {
     }
   }
 
+  proc addr(buf) {
+    return c_ptrTo(buf[0]);
+  }
+
+  private proc ddataToOffset(buf, off) {
+    return _ddata_shift(byteType, buf, off:int); // cast is needed for byteIndex
+  }
+
   proc copyChunk(buf, off, len, loc) {
     if !_local && loc != chpl_nodeID {
-      var newBuf = copyRemoteBuffer(loc, buf+off, len);
+      var newBuf = copyRemoteBuffer(loc, ddataToOffset(buf, off), len);
       return (newBuf, len);
     }
     else {
       var (newBuf,size) = allocBuffer(len+1);
-      c_memcpy(newBuf, buf+off, len);
+      c_memcpy(newBuf:loc_bufferType, buf:loc_bufferType+off, len);
       return (newBuf, size);
     }
   }
@@ -129,29 +143,30 @@ module ByteBufferHelpers {
   //dst must be local
   proc bufferMemcpy(dst, src_loc, src, len, dst_off=0, src_off=0) {
     if !_local && src_loc != chpl_nodeID {
-      chpl_string_comm_get(dst+dst_off, src_loc, src+src_off, len);
+      chpl_string_comm_get(dst:loc_bufferType+dst_off, src_loc,
+                           src:loc_bufferType+src_off, len);
     }
     else {
-      c_memcpy(dst+dst_off, src+src_off, len);
+      c_memcpy(dst:loc_bufferType+dst_off, src:loc_bufferType+src_off, len);
     }
 
   }
 
   proc bufferMemcpyLocal(dst, src, len, dst_off=0, src_off=0) {
-    c_memcpy(dst:bufferType+dst_off, src:bufferType+src_off, len);
+    c_memcpy(dst:loc_bufferType+dst_off, src:loc_bufferType+src_off, len);
   }
 
   proc bufferMemmove(dst, src, len, dst_off=0, src_off=0) {
-    c_memmove(dst+dst_off, src+src_off, len);
+    c_memmove(dst:loc_bufferType+dst_off, src:loc_bufferType+src_off, len);
   }
 
   proc freeBuffer(buf) {
-    chpl_here_free(buf);
+    chpl_here_free(buf:loc_bufferType);
   }
 
   proc getByteFromBuf(buf, off, loc) {
     if !_local && loc != chpl_nodeID {
-      const newBuf = copyRemoteBuffer(loc, buf+off, 1);
+      const newBuf = copyRemoteBuffer(loc, ddataToOffset(buf,off), 1);
       return newBuf[0];
     }
     else {
@@ -160,12 +175,12 @@ module ByteBufferHelpers {
   }
 
   proc bufferEqualsLocal(buf1, off1, buf2, off2, len) {
-    return _strcmp_local(buf1=buf1+off1,len1=len,
-                         buf2=buf2+off2,len2=len) == 0;
+    return _strcmp_local(buf1=addr(buf1)+off1,len1=len,
+                         buf2=addr(buf2)+off2,len2=len) == 0;
   }
 
   proc bufferEquals(buf1, off1, loc1, buf2, off2, loc2, len) {
-    return _strcmp(buf1=buf1+off1,len1=len,loc1=loc1,
-                   buf2=buf2+off2,len2=len,loc2=loc1) == 0;
+    return _strcmp(buf1=ddataToOffset(buf1,off1),len1=len,loc1=loc1,
+                   buf2=ddataToOffset(buf2,off2),len2=len,loc2=loc1) == 0;
   }
 }
