@@ -473,10 +473,6 @@ module String {
     var buff: bufferType = nil;
     pragma "no doc"
     var isowned: bool = true;
-    pragma "no doc"
-    // We use chpl_nodeID as a shortcut to get at here.id without actually constructing
-    // a locale object. Used when determining if we should make a remote transfer.
-    var locale_id = chpl_nodeID; // : chpl_nodeID_t
 
     pragma "no doc"
     proc init() {
@@ -657,6 +653,11 @@ module String {
       :returns: The number of bytes in the string.
       */
     inline proc size return len;
+
+    /*
+      :returns: The locale of the object's buffer.
+      */
+    inline proc locale_id return this.buff.locale.id;
 
     /*
       :returns: The number of codepoints in the string, assuming the
