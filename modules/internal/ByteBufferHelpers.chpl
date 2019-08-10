@@ -41,7 +41,7 @@ module ByteBufferHelpers {
     return CHPL_RT_MD_STR_COPY_REMOTE - chpl_memhook_md_num();
   }
 
-  private inline proc _cast(type t: loc_bufferType, v: bufferType) {
+  inline proc _cast(type t: loc_bufferType, v: bufferType) {
     return __primitive("_wide_get_addr", v):loc_bufferType;
   }
 
@@ -175,8 +175,8 @@ module ByteBufferHelpers {
   }
 
   proc bufferEqualsLocal(buf1, off1, buf2, off2, len) {
-    return _strcmp_local(buf1=addr(buf1)+off1,len1=len,
-                         buf2=addr(buf2)+off2,len2=len) == 0;
+    return _strcmp_local(buf1=buf1:loc_bufferType+off1,len1=len,
+                         buf2=buf2:loc_bufferType+off2,len2=len) == 0;
   }
 
   proc bufferEquals(buf1, off1, loc1, buf2, off2, loc2, len) {
