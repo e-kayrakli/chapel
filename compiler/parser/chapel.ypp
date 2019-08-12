@@ -397,6 +397,7 @@
 
 %type <pch> ident_use ident_def ident_fn_def
 %type <pch> internal_type_ident_def reserved_type_ident_use
+%type <pch> unres_type_ident_def
 %type <pch> fn_ident assignop_ident opt_label_ident
 %type <pch> opt_string
 
@@ -686,6 +687,7 @@ ident_fn_def:
 | TTHIS                    { $$ = "this"; }
 | TFALSE                   { $$ = "false"; redefiningReservedWordError($$); }
 | TTRUE                    { $$ = "true"; redefiningReservedWordError($$); }
+| unres_type_ident_def     { $$ = $1; }
 | internal_type_ident_def  { $$ = $1; redefiningReservedTypeError($1); }
 
 ident_def:
@@ -724,7 +726,6 @@ internal_type_ident_def:
 | TREAL      { $$ = "real"; }
 | TIMAG      { $$ = "imag"; }
 | TCOMPLEX   { $$ = "complex"; }
-| TSTRING    { $$ = "string"; }
 | TSYNC      { $$ = "sync"; }
 | TSINGLE    { $$ = "single"; }
 | TOWNED     { $$ = "owned"; }
@@ -736,6 +737,10 @@ internal_type_ident_def:
 | TLOCALE    { $$ = "locale"; }
 | TNOTHING   { $$ = "nothing"; }
 | TVOID      { $$ = "void"; }
+;
+
+unres_type_ident_def:
+  TSTRING      { $$ = "string"; }
 ;
 
 scalar_type:
@@ -750,6 +755,10 @@ scalar_type:
 | TNOTHING { $$ = new SymExpr(dtNothing->symbol); }
 | TVOID    { $$ = new SymExpr(dtVoid->symbol); }
 ;
+
+/*unres_scalar_type:*/
+  /*TSTRING  { $$ = new SymExpr(dtString->symbol); }*/
+/*;*/
 
 reserved_type_ident_use:
   /* These reserved words can also be used as types but in fewer
