@@ -33,7 +33,7 @@ module ByteBufferHelpers {
   //
   // Externs and constants used to implement strings
   //
-  private        param chpl_string_min_alloc_size: int = 16;
+  private        param chpl_string_min_alloc_size: int = 4;
 
   pragma "fn synchronization free"
   private extern proc chpl_memhook_md_num(): chpl_mem_descInt_t;
