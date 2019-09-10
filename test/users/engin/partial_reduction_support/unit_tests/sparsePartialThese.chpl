@@ -65,3 +65,5 @@ for c in ParentDom.dim(2) by 2 align 1{
   }
   writeln();
 }
+
+delete layout;
