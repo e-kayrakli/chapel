@@ -74,6 +74,18 @@ module LocaleModel {
       setup();
     }
 
+
+    override proc chpl__serialize() {
+      return (_node_id, local_name.chpl__serialize());
+    }
+
+    proc type chpl_deserialize(data: serialLocaleType) {
+      var l: LocaleModel;
+      l._node_id = data[1];
+      l.local_name = data[2].chpl__deserialize();
+      return l;
+    }
+
     proc init(parent_loc : locale) {
       if doneCreatingLocales {
         halt("Cannot create additional LocaleModel instances");

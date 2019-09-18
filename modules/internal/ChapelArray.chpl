@@ -4104,6 +4104,22 @@ module ChapelArray {
     chpl__uncheckedArrayTransfer(a, b);
   }
 
+  inline proc chpl__uncheckedArrayTransfer(ref a: [] locale, b:[] locale) {
+    on a {
+      var receiverData: [a.domain] serialLocaleType;
+      on b {
+        var senderData: [b.domain] serialLocaleType;
+        for (s,l) in zip(senderData, b) {
+          s = l.chpl__serialize();
+        }
+        receiverData = senderData;
+      }
+      for (r,l) in zip(receiverData, a) {
+        l = LocaleModel.chpl__deserialize(r);
+      }
+    }
+  }
+
   inline proc chpl__uncheckedArrayTransfer(ref a: [], b:[]) {
     if !chpl__serializeAssignment(a, b) && chpl__compatibleForBulkTransfer(a, b) {
       if chpl__bulkTransferArray(a, b) == false {

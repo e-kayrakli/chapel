@@ -90,6 +90,8 @@ module ChapelLocale {
             && subloc != c_sublocid_any
             && subloc != c_sublocid_all);
 
+  type serialLocaleType = (int, __serializeHelper());
+
   /*
     ``locale`` is the abstract class from which the various
     implementations inherit.  It specifies the required interface
@@ -106,6 +108,14 @@ module ChapelLocale {
       this.parent = parent;
     }
 
+    proc chpl__serialize() {
+      var t: serialLocaleType;
+      return t;
+    }
+
+    proc type chpl__deserialize(data: serialLocaleType): locale {
+      return here;
+    }
     //------------------------------------------------------------------------{
     //- Fields and accessors defined for all locale types (not overridable)
     //-
