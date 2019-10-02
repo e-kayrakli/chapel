@@ -165,6 +165,11 @@ static void walkBlockStmt(FnSymbol*         fn,
 
   // Be conservative about unreachable code before the epilogue
   } else if (isDeadCode == false) {
+    //if (VarSymbol *var = toVarSymbol(stmt)) {
+      //if (var->id == 329429) {
+        //gdbShouldBreakHere();
+      //}
+    //}
     // Collect variables that should be autoDestroyed
     if (VarSymbol* var = definesAnAutoDestroyedVariable(stmt)) {
       scope.variableAdd(var);
@@ -205,6 +210,9 @@ static void walkBlockStmt(FnSymbol*         fn,
 
     }
   }
+  //else if (isDeadCode) {
+    //nprint_view(stmt);
+  //}
 }
 
 static void walkBlockScopelessBlock(FnSymbol*         fn,
@@ -232,6 +240,10 @@ static void walkBlock(FnSymbol*         fn,
     addForallIndexVarToScope(&scope, pfs);
 
   for_alist(stmt, block->body) {
+    //if (stmt->id == 1277868) {
+      //std::cout << isDeadCode << std::endl;
+      //nprint_view(block);
+    //}
     //
     // Handle the current statement
     //
@@ -248,6 +260,20 @@ static void walkBlock(FnSymbol*         fn,
       // Don't visit any later code in this block
       // (don't add variable definitions, etc, above).
       isDeadCode = true;
+      if (gotoStmt) {
+        if (DefExpr *nextDE = toDefExpr(stmt->next)) {
+          //std::cout << "DefExpr\n";
+          //nprint_view(nextDE);
+          if (nextDE->sym->hasFlag(FLAG_ERROR_LABEL)) {
+            isDeadCode = false;
+          }
+        }
+      }
+      //if (block->id == 198056) { 
+        ////gdbShouldBreakHere();
+        //nprint_view(stmt);
+        //nprint_view(stmt->next);
+      //}
 
       // The main block for a function or a simple sub-block
       if (parent == NULL || gotoStmt == NULL) {

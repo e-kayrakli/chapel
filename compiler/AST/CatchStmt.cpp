@@ -176,6 +176,12 @@ void CatchStmt::verify() {
   }
 }
 
+static void subsumeBody(BlockStmt *outerBody, BlockStmt *toSubsume) {
+  for_alist(stmt, toSubsume->body) {
+    outerBody->insertAtTail(stmt->copy());
+  }
+}
+
 void CatchStmt::cleanup()
 {
   /*
@@ -250,7 +256,8 @@ void CatchStmt::cleanup()
 
   if (catchall) {
     newBody->insertAtTail(errorDef);
-    newBody->insertAtTail(oldBody);
+    //newBody->insertAtTail(oldBody);
+    subsumeBody(newBody, toBlockStmt(oldBody));
 
   } else {
     CallExpr*  errorExists = new CallExpr(PRIM_NOTEQUAL, castedError, gNil);
@@ -265,7 +272,8 @@ void CatchStmt::cleanup()
                                           new CallExpr("_owned", castedError));
     DefExpr* errorDef = new DefExpr(error, ownedCastedError);
     ifBody->insertAtTail(errorDef);
-    ifBody->insertAtTail(oldBody);
+    //ifBody->insertAtTail(oldBody);
+    subsumeBody(ifBody, toBlockStmt(oldBody));
 
     // Find the parent try statement. If it's a try!, add a call
     // to halt so that isDefinedAllPaths works correctly.
@@ -284,7 +292,6 @@ void CatchStmt::cleanup()
   // If we in the future support `throw;` to throw the currently caught
   // error, we'd update such a throw here to throw 'error'.
 }
-
 
 GenRet CatchStmt::codegen() {
   INT_FATAL("CatchStmt should be removed before codegen");
