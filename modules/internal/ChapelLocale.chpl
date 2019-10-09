@@ -90,7 +90,7 @@ module ChapelLocale {
             && subloc != c_sublocid_any
             && subloc != c_sublocid_all);
 
-  type serialLocaleType = (int, __serializeHelper());
+  type serialLocaleType = int;
 
   /*
     ``locale`` is the abstract class from which the various

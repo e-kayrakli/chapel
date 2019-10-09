@@ -76,13 +76,12 @@ module LocaleModel {
 
 
     override proc chpl__serialize() {
-      return (_node_id, local_name.chpl__serialize());
+      return _node_id;
     }
 
     proc type chpl_deserialize(data: serialLocaleType) {
       var l: LocaleModel;
       l._node_id = data[1];
-      l.local_name = data[2].chpl__deserialize();
       return l;
     }
 
@@ -106,7 +105,18 @@ module LocaleModel {
     override proc chpl_localeid() {
       return chpl_buildLocaleID(_node_id:chpl_nodeID_t, c_sublocid_any);
     }
-    override proc chpl_name() return local_name;
+    override proc chpl_name() {
+      if _node_id == here.id {
+        return local_name;
+      }
+      else {
+        var name: string;
+        on Locales[_node_id] {
+          name = here.name;
+        }
+        return name;
+      }
+    }
 
     //
     // Support for different types of memory:
