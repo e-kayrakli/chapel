@@ -1218,13 +1218,13 @@ proc Block.init(other: Block, privateData,
 
   this.complete();
 
-  /*targetLocales = other.targetLocales;*/
-  /*locDist = other.locDist;*/
+  targetLocales = other.targetLocales;
+  locDist = other.locDist;
 
-  for i in targetLocDom {
-    targetLocales(i) = other.targetLocales(i); // COMM BOTTLENECK
-    locDist(i) = other.locDist(i); // COMM BOTTLENECK
-  }
+  /*for i in targetLocDom {*/
+    /*targetLocales(i) = other.targetLocales(i); // COMM BOTTLENECK*/
+    /*locDist(i) = other.locDist(i); // COMM BOTTLENECK*/
+  /*}*/
 }
 
 proc Block.dsiSupportsPrivatization() param return true;
@@ -1283,8 +1283,9 @@ proc BlockDom.dsiPrivatize(privatizeData) {
   // in initializer we have to pass sparseLayoutType as it has no default value
   var c = new unmanaged BlockDom(rank=rank, idxType=idxType, stridable=stridable,
       sparseLayoutType=privdist.sparseLayoutType, dist=privdist);
-  for i in c.dist.targetLocDom do
-    c.locDoms(i) = locDoms(i);  // COMM BOTTLENECK 720
+  c.locDoms = locDoms;
+  /*for i in c.dist.targetLocDom do*/
+    /*c.locDoms(i) = locDoms(i);  // COMM BOTTLENECK 720*/
   c.whole = {(...privatizeData.dims)};
   return c;
 }
@@ -1292,8 +1293,9 @@ proc BlockDom.dsiPrivatize(privatizeData) {
 proc BlockDom.dsiGetReprivatizeData() return whole.dims();
 
 proc BlockDom.dsiReprivatize(other, reprivatizeData) {
-  for i in dist.targetLocDom do
-    locDoms(i) = other.locDoms(i);  // COMM BOTTLENECK 1440
+  locDoms = other.locDoms;
+  /*for i in dist.targetLocDom do*/
+    /*locDoms(i) = other.locDoms(i);  // COMM BOTTLENECK 1440*/
   whole = {(...reprivatizeData)};
 }
 
