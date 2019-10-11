@@ -998,7 +998,7 @@ module ChapelDistribution {
   // Domain implementations may supply their own dsiAssignDomain
   // that does something else.
   // lhs is a subclass of BaseRectangularDom
-  proc chpl_assignDomainWithGetSetIndices(lhs:?t, rhs: domain)
+  proc chpl_assignDomainWithGetSetIndices(lhs:?t, rhs: domain, avoidRepriv=false)
     where isSubtype(_to_borrowed(t),BaseRectangularDom)
   {
     type arrType = lhs.getBaseArrType();
@@ -1035,7 +1035,8 @@ module ChapelDistribution {
       on e do eCast.dsiPostReallocate();
     }
 
-    if lhs.dsiSupportsPrivatization() {
+    if lhs.dsiSupportsPrivatization() && !avoidRepriv {
+      writeln("repriv coming from assign domain helper");
       _reprivatize(lhs);
     }
   }

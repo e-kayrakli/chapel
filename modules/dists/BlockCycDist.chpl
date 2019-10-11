@@ -652,8 +652,9 @@ proc BlockCyclicDom.dsiSetIndices(x) {
   setup();
 }
 
-proc BlockCyclicDom.dsiAssignDomain(rhs: domain, lhsPrivate:bool) {
-  chpl_assignDomainWithGetSetIndices(this, rhs);
+proc BlockCyclicDom.dsiAssignDomain(rhs: domain, lhsPrivate:bool,
+                                    avoidRepriv=false) {
+  chpl_assignDomainWithGetSetIndices(this, rhs, avoidRepriv);
 }
 
 proc BlockCyclicDom.dsiGetIndices() {

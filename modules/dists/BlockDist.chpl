@@ -961,8 +961,8 @@ proc BlockDom.dsiGetIndices() {
   return whole.getIndices();
 }
 
-proc BlockDom.dsiAssignDomain(rhs: domain, lhsPrivate:bool) {
-  chpl_assignDomainWithGetSetIndices(this, rhs);
+proc BlockDom.dsiAssignDomain(rhs: domain, lhsPrivate:bool, avoidRepriv=false) {
+  chpl_assignDomainWithGetSetIndices(this, rhs, avoidRepriv);
 }
 
 // dsiLocalSlice
@@ -1312,11 +1312,14 @@ proc Block.init(other: Block, privateData,
 
   this.complete();
 
+  /*targetLocales = other.targetLocales;*/
+  /*locDist = other.locDist;*/
+
   for i in targetLocDom {
     if !regularTargetLocales {
-      chpl_targetLocales(i) = other.chpl_targetLocales(i);
+      chpl_targetLocales(i) = other.chpl_targetLocales(i); // COMM BOTTLENECK
     }
-    locDist(i) = other.locDist(i);
+    locDist(i) = other.locDist(i); // COMM BOTTLENECK
   }
 }
 
@@ -1381,7 +1384,7 @@ proc BlockDom.dsiPrivatize(privatizeData) {
       sparseLayoutType=privdist.sparseLayoutType,
       regularTargetLocales=regularTargetLocales, dist=privdist);
   for i in c.dist.targetLocDom do
-    c.locDoms(i) = locDoms(i);
+    c.locDoms(i) = locDoms(i);  // COMM BOTTLENECK 720
   c.whole = {(...privatizeData.dims)};
   return c;
 }
@@ -1390,7 +1393,7 @@ proc BlockDom.dsiGetReprivatizeData() return whole.dims();
 
 proc BlockDom.dsiReprivatize(other, reprivatizeData) {
   for i in dist.targetLocDom do
-    locDoms(i) = other.locDoms(i);
+    locDoms(i) = other.locDoms(i);  // COMM BOTTLENECK 1440
   whole = {(...reprivatizeData)};
 }
 
@@ -1418,7 +1421,7 @@ proc BlockArr.dsiPrivatize(privatizeData) {
       stridable=stridable, sparseLayoutType=sparseLayoutType,
       regularTargetLocales=regularTargetLocales, dom=privdom);
   for localeIdx in c.dom.dist.targetLocDom {
-    c.locArr(localeIdx) = locArr(localeIdx);
+    c.locArr(localeIdx) = locArr(localeIdx);   // COMM BOTTLENECK
     if c.locArr(localeIdx).locale.id == here.id then
       c.myLocArr = c.locArr(localeIdx);
   }
