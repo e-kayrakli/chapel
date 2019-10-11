@@ -643,7 +643,8 @@ module ChapelArray {
   //
   proc chpl__distributed(d: _distribution, dom: domain) {
     if isRectangularDom(dom) {
-      var distDom: domain(dom.rank, dom._value.idxType, dom._value.stridable) dmapped d = dom;
+      var distDom: domain(dom.rank, dom._value.idxType, dom._value.stridable) dmapped d;
+      distDom._instance.dsiAssignDomain(dom, lhsPrivate=false);
       return distDom;
     } else {
       var distDom: domain(dom._value.idxType) dmapped d = dom;
@@ -1925,6 +1926,7 @@ module ChapelArray {
     proc setIndices(x) {
       _value.dsiSetIndices(x);
       if _isPrivatized(_instance) {
+        writeln("reprivatize from setIndices");
         _reprivatize(_value);
       }
     }
@@ -3935,6 +3937,7 @@ module ChapelArray {
   }
 
   proc =(ref a: domain, b: domain) {
+    /*writeln("domain equals");*/
     if a.rank != b.rank then
       compilerError("rank mismatch in domain assignment");
 
@@ -3950,6 +3953,7 @@ module ChapelArray {
     a._instance.dsiAssignDomain(b, lhsPrivate=false);
 
     if _isPrivatized(a._instance) {
+      writeln("privatized domain equals");
       _reprivatize(a._instance);
     }
   }
