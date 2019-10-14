@@ -691,14 +691,14 @@ module ChapelDistribution {
 
     proc deinit() {
       // array implementation can destroy data or other members
-      arr.dsiDestroyArr();
+      dsiDestroyArr();
 
       // not necessary for aliases/slices because the original
       // array will take care of it.
       // This needs to be done after the array elements are destroyed
       // (by dsiDestroyArray above) because the array elements might
       // refer to this inner domain.
-      arr.decEltCountsIfNeeded();
+      decEltCountsIfNeeded();
     }
 
     proc dsiStaticFastFollowCheck(type leadType) param return false;
