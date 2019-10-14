@@ -33,6 +33,7 @@ module ChapelDistribution {
     var pid:int = nullPid; // privatized ID, if privatization is supported
 
     proc deinit() {
+      dsiDestroyDist();
     }
 
     // Returns a distribution that should be freed or nil.
@@ -167,6 +168,7 @@ module ChapelDistribution {
     }
 
     proc deinit() {
+      dsiDestroyDom();
     }
 
     pragma "unsafe"
@@ -688,6 +690,15 @@ module ChapelDistribution {
     }
 
     proc deinit() {
+      // array implementation can destroy data or other members
+      arr.dsiDestroyArr();
+
+      // not necessary for aliases/slices because the original
+      // array will take care of it.
+      // This needs to be done after the array elements are destroyed
+      // (by dsiDestroyArray above) because the array elements might
+      // refer to this inner domain.
+      arr.decEltCountsIfNeeded();
     }
 
     proc dsiStaticFastFollowCheck(type leadType) param return false;
@@ -966,8 +977,6 @@ module ChapelDistribution {
   // we can't include the privatized freeing for DefaultRectangular
   // because of resolution order issues
   proc _delete_dist(dist:unmanaged BaseDist, param privatized:bool) {
-    dist.dsiDestroyDist();
-
     if privatized {
       _freePrivatizedClass(dist.pid, dist);
     }
@@ -976,9 +985,6 @@ module ChapelDistribution {
   }
 
   proc _delete_dom(dom, param privatized:bool) {
-
-    dom.dsiDestroyDom();
-
     if privatized {
       _freePrivatizedClass(dom.pid, dom);
     }
@@ -987,16 +993,6 @@ module ChapelDistribution {
   }
 
   proc _delete_arr(arr: unmanaged BaseArr, param privatized:bool) {
-    // array implementation can destroy data or other members
-    arr.dsiDestroyArr();
-
-    // not necessary for aliases/slices because the original
-    // array will take care of it.
-    // This needs to be done after the array elements are destroyed
-    // (by dsiDestroyArray above) because the array elements might
-    // refer to this inner domain.
-    arr.decEltCountsIfNeeded();
-
     if privatized {
       _freePrivatizedClass(arr.pid, arr);
     }
