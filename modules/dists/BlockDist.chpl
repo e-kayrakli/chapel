@@ -1005,6 +1005,21 @@ proc BlockDom.dsiIndexOrder(i) {
 //
 proc LocBlockDom.contains(i) return myBlock.contains(i);
 
+proc LocBlockDom.chpl__serialize() {
+  return myBlock.dims();
+}
+
+proc type LocBlockDom.chpl__deserialize(data) {
+  var l = new this();
+  l.myBlock = new _domain(defaultDist, l.rank, l.idxType, l.stridable, data);
+  return l;
+}
+
+proc type LocBlockDom.chpl__serialtype() type {
+  var x = new this();
+  return x.myBlock.dims().type;
+}
+
 override proc BlockArr.dsiDisplayRepresentation() {
   for tli in dom.dist.targetLocDom {
     writeln("locArr[", tli, "].myElems = ", for e in locArr[tli].myElems do e);

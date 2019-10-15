@@ -3704,7 +3704,71 @@ module ChapelArray {
     chpl__uncheckedArrayTransfer(a, b);
   }
 
+  inline proc canTypeSerialize(type t) param: bool {
+    if canResolveTypeMethod(t, "chpl__serialtype") {
+      var obj = new t();
+      var serialObj: t.chpl__serialtype();
+      if canResolveMethod(obj, "chpl__serialize") &&
+         canResolveTypeMethod(t, "chpl__deserialize", serialObj) {
+        
+        return true;
+      }
+    }
+    return false;
+  }
+
+  inline proc chpl__uncheckedArrayTransfer(ref a: [] ?t, b:[] t) 
+      where canTypeSerialize(t) {
+
+    /*writeln("fast transfer");*/
+    // assert types are the same
+    on a {
+      var receiverData: [a.domain] a.eltType.chpl__serialtype();
+      on b {
+        var senderData: [b.domain] a.eltType.chpl__serialtype();
+        for (s,l) in zip(senderData, b) {
+          s = l.chpl__serialize();
+        }
+        receiverData = senderData;
+      }
+      for (r,l) in zip(receiverData, a) {
+        l = a.eltType.chpl__deserialize(r);
+      }
+    }
+  }
+
+  inline proc chpl__uncheckedArrayTransfer(ref a: [] locale, b:[] locale) {
+    on a {
+      var receiverData: [a.domain] serialLocaleType;
+      on b {
+        var senderData: [b.domain] serialLocaleType;
+        for (s,l) in zip(senderData, b) {
+          s = l.chpl__serialize();
+        }
+        receiverData = senderData;
+      }
+      for (r,l) in zip(receiverData, a) {
+        l = LocaleModel.chpl__deserialize(r);
+      }
+    }
+  }
+
   inline proc chpl__uncheckedArrayTransfer(ref a: [], b:[]) {
+    /*writeln(a.eltType:string, " ", canTypeSerialize(a.eltType));*/
+    /*writeln("\t", canResolveTypeMethod(a.eltType, "chpl__serialtype"));*/
+    /*writeln("\t", canResolveMethod(a[0], "chpl__serialize"));*/
+    /*if canResolveTypeMethod(a.eltType, "chpl__serialtype") {*/
+
+      /*if a.locale == here {*/
+        /*var serialObj: a.eltType.chpl__serialtype();*/
+        /*[>writeln("\t\t", {1..10}.type:string);<]*/
+        /*[>writeln("\t\t", canResolveTypeMethod(a.eltType, "chpl__deserialize", {1..10}));<]*/
+        /*[>writeln(serialObj.type:string);<]*/
+        /*writeln("\t\t", canResolveTypeMethod(a.eltType, "chpl__deserialize",*/
+              /*serialObj));*/
+      /*}*/
+    /*}*/
+
     if !chpl__serializeAssignment(a, b) && chpl__compatibleForBulkTransfer(a, b) {
       if chpl__bulkTransferArray(a, b) == false {
         chpl__transferArray(a, b);
