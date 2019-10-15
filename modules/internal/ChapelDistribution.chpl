@@ -1036,7 +1036,6 @@ module ChapelDistribution {
     }
 
     if lhs.dsiSupportsPrivatization() && !avoidRepriv {
-      writeln("repriv coming from assign domain helper");
       _reprivatize(lhs);
     }
   }
