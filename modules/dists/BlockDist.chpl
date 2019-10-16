@@ -341,7 +341,7 @@ class Block : BaseDist {
 class LocBlock {
   param rank: int;
   type idxType;
-  const myChunk: domain(rank, idxType);
+  var myChunk: domain(rank, idxType);
 }
 
 //
@@ -763,6 +763,12 @@ proc chpl__computeBlock(locid, targetLocBox, boundingBox) {
 }
 
 proc LocBlock.init(param rank: int,
+                   type idxType) {
+  this.rank = rank;
+  this.idxType = idxType;
+}
+
+proc LocBlock.init(param rank: int,
                    type idxType,
                    locid, // the locale index from the target domain
                    boundingBox,
@@ -998,6 +1004,21 @@ proc BlockDom.dsiMember(i) {
 
 proc BlockDom.dsiIndexOrder(i) {
   return whole.indexOrder(i);
+}
+
+proc LocBlock.chpl__serialize() {
+  return myChunk.dims();
+}
+
+proc type LocBlock.chpl__deserialize(data) {
+  var l = new this();
+  l.myChunk = new _domain(defaultDist, l.rank, l.idxType, false, data);
+  return l;
+}
+
+proc type LocBlock.chpl__serialtype() type {
+  var x = new this();
+  return x.myChunk.dims().type;
 }
 
 //
