@@ -350,7 +350,7 @@ handleArrayTypeCase(LoopExpr* loopExpr, FnSymbol* fn, Expr* indices,
   thenStmt->insertAtTail(new DefExpr(arrayType));
   Symbol* domain = newTemp("_domain");
   domain->addFlag(FLAG_EXPR_TEMP);
-  domain->addFlag(FLAG_NO_AUTO_DESTROY);
+  //domain->addFlag(FLAG_NO_AUTO_DESTROY);
   thenStmt->insertAtTail(new DefExpr(domain));
   thenStmt->insertAtTail(new CallExpr(PRIM_MOVE, domain,
                              new CallExpr("chpl__ensureDomainExpr",
