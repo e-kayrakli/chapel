@@ -40,6 +40,8 @@
 #include "typeSpecifier.h"
 #include "wellknown.h"
 
+#include "view.h"
+
 #include <cctype>
 #include <set>
 #include <vector>
@@ -824,6 +826,7 @@ static void normalizeIfExprBranch(VarSymbol* cond, VarSymbol* result, BlockStmt*
   Expr* last = stmt->body.tail->remove();
   Symbol* localResult = NULL;
 
+  nprint_view(stmt);
   if (isCallExpr(last) || isIfExpr(last) || isUnresolvedSymExpr(last)) {
     localResult = newTemp();
     localResult->addFlag(FLAG_MAYBE_TYPE);
