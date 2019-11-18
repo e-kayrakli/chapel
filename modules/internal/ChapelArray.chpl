@@ -3705,11 +3705,11 @@ module ChapelArray {
   }
 
   inline proc canTypeSerialize(type t) param: bool {
-    if canResolveTypeMethod(t, "chpl__serialtype") {
+    if Reflection.canResolveTypeMethod(t, "chpl__serialtype") {
       var obj = new t();
       var serialObj: t.chpl__serialtype();
-      if canResolveMethod(obj, "chpl__serialize") &&
-         canResolveTypeMethod(t, "chpl__deserialize", serialObj) {
+      if Reflection.canResolveMethod(obj, "chpl__serialize") &&
+         Reflection.canResolveTypeMethod(t, "chpl__deserialize", serialObj) {
         
         return true;
       }
