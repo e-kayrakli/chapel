@@ -526,7 +526,7 @@ printMemAllocs(chpl_mem_descInt_t description, int64_t threshold,
 
   memTableEntry* memEntry;
   c_string memEntryFilename;
-  int n, i;
+  int n, i, l;
   char* loc;
   memTableEntry** table;
 
@@ -556,59 +556,91 @@ printMemAllocs(chpl_mem_descInt_t description, int64_t threshold,
   }
 
   totalWidth = filenameWidth+numberWidth*4+descWidth+20;
-  for (i = 0; i < totalWidth; i++)
-    fprintf(memLogFile, "=");
-  fprintf(memLogFile, "\n");
-  fprintf(memLogFile, "%-*s%-*s%-*s%-*s%-*s%-*s\n",
-         filenameWidth+numberWidth, "Allocated Memory (Bytes)",
-         numberWidth, "Number",
-         numberWidth, "Size",
-         numberWidth, "Total",
-         descWidth, "Description",
-         20, "Address");
-  for (i = 0; i < totalWidth; i++)
-    fprintf(memLogFile, "=");
-  fprintf(memLogFile, "\n");
+  for (l = 0; l < chpl_numNodes; l++) {
+    if (chpl_nodeID == l) {
+      // print the header
+      if (chpl_numNodes == 1) {
+        for (i = 0; i < totalWidth; i++)
+          fprintf(memLogFile, "=");
+        fprintf(memLogFile, "\n");
+      }
+      else {
+        char *localeHeader = (char *)sys_malloc(30*sizeof(char));
+        const int leftPad = 3;
+        int localeHeaderLen, rightPad;
 
-  table = (memTableEntry**)sys_malloc(n*sizeof(memTableEntry*));
-  if (!table)
-    chpl_error("out of memory printing memory table", lineno, filename);
+        snprintf(localeHeader, 30, " LOCALE %d ", chpl_nodeID);
 
-  n = 0;
-  for (i = 0; i < hashSize; i++) {
-    for (memEntry = memTable[i]; memEntry != NULL; memEntry = memEntry->nextInBucket) {
-      size_t chunk = memEntry->number * memEntry->size;
-      if (chunk < threshold)
-        continue;
-      if (description != -1 && memEntry->description != description)
-        continue;
-      table[n++] = memEntry;
+        localeHeaderLen = strlen(localeHeader);
+        rightPad = totalWidth-leftPad-localeHeaderLen;
+
+        for (i = 0; i < leftPad; i++)
+          fprintf(memLogFile, "=");
+
+        fprintf(memLogFile, "%s", localeHeader);
+
+        for (i = 0; i < rightPad; i++)
+          fprintf(memLogFile, "=");
+        fprintf(memLogFile, "\n");
+        sys_free(localeHeader);
+      }
+
+      fprintf(memLogFile, "%-*s%-*s%-*s%-*s%-*s%-*s\n",
+             filenameWidth+numberWidth, "Allocated Memory (Bytes)",
+             numberWidth, "Number",
+             numberWidth, "Size",
+             numberWidth, "Total",
+             descWidth, "Description",
+             20, "Address");
+
+      for (i = 0; i < totalWidth; i++)
+        fprintf(memLogFile, "=");
+      fprintf(memLogFile, "\n");
+
+      table = (memTableEntry**)sys_malloc(n*sizeof(memTableEntry*));
+      if (!table)
+        chpl_error("out of memory printing memory table", lineno, filename);
+
+      n = 0;
+      for (i = 0; i < hashSize; i++) {
+        for (memEntry = memTable[i]; memEntry != NULL; memEntry = memEntry->nextInBucket) {
+          size_t chunk = memEntry->number * memEntry->size;
+          if (chunk < threshold)
+            continue;
+          if (description != -1 && memEntry->description != description)
+            continue;
+          table[n++] = memEntry;
+        }
+      }
+      qsort(table, n, sizeof(memTableEntry*), descCmp);
+
+      loc = (char*)sys_malloc((filenameWidth+numberWidth+1)*sizeof(char));
+
+      for (i = 0; i < n; i++) {
+        memEntry = table[i];
+        if (memEntry->filename) {
+          memEntryFilename = chpl_lookupFilename(memEntry->filename);
+          sprintf(loc, "%s:%" PRId32, memEntryFilename, memEntry->lineno);
+        } else {
+          sprintf(loc, "--");
+        }
+        fprintf(memLogFile, "%-*s%-*zu%-*zu%-*zu%-*s%#-*.*" PRIxPTR "\n",
+               filenameWidth+numberWidth, loc,
+               numberWidth, memEntry->number,
+               numberWidth, memEntry->size,
+               numberWidth, memEntry->size*memEntry->number,
+               descWidth, chpl_mem_descString(memEntry->description),
+               addressWidth, precision, (uintptr_t)memEntry->memAlloc);
+      }
+      for (i = 0; i < totalWidth; i++)
+        fprintf(memLogFile, "=");
+      fprintf(memLogFile, "\n");
+      putchar('\n');
+
+      fflush(stdout);
     }
+    chpl_comm_barrier("memTrack synch");
   }
-  qsort(table, n, sizeof(memTableEntry*), descCmp);
-
-  loc = (char*)sys_malloc((filenameWidth+numberWidth+1)*sizeof(char));
-
-  for (i = 0; i < n; i++) {
-    memEntry = table[i];
-    if (memEntry->filename) {
-      memEntryFilename = chpl_lookupFilename(memEntry->filename);
-      sprintf(loc, "%s:%" PRId32, memEntryFilename, memEntry->lineno);
-    } else {
-      sprintf(loc, "--");
-    }
-    fprintf(memLogFile, "%-*s%-*zu%-*zu%-*zu%-*s%#-*.*" PRIxPTR "\n",
-           filenameWidth+numberWidth, loc,
-           numberWidth, memEntry->number,
-           numberWidth, memEntry->size,
-           numberWidth, memEntry->size*memEntry->number,
-           descWidth, chpl_mem_descString(memEntry->description),
-           addressWidth, precision, (uintptr_t)memEntry->memAlloc);
-  }
-  for (i = 0; i < totalWidth; i++)
-    fprintf(memLogFile, "=");
-  fprintf(memLogFile, "\n");
-  putchar('\n');
 
   sys_free(table);
   sys_free(loc);
