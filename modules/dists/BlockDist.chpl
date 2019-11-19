@@ -1011,7 +1011,7 @@ proc LocBlock.chpl__serialize() {
 }
 
 proc type LocBlock.chpl__deserialize(data) {
-  var l = new this();
+  var l = new this();  // this is unmanaged
   l.myChunk = new _domain(defaultDist, l.rank, l.idxType, false, data);
   return l;
 }
@@ -1031,7 +1031,7 @@ proc LocBlockDom.chpl__serialize() {
 }
 
 proc type LocBlockDom.chpl__deserialize(data) {
-  var l = new this();
+  var l = new this(); // this is unmanaged
   l.myBlock = new _domain(defaultDist, l.rank, l.idxType, l.stridable, data);
   return l;
 }
@@ -1429,6 +1429,7 @@ proc BlockDom.dsiPrivatize(privatizeData) {
 proc BlockDom.dsiGetReprivatizeData() return whole.dims();
 
 proc BlockDom.dsiReprivatize(other, reprivatizeData) {
+  for ld in locDoms do delete ld;
   locDoms = other.locDoms;
   /*for i in dist.targetLocDom do*/
     /*locDoms(i) = other.locDoms(i);  // COMM BOTTLENECK 1440*/
