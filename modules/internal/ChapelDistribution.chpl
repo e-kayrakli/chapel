@@ -951,7 +951,7 @@ module ChapelDistribution {
   // param privatized here is a workaround for the fact that
   // we can't include the privatized freeing for DefaultRectangular
   // because of resolution order issues
-  proc _delete_dist(dist:unmanaged BaseDist, param privatized:bool) {
+  proc _delete_dist(dist:unmanaged BaseDist, privatized:bool) {
     dist.dsiDestroyDist();
 
     if privatized {
@@ -961,9 +961,14 @@ module ChapelDistribution {
     delete dist;
   }
 
-  proc _delete_dom(dom, param privatized:bool) {
+  proc _delete_dom(dom, privatized:bool) {
 
     dom.dsiDestroyDom();
+
+    extern proc printf(s: c_string, i, p): void;
+    printf("Locale %lli Attempting to free pre-privatized %llx\n",  here.id,
+          __primitive("cast", uint, 
+                      __primitive("_wide_get_addr", dom)));
 
     if privatized {
       _freePrivatizedClass(dom.pid, dom);

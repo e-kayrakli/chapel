@@ -269,6 +269,13 @@ module ChapelArray {
 
     proc _freePrivatizedClassHelp(pid, original) {
       var prv = chpl_getPrivatizedCopy(unmanaged object, pid);
+      try {
+        writef("Locale %i Attempting to free privatized %xu -- original obj %xu\n",  here.id,
+              __primitive("cast", uint, 
+                          __primitive("_wide_get_addr", prv)),
+              __primitive("cast", uint, 
+                          __primitive("_wide_get_addr", original)));
+      } catch e: Error {}
       if prv != original then
         delete prv;
 
@@ -2598,6 +2605,14 @@ module ChapelArray {
         checkRankChange(args);
 
       const rcdom = this.domain[(...args)];
+      for l in Locales do on l {
+        extern proc printf(s: c_string, i, p): void;
+        printf("Locale %lli Created rank change domain %llx\n",  here.id,
+              __primitive("cast", uint, 
+                          __primitive("_wide_get_addr", 
+                              chpl_getPrivatizedCopy(rcdom._value.type,
+                                                     rcdom._value.pid))));
+      }
 
       // TODO: With additional effort, we could collapse rank changes of
       // rank-change array views to a single array view, similar to what
@@ -3521,16 +3536,26 @@ module ChapelArray {
         // The dead code to access the fields of _instance are left in the
         // generated code with --baseline on. This means that these
         // statements cannot come after the _delete_arr call.
-        param domIsPrivatized  = _isPrivatized(domToRemove);
+        extern proc printf(s: c_string, i, pa, pd, t: c_string): void;
+        printf("Locale %lli Attempting to free array %llx with dom %llx that has type %s\n",  here.id,
+              __primitive("cast", uint, 
+                          __primitive("_wide_get_addr", _instance)),
+              __primitive("cast", uint, 
+                          __primitive("_wide_get_addr", domToRemove)),
+        __primitive("typeof", domToRemove):string);
+        /*var domIsPrivatized  = _isPrivatized(domToRemove);*/
+        var domIsPrivatized = false;
         // Store the instance's dom class before the instance is destroyed
         const instanceDom = domToRemove;
         if domToRemove != nil {
           // remove that domain
           (domToFree, distToRemove) = domToRemove!.remove();
+          domIsPrivatized = domToRemove!.pid != nullPid;
         }
-        param distIsPrivatized = _isPrivatized(distToRemove);
+        var distIsPrivatized = false;
         if distToRemove != nil {
           distToFree = distToRemove!.remove();
+          distIsPrivatized = distToRemove!.pid != nullPid;
         }
         if arrToFree != nil then
           _delete_arr(_instance, _isPrivatized(_instance));
