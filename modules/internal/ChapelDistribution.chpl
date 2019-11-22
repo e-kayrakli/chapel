@@ -965,11 +965,6 @@ module ChapelDistribution {
 
     dom.dsiDestroyDom();
 
-    extern proc printf(s: c_string, i, p): void;
-    printf("Locale %lli Attempting to free pre-privatized %llx\n",  here.id,
-          __primitive("cast", uint, 
-                      __primitive("_wide_get_addr", dom)));
-
     if privatized {
       _freePrivatizedClass(dom.pid, dom);
     }
