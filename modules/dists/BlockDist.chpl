@@ -1493,8 +1493,8 @@ where !disableBlockDistBulkTransfer {
   if debugBlockDistBulkTransfer then
     writeln("In BlockDist.doiBulkTransferToKnown(DefaultRectangular)");
 
-  coforall j in dom.dist.activeTargetLocales(srcDom) {
-    on dom.dist.targetLocales(j) {
+  var activeLocs = dom.dist.activeTargetLocales(srcDom);
+  forall j in activeLocs {
       const Src = if _privatization then chpl_getPrivatizedCopy(this.type, pid) else this;
       const inters = Src.dom.locDoms(j).myBlock[srcDom];
 
@@ -1505,7 +1505,6 @@ where !disableBlockDistBulkTransfer {
 
       const elemActual = Src.locArr[j].myElems._value;
       chpl__bulkTransferArray(Dest, destChunk, elemActual, inters);
-    }
   }
 
   return true;
@@ -1517,8 +1516,8 @@ where !disableBlockDistBulkTransfer {
   if debugBlockDistBulkTransfer then
     writeln("In BlockArr.doiBulkTransferFromKnown(DefaultRectangular)");
 
-  coforall j in dom.dist.activeTargetLocales(destDom) {
-    on dom.dist.targetLocales(j) {
+  const activeLocs = dom.dist.activeTargetLocales(destDom);
+  forall j in activeLocs {
       // Grab privatized copy of 'this' to avoid extra GETs
       const Dest = if _privatization then chpl_getPrivatizedCopy(this.type, pid) else this;
       const inters = Dest.dom.locDoms(j).myBlock[destDom];
@@ -1531,7 +1530,6 @@ where !disableBlockDistBulkTransfer {
 
       const elemActual = Dest.locArr[j].myElems._value;
       chpl__bulkTransferArray(elemActual, inters, Src, srcChunk);
-    }
   }
 
   return true;
