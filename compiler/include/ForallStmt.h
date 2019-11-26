@@ -88,6 +88,9 @@ public:
 
   // indicates a forall expression (vs a forall statement)
   bool isForallExpr() const;
+  //
+  // optimization variables
+  Expr *fastAccessDomain = NULL;
 
 private:
   AList          fIterVars;

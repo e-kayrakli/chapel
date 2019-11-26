@@ -41,6 +41,7 @@
 #include "stringutil.h"
 #include "TransformLogicalShortCircuit.h"
 #include "typeSpecifier.h"
+#include "view.h"
 #include "wellknown.h"
 
 #include <cctype>
@@ -121,6 +122,36 @@ static bool        firstConstructorWarning = true;
 *                                                                             *
 ************************************** | *************************************/
 
+static void findFastAccessDomainCandidates() {
+  forv_Vec(ForallStmt, forall, gForallStmts) {
+    AList &iterExprs = forall->iteratedExpressions();
+    if (iterExprs.length == 1) {  // limit to 1 for now
+      if (UnresolvedSymExpr *urse = toUnresolvedSymExpr(iterExprs.head)) {
+        // it might be in the form `D` where an array with domain D is accessed
+        // in the loop body
+        forall->fastAccessDomain = iterExprs.head;
+      }
+      else if (CallExpr *ce = toCallExpr(iterExprs.head)) {
+        // it might be in the form `A.domain` where A is used in the loop body
+        if (ce->isNamedAstr(astrSdot)) {
+          if (SymExpr *se = toSymExpr(ce->get(2))) {
+            if (VarSymbol *var = toVarSymbol(se->symbol())) {
+              if (var->immediate->const_kind == CONST_KIND_STRING) {
+                if (strcmp(var->immediate->v_string, "_dom") == 0) {
+                  forall->fastAccessDomain = iterExprs.head;
+                }
+              }
+            }
+          } 
+        }
+      }
+      else { 
+        // I don't know what to do with this. Don't do anything for this loop
+      }
+    }
+  }
+}
+
 void normalize() {
   insertModuleInit();
 
@@ -166,6 +197,14 @@ void normalize() {
       }
     }
   }
+
+  findFastAccessDomainCandidates();
+
+  //forv_Vec(ForallStmt, forall, gForallStmts) {
+    //if (forall->fastAccessDomain != NULL) {
+      //nprint_view(forall);
+    //}
+  //}
 
   normalizeBase(theProgram, true);
 

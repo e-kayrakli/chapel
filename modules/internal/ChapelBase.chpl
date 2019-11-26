@@ -2442,6 +2442,14 @@ module ChapelBase {
     return ret;
   }
 
+  inline proc chpl__getFastAccessor(obj, dom: domain) {
+    if canResolveMethod(obj, "_dom") {
+      if obj.domain == dom {
+        return c_ptrTo(obj[dom.localSubdomain().low]);
+      }
+    }
+    return nil;
+  }
 
   pragma "no borrow convert"
   inline proc _removed_cast(in x) {
