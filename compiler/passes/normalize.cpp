@@ -125,11 +125,13 @@ static bool        firstConstructorWarning = true;
 static void findFastAccessDomainCandidates() {
   forv_Vec(ForallStmt, forall, gForallStmts) {
     AList &iterExprs = forall->iteratedExpressions();
-    if (iterExprs.length == 1) {  // limit to 1 for now
+    AList &indexVars = forall->inductionVariables();
+    if (iterExprs.length == 1 && indexVars.length == 1) {  // limit to 1 for now
       if (UnresolvedSymExpr *urse = toUnresolvedSymExpr(iterExprs.head)) {
         // it might be in the form `D` where an array with domain D is accessed
         // in the loop body
         forall->fastAccessDomain = iterExprs.head;
+        forall->fastAccessIndexVar = indexVars.head;
       }
       else if (CallExpr *ce = toCallExpr(iterExprs.head)) {
         // it might be in the form `A.domain` where A is used in the loop body
@@ -139,6 +141,7 @@ static void findFastAccessDomainCandidates() {
               if (var->immediate->const_kind == CONST_KIND_STRING) {
                 if (strcmp(var->immediate->v_string, "_dom") == 0) {
                   forall->fastAccessDomain = iterExprs.head;
+                  forall->fastAccessIndexVar = indexVars.head;
                 }
               }
             }

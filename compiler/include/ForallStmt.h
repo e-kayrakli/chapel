@@ -91,6 +91,7 @@ public:
   //
   // optimization variables
   Expr *fastAccessDomain = NULL;
+  Expr *fastAccessIndexVar = NULL;
 
 private:
   AList          fIterVars;

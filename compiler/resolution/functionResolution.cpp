@@ -2526,6 +2526,16 @@ void resolveCall(CallExpr* call) {
       return;
 
     resolveNormalCall(call);
+
+    // if call is named this
+    // if the call is inside a forall body
+    // if it has two arguments
+    // if the second argument is a symexpr
+    // if the second argument is equal to the forall's fastAccessIndexVar
+    // then add a call right before the forall loop to call the thingy that is
+    // added to ChapelBase with the first argument of the CallExpr and the
+    // fastAccessDomain of the Forall expr
+    // resolve the added calls
   }
 }
 
