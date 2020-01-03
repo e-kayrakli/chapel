@@ -1,6 +1,7 @@
 use Time;
 use Memory;
 use CommDiagnostics;
+use Map;
 
 use BlockDist;
 use CyclicDist;
@@ -18,6 +19,9 @@ enum distType { block, cyclic, blockCyc, stencil };
 config const size = arraySize.tiny;
 config const dist = distType.block;
 config const mode = diagMode.performance;
+
+config var numInstances = 1; // ignored if mode!=diagMode.performance
+var curInstance = 1;
 
 // assume homogeneity
 const totMem = here.physicalMemory(unit = MemUnits.Bytes);
@@ -38,6 +42,12 @@ const nElems = if size == arraySize.tiny then nElemsTiny else
 
 
 var t = new Timer();
+
+const times: map(string, real);
+times["domInit"] = 0.0;
+times["domDeinit"] = 0.0;
+times["arrInit"] = 0.0;
+times["arrDeinit"] = 0.0;
 
 inline proc shouldRunDiag(name) {
   if !reportInit && name.endsWith("Init") then
@@ -77,7 +87,10 @@ inline proc endDiag(name) {
   select(mode) {
     when diagMode.performance {
       t.stop();
-      writeln(name, ": ", t.elapsed());
+      times[name] += t.elapsed();
+      if curInstance == numInstances {
+        writeln(name, ": ", times[name]/numInstances);
+      }
       t.clear();
     }
     when diagMode.correctness { }
@@ -113,85 +126,109 @@ inline proc endDiag(name, x) {
 
 const localDom = {1..nElems};
 
-if mode == diagMode.correctness || dist == distType.block {
-  { // weird blocks are necessary to measure deinit performance
-    startDiag("domInit");
-    const blockDom = localDom dmapped Block(boundingBox=localDom);
-    endDiag("domInit", blockDom);
-    if createArrays {
-      {
-        startDiag("arrInit");
-        const blockArr: [blockDom] elemType;
-        endDiag("arrInit", blockArr);
+if mode != diagMode.performance then
+  numInstances = 1;
 
-        startDiag("arrDeinit");
+if mode == diagMode.correctness || dist == distType.block {
+  for i in 1..numInstances {
+
+    { // weird blocks are necessary to measure deinit performance
+      startDiag("domInit");
+      const blockDom = localDom dmapped Block(boundingBox=localDom);
+      endDiag("domInit", blockDom);
+      if createArrays {
+        {
+          startDiag("arrInit");
+          const blockArr: [blockDom] elemType;
+          endDiag("arrInit", blockArr);
+
+          startDiag("arrDeinit");
+        }
+        endDiag("arrDeinit");
       }
-      endDiag("arrDeinit");
+      startDiag("domDeinit");
     }
-    startDiag("domDeinit");
+    endDiag("domDeinit");
+
+    curInstance += 1;
   }
-  endDiag("domDeinit");
 }
 
 if mode == diagMode.correctness || dist == distType.cyclic {
-  { // weird blocks are necessary to measure deinit performance
-    startDiag("domInit");
-    const cyclicDom = localDom dmapped Cyclic(startIdx=localDom.first);
-    endDiag("domInit", cyclicDom);
-    if createArrays {
-      {
-        startDiag("arrInit");
-        const cyclicArr: [cyclicDom] elemType;
-        endDiag("arrInit", cyclicArr);
+  for i in 1..numInstances {
 
-        startDiag("arrDeinit");
+    { // weird blocks are necessary to measure deinit performance
+      startDiag("domInit");
+      const cyclicDom = localDom dmapped Cyclic(startIdx=localDom.first);
+      endDiag("domInit", cyclicDom);
+      if createArrays {
+        {
+          startDiag("arrInit");
+          const cyclicArr: [cyclicDom] elemType;
+          endDiag("arrInit", cyclicArr);
+
+          startDiag("arrDeinit");
+        }
+        endDiag("arrDeinit");
       }
-      endDiag("arrDeinit");
+      startDiag("domDeinit");
     }
-    startDiag("domDeinit");
+    endDiag("domDeinit");
+
+    curInstance += 1;
   }
-  endDiag("domDeinit");
 }
 
 if mode == diagMode.correctness || dist == distType.blockCyc {
-  { // weird blocks are necessary to measure deinit performance
-    startDiag("domInit");
-    const blockCyclicDom = localDom dmapped BlockCyclic(startIdx=localDom.first,
-                                                        blocksize=5);
-    endDiag("domInit", blockCyclicDom);
-    if createArrays {
-      {
-        startDiag("arrInit");
-        const blockCyclicArr: [blockCyclicDom] elemType;
-        endDiag("arrInit", blockCyclicArr);
-        
-        startDiag("arrDeinit");
-      }
-      endDiag("arrDeinit");
-    }
+  for i in 1..numInstances {
 
-    startDiag("domDeinit");
+    { // weird blocks are necessary to measure deinit performance
+      startDiag("domInit");
+      const blockCyclicDom = localDom dmapped BlockCyclic(startIdx=localDom.first,
+                                                          blocksize=5);
+      endDiag("domInit", blockCyclicDom);
+      if createArrays {
+        {
+          startDiag("arrInit");
+          const blockCyclicArr: [blockCyclicDom] elemType;
+          endDiag("arrInit", blockCyclicArr);
+          
+          startDiag("arrDeinit");
+        }
+        endDiag("arrDeinit");
+      }
+
+      startDiag("domDeinit");
+    }
+    endDiag("domDeinit");
+  
+
+    curInstance += 1;
   }
-  endDiag("domDeinit");
 }
 
 if mode == diagMode.correctness || dist == distType.stencil {
-  { // weird blocks are necessary to measure deinit performance
-    startDiag("domInit");
-    const blockDom = localDom dmapped Stencil(boundingBox=localDom,
-                                              fluff=(1,));
-    endDiag("domInit", blockDom);
-    if createArrays {
-      {
-        startDiag("arrInit");
-        const blockArr: [blockDom] elemType;
-        endDiag("arrInit", blockArr);
+  for i in 1..numInstances {
 
-        startDiag("arrDeinit");
+    { // weird blocks are necessary to measure deinit performance
+      startDiag("domInit");
+      const blockDom = localDom dmapped Stencil(boundingBox=localDom,
+                                                fluff=(1,));
+      endDiag("domInit", blockDom);
+      if createArrays {
+        {
+          startDiag("arrInit");
+          const blockArr: [blockDom] elemType;
+          endDiag("arrInit", blockArr);
+
+          startDiag("arrDeinit");
+        }
+        endDiag("arrDeinit");
       }
-      endDiag("arrDeinit");
+      startDiag("domDeinit");
     }
-    startDiag("domDeinit");
+    endDiag("domDeinit");
+
+    curInstance += 1;
   }
-  endDiag("domDeinit");
 }
