@@ -536,7 +536,7 @@ proc Block.initHelper(boundingBox: domain,
   }
 }
 
-proc Block.targetLocales {
+inline proc Block.targetLocales {
   if regularTargetLocales {
     return Locales;
   }
