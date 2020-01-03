@@ -3535,7 +3535,6 @@ module ChapelArray {
   }
 
   proc =(ref a: domain, b: domain) {
-    /*writeln("domain equals");*/
     if a.rank != b.rank then
       compilerError("rank mismatch in domain assignment");
 
@@ -3549,7 +3548,6 @@ module ChapelArray {
     a._instance.dsiAssignDomain(b, lhsPrivate=false);
 
     if _isPrivatized(a._instance) {
-      writeln("privatized domain equals");
       _reprivatize(a._instance);
     }
   }
