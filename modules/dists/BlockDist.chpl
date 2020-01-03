@@ -1032,7 +1032,7 @@ proc LocBlockDom.chpl__serialize() {
 
 proc type LocBlockDom.chpl__deserialize(data) {
   var l = new this(); // this is unmanaged
-  l.myBlock = new _domain(defaultDist, l.rank, l.idxType, l.stridable, data);
+  l.myBlock = {(...data)};
   return l;
 }
 
@@ -1348,15 +1348,13 @@ proc Block.init(other: Block, privateData,
 
   this.complete();
 
-  targetLocales = other.targetLocales;
-  locDist = other.locDist;
+  /*locDist = other.locDist;*/
 
-  for i in targetLocDom {
-    if !regularTargetLocales {
-      chpl_targetLocales(i) = other.chpl_targetLocales(i); // COMM BOTTLENECK
-    }
-    locDist(i) = other.locDist(i); // COMM BOTTLENECK
+  if !regularTargetLocales {
+    chpl_targetLocales = other.chpl_targetLocales; // COMM BOTTLENECK
   }
+  /*locDist(i) = other.locDist(i); // COMM BOTTLENECK*/
+  locDist = other.locDist;
 }
 
 proc Block.dsiSupportsPrivatization() param return true;
@@ -1419,9 +1417,10 @@ proc BlockDom.dsiPrivatize(privatizeData) {
   var c = new unmanaged BlockDom(rank=rank, idxType=idxType, stridable=stridable,
       sparseLayoutType=privdist.sparseLayoutType,
       regularTargetLocales=regularTargetLocales, dist=privdist);
-  // TODO make this an assignment
-  for i in c.dist.targetLocDom do
-    c.locDoms(i) = locDoms(i);  // COMM BOTTLENECK 720
+  for ld in c.locDoms do delete ld;
+  c.locDoms = locDoms;
+  /*for i in c.dist.targetLocDom do*/
+    /*c.locDoms(i) = locDoms(i);  // COMM BOTTLENECK 720*/
   c.whole = {(...privatizeData.dims)};
   return c;
 }
