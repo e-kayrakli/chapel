@@ -448,6 +448,92 @@ proc _undensCheck(param cond, type argtypes, param errlevel = 2) {
 }
 
 
+record chpl_tlWrapper {
+  param rank: int;
+  param regular: bool;
+  
+  // keep these separate: if we have a multiD domain that is distributed over
+  // `Locales`, then, we'd want to change targetLocDom but not targetLocales
+  var targetLocDom = Locales.domain;
+  var targetLocArr = Locales;
+
+  proc init(param rank, param regular, specifiedLocArr) {
+    this.complete();
+    if rank != 1 && specifiedLocArr.rank == 1 {
+      const factors = _factor(rank, specifiedLocArr.numElements);
+      var ranges: rank*range;
+      for param i in 1..rank do
+        ranges(i) = 0..#factors(i);
+      targetLocDom = {(...ranges)};
+      targetLocArr = reshape(specifiedLocArr, targetLocDom);
+    } else {
+      if specifiedLocArr.rank != rank then
+        compilerError("specified target array of locales must equal 1 or distribution rank");
+      var ranges: rank*range;
+      for param i in 1..rank do
+        ranges(i) = 0..#specifiedLocArr.domain.dim(i).length;
+      targetLocDom = {(...ranges)};
+      targetLocArr = specifiedLocArr;
+    }
+  }
+
+  proc init=(other: chpl_tlWrapper) {
+    this.rank = other.rank;
+    this.regular = other.regular;
+
+    this.targetLocDom = other.targetLocDom;
+    if !regular {
+      this.targetLocArr = other.targetLocArr;
+    }
+  }
+
+  proc setup(specifiedLocArr) {
+    /*param rank = targetLocDom.rank;*/
+    if rank != 1 && specifiedLocArr.rank == 1 {
+      const factors = _factor(rank, specifiedLocArr.numElements);
+      var ranges: rank*range;
+      for param i in 1..rank do
+        ranges(i) = 0..#factors(i);
+      targetLocDom = {(...ranges)};
+      targetLocArr = reshape(specifiedLocArr, targetLocDom);
+    } else {
+      if specifiedLocArr.rank != rank then
+        compilerError("specified target array of locales must equal 1 or distribution rank");
+      var ranges: rank*range;
+      for param i in 1..rank do
+        ranges(i) = 0..#specifiedLocArr.domain.dim(i).length;
+      targetLocDom = {(...ranges)};
+      targetLocArr = specifiedLocArr;
+    }
+  }
+
+  proc this(i: rank*int) const ref {
+    if regular {
+      // flatten the index
+      return Locales[targetLocDom._value.getDataIndex(i)];
+    }
+    else {
+      return targetLocArr[i];
+    }
+  }
+
+  inline proc this(i: int) const ref where rank == 1 {
+    return this[(i,)];
+  }
+
+  iter these() {
+    for l in targetLocArr do yield l;
+  }
+
+  inline proc getTargetLocales() {
+    if regular {
+      return Locales;
+    }
+    else {
+      return targetLocArr;
+    }
+  }
+}
 //
 // setupTargetLocalesArray
 //

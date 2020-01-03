@@ -322,9 +322,10 @@ class Block : BaseDist {
   type idxType = int;
   param regularTargetLocales = false;
   var boundingBox: domain(rank, idxType);
-  var targetLocDom: domain(rank);
-  var chpl_targetLocales: [targetLocDom] locale;
-  var locDist: [targetLocDom] unmanaged LocBlock(rank, idxType);
+  var tlWrapper: chpl_tlWrapper(?, ?);
+  /*var targetLocDom: domain(rank);*/
+  /*var chpl_targetLocales: [targetLocDom] locale;*/
+  var locDist: [tlWrapper.targetLocDom] unmanaged LocBlock(rank, idxType);
   var dataParTasksPerLocale: int;
   var dataParIgnoreRunningTasks: bool;
   var dataParMinGranularity: int;
@@ -454,6 +455,9 @@ proc Block.init(boundingBox: domain,
 
   this.boundingBox = boundingBox : domain(rank, idxType, stridable = false);
 
+  this.tlWrapper = new chpl_tlWrapper(rank, regularTargetLocales,
+                                      targetLocales);
+
   this.sparseLayoutType = _to_unmanaged(sparseLayoutType);
 
   this.complete();
@@ -489,7 +493,11 @@ proc Block.init(boundingBox: domain,
 
   this.boundingBox = boundingBox : domain(rank, idxType, stridable = false);
 
+  this.tlWrapper = new chpl_tlWrapper(rank, regularTargetLocales,
+                                      Locales);
+
   this.sparseLayoutType = _to_unmanaged(sparseLayoutType);
+
 
   this.complete();
 
@@ -510,12 +518,12 @@ proc Block.initHelper(boundingBox: domain,
                       param rank,
                       type idxType) {
 
-  if !this.regularTargetLocales {
-    setupTargetLocalesArray(targetLocDom, this.chpl_targetLocales, targetLocales);
-  }
-  else {
-    this.targetLocDom = Locales.domain;
-  }
+  /*if !this.regularTargetLocales {*/
+    /*setupTargetLocalesArray(targetLocDom, this.chpl_targetLocales, targetLocales);*/
+  /*}*/
+  /*else {*/
+    /*this.targetLocDom = Locales.domain;*/
+  /*}*/
   coforall locid in targetLocDom do
     on this.targetLocales(locid) do
       locDist(locid) = new unmanaged LocBlock(rank, idxType, locid, boundingBox,
@@ -536,13 +544,18 @@ proc Block.initHelper(boundingBox: domain,
   }
 }
 
-inline proc Block.targetLocales {
-  if regularTargetLocales {
-    return Locales;
-  }
-  else {
-    return this.chpl_targetLocales;
-  }
+inline proc Block.targetLocales ref {
+  return this.tlWrapper.targetLocArr;
+  /*if regularTargetLocales {*/
+    /*return Locales;*/
+  /*}*/
+  /*else {*/
+    /*return this.chpl_targetLocales;*/
+  /*}*/
+}
+
+inline proc Block.targetLocDom ref {
+  return this.tlWrapper.targetLocDom;
 }
 
 proc Block.dsiAssign(other: this.type) {
@@ -553,7 +566,7 @@ proc Block.dsiAssign(other: this.type) {
   targetLocDom = other.targetLocDom;
   regularTargetLocales = other.regularTargetLocales;
   if !regularTargetLocales {
-    chpl_targetLocales = other.chpl_targetLocales;
+    targetLocales = other.targetLocales;
   }
   dataParTasksPerLocale = other.dataParTasksPerLocale;
   dataParIgnoreRunningTasks = other.dataParIgnoreRunningTasks;
@@ -572,7 +585,7 @@ proc Block.dsiAssign(other: this.type) {
 proc Block.dsiEqualDMaps(that: Block(?)) {
   proc targetLocalesEquals(that) {
     return (this.regularTargetLocales && that.regularTargetLocales) ||
-           (this.chpl_targetLocales.equals(that.chpl_targetLocales));
+           (this.targetLocales.equals(that.targetLocales));
   }
   return (this.rank == that.rank &&
           this.boundingBox == that.boundingBox &&
@@ -1340,7 +1353,7 @@ proc Block.init(other: Block, privateData,
   this.idxType = idxType;
   this.regularTargetLocales = other.regularTargetLocales;
   boundingBox = {(...privateData(1))};
-  targetLocDom = {(...privateData(2))};
+  this.tlWrapper = other.tlWrapper;
   dataParTasksPerLocale = privateData(3);
   dataParIgnoreRunningTasks = privateData(4);
   dataParMinGranularity = privateData(5);
@@ -1350,9 +1363,9 @@ proc Block.init(other: Block, privateData,
 
   /*locDist = other.locDist;*/
 
-  if !regularTargetLocales {
-    chpl_targetLocales = other.chpl_targetLocales; // COMM BOTTLENECK
-  }
+  /*if !regularTargetLocales {*/
+    /*targetLocales = other.targetLocales; // COMM BOTTLENECK*/
+  /*}*/
   /*locDist(i) = other.locDist(i); // COMM BOTTLENECK*/
   locDist = other.locDist;
 }
@@ -1375,7 +1388,7 @@ proc Block.dsiReprivatize(other, reprivatizeData) {
   targetLocDom = other.targetLocDom;
   regularTargetLocales = other.regularTargetLocales;
   if !regularTargetLocales {
-    chpl_targetLocales = other.chpl_targetLocales;
+    targetLocales = other.targetLocales;
   }
   locDist = other.locDist;
   dataParTasksPerLocale = other.dataParTasksPerLocale;
