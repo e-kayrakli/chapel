@@ -454,11 +454,12 @@ record chpl_tlWrapper {
   
   // keep these separate: if we have a multiD domain that is distributed over
   // `Locales`, then, we'd want to change targetLocDom but not targetLocales
-  var targetLocDom = Locales.domain;
+  var targetLocDom: domain(rank);
   var targetLocArr = Locales;
 
   proc init(param rank, param regular, specifiedLocArr) {
-    this.complete();
+    this.rank = rank;
+    this.regular = regular;
     if rank != 1 && specifiedLocArr.rank == 1 {
       const factors = _factor(rank, specifiedLocArr.numElements);
       var ranges: rank*range;
@@ -475,17 +476,18 @@ record chpl_tlWrapper {
       targetLocDom = {(...ranges)};
       targetLocArr = specifiedLocArr;
     }
+    this.complete();
   }
 
-  proc init=(other: chpl_tlWrapper) {
-    this.rank = other.rank;
-    this.regular = other.regular;
+  /*proc init=(other: chpl_tlWrapper(rank, regular)) {*/
+    /*this.rank = other.rank;*/
+    /*this.regular = other.regular;*/
 
-    this.targetLocDom = other.targetLocDom;
-    if !regular {
-      this.targetLocArr = other.targetLocArr;
-    }
-  }
+    /*this.targetLocDom = other.targetLocDom;*/
+    /*if !regular {*/
+      /*this.targetLocArr = other.targetLocArr;*/
+    /*}*/
+  /*}*/
 
   proc setup(specifiedLocArr) {
     /*param rank = targetLocDom.rank;*/
@@ -533,6 +535,12 @@ record chpl_tlWrapper {
       return targetLocArr;
     }
   }
+}
+
+proc ==(const ref tlWrapper1: chpl_tlWrapper,
+        const ref tlWrapper2: chpl_tlWrapper) {
+  return (tlWrapper1.regular && tlWrapper2.regular) ||
+         (tlWrapper1.targetLocArr == tlWrapper2.targetLocArr);
 }
 //
 // setupTargetLocalesArray

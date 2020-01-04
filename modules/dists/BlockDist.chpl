@@ -320,9 +320,9 @@ This example demonstrates a Block-distributed sparse domain and array:
 class Block : BaseDist {
   param rank: int;
   type idxType = int;
-  param regularTargetLocales = false;
+  /*param regularTargetLocales = false;*/
   var boundingBox: domain(rank, idxType);
-  var tlWrapper: chpl_tlWrapper(?, ?);
+  var tlWrapper: chpl_tlWrapper(rank);
   /*var targetLocDom: domain(rank);*/
   /*var chpl_targetLocales: [targetLocDom] locale;*/
   var locDist: [tlWrapper.targetLocDom] unmanaged LocBlock(rank, idxType);
@@ -357,8 +357,9 @@ class LocBlock {
 //
 class BlockDom: BaseRectangularDom {
   type sparseLayoutType;
-  param regularTargetLocales = false;
-  const dist: unmanaged Block(rank, idxType, regularTargetLocales, sparseLayoutType);
+  /*param regularTargetLocales = false;*/
+  /*const dist: unmanaged Block(rank, idxType, regularTargetLocales, sparseLayoutType);*/
+  const dist: unmanaged Block(rank, idxType, sparseLayoutType);
   var locDoms: [dist.targetLocDom] unmanaged LocBlockDom(rank, idxType, stridable);
   var whole: domain(rank=rank, idxType=idxType, stridable=stridable);
 }
@@ -391,10 +392,10 @@ class LocBlockDom {
 //
 class BlockArr: BaseRectangularArr {
   type sparseLayoutType;
-  param regularTargetLocales = false;
+  /*param regularTargetLocales = false;*/
   var doRADOpt: bool = defaultDoRADOpt;
-  var dom: unmanaged BlockDom(rank, idxType, stridable, sparseLayoutType,
-                              regularTargetLocales);
+  var dom: unmanaged BlockDom(rank, idxType, stridable, sparseLayoutType);
+                              /*regularTargetLocales);*/
   var locArr: [dom.dist.targetLocDom] unmanaged LocBlockArr(eltType, rank, idxType, stridable);
   pragma "local field"
   var myLocArr: unmanaged LocBlockArr(eltType, rank, idxType, stridable)?;
@@ -442,7 +443,7 @@ proc Block.init(boundingBox: domain,
                 type sparseLayoutType = unmanaged DefaultDist) {
   this.rank = rank;
   this.idxType = idxType;
-  this.regularTargetLocales = false;
+  /*this.regularTargetLocales = false;*/
   if rank != boundingBox.rank then
     compilerError("specified Block rank != rank of specified bounding box");
   if idxType != boundingBox.idxType then
@@ -455,8 +456,8 @@ proc Block.init(boundingBox: domain,
 
   this.boundingBox = boundingBox : domain(rank, idxType, stridable = false);
 
-  this.tlWrapper = new chpl_tlWrapper(rank, regularTargetLocales,
-                                      targetLocales);
+  this.tlWrapper = new chpl_tlWrapper(rank=rank, regular=false,
+                                      specifiedLocArr=targetLocales);
 
   this.sparseLayoutType = _to_unmanaged(sparseLayoutType);
 
@@ -480,7 +481,7 @@ proc Block.init(boundingBox: domain,
                 type sparseLayoutType = unmanaged DefaultDist) {
   this.rank = rank;
   this.idxType = idxType;
-  this.regularTargetLocales = true;
+  /*this.regularTargetLocales = true;*/
   if rank != boundingBox.rank then
     compilerError("specified Block rank != rank of specified bounding box");
   if idxType != boundingBox.idxType then
@@ -493,8 +494,8 @@ proc Block.init(boundingBox: domain,
 
   this.boundingBox = boundingBox : domain(rank, idxType, stridable = false);
 
-  this.tlWrapper = new chpl_tlWrapper(rank, regularTargetLocales,
-                                      Locales);
+  this.tlWrapper = new chpl_tlWrapper(rank=rank, regular=true,
+                                      specifiedLocArr=Locales);
 
   this.sparseLayoutType = _to_unmanaged(sparseLayoutType);
 
@@ -563,11 +564,12 @@ proc Block.dsiAssign(other: this.type) {
     on targetLocales(locid) do
       delete locDist(locid);
   boundingBox = other.boundingBox;
-  targetLocDom = other.targetLocDom;
-  regularTargetLocales = other.regularTargetLocales;
-  if !regularTargetLocales {
-    targetLocales = other.targetLocales;
-  }
+  tlWrapper = other.tlWrapper;
+  /*targetLocDom = other.targetLocDom;*/
+  /*regularTargetLocales = other.regularTargetLocales;*/
+  /*if !regularTargetLocales {*/
+    /*targetLocales = other.targetLocales;*/
+  /*}*/
   dataParTasksPerLocale = other.dataParTasksPerLocale;
   dataParIgnoreRunningTasks = other.dataParIgnoreRunningTasks;
   dataParMinGranularity = other.dataParMinGranularity;
@@ -583,13 +585,9 @@ proc Block.dsiAssign(other: this.type) {
 // box and target locale set.
 //
 proc Block.dsiEqualDMaps(that: Block(?)) {
-  proc targetLocalesEquals(that) {
-    return (this.regularTargetLocales && that.regularTargetLocales) ||
-           (this.targetLocales.equals(that.targetLocales));
-  }
   return (this.rank == that.rank &&
           this.boundingBox == that.boundingBox &&
-          targetLocalesEquals(that));
+          this.tlWrapper == that.tlWrapper);
 }
 
 //
@@ -600,7 +598,7 @@ proc Block.dsiEqualDMaps(that) param {
 }
 
 proc Block.dsiClone() {
-  if regularTargetLocales {
+  if tlWrapper.regular {
     return new unmanaged Block(boundingBox,
                      dataParTasksPerLocale, dataParIgnoreRunningTasks,
                      dataParMinGranularity,
@@ -645,8 +643,8 @@ override proc Block.dsiNewRectangularDom(param rank: int, type idxType,
     compilerError("Block domain rank does not match distribution's");
 
   var dom = new unmanaged BlockDom(rank=rank, idxType=idxType, dist=_to_unmanaged(this),
-      stridable=stridable, sparseLayoutType=sparseLayoutType,
-      regularTargetLocales=regularTargetLocales);
+      stridable=stridable, sparseLayoutType=sparseLayoutType);
+      /*regularTargetLocales=regularTargetLocales);*/
   dom.dsiSetIndices(inds);
   if debugBlockDist {
     writeln("Creating new Block domain:");
@@ -929,7 +927,7 @@ proc BlockDom.dsiSerialWrite(x) {
 proc BlockDom.dsiBuildArray(type eltType) {
   var arr = new unmanaged BlockArr(eltType=eltType, rank=rank, idxType=idxType,
       stridable=stridable, sparseLayoutType=sparseLayoutType,
-      regularTargetLocales=regularTargetLocales,
+      /*regularTargetLocales=regularTargetLocales,*/
       dom=_to_unmanaged(this));
   arr.setup();
   return arr;
@@ -1351,7 +1349,7 @@ proc Block.init(other: Block, privateData,
                 type sparseLayoutType = other.sparseLayoutType) {
   this.rank = rank;
   this.idxType = idxType;
-  this.regularTargetLocales = other.regularTargetLocales;
+  /*this.regularTargetLocales = other.regularTargetLocales;*/
   boundingBox = {(...privateData(1))};
   this.tlWrapper = other.tlWrapper;
   dataParTasksPerLocale = privateData(3);
@@ -1385,11 +1383,12 @@ proc Block.dsiGetReprivatizeData() return boundingBox.dims();
 
 proc Block.dsiReprivatize(other, reprivatizeData) {
   boundingBox = {(...reprivatizeData)};
-  targetLocDom = other.targetLocDom;
-  regularTargetLocales = other.regularTargetLocales;
-  if !regularTargetLocales {
-    targetLocales = other.targetLocales;
-  }
+  tlWrapper = other.tlWrapper;
+  /*targetLocDom = other.targetLocDom;*/
+  /*regularTargetLocales = other.regularTargetLocales;*/
+  /*if !regularTargetLocales {*/
+    /*targetLocales = other.targetLocales;*/
+  /*}*/
   locDist = other.locDist;
   dataParTasksPerLocale = other.dataParTasksPerLocale;
   dataParIgnoreRunningTasks = other.dataParIgnoreRunningTasks;
@@ -1428,8 +1427,8 @@ proc BlockDom.dsiPrivatize(privatizeData) {
   var privdist = chpl_getPrivatizedCopy(dist.type, privatizeData.distpid);
   // in initializer we have to pass sparseLayoutType as it has no default value
   var c = new unmanaged BlockDom(rank=rank, idxType=idxType, stridable=stridable,
-      sparseLayoutType=privdist.sparseLayoutType,
-      regularTargetLocales=regularTargetLocales, dist=privdist);
+      sparseLayoutType=privdist.sparseLayoutType, dist = privdist);
+      /*regularTargetLocales=regularTargetLocales, dist=privdist);*/
   for ld in c.locDoms do delete ld;
   c.locDoms = locDoms;
   /*for i in c.dist.targetLocDom do*/
@@ -1469,8 +1468,8 @@ proc BlockArr.dsiGetPrivatizeData() return dom.pid;
 proc BlockArr.dsiPrivatize(privatizeData) {
   var privdom = chpl_getPrivatizedCopy(dom.type, privatizeData);
   var c = new unmanaged BlockArr(eltType=eltType, rank=rank, idxType=idxType,
-      stridable=stridable, sparseLayoutType=sparseLayoutType,
-      regularTargetLocales=regularTargetLocales, dom=privdom);
+      stridable=stridable, sparseLayoutType=sparseLayoutType, dom=privdom);
+      /*regularTargetLocales=regularTargetLocales, dom=privdom);*/
   for localeIdx in c.dom.dist.targetLocDom {
     c.locArr(localeIdx) = locArr(localeIdx);   // COMM BOTTLENECK
     if c.locArr(localeIdx).locale.id == here.id then
