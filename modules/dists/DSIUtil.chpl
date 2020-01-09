@@ -455,7 +455,7 @@ record chpl_tlWrapper {
   // keep these separate: if we have a multiD domain that is distributed over
   // `Locales`, then, we'd want to change targetLocDom but not targetLocales
   var targetLocDom: domain(rank);
-  var targetLocArr = Locales;
+  var targetLocArr: [targetLocDom] locale;
 
   proc init(param rank, param regular, specifiedLocArr) {
     this.rank = rank;
