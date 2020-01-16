@@ -540,7 +540,7 @@ record chpl_tlWrapper {
 proc ==(const ref tlWrapper1: chpl_tlWrapper,
         const ref tlWrapper2: chpl_tlWrapper) {
   return (tlWrapper1.regular && tlWrapper2.regular) ||
-         (tlWrapper1.targetLocArr == tlWrapper2.targetLocArr);
+         (tlWrapper1.targetLocArr.equals(tlWrapper2.targetLocArr));
 }
 //
 // setupTargetLocalesArray

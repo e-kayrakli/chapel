@@ -81,8 +81,11 @@ record TargetLocaleComparator {
 //
 class SparseBlockDom: BaseSparseDomImpl {
   type sparseLayoutType;
+  param regularTargetLocales = false;
   param stridable: bool = false;  // TODO: remove default value eventually
-  const dist: unmanaged Block(rank, idxType, sparseLayoutType);
+  const dist: unmanaged Block(rank=rank, idxType=idxType,
+                              sparseLayoutType=sparseLayoutType,
+                              regularTargetLocales=regularTargetLocales);
   var whole: domain(rank=rank, idxType=idxType, stridable=stridable);
   var locDoms: [dist.targetLocDom] unmanaged LocSparseBlockDom(rank, idxType,
                                                               stridable,
@@ -759,6 +762,7 @@ proc SparseBlockDom.dsiPrivatize(privatizeData) {
   var privdist = chpl_getPrivatizedCopy(dist.type, privatizeData(1));
   var c = new unmanaged SparseBlockDom(rank=rank, idxType=idxType,
                              sparseLayoutType=sparseLayoutType,
+                             regularTargetLocales=regularTargetLocales,
                              stridable=parentDom.stridable, dist=privdist,
                              whole=whole,
                              parentDom=parentDom);

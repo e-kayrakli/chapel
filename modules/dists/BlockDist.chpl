@@ -657,6 +657,7 @@ override proc Block.dsiNewSparseDom(param rank: int, type idxType,
                                     dom: domain) {
   return new unmanaged SparseBlockDom(rank=rank, idxType=idxType,
                             sparseLayoutType=sparseLayoutType,
+                            regularTargetLocales=regularTargetLocales,
                             stridable=dom.stridable,
                             dist=_to_unmanaged(this), whole=dom._value.whole,
                             parentDom=dom);
@@ -1023,6 +1024,7 @@ proc LocBlock.chpl__serialize() {
 
 proc type LocBlock.chpl__deserialize(data) {
   var l = new this();  // this is unmanaged
+  writeln(here, " deserializing LocBlock. data.locale: ", data.locale);
   l.myChunk = new _domain(defaultDist, l.rank, l.idxType, false, data);
   return l;
 }
@@ -1043,6 +1045,7 @@ proc LocBlockDom.chpl__serialize() {
 
 proc type LocBlockDom.chpl__deserialize(data) {
   var l = new this(); // this is unmanaged
+  writeln(here, " deserializing LocBlockDom. data.locale: ", data.locale);
   l.myBlock = {(...data)};
   return l;
 }
@@ -1408,7 +1411,8 @@ proc type BlockDom.chpl__deserialize(data) {
            unmanaged BlockDom(rank=this.rank,
                               idxType=this.idxType,
                               stridable=this.stridable,
-                              sparseLayoutType=this.sparseLayoutType),
+                              sparseLayoutType=this.sparseLayoutType,
+                              regularTargetLocales=this.regularTargetLocales),
            data);
 }
 
@@ -1457,7 +1461,8 @@ proc type BlockArr.chpl__deserialize(data) {
                               idxType=this.idxType,
                               stridable=this.stridable,
                               eltType=this.eltType,
-                              sparseLayoutType=this.sparseLayoutType),
+                              sparseLayoutType=this.sparseLayoutType,
+                              regularTargetLocales=this.regularTargetLocales),
            data);
 }
 

@@ -13,16 +13,16 @@ const slice = offset.expand(-1);
 
 resetCommDiagnostics();
 startCommDiagnostics();
-if doVerboseComm then startVerboseComm();
+if doVerboseComm then startVerboseCommHere();
 ref Areind = A.reindex(offset)[slice];
-if doVerboseComm then stopVerboseComm();
+if doVerboseComm then stopVerboseCommHere();
 stopCommDiagnostics();
 writeln(getCommDiagnostics());
 resetCommDiagnostics();
 startCommDiagnostics();
-if doVerboseComm then startVerboseComm();
+if doVerboseComm then startVerboseCommHere();
 B = Areind;
-if doVerboseComm then stopVerboseComm();
+if doVerboseComm then stopVerboseCommHere();
 stopCommDiagnostics();
 writeln(getCommDiagnostics());
 
