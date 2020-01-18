@@ -948,7 +948,7 @@ record regexp {
 
     if exprType==string {
       try! {
-        const ret = createStringWithOwnedBuffer(replaced);
+        const ret = chpl_createStringWithOwnedBufferNV(replaced);
         return (ret, nreplaced);
       }
     }

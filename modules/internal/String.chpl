@@ -593,7 +593,13 @@ module String {
   }
 
   pragma "no doc"
-  private inline proc chpl_createStringWithOwnedBufferNV(s: bufferType,
+  inline proc chpl_createStringWithOwnedBufferNV(s: c_string,
+                                                         length = s.length) {
+    return chpl_createStringWithOwnedBufferNV(s:bufferType, length, length+1);
+  }
+
+  pragma "no doc"
+  inline proc chpl_createStringWithOwnedBufferNV(s: bufferType,
                                                          length: int,
                                                          size: int) {
     var ret: string;
