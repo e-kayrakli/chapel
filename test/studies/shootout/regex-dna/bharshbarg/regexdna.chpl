@@ -10,29 +10,29 @@ use Regexp;
 
 proc main(args: [] string) {
   var variants = [
-    "agggtaaa|tttaccct",
-    "[cgt]gggtaaa|tttaccc[acg]",
-    "a[act]ggtaaa|tttacc[agt]t",
-    "ag[act]gtaaa|tttac[agt]ct",
-    "agg[act]taaa|ttta[agt]cct",
-    "aggg[acg]aaa|ttt[cgt]ccct",
-    "agggt[cgt]aa|tt[acg]accct",
-    "agggta[cgt]a|t[acg]taccct",
-    "agggtaa[cgt]|[acg]ttaccct"
+    b"agggtaaa|tttaccct",
+    b"[cgt]gggtaaa|tttaccc[acg]",
+    b"a[act]ggtaaa|tttacc[agt]t",
+    b"ag[act]gtaaa|tttac[agt]ct",
+    b"agg[act]taaa|ttta[agt]cct",
+    b"aggg[acg]aaa|ttt[cgt]ccct",
+    b"agggt[cgt]aa|tt[acg]accct",
+    b"agggta[cgt]a|t[acg]taccct",
+    b"agggtaa[cgt]|[acg]ttaccct"
   ];
 
   var subst = [
-    ("B", "(c|g|t)"), ("D", "(a|g|t)"), ("H", "(a|c|t)"), ("K", "(g|t)"),
-    ("M", "(a|c)"), ("N", "(a|c|g|t)"), ("R", "(a|g)"), ("S", "(c|g)"),
-    ("V", "(a|c|g)"), ("W", "(a|t)"), ("Y", "(c|t)")
+    (b"B", b"(c|g|t)"), (b"D", b"(a|g|t)"), (b"H", b"(a|c|t)"), (b"K", b"(g|t)"),
+    (b"M", b"(a|c)"), (b"N", b"(a|c|g|t)"), (b"R", b"(a|g)"), (b"S", b"(c|g)"),
+    (b"V", b"(a|c|g)"), (b"W", b"(a|t)"), (b"Y", b"(c|t)")
   ];
 
-  var data: string;
-  stdin.readstring(data); // read in the entire file
+  var data: bytes;
+  stdin.readbytes(data); // read in the entire file
   const initLen = data.length;
 
   // remove newlines
-  data = compile(">.*\n|\n").sub("", data);
+  data = compile(b">.*\n|\n").sub(b"", data);
 
   var copy = data; // make a copy so we can perform replacements in parallel
 
