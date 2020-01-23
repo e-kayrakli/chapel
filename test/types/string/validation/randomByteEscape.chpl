@@ -34,8 +34,35 @@ catch {
   halt("Unexpected error");
 }
 
+var randomUnescapedString =
+randomEscapedString.encode(errors=encodePolicy.unescape);
+
 // unescaped string must be equal to the initial `bytes`
-writeln("I recovered non UTF8 bytes: ",
-    randomEscapedString.encode(errors=encodePolicy.unescape) == randomBytes);
+var success = randomUnescapedString == randomBytes;
+if success {
+  writeln("I recovered non UTF8 bytes: ", success);
+}
+else {
+  writeln("Initial Buffer");
+  for i in 0..#nBytes {
+    writef("Byte %i: %xu\n", i, buf[i]);
+  }
+
+  writeln("Escaped string");
+  for i in 0..randomEscapedString.numBytes {
+    writef("Byte %i: %xu\n", i, randomEscapedString.buff[i]);
+  }
+
+  writeln("Unescaped string");
+  for i in 0..randomUnescapedString.numBytes {
+    writef("Byte %i: %xu\n", i, randomUnescapedString.buff[i]);
+  }
+
+  writeln("Side-by-side bytes");
+  for i in 0..randomUnescapedString.numBytes {
+    writef("Byte %i: %xu %xu\n", i, buf[i], randomUnescapedString.buff[i]);
+  }
+}
+
 
 

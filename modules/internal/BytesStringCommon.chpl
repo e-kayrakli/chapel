@@ -107,6 +107,8 @@ module BytesStringCommon {
     ret._size = allocSize;
     ret.isowned = true;
 
+    var expectedSize = ret._size;
+
     var thisIdx = 0;
     var decodedIdx = 0;
     while thisIdx < length {
@@ -141,7 +143,7 @@ module BytesStringCommon {
             // in place of a single byte, we may overflow
             const sizeChange = 3-nInvalidBytes;
             (ret.buff, ret._size) = bufferEnsureSize(ret.buff, ret._size,
-                                                     ret.len+sizeChange+1);
+                                                     decodedIdx+sizeChange+1);
 
             qio_encode_char_buf(ret.buff+decodedIdx, replChar);
 
@@ -149,10 +151,18 @@ module BytesStringCommon {
           }
           else if errors == decodePolicy.escape {
 
+            extern proc printf(str, val);
+
             // encoded escape sequence is 3 bytes. And this is per invalid byte
-            const sizeChange = 2*nInvalidBytes;
+            /*const sizeChange = 2*nInvalidBytes;*/
+            expectedSize += 2*nInvalidBytes;
+            printf("decoded idx: %lld\n", decodedIdx);
+            printf("cur size: %lld\n", ret._size);
             (ret.buff, ret._size) = bufferEnsureSize(ret.buff, ret._size,
-                                                     ret.len+sizeChange+1);
+                                                     expectedSize);
+                                                     /*initSize+sizeChange+1);*/
+                                                     /*decodedIdx+3*nInvalidBytes+1);*/
+            printf("post size: %lld\n", ret._size);
             for i in 0..#nInvalidBytes {
               qio_encode_char_buf(ret.buff+decodedIdx,
                                   0xdc00+buf[thisIdx-nInvalidBytes+i]);
