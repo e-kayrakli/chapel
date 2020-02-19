@@ -1004,15 +1004,15 @@ proc BlockDom.setup() {
 }
 
 override proc BlockDom.dsiDestroyDom() {
-  writeln(here, " is destroying the blockDom");
-  writeln("dist.targetLocDom: ", dist.targetLocDom);
-  for localeIdx in dist.targetLocDom do {
-    writeln(dist.targetLocales[localeIdx]);
-    writeln(locDoms(localeIdx));
+  /*writeln(here, " is destroying the blockDom");*/
+  /*writeln("dist.targetLocDom: ", dist.targetLocDom);*/
+  /*for localeIdx in dist.targetLocDom do {*/
+    /*writeln(dist.targetLocales[localeIdx]);*/
+    /*writeln(locDoms(localeIdx));*/
 
-  }
+  /*}*/
   coforall localeIdx in dist.targetLocDom do {
-    writeln("Firing an on for locDom that is on localeIdx: ", localeIdx);
+    /*writeln("Firing an on for locDom that is on localeIdx: ", localeIdx);*/
     on locDoms(localeIdx) do
       delete locDoms(localeIdx);
   }
@@ -1443,13 +1443,13 @@ proc BlockDom.dsiPrivatize(privatizeData) {
       regularTargetLocales=regularTargetLocales, dist=privdist);
   for ld in c.locDoms do delete ld;
   c.locDoms = locDoms;
-  writeln(here, " is privatizing the blockDom");
-  writeln("dist.targetLocDom: ", dist.targetLocDom);
-  for localeIdx in dist.targetLocDom do {
-    writeln(dist.targetLocales[localeIdx]);
-    writeln(locDoms(localeIdx));
+  /*writeln(here, " is privatizing the blockDom");*/
+  /*writeln("dist.targetLocDom: ", dist.targetLocDom);*/
+  /*for localeIdx in dist.targetLocDom do {*/
+    /*writeln(dist.targetLocales[localeIdx]);*/
+    /*writeln(locDoms(localeIdx));*/
 
-  }
+  /*}*/
   /*for i in c.dist.targetLocDom do*/
     /*c.locDoms(i) = locDoms(i);  // COMM BOTTLENECK 720*/
   c.whole = {(...privatizeData.dims)};
@@ -1461,13 +1461,13 @@ proc BlockDom.dsiGetReprivatizeData() return whole.dims();
 proc BlockDom.dsiReprivatize(other, reprivatizeData) {
   /*for ld in locDoms do delete ld;*/
   locDoms = other.locDoms;
-  writeln(here, " is reprivatizing the blockDom");
-  writeln("dist.targetLocDom: ", dist.targetLocDom);
-  for localeIdx in dist.targetLocDom do {
-    writeln(dist.targetLocales[localeIdx]);
-    writeln(locDoms(localeIdx));
+  /*writeln(here, " is reprivatizing the blockDom");*/
+  /*writeln("dist.targetLocDom: ", dist.targetLocDom);*/
+  /*for localeIdx in dist.targetLocDom do {*/
+    /*writeln(dist.targetLocales[localeIdx]);*/
+    /*writeln(locDoms(localeIdx));*/
 
-  }
+  /*}*/
   /*for i in dist.targetLocDom do*/
     /*locDoms(i) = other.locDoms(i);  // COMM BOTTLENECK 1440*/
   whole = {(...reprivatizeData)};
