@@ -1037,10 +1037,10 @@ proc type LocBlock.chpl__deserialize(data) {
   return l;
 }
 
-/*proc type LocBlock.chpl__serialtype() type {*/
-  /*var x = new this();*/
-  /*return x.myChunk.dims().type;*/
-/*}*/
+proc type LocBlock.chpl__serialtype() type {
+  var x = new this();
+  return x.myChunk.dims().type;
+}
 
 //
 // Added as a performance stopgap to avoid returning a domain
@@ -1058,10 +1058,10 @@ proc type LocBlockDom.chpl__deserialize(data) {
   return l;
 }
 
-/*proc type LocBlockDom.chpl__serialtype() type {*/
-  /*var x = new this();*/
-  /*return x.myBlock.dims().type;*/
-/*}*/
+proc type LocBlockDom.chpl__serialtype() type {
+  var x = new this();
+  return x.myBlock.dims().type;
+}
 
 override proc BlockArr.dsiDisplayRepresentation() {
   for tli in dom.dist.targetLocDom {
@@ -1132,10 +1132,21 @@ inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
 // fast/local path and get better performance.
 //
 inline proc BlockArr.dsiAccess(const in idx: rank*idxType) ref {
-  /*local {*/
+  /*writeln("Starting access ", here);*/
+  /*writeln(here, "this target loc dom: ", this.dom.dist.targetLocDom);*/
+  /*writeln(here, "this locDoms dom: ", this.dom.locDoms.domain);*/
+  /*for l in this.dom.locDoms {*/
+    /*writeln(here, "locDom: ", l, " locale: ", l.locale);*/
+  /*}*/
+
+  /*writeln(here, "myLocArr locale: ", myLocArr.locale);*/
+  /*writeln(here, "myLocArr.locDom locale: ", myLocArr!.locDom.locale);*/
+  /*writeln();*/
+  
+  local {
     if myLocArr != nil && myLocArr!.locDom.contains(idx) then
       return myLocArr!.this(idx);
-  /*}*/
+  }
   return nonLocalAccess(idx);
 }
 
@@ -1441,7 +1452,7 @@ proc BlockDom.dsiPrivatize(privatizeData) {
   var c = new unmanaged BlockDom(rank=rank, idxType=idxType, stridable=stridable,
       sparseLayoutType=privdist.sparseLayoutType,// dist = privdist);
       regularTargetLocales=regularTargetLocales, dist=privdist);
-  for ld in c.locDoms do delete ld;
+  /*for ld in c.locDoms do delete ld;*/
   c.locDoms = locDoms;
   /*writeln(here, " is privatizing the blockDom");*/
   /*writeln("dist.targetLocDom: ", dist.targetLocDom);*/
@@ -1460,6 +1471,12 @@ proc BlockDom.dsiGetReprivatizeData() return whole.dims();
 
 proc BlockDom.dsiReprivatize(other, reprivatizeData) {
   /*for ld in locDoms do delete ld;*/
+  /*writeln("Starting reprivatize");*/
+  /*writeln("this target loc dom: ", this.dist.targetLocDom);*/
+  /*writeln("other target loc dom: ", other.dist.targetLocDom);*/
+  /*writeln("this locDoms dom: ", locDoms.domain);*/
+  /*writeln("other locDoms dom: ", other.locDoms.domain);*/
+  // This causes access remote access inside local block errors
   locDoms = other.locDoms;
   /*writeln(here, " is reprivatizing the blockDom");*/
   /*writeln("dist.targetLocDom: ", dist.targetLocDom);*/

@@ -549,6 +549,10 @@ module DefaultRectangular {
     }
 
     proc dsiMember(ind: rank*idxType) {
+      /*writeln(here.id, " is in dsiMember");*/
+      /*for r in 1..rank do*/
+        /*writeln(ranges[r], " ", r.locale.id);*/
+      /*writeln();*/
       for param i in 1..rank do
         if !ranges(i).contains(ind(i)) then
           return false;
