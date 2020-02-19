@@ -1004,7 +1004,15 @@ proc BlockDom.setup() {
 }
 
 override proc BlockDom.dsiDestroyDom() {
+  writeln(here, " is destroying the blockDom");
+  writeln("dist.targetLocDom: ", dist.targetLocDom);
+  for localeIdx in dist.targetLocDom do {
+    writeln(dist.targetLocales[localeIdx]);
+    writeln(locDoms(localeIdx));
+
+  }
   coforall localeIdx in dist.targetLocDom do {
+    writeln("Firing an on for locDom that is on localeIdx: ", localeIdx);
     on locDoms(localeIdx) do
       delete locDoms(localeIdx);
   }
@@ -1024,15 +1032,15 @@ proc LocBlock.chpl__serialize() {
 
 proc type LocBlock.chpl__deserialize(data) {
   var l = new this();  // this is unmanaged
-  writeln(here, " deserializing LocBlock. data.locale: ", data.locale);
+  /*writeln(here, " deserializing LocBlock. data.locale: ", data.locale);*/
   l.myChunk = new _domain(defaultDist, l.rank, l.idxType, false, data);
   return l;
 }
 
-proc type LocBlock.chpl__serialtype() type {
-  var x = new this();
-  return x.myChunk.dims().type;
-}
+/*proc type LocBlock.chpl__serialtype() type {*/
+  /*var x = new this();*/
+  /*return x.myChunk.dims().type;*/
+/*}*/
 
 //
 // Added as a performance stopgap to avoid returning a domain
@@ -1045,15 +1053,15 @@ proc LocBlockDom.chpl__serialize() {
 
 proc type LocBlockDom.chpl__deserialize(data) {
   var l = new this(); // this is unmanaged
-  writeln(here, " deserializing LocBlockDom. data.locale: ", data.locale);
+  /*writeln(here, " deserializing LocBlockDom. data.locale: ", data.locale);*/
   l.myBlock = {(...data)};
   return l;
 }
 
-proc type LocBlockDom.chpl__serialtype() type {
-  var x = new this();
-  return x.myBlock.dims().type;
-}
+/*proc type LocBlockDom.chpl__serialtype() type {*/
+  /*var x = new this();*/
+  /*return x.myBlock.dims().type;*/
+/*}*/
 
 override proc BlockArr.dsiDisplayRepresentation() {
   for tli in dom.dist.targetLocDom {
@@ -1124,10 +1132,10 @@ inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
 // fast/local path and get better performance.
 //
 inline proc BlockArr.dsiAccess(const in idx: rank*idxType) ref {
-  local {
+  /*local {*/
     if myLocArr != nil && myLocArr!.locDom.contains(idx) then
       return myLocArr!.this(idx);
-  }
+  /*}*/
   return nonLocalAccess(idx);
 }
 
@@ -1435,6 +1443,13 @@ proc BlockDom.dsiPrivatize(privatizeData) {
       regularTargetLocales=regularTargetLocales, dist=privdist);
   for ld in c.locDoms do delete ld;
   c.locDoms = locDoms;
+  writeln(here, " is privatizing the blockDom");
+  writeln("dist.targetLocDom: ", dist.targetLocDom);
+  for localeIdx in dist.targetLocDom do {
+    writeln(dist.targetLocales[localeIdx]);
+    writeln(locDoms(localeIdx));
+
+  }
   /*for i in c.dist.targetLocDom do*/
     /*c.locDoms(i) = locDoms(i);  // COMM BOTTLENECK 720*/
   c.whole = {(...privatizeData.dims)};
@@ -1444,8 +1459,15 @@ proc BlockDom.dsiPrivatize(privatizeData) {
 proc BlockDom.dsiGetReprivatizeData() return whole.dims();
 
 proc BlockDom.dsiReprivatize(other, reprivatizeData) {
-  for ld in locDoms do delete ld;
+  /*for ld in locDoms do delete ld;*/
   locDoms = other.locDoms;
+  writeln(here, " is reprivatizing the blockDom");
+  writeln("dist.targetLocDom: ", dist.targetLocDom);
+  for localeIdx in dist.targetLocDom do {
+    writeln(dist.targetLocales[localeIdx]);
+    writeln(locDoms(localeIdx));
+
+  }
   /*for i in dist.targetLocDom do*/
     /*locDoms(i) = other.locDoms(i);  // COMM BOTTLENECK 1440*/
   whole = {(...reprivatizeData)};
