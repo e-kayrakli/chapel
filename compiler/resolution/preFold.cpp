@@ -1585,7 +1585,8 @@ static Expr* preFoldPrimOp(CallExpr* call) {
     // or distribution wrapper type, apply .locale to the _value
     // field of the wrapper
     //
-    if (isRecordWrappedType(type)) {
+    if (isRecordWrappedType(type) ||
+        type == dtLocale) {
       VarSymbol* tmp = newTemp("_locale_tmp_");
 
       call->getStmtExpr()->insertBefore(new DefExpr(tmp));
