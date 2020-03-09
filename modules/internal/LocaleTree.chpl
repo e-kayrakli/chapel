@@ -37,18 +37,19 @@ module LocaleTree {
 
   proc chpl_initLocaleTree() {
     for i in LocaleSpace {
-      var left = nilLocale;
-      var right = nilLocale;
+      var left: unmanaged BaseLocale?;
+      var right: unmanaged BaseLocale?;
       var child = (i+1)*2-1;    // Assumes that indices are dense.
       if child < numLocales {
-        left = rootLocale.getChild(child);
+        left = rootLocale.getChild(child)._instance;
         child += 1;
         if child < numLocales then
-          right = rootLocale.getChild(child);
+          right = rootLocale.getChild(child)._instance;
       }
       on rootLocale.getChild(i) {
-        chpl_localeTree.left = left;
-        chpl_localeTree.right = right;
+        ref clt = chpl_localeTree;
+        clt.left._instance = left;
+        clt.right._instance = right;
       }
     }
   }

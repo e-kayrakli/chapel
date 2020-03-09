@@ -370,6 +370,9 @@ inLocalBlock(CallExpr *call) {
 static int
 markFastSafeFn(FnSymbol *fn, int recurse, std::set<FnSymbol*>& visited) {
 
+  //if (fn->id == 900865)
+    //gdbShouldBreakHere();
+
   // First, handle functions we've already visited.
   if (visited.count(fn) != 0) {
     if (fn->hasFlag(FLAG_FAST_ON))
