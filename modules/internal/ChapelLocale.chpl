@@ -96,7 +96,6 @@ module ChapelLocale {
   const nilLocale = new locale(localeKind.nilLocale);
   /*const anyLocale = new locale(localeKind.any);*/
 
-  pragma "always RVF"
   record _locale {
     /*pragma "owned"*/
     /*pragma "alias scope from this"*/
@@ -130,19 +129,13 @@ module ChapelLocale {
     }
 
     /*proc init=(other: locale) {*/
-      /*local {*/
-        /*this._instance = other._instance;*/
-        /*this.kind = kind;*/
-      /*}*/
+      /*this._instance = other._instance;*/
+      /*this.kind = kind;*/
     /*}*/
 
     proc deinit() {
       /*delete this._instance;*/
     }
-
-    /*inline proc getChild(idx: int): locale {*/
-      /*return this._instance!.getChild(idx);*/
-    /*}*/
 
     inline proc maxTaskPar { return this._instance!.maxTaskPar; }
     inline proc callStackSize { return this._instance!.callStackSize; }
@@ -153,13 +146,6 @@ module ChapelLocale {
       return this._instance!.numPUs();
     }
   }
-
-  /*proc =(ref l1: locale, const ref l2: locale) {*/
-    /*local {*/
-      /*l1._instance = l2._instance;*/
-      /*l1.kind = l2.kind;*/
-    /*}*/
-  /*}*/
 
   /*
     ``locale`` is the abstract class from which the various
