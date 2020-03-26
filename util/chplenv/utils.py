@@ -52,7 +52,7 @@ def run_command(command, stdout=True, stderr=False, cmd_input=None):
         error("command failed: {0}\noutput was:\n{1}".format(
             command, output[1]), CommandError)
     else:
-        output = (output[0].decode(), output[1].decode())
+        output = (output[0].decode(encoding="utf-8"), output[1].decode(encoding="utf-8"))
         if stdout and stderr:
             return output
         elif stdout:
