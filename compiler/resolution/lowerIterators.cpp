@@ -2375,6 +2375,22 @@ expandForLoop(ForLoop* forLoop) {
 
     setupSimultaneousIterators(iterators, indices, iterator, index, forLoop);
 
+    //if (fWarnUnstable) {
+    if (true) {
+      Type *zipperType = NULL;
+      forv_Vec(Symbol *, iterSym, iterators) {
+        if (zipperType == NULL) {
+          zipperType = iterSym->type;
+        }
+        else {
+          if (zipperType != iterSym->type) {
+            USR_WARN(forLoop, "zippering between different types is unstable");
+            break;   // warning once is enough, break
+          }
+        }
+      }
+    }
+
     bool allOrderIndependent = true;
     // For each iterator we add the zip* functions in the appropriate place and
     // if bounds checking was on, we insert the code for that. Note that this
