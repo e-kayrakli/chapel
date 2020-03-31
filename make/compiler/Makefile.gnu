@@ -39,18 +39,22 @@ OPT_CFLAGS = -O3
 PROFILE_CFLAGS = -pg
 PROFILE_LFLAGS = -pg
 
-ifdef CHPL_SANITIZE_ADDRESS
 # Note gcc has leak sanitizer on by default, which isn't that helpful ATM.
 # Disable with `export ASAN_OPTIONS=detect_leaks=0`
-CFLAGS += -fsanitize=address
-CXXFLAGS += -fsanitize=address
-# This produces way more helpful error messages, but has more overhead
+ASAN_FLAGS=-fsanitize=address
+# By default only use -O1 and omit frame pointers for better diagnostics and
+# stack traces.
 ifndef CHPL_SANITIZE_ADDRESS_FAST
-CFLAGS += -fno-omit-frame-pointer -O1 -g
-CXXFLAGS += -fno-omit-frame-pointer -O1 -g
+ASAN_OPT_FLAGS = -fno-omit-frame-pointer -O1 -g
 endif
-LDFLAGS += -fsanitize=address
-CHPL_MAKE_BASE_LFLAGS += -fsanitize=address
+
+ifdef CHPL_SANITIZE_ADDRESS
+CHPL_GEN_SANITIZE_ADDRESS=$(CHPL_SANITIZE_ADDRESS)
+CFLAGS += $(ASAN_FLAGS) $(ASAN_OPT_FLAGS)
+CXXFLAGS += $(ASAN_FLAGS) $(ASAN_OPT_FLAGS)
+
+LDFLAGS += $(ASAN_FLAGS)
+CHPL_MAKE_BASE_LFLAGS += $(ASAN_FLAGS)
 endif
 
 ifdef CHPL_GCOV
@@ -85,6 +89,19 @@ GEN_DYNAMIC_FLAG =
 LIB_STATIC_FLAG =
 LIB_DYNAMIC_FLAG = -shared
 SHARED_LIB_CFLAGS = -fPIC
+
+ifdef CHPL_GEN_SANITIZE_ADDRESS
+ifneq ($(CHPL_MAKE_TASKS), fifo)
+  $(error CHPL_TASKS=fifo is required for ASAN)
+endif
+ifneq ($(CHPL_MAKE_TARGET_MEM), cstdlib)
+  $(error CHPL_MEM=cstdlib is required for ASAN)
+endif
+
+GEN_CFLAGS += $(ASAN_FLAGS) $(ASAN_OPT_FLAGS)
+GEN_LFLAGS += $(ASAN_FLAGS)
+#LDFLAGS += $(ASAN_FLAGS)
+endif
 
 # Set the target architecture for optimization
 ifneq ($(CHPL_MAKE_TARGET_CPU), none)
