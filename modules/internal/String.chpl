@@ -1386,7 +1386,7 @@ module String {
             halt("range out of bounds of string");
         }
         if r.hasHighBound() && (!r.hasLowBound() || r.size > 0) {
-          if (r.high:int < 0) || (r.high:int > this.len) then
+          if (r.high:int < 1) || (r.high:int > this.len) then
             halt("range out of bounds of string");
         }
       }

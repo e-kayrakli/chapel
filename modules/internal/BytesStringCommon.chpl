@@ -334,9 +334,26 @@ module BytesStringCommon {
       const idx = result.find(localNeedle, startIdx..);
       if !idx then break;
 
+      const hasPreRepl = result.indices.contains((idx-1):int);
+      const hasPostRepl = result.indices.contains((idx+localNeedle.numBytes):int);
+
       found += 1;
-      result = result[..idx-1] + localReplacement +
-               result[(idx + localNeedle.numBytes)..];
+
+      if hasPreRepl && hasPostRepl {
+        result = result[..idx-1] + localReplacement +
+                 result[(idx + localNeedle.numBytes)..];
+      }
+      else if hasPreRepl || hasPostRepl {
+        if hasPreRepl {
+          result = result[..idx-1] + localReplacement;
+        }
+        else {
+          result = localReplacement + result[(idx + localNeedle.numBytes)..];
+        }
+      }
+      else {
+        result = localReplacement;
+      }
 
       startIdx = idx + localReplacement.numBytes;
     }
