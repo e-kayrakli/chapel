@@ -2442,14 +2442,19 @@ module ChapelBase {
     return ret;
   }
 
-  inline proc chpl__getFastAccessor(obj, dom: domain) {
-    if canResolveMethod(obj, "_dom") {
-      if obj.domain == dom {
-        return c_ptrTo(obj[dom.localSubdomain().low]);
-      }
-    }
-    return nil;
+  inline proc chpl__canDoFastAccess(obj, dom: domain): bool {
+    use Reflection;
+    return canResolveMethod(obj, "_dom") && obj.domain == dom;
   }
+
+  inline proc chpl__getOrAdvanceAccessPtr(arr: [], ref p: c_void_ptr,
+                                          idx: int, fast: bool) {
+    if fast && p != nil { (p:c_ptr(arr.eltType)) += 1; } else { p = c_ptrTo(arr[idx]); }
+  }
+
+  /*inline proc chpl__accessPtrType(arr: []) type {*/
+    /*return c_ptr(arr.eltType);*/
+  /*}*/
 
   pragma "no borrow convert"
   inline proc _removed_cast(in x) {

@@ -2469,6 +2469,109 @@ static bool resolveBuiltinCastCall(CallExpr* call);
 static bool resolveClassBorrowMethod(CallExpr* call);
 static void resolvePrimInit(CallExpr* call);
 
+ShadowVarSymbol* buildFastPointerShadowVar(const char* nameString) {
+  // TPV - task-private variable, as we have a type and/or an initializer.
+  ShadowVarSymbol* result = new ShadowVarSymbol(TFI_TASK_PRIVATE,
+                                                nameString, NULL);
+  result->type = dtCVoidPtr;
+  result->qual = QUAL_VAL;
+  result->addFlag(FLAG_NO_AUTO_DESTROY);
+  new DefExpr(result);
+  return result;
+}
+
+void analyzeCallForFastPointer(CallExpr* call) {
+
+  // here is a list of conditions:
+  // 1. it is named "this"
+  // 2. has 3 SymExpr arguments
+  // 3. first argument is a method token
+  // 4. last argument is a SymExpr whose symbol is the same as the forall's
+  //    fastAccessIndexVar
+  //
+  // If these hold, then we'll add the second argument to the forall's candidate
+  // arrays set.
+
+  if (call->isNamed("this") &&
+      call->argList.length == 3) {
+
+    ForallStmt *forall = NULL;
+    Expr *currentParent = call->parentExpr;
+    while (currentParent != NULL) {
+      std::cout << "Current parent" << std::endl;
+      forall = toForallStmt(currentParent);
+      if (forall != NULL) {
+        std::cout << "Found a candidate forall" << std::endl;
+        //nprint_view(forall);
+        break;
+      }
+      currentParent = currentParent->parentExpr;
+    }
+
+    if (forall != NULL) {
+      SymExpr *firstArgSE, *secondArgSE, *thirdArgSE;
+      if ((firstArgSE = toSymExpr(call->get(1))) &&
+          (secondArgSE = toSymExpr(call->get(2))) &&
+          (thirdArgSE = toSymExpr(call->get(3))) ) {
+        if (firstArgSE->symbol()->type == dtMethodToken) {
+          // is it the same symbol as the fastAccessIndexSym of the forall
+          if (thirdArgSE->symbol() == forall->fastAccessIndexSym) {
+            Symbol *candidateArrSym = secondArgSE->symbol();
+
+            if (forall->candidateArrays.count(candidateArrSym) == 0) {
+              SET_LINENO(forall);
+
+              forall->candidateArrays.insert(secondArgSE->symbol());
+
+              // define the control flag
+              // assign to it a call to canDoFastAccess
+              VarSymbol *arrFastFlag = new VarSymbol("chpl_fast_flag", dtBool);
+              arrFastFlag->qual = QUAL_CONST_VAL;
+              DefExpr *arrFlagDef = new DefExpr(arrFastFlag);
+
+              CallExpr *arrCheck = new CallExpr("chpl__canDoFastAccess",
+                                                new SymExpr(candidateArrSym),
+                                                forall->fastAccessDomain->copy());
+              CallExpr *arrFlagMove = new CallExpr(PRIM_MOVE, arrFastFlag,
+                                                             arrCheck);
+
+              // define access pointers and add them to the task local variables
+              //VarSymbol *arrFastPtr = new VarSymbol("chpl_fast_ptr");
+              ShadowVarSymbol *arrFastPtr =
+                buildFastPointerShadowVar("chpl_fast_ptr");
+              forall->shadowVariables().insertAtTail(arrFastPtr->defPoint);
+
+
+              // add getOrAdvance call in the loop body
+              // after scope resolve we don't have any unresolved sym expr?
+              CallExpr *getPtr =
+                             new CallExpr(new UnresolvedSymExpr("chpl__getOrAdvanceAccessPtr"),
+                                          new SymExpr(candidateArrSym),
+                                          new SymExpr(arrFastPtr),
+                                          new SymExpr(forall->fastAccessIndexSym),
+                                          new SymExpr(arrFastFlag));
+              
+                                                    
+
+              forall->insertBefore(arrFlagDef);
+              forall->insertBefore(arrFlagMove);
+              forall->loopBody()->insertAtHead(getPtr);
+
+              normalize(arrFlagMove);
+              normalize(getPtr);
+
+              //resolveExpr(arrFlagDef);
+              resolveCall(arrCheck);
+              resolveCall(arrFlagMove);
+              resolveCall(getPtr);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 void resolveCall(CallExpr* call) {
   if (call->primitive) {
     switch (call->primitive->tag) {
@@ -2527,15 +2630,22 @@ void resolveCall(CallExpr* call) {
 
     resolveNormalCall(call);
 
-    // if call is named this
-    // if the call is inside a forall body
-    // if it has two arguments
-    // if the second argument is a symexpr
-    // if the second argument is equal to the forall's fastAccessIndexVar
-    // then add a call right before the forall loop to call the thingy that is
-    // added to ChapelBase with the first argument of the CallExpr and the
-    // fastAccessDomain of the Forall expr
-    // resolve the added calls
+    //std::cout << call->astloc.filename << std::endl;
+    
+  }
+}
+
+static void addFastAccessPointers() {
+  forv_Vec(ForallStmt, fs, gForallStmts) {
+    std::vector<CallExpr *> callExprs;
+    collectCallExprs(fs->loopBody(), callExprs);
+    for_vector(CallExpr, call, callExprs) {
+      if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
+                  36) == 0) {
+      //if (false) {
+        analyzeCallForFastPointer(call);
+      }
+    }
   }
 }
 
@@ -8486,6 +8596,8 @@ void resolve() {
 
   resolveAutoCopies();
 
+  addFastAccessPointers();
+
   resolveOther();
 
   resolveDynamicDispatches();
@@ -8512,6 +8624,7 @@ void resolve() {
 
   handleRuntimeTypes();
 
+
   if (fPrintCallGraph) {
     // This needs to go after resolution is complete, but before
     // pruneResolvedTree() removes unused functions (like the uninstantiated
@@ -8521,6 +8634,8 @@ void resolve() {
 
   if (fPrintUnusedFns || fPrintUnusedInternalFns)
     printUnusedFunctions();
+
+
 
   pruneResolvedTree();
 

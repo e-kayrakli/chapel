@@ -127,11 +127,20 @@ static void findFastAccessDomainCandidates() {
     AList &iterExprs = forall->iteratedExpressions();
     AList &indexVars = forall->inductionVariables();
     if (iterExprs.length == 1 && indexVars.length == 1) {  // limit to 1 for now
-      if (UnresolvedSymExpr *urse = toUnresolvedSymExpr(iterExprs.head)) {
+      if (isUnresolvedSymExpr(iterExprs.head) || isSymExpr(iterExprs.head)) {
         // it might be in the form `D` where an array with domain D is accessed
         // in the loop body
         forall->fastAccessDomain = iterExprs.head;
-        forall->fastAccessIndexVar = indexVars.head;
+
+        if (SymExpr* se = toSymExpr(indexVars.head)) {
+          forall->fastAccessIndexSym = se->symbol();
+        }
+        else if (DefExpr* de = toDefExpr(indexVars.head)) {
+          forall->fastAccessIndexSym = de->sym;
+        }
+        else {
+          INT_FATAL("forall expression's index variable is not a valid expr");
+        }
       }
       else if (CallExpr *ce = toCallExpr(iterExprs.head)) {
         // it might be in the form `A.domain` where A is used in the loop body
@@ -141,7 +150,16 @@ static void findFastAccessDomainCandidates() {
               if (var->immediate->const_kind == CONST_KIND_STRING) {
                 if (strcmp(var->immediate->v_string, "_dom") == 0) {
                   forall->fastAccessDomain = iterExprs.head;
-                  forall->fastAccessIndexVar = indexVars.head;
+                  if (SymExpr* se = toSymExpr(indexVars.head)) {
+                    forall->fastAccessIndexSym = se->symbol();
+                  }
+                  else if (DefExpr* de = toDefExpr(indexVars.head)) {
+                    forall->fastAccessIndexSym = de->sym;
+                  }
+                  else {
+                    nprint_view(indexVars.head);
+                    INT_FATAL("forall expression's index variable is not a valid expr");
+                  }
                 }
               }
             }

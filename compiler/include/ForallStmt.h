@@ -91,7 +91,9 @@ public:
   //
   // optimization variables
   Expr *fastAccessDomain = NULL;
-  Expr *fastAccessIndexVar = NULL;
+  Symbol *fastAccessIndexSym = NULL;
+
+  std::set<Symbol *> candidateArrays;
 
 private:
   AList          fIterVars;
