@@ -1387,7 +1387,7 @@ module String {
       // is used for indexing into byte buffers
       const slicedRange = r[byteIndices];
       return slicedRange.low:int..slicedRange.high:int by
-             slicedRange.stride:int;
+             slicedRange.stride:int align slicedRange.alignment:int;
       
       //return r[byteIndices];
     }
