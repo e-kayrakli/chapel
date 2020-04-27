@@ -1382,32 +1382,14 @@ module String {
     // TODO: move into the public interface in some form? better name if so?
     pragma "no doc"
     proc _getView(r:range(?)) where r.idxType == byteIndex {
-      if boundsChecking {
-        if r.hasLowBound() && (!r.hasHighBound() || r.size > 0) {
-          if r.alignedLow:int < 0 then
-            halt("range ", r, " out of bounds for string");
-        }
-        if r.hasHighBound() && (!r.hasLowBound() || r.size > 0) {
-          // This seems suspicious... why would a range with a high bound
-          // of -1 be in-bounds yet one whose high bound was -2 be out?
-          // It seems as though any bound < 0 or >= len should be OOB.
-          // (This logic pre-dated this PR, though the numbers differed
-          // in the 1-based string/bytes indexing world).
-          // I think that this exists in order to permit the doReplace()
-          // call to work when `find()` returns 0, but this doesn't
-          // seem principled.  See also the similar case in Bytes.chpl.
-          if (r.alignedHigh:int < -1) || (r.alignedHigh:int >= this.buffLen) then
-            halt("range ", r, " out of bounds for string with ", this.numBytes, " bytes");
-        }
-      }
-      const r1 = r[0:r.idxType..(this.buffLen-1):r.idxType];
-      if r1.stridable {
-        const ret = r1.alignedLow:int..r1.alignedHigh:int by r1.stride;
-        return ret;
-      } else {
-        const ret = r1.alignedLow:int..r1.alignedHigh:int;
-        return ret;
-      }
+      const byteIndices = 0..<this.numBytes;
+      // all the callsites assume getView returns int but then the return value
+      // is used for indexing into byte buffers
+      const slicedRange = r[byteIndices];
+      return slicedRange.low:int..slicedRange.high:int by
+             slicedRange.stride:int;
+      
+      //return r[byteIndices];
     }
 
     // Checks to see if r is inside the bounds of this and returns a finite
@@ -1427,42 +1409,27 @@ module String {
       if r.stridable {
         compilerError("string slicing doesn't support stridable codepoint ranges");
       }
-      if boundsChecking {
-        if r.hasLowBound() && (!r.hasHighBound() || r.size > 0) {
-          if r.alignedLow:int < 0 then
-            halt("range ", r, " out of bounds for string");
-        }
-      }
-      // Loop to find whether the low and high codepoint indices
-      // appear within the string.  Note the byte indices of those
-      // locations, if they exist.
-      const cp_low = if r.hasLowBound() && r.alignedLow:int >= 0
-                       then r.alignedLow:int else 0;
-      const cp_high = if r.hasHighBound() then r.alignedHigh:int else this.buffLen;
-      var cp_count = 0;
+      const cpRange = r[this.indices];
+
+      var cpCount = 0;
       var byte_low = this.buffLen;  // empty range if bounds outside string
       var byte_high = this.buffLen - 1;
-      if cp_high > 0 {
+      if cpRange.high >= 0 {
         for (i, nbytes) in this._indexLen() {
-          if cp_count == cp_low {
+          if cpCount == cpRange.low {
             byte_low = i:int;
             if !r.hasHighBound() then
               break;
           }
-          if cp_count == cp_high {
+          if cpCount == cpRange.high {
             byte_high = i:int + nbytes-1;
             break;
           }
-          cp_count += 1;
-        }
-      }
-      if boundsChecking {
-        if r.hasHighBound() && (!r.hasLowBound() || r.size > 0) {
-          if (r.alignedHigh:int < 0) || (r.alignedHigh:int > cp_count) then
-            halt("range ", r, " out of bounds for string with length ", this.size);
+          cpCount += 1;
         }
       }
       const r1 = byte_low..byte_high;
+      // do we need to do this slice?
       const ret = r1[0..#(this.buffLen)];
       return ret;
     }
@@ -1547,6 +1514,10 @@ module String {
         const nLen = needle.buffLen;
         const view = this._getView(region);
         const thisLen = view.size;
+
+        //writeln("nLen: ", nLen);
+        //writeln("view: ", view);
+        //writeln("thisLen: ", view.size);
 
         // Edge cases
         if count {
