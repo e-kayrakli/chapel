@@ -946,11 +946,14 @@ proc _cast(type t, r: range(?)) where isRangeType(t) {
     if this.isAmbiguous() || other.isAmbiguous()
       then return false;
 
+    const globLow = min(low, high, other.low, other.high);
+    const globHigh = max(low, high, other.low, other.high);
+
     var boundedOther = new range(
                           idxType, BoundedRangeType.bounded,
                           s || this.stridable,
-                          if other.hasLowBound() then other.low else low,
-                          if other.hasHighBound() then other.high else high,
+                          if other.hasLowBound() then other.low else globLow,
+                          if other.hasHighBound() then other.high else globHigh,
                           other.stride,
                           other.alignment,
                           true);
