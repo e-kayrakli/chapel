@@ -1382,14 +1382,19 @@ module String {
     // TODO: move into the public interface in some form? better name if so?
     pragma "no doc"
     proc _getView(r:range(?)) where r.idxType == byteIndex {
+
       const byteIndices = 0..<this.numBytes;
-      // all the callsites assume getView returns int but then the return value
-      // is used for indexing into byte buffers
-      const slicedRange = r[byteIndices];
-      return slicedRange.low:int..slicedRange.high:int by
-             slicedRange.stride:int align slicedRange.alignment:int;
-      
-      //return r[byteIndices];
+
+      // cast the argument r to `int` to make sure that we are not dealing with
+      // byteIndex
+      const intR = r:range(int, r.boundedType, r.stridable);
+      if boundsChecking {
+        if !byteIndices.boundsCheck(intR) {
+          halt("range ", r, " out of bounds for string with ",
+               this.numBytes, " bytes");
+        }
+      }
+      return intR[byteIndices];
     }
 
     // Checks to see if r is inside the bounds of this and returns a finite
@@ -1409,9 +1414,19 @@ module String {
       if r.stridable {
         compilerError("string slicing doesn't support stridable codepoint ranges");
       }
-      const cpRange = r[this.indices];
 
+      // cast the argument r to `int` to make sure that we are not dealing with
+      // codepointIdx
+      const intR = r:range(int, r.boundedType, r.stridable);
+      if boundsChecking {
+        if !this.indices.boundsCheck(intR) {
+          halt("range ", r, " out of bounds for string with length ", this.size);
+        }
+      }
+
+      const cpRange = intR[this.indices];
       var cpCount = 0;
+
       var byte_low = this.buffLen;  // empty range if bounds outside string
       var byte_high = this.buffLen - 1;
       if cpRange.high >= 0 {
