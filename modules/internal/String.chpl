@@ -394,6 +394,11 @@ module String {
     return (x + y: int): t;
 
   pragma "no doc"
+  inline proc +(x: ?t, y: t)
+    where t == byteIndex || t == codepointIndex
+    return (x:int + y:int): t;
+
+  pragma "no doc"
   inline proc +(x: bufferType, y: byteIndex) {
     return x+(y:int);
   }
@@ -974,6 +979,9 @@ module String {
                 (i.e., the range ``0..<this.size``)
     */
     proc indices return 0..<size;
+
+    pragma "no doc"
+    proc byteIndices return 0:byteIndex..<this.numBytes:byteIndex;
 
     /*
       :returns: The number of bytes in the string.
@@ -1618,7 +1626,8 @@ module String {
       :returns: the index of the first occurrence of `needle` within a
                 string, or -1 if the `needle` is not in the string.
      */
-    inline proc find(needle: string, region: range(?) = 0:byteIndex..) : byteIndex {
+    inline proc find(needle: string,
+                     region: range(?) = this.byteIndices) : byteIndex {
       // TODO: better name than region?
       return _search_helper(needle, region, count=false): byteIndex;
     }
@@ -1632,7 +1641,8 @@ module String {
       :returns: the index of the first occurrence from the right of `needle`
                 within a string, or -1 if the `needle` is not in the string.
      */
-    inline proc rfind(needle: string, region: range(?) = 0:byteIndex..) : byteIndex {
+    inline proc rfind(needle: string,
+                      region: range(?) = this.byteIndices) : byteIndex {
       return _search_helper(needle, region, count=false, fromLeft=false): byteIndex;
     }
 
@@ -1644,7 +1654,7 @@ module String {
 
       :returns: the number of times `needle` occurs in the string
      */
-    inline proc count(needle: string, region: range(?) = 0..) : int {
+    inline proc count(needle: string, region: range(?) = this.indices) : int {
       return _search_helper(needle, region, count=true);
     }
 
