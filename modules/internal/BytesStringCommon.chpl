@@ -333,16 +333,51 @@ module BytesStringCommon {
     const localNeedle: t = needle.localize();
     const localReplacement: t = replacement.localize();
 
+    //writeln("Starting");
+
+
     while (count < 0) || (found < count) {
+      //writeln("Calling find");
       const idx = result.find(localNeedle, startIdx..);
       if idx == -1 then break;
 
+      //writeln("idx = ", idx);
+      const byteIndices = 0..<result.numBytes;
+      const hasPreRepl = byteIndices.contains((idx-1):int);
+      const hasPostRepl = byteIndices.contains((idx+localNeedle.numBytes):int);
+
+      //writeln("pre post", hasPreRepl, " ", hasPostRepl);
+
       found += 1;
-      result = result[..idx-1] + localReplacement +
-               result[(idx + localNeedle.numBytes)..];
+
+      if hasPreRepl && hasPostRepl {
+        result = result[..idx-1] + localReplacement +
+                 result[(idx + localNeedle.numBytes)..];
+        //writeln("Branch 1");
+      }
+      else if hasPreRepl || hasPostRepl {
+        if hasPreRepl {
+          result = result[..idx-1] + localReplacement;
+          //writeln("Branch 2");
+          // we must have reached the end of string
+          break;
+        }
+        else {
+          result = localReplacement + result[(idx + localNeedle.numBytes)..];
+          //writeln("Branch 3");
+        }
+      }
+      else {
+        //writeln("Branch 4");
+        result = localReplacement;
+        // we are done
+        break;
+      }
 
       startIdx = idx + localReplacement.numBytes;
     }
+    //writeln("Finished");
+    //writeln();
     return result;
   }
 
@@ -363,7 +398,7 @@ module BytesStringCommon {
 
       var start: _idxt = 0;
       var done: bool = false;
-      while !done  {
+      while !done && start < localThis.numBytes {
         var chunk: t;
         var end: _idxt = -1;
 
@@ -391,6 +426,13 @@ module BytesStringCommon {
           splitCount += 1;
         }
         start = end+localSep.numBytes;
+      }
+
+      if start >= localThis.numBytes {
+        // we ended the loop with a leftover empty string
+        if !ignoreEmpty && (splitAll || splitCount < maxsplit) {
+          yield "";
+        }
       }
     }
   }
@@ -512,9 +554,18 @@ module BytesStringCommon {
     assertArgType(t, "doPartition");
 
     const idx = x.find(sep);
-    if idx != -1 {
-      return (x[..idx-1], sep, x[idx+sep.numBytes..]);
-    } else {
+    if idx == 0 { // sep is at the very beginning
+      return ("", sep, x[sep.numBytes:byteIndex..]);
+    }
+    else if idx > 0 {
+      if idx+sep.numBytes < x.numBytes {  // sep is somewhere in the middle
+        return (x[..idx-1], sep, x[idx+sep.numBytes:byteIndex..]);
+      }
+      else {  // sep is at the very end
+        return (x[..idx-1], sep, "");
+      }
+    }
+    else {  // there is no sep
       return (x, "":t, "":t);
     }
   }
