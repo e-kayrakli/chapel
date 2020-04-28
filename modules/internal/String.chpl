@@ -1391,13 +1391,11 @@ module String {
     pragma "no doc"
     proc _getView(r:range(?)) where r.idxType == byteIndex {
 
-      const byteIndices = 0..<this.numBytes;
-
       // cast the argument r to `int` to make sure that we are not dealing with
       // byteIndex
       const intR = r:range(int, r.boundedType, r.stridable);
       if boundsChecking {
-        if !byteIndices.boundsCheck(intR) {
+        if !this.byteIndices.boundsCheck(intR) {
           halt("range ", r, " out of bounds for string with ",
                this.numBytes, " bytes");
         }
@@ -1432,26 +1430,26 @@ module String {
         }
       }
 
+      // find the byte range of the given codepoint range
       const cpRange = intR[this.indices];
       var cpCount = 0;
-
-      var byte_low = this.buffLen;  // empty range if bounds outside string
-      var byte_high = this.buffLen - 1;
+      var byteLow = this.buffLen;  // empty range if bounds outside string
+      var byteHigh = this.buffLen - 1;
       if cpRange.high >= 0 {
-        for (i, nbytes) in this._indexLen() {
+        for (i, nBytes) in this._indexLen() {
           if cpCount == cpRange.low {
-            byte_low = i:int;
+            byteLow = i:int;
             if !r.hasHighBound() then
               break;
           }
           if cpCount == cpRange.high {
-            byte_high = i:int + nbytes-1;
+            byteHigh = i:int + nBytes-1;
             break;
           }
           cpCount += 1;
         }
       }
-      const r1 = byte_low..byte_high;
+      const r1 = byteLow..byteHigh;
       // do we need to do this slice?
       const ret = r1[0..#(this.buffLen)];
       return ret;
@@ -1537,10 +1535,6 @@ module String {
         const nLen = needle.buffLen;
         const view = this._getView(region);
         const thisLen = view.size;
-
-        //writeln("nLen: ", nLen);
-        //writeln("view: ", view);
-        //writeln("thisLen: ", view.size);
 
         // Edge cases
         if count {
