@@ -981,7 +981,7 @@ module String {
     proc indices return 0..<size;
 
     pragma "no doc"
-    proc byteIndices return 0:byteIndex..<this.numBytes:byteIndex;
+    proc byteIndices return 0..<this.numBytes;
 
     /*
       :returns: The number of bytes in the string.
@@ -1400,7 +1400,7 @@ module String {
                this.numBytes, " bytes");
         }
       }
-      return intR[byteIndices];
+      return intR[this.byteIndices];
     }
 
     // Checks to see if r is inside the bounds of this and returns a finite
@@ -1533,7 +1533,9 @@ module String {
         // used because we cant break out of an on-clause early
         var localRet: int = -2;
         const nLen = needle.buffLen;
-        const view = this._getView(region);
+        const byteRegion = region:range(byteIndex, region.boundedType,
+                                        region.stridable);
+        const view = this._getView(byteRegion);
         const thisLen = view.size;
 
         // Edge cases

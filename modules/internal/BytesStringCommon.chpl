@@ -337,8 +337,8 @@ module BytesStringCommon {
       const idx = result.find(localNeedle, startIdx..);
       if idx == -1 then break;
 
-      const hasPreRepl = this.byteIndices.contains((idx-1):int);
-      const hasPostRepl = this.byteIndices.contains((idx+localNeedle.numBytes):int);
+      const hasPreRepl = result.byteIndices.contains((idx-1):int);
+      const hasPostRepl = result.byteIndices.contains((idx+localNeedle.numBytes):int);
 
       found += 1;
 
@@ -541,14 +541,14 @@ module BytesStringCommon {
 
     const idx = x.find(sep);
     if idx == 0 { // sep is at the very beginning
-      return ("", sep, x[sep.numBytes:byteIndex..]);
+      return ("":t, sep, x[sep.numBytes:byteIndex..]);
     }
     else if idx > 0 {
       if idx+sep.numBytes < x.numBytes {  // sep is somewhere in the middle
         return (x[..idx-1], sep, x[idx+sep.numBytes:byteIndex..]);
       }
       else {  // sep is at the very end
-        return (x[..idx-1], sep, "");
+        return (x[..idx-1], sep, "":t);
       }
     }
     else {  // there is no sep
