@@ -1533,9 +1533,7 @@ module String {
         // used because we cant break out of an on-clause early
         var localRet: int = -2;
         const nLen = needle.buffLen;
-        const byteRegion = region:range(byteIndex, region.boundedType,
-                                        region.stridable);
-        const view = this._getView(byteRegion);
+        const view = this._getView(region);
         const thisLen = view.size;
 
         // Edge cases
@@ -1623,7 +1621,7 @@ module String {
                 string, or -1 if the `needle` is not in the string.
      */
     inline proc find(needle: string,
-                     region: range(?) = this.byteIndices) : byteIndex {
+                     region: range(?) = this.byteIndices:range(byteIndex)) : byteIndex {
       // TODO: better name than region?
       return _search_helper(needle, region, count=false): byteIndex;
     }
@@ -1638,7 +1636,7 @@ module String {
                 within a string, or -1 if the `needle` is not in the string.
      */
     inline proc rfind(needle: string,
-                      region: range(?) = this.byteIndices) : byteIndex {
+                      region: range(?) = this.byteIndices:range(byteIndex)) : byteIndex {
       return _search_helper(needle, region, count=false, fromLeft=false): byteIndex;
     }
 
