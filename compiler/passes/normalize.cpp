@@ -122,6 +122,17 @@ static bool        firstConstructorWarning = true;
 *                                                                             *
 ************************************** | *************************************/
 
+static ShadowVarSymbol* buildFastPointerShadowVar(const char* nameString) {
+  // TPV - task-private variable, as we have a type and/or an initializer.
+  ShadowVarSymbol* result = new ShadowVarSymbol(TFI_TASK_PRIVATE,
+                                                nameString, NULL);
+  result->type = dtCVoidPtr;
+  result->qual = QUAL_VAL;
+  result->addFlag(FLAG_NO_AUTO_DESTROY);
+  new DefExpr(result);
+  return result;
+}
+
 static void findFastAccessDomainCandidates() {
   forv_Vec(ForallStmt, forall, gForallStmts) {
     AList &iterExprs = forall->iteratedExpressions();
@@ -168,6 +179,64 @@ static void findFastAccessDomainCandidates() {
       }
       else { 
         // I don't know what to do with this. Don't do anything for this loop
+      }
+    }
+
+    // now add the module function calls for every `foo[i]` assuming that foo is
+    // an array
+    if (forall->fastAccessDomain != NULL) {
+      std::vector<CallExpr *> callExprs;
+      collectCallExprs(forall->loopBody(), callExprs);
+      for_vector(CallExpr, call, callExprs) {
+        if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
+                    36) == 0) {
+          if (call->argList.length == 1) {
+            SymExpr *baseSE = toSymExpr(call->baseExpr);
+            SymExpr *argSE = toSymExpr(call->get(1));
+
+            if (baseSE != NULL && argSE != NULL) {
+
+              SET_LINENO(forall);
+
+              // define the control flag
+              // assign to it a call to canDoFastAccess
+              VarSymbol *arrFastFlag = new VarSymbol("chpl_fast_flag", dtBool);
+              arrFastFlag->qual = QUAL_CONST_VAL;
+              DefExpr *arrFlagDef = new DefExpr(arrFastFlag);
+
+              CallExpr *arrCheck = new CallExpr("chpl__canDoFastAccess",
+                                                new SymExpr(baseSE->symbol()),
+                                                forall->fastAccessDomain->copy());
+              CallExpr *arrFlagMove = new CallExpr(PRIM_MOVE, arrFastFlag,
+                                                              arrCheck);
+
+              // define access pointers and add them to the task local variables
+              //VarSymbol *arrFastPtr = new VarSymbol("chpl_fast_ptr");
+              ShadowVarSymbol *arrFastPtr =
+                buildFastPointerShadowVar("chpl_fast_ptr");
+              forall->shadowVariables().insertAtTail(arrFastPtr->defPoint);
+
+
+              // add getOrAdvance call in the loop body
+              // after scope resolve we don't have any unresolved sym expr?
+              CallExpr *getPtr =
+                             new CallExpr(new UnresolvedSymExpr("chpl__getOrAdvanceAccessPtr"),
+                                          new SymExpr(baseSE->symbol()),
+                                          new SymExpr(arrFastPtr),
+                                          new SymExpr(forall->fastAccessIndexSym),
+                                          new SymExpr(arrFastFlag));
+              
+                                                    
+
+              forall->insertBefore(arrFlagDef);
+              forall->insertBefore(arrFlagMove);
+              forall->loopBody()->insertAtHead(getPtr);
+
+              normalize(arrFlagMove);
+              normalize(getPtr);
+            }
+          }
+        }
       }
     }
   }

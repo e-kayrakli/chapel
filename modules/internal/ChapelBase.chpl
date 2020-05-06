@@ -2442,6 +2442,8 @@ module ChapelBase {
     return ret;
   }
 
+  //proc chpl__symbolSupport
+
   inline proc chpl__canDoFastAccess(obj, dom: domain): bool {
     use Reflection;
     return canResolveMethod(obj, "_dom") && obj.domain == dom;
@@ -2449,7 +2451,12 @@ module ChapelBase {
 
   inline proc chpl__getOrAdvanceAccessPtr(arr: [], ref p: c_void_ptr,
                                           idx: int, fast: bool) {
-    if fast && p != nil { (p:c_ptr(arr.eltType)) += 1; } else { p = c_ptrTo(arr[idx]); }
+    if fast && p != nil {
+      p = (p:c_ptr(arr.eltType)) + 1;
+    }
+    else {
+      p = c_ptrTo(arr[idx]);
+    }
   }
 
   /*inline proc chpl__accessPtrType(arr: []) type {*/

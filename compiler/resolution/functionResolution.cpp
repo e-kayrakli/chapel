@@ -2508,7 +2508,8 @@ void analyzeCallForFastPointer(CallExpr* call) {
       currentParent = currentParent->parentExpr;
     }
 
-    if (forall != NULL) {
+    //if (forall != NULL) {
+    if (false) {
       SymExpr *firstArgSE, *secondArgSE, *thirdArgSE;
       if ((firstArgSE = toSymExpr(call->get(1))) &&
           (secondArgSE = toSymExpr(call->get(2))) &&
