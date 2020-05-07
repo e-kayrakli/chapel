@@ -2624,15 +2624,17 @@ void resolveCall(CallExpr* call) {
 }
 
 static void addFastAccessPointers() {
-  forv_Vec(ForallStmt, fs, gForallStmts) {
-    std::vector<CallExpr *> callExprs;
-    collectCallExprs(fs->loopBody(), callExprs);
-    for_vector(CallExpr, call, callExprs) {
-      //if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
-                  //36) == 0) {
-      //if (false) {
-        analyzeCallForFastPointer(call);
-      //}
+  if (fFastAccessFlag) {
+    forv_Vec(ForallStmt, fs, gForallStmts) {
+      std::vector<CallExpr *> callExprs;
+      collectCallExprs(fs->loopBody(), callExprs);
+      for_vector(CallExpr, call, callExprs) {
+        //if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
+                    //36) == 0) {
+        //if (false) {
+          analyzeCallForFastPointer(call);
+        //}
+      }
     }
   }
 }

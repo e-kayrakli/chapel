@@ -140,111 +140,113 @@ static ShadowVarSymbol* buildFastPointerShadowVar(const char* nameString) {
 }
 
 static void findFastAccessDomainCandidates() {
-  forv_Vec(ForallStmt, forall, gForallStmts) {
-    AList &iterExprs = forall->iteratedExpressions();
-    AList &indexVars = forall->inductionVariables();
-    if (iterExprs.length == 1 && indexVars.length == 1) {  // limit to 1 for now
-      if (isUnresolvedSymExpr(iterExprs.head) || isSymExpr(iterExprs.head)) {
-        // it might be in the form `D` where an array with domain D is accessed
-        // in the loop body
-        forall->fastAccessDomain = iterExprs.head;
+  if (fFastAccessFlag) {
+    forv_Vec(ForallStmt, forall, gForallStmts) {
+      AList &iterExprs = forall->iteratedExpressions();
+      AList &indexVars = forall->inductionVariables();
+      if (iterExprs.length == 1 && indexVars.length == 1) {  // limit to 1 for now
+        if (isUnresolvedSymExpr(iterExprs.head) || isSymExpr(iterExprs.head)) {
+          // it might be in the form `D` where an array with domain D is accessed
+          // in the loop body
+          forall->fastAccessDomain = iterExprs.head;
 
-        if (SymExpr* se = toSymExpr(indexVars.head)) {
-          forall->fastAccessIndexSym = se->symbol();
+          if (SymExpr* se = toSymExpr(indexVars.head)) {
+            forall->fastAccessIndexSym = se->symbol();
+          }
+          else if (DefExpr* de = toDefExpr(indexVars.head)) {
+            forall->fastAccessIndexSym = de->sym;
+          }
+          else {
+            INT_FATAL("forall expression's index variable is not a valid expr");
+          }
         }
-        else if (DefExpr* de = toDefExpr(indexVars.head)) {
-          forall->fastAccessIndexSym = de->sym;
-        }
-        else {
-          INT_FATAL("forall expression's index variable is not a valid expr");
-        }
-      }
-      else if (CallExpr *ce = toCallExpr(iterExprs.head)) {
-        // it might be in the form `A.domain` where A is used in the loop body
-        if (ce->isNamedAstr(astrSdot)) {
-          if (SymExpr *se = toSymExpr(ce->get(2))) {
-            if (VarSymbol *var = toVarSymbol(se->symbol())) {
-              if (var->immediate->const_kind == CONST_KIND_STRING) {
-                if (strcmp(var->immediate->v_string, "_dom") == 0) {
-                  forall->fastAccessDomain = iterExprs.head;
-                  if (SymExpr* se = toSymExpr(indexVars.head)) {
-                    forall->fastAccessIndexSym = se->symbol();
-                  }
-                  else if (DefExpr* de = toDefExpr(indexVars.head)) {
-                    forall->fastAccessIndexSym = de->sym;
-                  }
-                  else {
-                    nprint_view(indexVars.head);
-                    INT_FATAL("forall expression's index variable is not a valid expr");
+        else if (CallExpr *ce = toCallExpr(iterExprs.head)) {
+          // it might be in the form `A.domain` where A is used in the loop body
+          if (ce->isNamedAstr(astrSdot)) {
+            if (SymExpr *se = toSymExpr(ce->get(2))) {
+              if (VarSymbol *var = toVarSymbol(se->symbol())) {
+                if (var->immediate->const_kind == CONST_KIND_STRING) {
+                  if (strcmp(var->immediate->v_string, "_dom") == 0) {
+                    forall->fastAccessDomain = iterExprs.head;
+                    if (SymExpr* se = toSymExpr(indexVars.head)) {
+                      forall->fastAccessIndexSym = se->symbol();
+                    }
+                    else if (DefExpr* de = toDefExpr(indexVars.head)) {
+                      forall->fastAccessIndexSym = de->sym;
+                    }
+                    else {
+                      nprint_view(indexVars.head);
+                      INT_FATAL("forall expression's index variable is not a valid expr");
+                    }
                   }
                 }
               }
-            }
-          } 
+            } 
+          }
+        }
+        else { 
+          // I don't know what to do with this. Don't do anything for this loop
         }
       }
-      else { 
-        // I don't know what to do with this. Don't do anything for this loop
-      }
-    }
 
-    // now add the module function calls for every `foo[i]` assuming that foo is
-    // an array
-    if (forall->fastAccessDomain != NULL) {
-      std::vector<CallExpr *> callExprs;
-      collectCallExprs(forall->loopBody(), callExprs);
-      for_vector(CallExpr, call, callExprs) {
-        if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
-                    36) == 0) {
-          if (call->argList.length == 1) {
-            SymExpr *baseSE = toSymExpr(call->baseExpr);
-            SymExpr *argSE = toSymExpr(call->get(1));
+      // now add the module function calls for every `foo[i]` assuming that foo is
+      // an array
+      if (forall->fastAccessDomain != NULL) {
+        std::vector<CallExpr *> callExprs;
+        collectCallExprs(forall->loopBody(), callExprs);
+        for_vector(CallExpr, call, callExprs) {
+          if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
+                      36) == 0) {
+            if (call->argList.length == 1) {
+              SymExpr *baseSE = toSymExpr(call->baseExpr);
+              SymExpr *argSE = toSymExpr(call->get(1));
 
-            if (baseSE != NULL && argSE != NULL) {
+              if (baseSE != NULL && argSE != NULL) {
 
-              if (forall->candidateArrays.count(baseSE->symbol()) == 0) {
-                //forall->candidateArrays.insert(secondArgSE->symbol());
+                if (forall->candidateArrays.count(baseSE->symbol()) == 0) {
+                  //forall->candidateArrays.insert(secondArgSE->symbol());
 
-                SET_LINENO(forall);
+                  SET_LINENO(forall);
 
-                // define the control flag
-                // assign to it a call to canDoFastAccess
-                VarSymbol *arrFastFlag = new VarSymbol("chpl_fast_flag", dtBool);
-                arrFastFlag->qual = QUAL_CONST_VAL;
-                DefExpr *arrFlagDef = new DefExpr(arrFastFlag);
+                  // define the control flag
+                  // assign to it a call to canDoFastAccess
+                  VarSymbol *arrFastFlag = new VarSymbol("chpl_fast_flag", dtBool);
+                  arrFastFlag->qual = QUAL_CONST_VAL;
+                  DefExpr *arrFlagDef = new DefExpr(arrFastFlag);
 
-                CallExpr *arrCheck = new CallExpr("chpl__canDoFastAccess",
-                                                  new SymExpr(baseSE->symbol()),
-                                                  forall->fastAccessDomain->copy());
-                CallExpr *arrFlagMove = new CallExpr(PRIM_MOVE, arrFastFlag,
-                                                                arrCheck);
+                  CallExpr *arrCheck = new CallExpr("chpl__canDoFastAccess",
+                                                    new SymExpr(baseSE->symbol()),
+                                                    forall->fastAccessDomain->copy());
+                  CallExpr *arrFlagMove = new CallExpr(PRIM_MOVE, arrFastFlag,
+                                                                  arrCheck);
 
-                // define access pointers and add them to the task local variables
-                //VarSymbol *arrFastPtr = new VarSymbol("chpl_fast_ptr");
-                ShadowVarSymbol *arrFastPtr =
-                  buildFastPointerShadowVar("chpl_fast_ptr");
-                forall->shadowVariables().insertAtTail(arrFastPtr->defPoint);
+                  // define access pointers and add them to the task local variables
+                  //VarSymbol *arrFastPtr = new VarSymbol("chpl_fast_ptr");
+                  ShadowVarSymbol *arrFastPtr =
+                    buildFastPointerShadowVar("chpl_fast_ptr");
+                  forall->shadowVariables().insertAtTail(arrFastPtr->defPoint);
 
 
-                // add getOrAdvance call in the loop body
-                // after scope resolve we don't have any unresolved sym expr?
-                CallExpr *getPtr =
-                               new CallExpr(new UnresolvedSymExpr("chpl__getOrAdvanceAccessPtr"),
-                                            new SymExpr(baseSE->symbol()),
-                                            new SymExpr(arrFastPtr),
-                                            new SymExpr(forall->fastAccessIndexSym),
-                                            new SymExpr(arrFastFlag));
-                
-                                                      
+                  // add getOrAdvance call in the loop body
+                  // after scope resolve we don't have any unresolved sym expr?
+                  CallExpr *getPtr =
+                                 new CallExpr(new UnresolvedSymExpr("chpl__getOrAdvanceAccessPtr"),
+                                              new SymExpr(baseSE->symbol()),
+                                              new SymExpr(arrFastPtr),
+                                              new SymExpr(forall->fastAccessIndexSym),
+                                              new SymExpr(arrFastFlag));
+                  
+                                                        
 
-                forall->insertBefore(arrFlagDef);
-                forall->insertBefore(arrFlagMove);
-                forall->loopBody()->insertAtHead(getPtr);
+                  forall->insertBefore(arrFlagDef);
+                  forall->insertBefore(arrFlagMove);
+                  forall->loopBody()->insertAtHead(getPtr);
 
-                normalize(arrFlagMove);
-                normalize(getPtr);
+                  normalize(arrFlagMove);
+                  normalize(getPtr);
 
-                forall->candidateArrays[baseSE->symbol()] = arrFastPtr;
+                  forall->candidateArrays[baseSE->symbol()] = arrFastPtr;
+                }
               }
             }
           }
