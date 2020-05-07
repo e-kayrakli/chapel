@@ -202,6 +202,10 @@ static void findFastAccessDomainCandidates() {
               SymExpr *argSE = toSymExpr(call->get(1));
 
               if (baseSE != NULL && argSE != NULL) {
+                // (i,j) in forall (i,j) in bla is a tuple that is
+                // index-by-index accessed in loop body that throw off this
+                // analysis
+                if (baseSE->symbol()->hasFlag(FLAG_INDEX_OF_INTEREST)) break;
 
                 if (forall->candidateArrays.count(baseSE->symbol()) == 0) {
                   //forall->candidateArrays.insert(secondArgSE->symbol());
