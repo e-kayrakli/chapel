@@ -123,6 +123,7 @@ int  fcg = 0;
 bool fCacheRemote = false;
 bool fFastFlag = false;
 bool fFastAccessFlag = false;
+bool fFastAccessFlagLog = false;
 bool fUseNoinit = true;
 bool fNoCopyPropagation = false;
 bool fNoDeadCodeElimination = false;
@@ -713,6 +714,10 @@ static void setFastAccessFlag(const ArgumentDescription* desc, const char* unuse
   fFastAccessFlag = true;
 }
 
+static void setFastAccessFlagLog(const ArgumentDescription* desc, const char* unused) {
+  fFastAccessFlagLog = true;
+}
+
 static void setFastFlag(const ArgumentDescription* desc, const char* unused) {
   //
   // Enable all compiler optimizations, disable all runtime checks
@@ -915,7 +920,8 @@ static ArgumentDescription arg_desc[] = {
  {"copy-propagation", ' ', NULL, "Enable [disable] copy propagation", "n", &fNoCopyPropagation, "CHPL_DISABLE_COPY_PROPAGATION", NULL},
  {"dead-code-elimination", ' ', NULL, "Enable [disable] dead code elimination", "n", &fNoDeadCodeElimination, "CHPL_DISABLE_DEAD_CODE_ELIMINATION", NULL},
  {"fast", ' ', NULL, "Disable checks; optimize/specialize code", "F", &fFastFlag, "CHPL_FAST", setFastFlag},
- {"fast-access-pointer", ' ', NULL, "Fast access pointer optimization", "F", &fFastAccessFlag, "CHPL_FAST", setFastAccessFlag},
+ {"fast-access-pointer", ' ', NULL, "Fast access pointer optimization", "F", &fFastAccessFlag, "CHPL_FAST_ACCESS", setFastAccessFlag},
+ {"fast-access-pointer-log", ' ', NULL, "Fast access pointer optimization log", "F", &fFastAccessFlagLog, "CHPL_FAST_ACCESS_LOG", setFastAccessFlagLog},
  {"fast-followers", ' ', NULL, "Enable [disable] fast followers", "n", &fNoFastFollowers, "CHPL_DISABLE_FAST_FOLLOWERS", NULL},
  {"ieee-float", ' ', NULL, "Generate code that is strict [lax] with respect to IEEE compliance", "N", &fieeefloat, "CHPL_IEEE_FLOAT", setFloatOptFlag},
  {"ignore-local-classes", ' ', NULL, "Disable [enable] local classes", "N", &fIgnoreLocalClasses, NULL, NULL},

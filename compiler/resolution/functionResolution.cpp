@@ -2537,9 +2537,14 @@ void analyzeCallForFastPointer(CallExpr* call) {
                         replCandidate->typeInfo()->symbol,
                         new SymExpr(replSym)));
 
-                      //std::cout << "Optimized access:" << std::endl;
-                      //std::cout << "\t" << forall->stringLoc() << std::endl;
-                      //std::cout << std::endl;
+                      if (fFastAccessFlagLog) {
+                        std::cout << "Optimized access:" << std::endl
+                                  << "\tLoop location: " << forall->stringLoc() << std::endl
+                                  << "\tAccess location: " << replCandidate->stringLoc() << std::endl
+                                  << "\tAccessed array: " << candidateArrSym->name << 
+                                     "  Accessed index: " << thirdArgSE->symbol()->name << std::endl;
+                        std::cout << std::endl;
+                      }
 
                     }
                   }

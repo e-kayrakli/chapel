@@ -35,6 +35,7 @@ extern int  instantiation_limit;
 // optimization control flags
 extern bool fFastFlag;
 extern bool fFastAccessFlag;
+extern bool fFastAccessFlagLog;
 extern bool fNoBoundsChecks;
 extern bool fNoCopyPropagation;
 extern bool fNoDeadCodeElimination;
