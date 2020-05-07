@@ -93,7 +93,7 @@ public:
   Expr *fastAccessDomain = NULL;
   Symbol *fastAccessIndexSym = NULL;
 
-  std::set<Symbol *> candidateArrays;
+  std::map<Symbol *, ShadowVarSymbol *> candidateArrays;
 
 private:
   AList          fIterVars;

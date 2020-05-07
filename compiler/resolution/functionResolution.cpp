@@ -2508,8 +2508,9 @@ void analyzeCallForFastPointer(CallExpr* call) {
       currentParent = currentParent->parentExpr;
     }
 
-    //if (forall != NULL) {
-    if (false) {
+    if (forall != NULL) {
+      SET_LINENO(forall);
+    //if (false) {
       SymExpr *firstArgSE, *secondArgSE, *thirdArgSE;
       if ((firstArgSE = toSymExpr(call->get(1))) &&
           (secondArgSE = toSymExpr(call->get(2))) &&
@@ -2519,52 +2520,38 @@ void analyzeCallForFastPointer(CallExpr* call) {
           if (thirdArgSE->symbol() == forall->fastAccessIndexSym) {
             Symbol *candidateArrSym = secondArgSE->symbol();
 
-            if (forall->candidateArrays.count(candidateArrSym) == 0) {
-              SET_LINENO(forall);
+            if (forall->candidateArrays.count(candidateArrSym) == 1) {
 
-              forall->candidateArrays.insert(secondArgSE->symbol());
+              Expr *replCandidate = NULL;
+              if (ContextCallExpr *cce = toContextCallExpr(call->parentExpr)) {
+                replCandidate = cce;
+              }
+              else {
+                // is this possible?
+                //call->replace(repl);
+                replCandidate = call;
+              }
 
-              // define the control flag
-              // assign to it a call to canDoFastAccess
-              VarSymbol *arrFastFlag = new VarSymbol("chpl_fast_flag", dtBool);
-              arrFastFlag->qual = QUAL_CONST_VAL;
-              DefExpr *arrFlagDef = new DefExpr(arrFastFlag);
+              if (replCandidate != NULL) {
+                if (CallExpr *parentCE = toCallExpr(replCandidate->parentExpr)) {
+                  if (parentCE->isPrimitive(PRIM_MOVE)) {
 
-              CallExpr *arrCheck = new CallExpr("chpl__canDoFastAccess",
-                                                new SymExpr(candidateArrSym),
-                                                forall->fastAccessDomain->copy());
-              CallExpr *arrFlagMove = new CallExpr(PRIM_MOVE, arrFastFlag,
-                                                             arrCheck);
+                    //CallExpr *repl = new CallExpr(PRIM_DEREF,
+                            //new SymExpr(forall->candidateArrays[candidateArrSym]));
 
-              // define access pointers and add them to the task local variables
-              //VarSymbol *arrFastPtr = new VarSymbol("chpl_fast_ptr");
-              ShadowVarSymbol *arrFastPtr =
-                buildFastPointerShadowVar("chpl_fast_ptr");
-              forall->shadowVariables().insertAtTail(arrFastPtr->defPoint);
+                    if (SymExpr *lhsSE = toSymExpr(parentCE->get(1))) {
+                      //Type *replType = lhsSE->symbol()->type;
+                      Symbol *replSym = forall->candidateArrays[candidateArrSym];
 
+                      replCandidate->replace(new CallExpr(PRIM_CAST,
+                        replCandidate->typeInfo()->symbol,
+                        new SymExpr(replSym)));
 
-              // add getOrAdvance call in the loop body
-              // after scope resolve we don't have any unresolved sym expr?
-              CallExpr *getPtr =
-                             new CallExpr(new UnresolvedSymExpr("chpl__getOrAdvanceAccessPtr"),
-                                          new SymExpr(candidateArrSym),
-                                          new SymExpr(arrFastPtr),
-                                          new SymExpr(forall->fastAccessIndexSym),
-                                          new SymExpr(arrFastFlag));
-              
-                                                    
+                    }
+                  }
 
-              forall->insertBefore(arrFlagDef);
-              forall->insertBefore(arrFlagMove);
-              forall->loopBody()->insertAtHead(getPtr);
-
-              normalize(arrFlagMove);
-              normalize(getPtr);
-
-              //resolveExpr(arrFlagDef);
-              resolveCall(arrCheck);
-              resolveCall(arrFlagMove);
-              resolveCall(getPtr);
+                }
+              }
             }
           }
         }

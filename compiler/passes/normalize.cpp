@@ -129,6 +129,12 @@ static ShadowVarSymbol* buildFastPointerShadowVar(const char* nameString) {
   result->type = dtCVoidPtr;
   result->qual = QUAL_VAL;
   result->addFlag(FLAG_NO_AUTO_DESTROY);
+
+  CallExpr *initZero = new CallExpr(PRIM_MOVE, new SymExpr(result), 
+                                    new SymExpr(dtCVoidPtr->defaultValue));
+
+  result->initBlock()->insertAtTail(initZero);
+  
   new DefExpr(result);
   return result;
 }
@@ -196,44 +202,50 @@ static void findFastAccessDomainCandidates() {
 
             if (baseSE != NULL && argSE != NULL) {
 
-              SET_LINENO(forall);
+              if (forall->candidateArrays.count(baseSE->symbol()) == 0) {
+                //forall->candidateArrays.insert(secondArgSE->symbol());
 
-              // define the control flag
-              // assign to it a call to canDoFastAccess
-              VarSymbol *arrFastFlag = new VarSymbol("chpl_fast_flag", dtBool);
-              arrFastFlag->qual = QUAL_CONST_VAL;
-              DefExpr *arrFlagDef = new DefExpr(arrFastFlag);
+                SET_LINENO(forall);
 
-              CallExpr *arrCheck = new CallExpr("chpl__canDoFastAccess",
-                                                new SymExpr(baseSE->symbol()),
-                                                forall->fastAccessDomain->copy());
-              CallExpr *arrFlagMove = new CallExpr(PRIM_MOVE, arrFastFlag,
-                                                              arrCheck);
+                // define the control flag
+                // assign to it a call to canDoFastAccess
+                VarSymbol *arrFastFlag = new VarSymbol("chpl_fast_flag", dtBool);
+                arrFastFlag->qual = QUAL_CONST_VAL;
+                DefExpr *arrFlagDef = new DefExpr(arrFastFlag);
 
-              // define access pointers and add them to the task local variables
-              //VarSymbol *arrFastPtr = new VarSymbol("chpl_fast_ptr");
-              ShadowVarSymbol *arrFastPtr =
-                buildFastPointerShadowVar("chpl_fast_ptr");
-              forall->shadowVariables().insertAtTail(arrFastPtr->defPoint);
+                CallExpr *arrCheck = new CallExpr("chpl__canDoFastAccess",
+                                                  new SymExpr(baseSE->symbol()),
+                                                  forall->fastAccessDomain->copy());
+                CallExpr *arrFlagMove = new CallExpr(PRIM_MOVE, arrFastFlag,
+                                                                arrCheck);
+
+                // define access pointers and add them to the task local variables
+                //VarSymbol *arrFastPtr = new VarSymbol("chpl_fast_ptr");
+                ShadowVarSymbol *arrFastPtr =
+                  buildFastPointerShadowVar("chpl_fast_ptr");
+                forall->shadowVariables().insertAtTail(arrFastPtr->defPoint);
 
 
-              // add getOrAdvance call in the loop body
-              // after scope resolve we don't have any unresolved sym expr?
-              CallExpr *getPtr =
-                             new CallExpr(new UnresolvedSymExpr("chpl__getOrAdvanceAccessPtr"),
-                                          new SymExpr(baseSE->symbol()),
-                                          new SymExpr(arrFastPtr),
-                                          new SymExpr(forall->fastAccessIndexSym),
-                                          new SymExpr(arrFastFlag));
-              
-                                                    
+                // add getOrAdvance call in the loop body
+                // after scope resolve we don't have any unresolved sym expr?
+                CallExpr *getPtr =
+                               new CallExpr(new UnresolvedSymExpr("chpl__getOrAdvanceAccessPtr"),
+                                            new SymExpr(baseSE->symbol()),
+                                            new SymExpr(arrFastPtr),
+                                            new SymExpr(forall->fastAccessIndexSym),
+                                            new SymExpr(arrFastFlag));
+                
+                                                      
 
-              forall->insertBefore(arrFlagDef);
-              forall->insertBefore(arrFlagMove);
-              forall->loopBody()->insertAtHead(getPtr);
+                forall->insertBefore(arrFlagDef);
+                forall->insertBefore(arrFlagMove);
+                forall->loopBody()->insertAtHead(getPtr);
 
-              normalize(arrFlagMove);
-              normalize(getPtr);
+                normalize(arrFlagMove);
+                normalize(getPtr);
+
+                forall->candidateArrays[baseSE->symbol()] = arrFastPtr;
+              }
             }
           }
         }
