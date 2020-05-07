@@ -2498,10 +2498,10 @@ void analyzeCallForFastPointer(CallExpr* call) {
     ForallStmt *forall = NULL;
     Expr *currentParent = call->parentExpr;
     while (currentParent != NULL) {
-      std::cout << "Current parent" << std::endl;
+      //std::cout << "Current parent" << std::endl;
       forall = toForallStmt(currentParent);
       if (forall != NULL) {
-        std::cout << "Found a candidate forall" << std::endl;
+        //std::cout << "Found a candidate forall" << std::endl;
         //nprint_view(forall);
         break;
       }
@@ -2628,11 +2628,11 @@ static void addFastAccessPointers() {
     std::vector<CallExpr *> callExprs;
     collectCallExprs(fs->loopBody(), callExprs);
     for_vector(CallExpr, call, callExprs) {
-      if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
-                  36) == 0) {
+      //if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
+                  //36) == 0) {
       //if (false) {
         analyzeCallForFastPointer(call);
-      }
+      //}
     }
   }
 }
