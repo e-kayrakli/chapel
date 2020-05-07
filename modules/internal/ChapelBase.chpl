@@ -2450,7 +2450,7 @@ module ChapelBase {
   }
 
   inline proc chpl__getOrAdvanceAccessPtr(arr: [], ref p: c_void_ptr,
-                                          idx: int, fast: bool) {
+                                          idx, fast: bool) {
     if fast && p != nil {
       p = (p:c_ptr(arr.eltType)) + 1;
     }
@@ -2462,7 +2462,7 @@ module ChapelBase {
   // anything besides an array is a noop and the branch where this sits should
   // never be hit and dead-code eliminated
   inline proc chpl__getOrAdvanceAccessPtr(arr, ref p: c_void_ptr,
-                                          idx: int, fast: bool) {
+                                          idx, fast: bool) {
 
   }
 
