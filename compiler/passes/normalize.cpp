@@ -205,7 +205,13 @@ static void findFastAccessDomainCandidates() {
                 // (i,j) in forall (i,j) in bla is a tuple that is
                 // index-by-index accessed in loop body that throw off this
                 // analysis
-                if (baseSE->symbol()->hasFlag(FLAG_INDEX_OF_INTEREST)) break;
+                if (baseSE->symbol()->hasFlag(FLAG_INDEX_OF_INTEREST))
+                  break;
+
+                // give up if the symbol we are looking to optimize is defined
+                // inside the loop itself
+                if (forall->loopBody()->contains(baseSE->symbol()->defPoint))
+                  break;
 
                 if (forall->candidateArrays.count(baseSE->symbol()) == 0) {
                   //forall->candidateArrays.insert(secondArgSE->symbol());

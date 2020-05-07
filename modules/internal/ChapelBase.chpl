@@ -2459,6 +2459,13 @@ module ChapelBase {
     }
   }
 
+  // anything besides an array is a noop and the branch where this sits should
+  // never be hit and dead-code eliminated
+  inline proc chpl__getOrAdvanceAccessPtr(arr, ref p: c_void_ptr,
+                                          idx: int, fast: bool) {
+
+  }
+
   /*inline proc chpl__accessPtrType(arr: []) type {*/
     /*return c_ptr(arr.eltType);*/
   /*}*/
