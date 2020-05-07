@@ -2547,6 +2547,10 @@ void analyzeCallForFastPointer(CallExpr* call) {
                         replCandidate->typeInfo()->symbol,
                         new SymExpr(replSym)));
 
+                      //std::cout << "Optimized access:" << std::endl;
+                      //std::cout << "\t" << forall->stringLoc() << std::endl;
+                      //std::cout << std::endl;
+
                     }
                   }
 

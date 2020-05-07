@@ -195,8 +195,8 @@ static void findFastAccessDomainCandidates() {
         std::vector<CallExpr *> callExprs;
         collectCallExprs(forall->loopBody(), callExprs);
         for_vector(CallExpr, call, callExprs) {
-          if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
-                      36) == 0) {
+          //if (strncmp(call->astloc.filename, "../playground/streamCompilation.chpl",
+                      //36) == 0) {
             if (call->argList.length == 1) {
               SymExpr *baseSE = toSymExpr(call->baseExpr);
               SymExpr *argSE = toSymExpr(call->get(1));
@@ -249,7 +249,7 @@ static void findFastAccessDomainCandidates() {
                 }
               }
             }
-          }
+          //}
         }
       }
     }
