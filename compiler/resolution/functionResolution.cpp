@@ -2482,16 +2482,6 @@ ShadowVarSymbol* buildFastPointerShadowVar(const char* nameString) {
 
 void analyzeCallForFastPointer(CallExpr* call) {
 
-  // here is a list of conditions:
-  // 1. it is named "this"
-  // 2. has 3 SymExpr arguments
-  // 3. first argument is a method token
-  // 4. last argument is a SymExpr whose symbol is the same as the forall's
-  //    fastAccessIndexVar
-  //
-  // If these hold, then we'll add the second argument to the forall's candidate
-  // arrays set.
-
   if (call->isNamed("this") &&
       call->argList.length == 3) {
 
