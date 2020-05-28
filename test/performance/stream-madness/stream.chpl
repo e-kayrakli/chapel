@@ -178,13 +178,18 @@ proc runTest(D, A, B, C, oMode) {
 }
 
 proc runTests(D, A, B, C) {
-
   runTest(D, A, B, C, operationMode.promotion);
   runTest(D, A, B, C, operationMode.directIndex);
   runTest(D, A, B, C, operationMode.arrZip);
 }
 
-runTests((...createDefaultRect()));
-runTests((...createBlock()));
-runTests((...createCyclic()));
+{
+  runTests((...createDefaultRect()));
+}
+{
+  runTests((...createBlock()));
+}
+{
+  runTests((...createCyclic()));
+}
 //runTests((...createBlockCyc));
