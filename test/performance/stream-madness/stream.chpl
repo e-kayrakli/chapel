@@ -7,6 +7,8 @@ use CyclicDist;
 use BlockCycDist;
 use StencilDist;
 
+import Math;
+
 
 type elemType = real;
 
@@ -33,10 +35,7 @@ config const memFraction = 4;
 config const nElemsTiny = numLocales*10;
 config const nElemsSmall = if dMode==diagMode.correctness then 100 else 1000000;
 config const nElemsLarge = numLocales*((totMem/numBytes(elemType))/memFraction)/3;
-
-const nElems = if size == arraySize.tiny then nElemsTiny else
-               if size == arraySize.small then nElemsSmall else
-               if size == arraySize.large then nElemsLarge else -1;
+config const nElemsLargeOneLoc = ((totMem/numBytes(elemType))/memFraction)/3;
 
 
 var t = new Timer();
@@ -91,14 +90,39 @@ inline proc endDiag(name) {
   }
 }
 
-var ranges: nDims*range;
-for r in ranges {
-  r = 0..#nElems;
+proc getMultiLocIndexSpace() {
+  const nElems = if size == arraySize.tiny then nElemsTiny else
+                 if size == arraySize.small then nElemsSmall else
+                 if size == arraySize.large then nElemsLarge else -1;
+
+  var ranges: nDims*range;
+  for r in ranges {
+    if nDims == 1 then
+      r = 0..#nElems;
+    else
+      r = 0..#(Math.sqrt(nElems)):int;
+  }
+  return {(...ranges)};
 }
-const indexSpace = {(...ranges)};
+
+proc getSingleLocIndexSpace() {
+  const nElems = if size == arraySize.tiny then nElemsTiny else
+                 if size == arraySize.small then nElemsSmall else
+                 if size == arraySize.large then nElemsLargeOneLoc else -1;
+
+  var ranges: nDims*range;
+  for r in ranges {
+    if nDims == 1 then
+      r = 0..#nElems;
+    else
+      r = 0..#(Math.sqrt(nElems)):int;
+  }
+  return {(...ranges)};
+}
+
 
 proc createDefaultRect() {
-  var D = indexSpace;
+  var D = getSingleLocIndexSpace();
 
   var A: [D] elemType;
   var B: [D] elemType;
@@ -108,7 +132,7 @@ proc createDefaultRect() {
 }
 
 proc createBlock() {
-  var D = newBlockDom(indexSpace);
+  var D = newBlockDom(getMultiLocIndexSpace());
 
   var A: [D] elemType;
   var B: [D] elemType;
@@ -118,7 +142,7 @@ proc createBlock() {
 }
 
 proc createCyclic() {
-  var D = newCyclicDom(indexSpace);
+  var D = newCyclicDom(getMultiLocIndexSpace());
 
   var A: [D] elemType;
   var B: [D] elemType;
@@ -145,16 +169,6 @@ inline proc slicifyIfNeeded(D, A, B, C) {
     }
   }
 }
-
-//proc createBlockCyc() {
-  //var D = newBlockCycDom(indexSpace);
-
-  //var A: [D] elemType;
-  //var B: [D] elemType;
-  //var C: [D] elemType;
-
-  //return slicifyIfNeeded(D, A, B, C);
-//}
 
 proc runTest(D, A, B, C, oMode, keyPrefix: string) {
 
