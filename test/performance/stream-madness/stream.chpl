@@ -11,6 +11,7 @@ use StencilDist;
 type elemType = real;
 
 config param nDims = 1;
+config param slice = false;
 
 param alpha = 2.0;
 
@@ -29,7 +30,7 @@ config const nIter = 4;
 const totMem = here.physicalMemory(unit = MemUnits.Bytes);
 config const memFraction = 4;
 
-config const nElemsTiny = numLocales;
+config const nElemsTiny = numLocales*10;
 config const nElemsSmall = if dMode==diagMode.correctness then 100 else 1000000;
 config const nElemsLarge = numLocales*((totMem/numBytes(elemType))/memFraction)/3;
 
@@ -103,7 +104,7 @@ proc createDefaultRect() {
   var B: [D] elemType;
   var C: [D] elemType;
 
-  return (D, A, B, C);
+  return slicifyIfNeeded(D, A, B, C);
 }
 
 proc createBlock() {
@@ -113,7 +114,7 @@ proc createBlock() {
   var B: [D] elemType;
   var C: [D] elemType;
 
-  return (D, A, B, C);
+  return slicifyIfNeeded(D, A, B, C);
 }
 
 proc createCyclic() {
@@ -123,7 +124,26 @@ proc createCyclic() {
   var B: [D] elemType;
   var C: [D] elemType;
 
-  return (D, A, B, C);
+  return slicifyIfNeeded(D, A, B, C);
+}
+
+inline proc slicifyIfNeeded(D, A, B, C) {
+  if !slice {
+    return (D, A, B, C);
+  }
+  else {
+    if nDims == 1 {
+      const DInner = D.expand(-1);
+      return (DInner, A[DInner], B[DInner], C[DInner]);
+    }
+    else if nDims == 2 {
+      const DInner = D.expand((-1,-1));
+      return (DInner, A[DInner], B[DInner], C[DInner]);
+    }
+    else {
+      compilerError("Wrong `nDims`: ", nDims);
+    }
+  }
 }
 
 //proc createBlockCyc() {
@@ -133,12 +153,12 @@ proc createCyclic() {
   //var B: [D] elemType;
   //var C: [D] elemType;
 
-  //return (D, A, B, C);
+  //return slicifyIfNeeded(D, A, B, C);
 //}
 
-proc runTest(D, A, B, C, oMode) {
+proc runTest(D, A, B, C, oMode, keyPrefix: string) {
 
-  var diagName = dist:string+"-"+oMode:string;
+  var diagName = keyPrefix+"-"+oMode:string;
 
   if oMode == operationMode.promotion {
     A = B + alpha * C;
@@ -177,19 +197,18 @@ proc runTest(D, A, B, C, oMode) {
   }
 }
 
-proc runTests(D, A, B, C) {
-  runTest(D, A, B, C, operationMode.promotion);
-  runTest(D, A, B, C, operationMode.directIndex);
-  runTest(D, A, B, C, operationMode.arrZip);
+proc runTests(D, A, B, C, keyPrefix: string) {
+  runTest(D, A, B, C, operationMode.promotion, keyPrefix);
+  runTest(D, A, B, C, operationMode.directIndex, keyPrefix);
+  runTest(D, A, B, C, operationMode.arrZip, keyPrefix);
 }
 
 {
-  runTests((...createDefaultRect()));
+  runTests((...createDefaultRect()), "defaultRect");
 }
 {
-  runTests((...createBlock()));
+  runTests((...createBlock()), "block");
 }
 {
-  runTests((...createCyclic()));
+  runTests((...createCyclic()), "cyclic");
 }
-//runTests((...createBlockCyc));
