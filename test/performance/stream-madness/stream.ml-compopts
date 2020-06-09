@@ -1,0 +1,4 @@
+-snDims=1  -sslice=false  # stream-madness-1D-whole-ml
+-snDims=2  -sslice=false  # stream-madness-2D-whole-ml
+-snDims=1  -sslice=true  # stream-madness-1D-slice-ml
+-snDims=2  -sslice=true  # stream-madness-2D-slice-ml

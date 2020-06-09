@@ -1,0 +1,5 @@
+perfkeys: defaultRect-promotion:, defaultRect-directIndex:, defaultRect-arrZip:, block-promotion:, block-directIndex:, block-arrZip:, cyclic-promotion:, cyclic-directIndex:, cyclic-arrZip:
+graphkeys: defaultRect-promotion:, defaultRect-directIndex:, defaultRect-arrZip:, block-promotion:, block-directIndex:, block-arrZip:, cyclic-promotion:, cyclic-directIndex:, cyclic-arrZip:
+files:stream-madness-1D-slice-sl.dat
+ylabel: Time(seconds)
+graphtitle: STREAM-Triad Time (1D Whole Arrays)

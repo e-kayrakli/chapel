@@ -297,6 +297,11 @@ studies/elegance/elegance.graph
 # suite: Bale
 studies/bale/toposort/toposort.perf.graph
 studies/bale/toposort/toposort.time.graph
+# suite: Stream Variations
+performance/stream-madness/stream-madness-1D-whole-sl.graph
+performance/stream-madness/stream-madness-2D-whole-sl.graph
+performance/stream-madness/stream-madness-1D-slice-sl.graph
+performance/stream-madness/stream-madness-2D-slice-sl.graph
 # suite: Serial Performance
 patterns/primality/prime.graph
 statements/lydia/forCompare.graph

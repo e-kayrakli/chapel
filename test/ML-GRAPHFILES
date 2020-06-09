@@ -57,7 +57,6 @@ studies/prk/Stencil/prk-stencil.ml-perf.graph
 studies/bale/histogram/histo-atomics.ml-perf.graph
 studies/bale/indexgather/ig.ml-perf.graph
 studies/bale/indexgather/ig-variants.ml-perf.graph
-
 # suite: <empty>
 # suite: All (time)
 npb/ep/mcahir/ep.ml-time.graph
@@ -148,3 +147,8 @@ performance/array/distCreate-small-deinit.ml-perf.graph
 performance/array/distCreate-large-init.ml-perf.graph
 performance/array/distCreate-large-deinit.ml-perf.graph
 library/packages/Sort/performance/dist-performance.ml-perf.graph
+# suite: - Stream Variations
+performance/stream-madness/stream-madness-1D-whole-ml.graph
+performance/stream-madness/stream-madness-2D-whole-ml.graph
+performance/stream-madness/stream-madness-1D-slice-ml.graph
+performance/stream-madness/stream-madness-2D-slice-ml.graph
