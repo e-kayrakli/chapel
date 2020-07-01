@@ -6515,6 +6515,11 @@ void resolveInitVar(CallExpr* call) {
 
   } else if (isRecord(targetType->getValType())) {
     AggregateType* at = toAggregateType(targetType->getValType());
+    if (dst->hasFlag(FLAG_CONST) && !dst->hasFlag(FLAG_REF)) {
+      call->insertAfter(new CallExpr(PRIM_SET_MEMBER, dst,
+                                           new_CStringSymbol("chpl_isConst"),
+                                           gTrue));
+    }
 
     // Clear FLAG_INSERT_AUTO_DESTROY_FOR_EXPLICIT_NEW
     // since the result of the 'new' will "move" into

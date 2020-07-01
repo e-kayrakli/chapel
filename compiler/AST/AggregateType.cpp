@@ -2279,7 +2279,8 @@ void AggregateType::fieldToArg(FnSymbol*              fn,
     SET_LINENO(fieldDefExpr);
 
     if (VarSymbol* field = toVarSymbol(fieldDefExpr)) {
-      if (field->hasFlag(FLAG_SUPER_CLASS) == false) {
+      if (field->hasFlag(FLAG_SUPER_CLASS) == false &&
+          field->hasFlag(FLAG_CONST_CHECK_FIELD) == false) {
 
         DefExpr*    defPoint = field->defPoint;
         const char* name     = field->name;

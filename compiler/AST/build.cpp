@@ -1651,6 +1651,14 @@ AggregateType* installInternalType(AggregateType* ct, AggregateType* dt) {
   return dt;
 }
 
+static void buildIsConstField(BlockStmt *decls) {
+  VarSymbol *isConst = new VarSymbol("chpl_isConst");
+  isConst->addFlag(FLAG_CONST);  // can we make this a param?
+  isConst->addFlag(FLAG_CONST_CHECK_FIELD);
+  DefExpr *constCheckField = new DefExpr(isConst, gFalse, dtBool->symbol);
+  decls->insertAtHead(constCheckField);
+}
+
 DefExpr* buildClassDefExpr(const char*  name,
                            const char*  cname,
                            AggregateTag tag,
@@ -1708,6 +1716,10 @@ DefExpr* buildClassDefExpr(const char*  name,
     if (inherit != NULL)
       USR_FATAL_CONT(inherit,
                      "External types do not currently support inheritance");
+  }
+
+  if (!isExtern && tag == AGGREGATE_RECORD) {
+    buildIsConstField(decls);
   }
 
   ct->addDeclarations(decls);
