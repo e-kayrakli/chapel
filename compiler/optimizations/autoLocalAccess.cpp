@@ -733,16 +733,16 @@ void autoLocalAccess() {
                   }
                 }
               }
-              else {
-                // I couldn't find a domain symbol for this array, but it can
-                // still be a candidate for optimization based on analysis at
-                // runtime
-                forall->optInfo.dynamicCandidates.push_back(call);
-              }
             }
 
             if (canOptimize) {
               forall->optInfo.staticCandidates.push_back(call);
+            }
+            else {
+              // I couldn't find a domain symbol for this array, but it can
+              // still be a candidate for optimization based on analysis at
+              // runtime
+              forall->optInfo.dynamicCandidates.push_back(call);
             }
           }
         }
