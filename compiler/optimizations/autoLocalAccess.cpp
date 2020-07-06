@@ -298,8 +298,16 @@ static void gatherForallInfo(ForallStmt *forall) {
                     forall->optInfo.dotDomIterSym);
     }
   }
+  else if (CallExpr *iterCall = toCallExpr(iterExprs.head)) {
+    // TODO: should we put this call in a temporary to avoid making that call
+    // repeatedly?
+    forall->optInfo.iterCall = iterCall;
+    LOG("Loop iterand is a call. Will attempt dynamic optimization.", iterCall);
+  }
 
-  if (forall->optInfo.iterSym != NULL || forall->optInfo.dotDomIterSym != NULL) {
+  if (forall->optInfo.iterSym != NULL ||
+      forall->optInfo.dotDomIterSym != NULL ||
+      forall->optInfo.iterCall != NULL) {
     // the iterator is something we can optimize
     // now check the induction variables
     if (SymExpr* se = toSymExpr(indexVars.head)) {
@@ -321,15 +329,13 @@ static void gatherForallInfo(ForallStmt *forall) {
   }
 }
 
-static bool checkLoopSuitableForOpt(ForallStmt *forall) {
-
-  if (forall->optInfo.multiDIndices.size() == 0) {
-    return false;
+static bool checkLoopSuitableForStaticOpt(ForallStmt *forall) {
+  if (forall->optInfo.iterSym != NULL ||
+      forall->optInfo.dotDomIterSym != NULL) {
+    INT_ASSERT(forall->optInfo.multiDIndices.size() > 0);
+    return true;
   }
-
-  INT_ASSERT(forall->optInfo.iterSym != NULL ||
-             forall->optInfo.dotDomIterSym != NULL);
-  return true;
+  return false;
 }
 
 // Bunch of checks to see if `call` is a candidate for optimization within
@@ -411,6 +417,9 @@ static void generateDynamicCheckForAccess(CallExpr *access,
   else if (optInfo.dotDomIterExpr != NULL) {
     currentCheck->insertAtTail(optInfo.dotDomIterExpr->copy());
   }
+  else if (optInfo.iterCall != NULL) {
+    currentCheck->insertAtTail(optInfo.iterCall->copy());
+  }
   else {
     INT_FATAL("optInfo didn't have enough information");
   }
@@ -456,6 +465,9 @@ static Symbol *generateStaticCheckForAccess(CallExpr *access,
     }
     else if (optInfo.dotDomIterExpr != NULL) {
       checkCall->insertAtTail(optInfo.dotDomIterExpr->copy());
+    }
+    else if (optInfo.iterCall != NULL) {
+      checkCall->insertAtTail(optInfo.iterCall->copy());
     }
     else {
       INT_FATAL("optInfo didn't have enough information");
@@ -688,18 +700,20 @@ void autoLocalAccess() {
       LOG("**** Start forall ****", forall);
       gatherForallInfo(forall);
 
-      if (checkLoopSuitableForOpt(forall)) {
-        LOG("Loop is suitable for further analysis", forall);
+      bool staticOpt = checkLoopSuitableForStaticOpt(forall);
+      LOG("Loop is suitable for further analysis", forall);
 
-        std::vector<CallExpr *> allCallExprs;
-        collectCallExprs(forall->loopBody(), allCallExprs);
+      std::vector<CallExpr *> allCallExprs;
+      collectCallExprs(forall->loopBody(), allCallExprs);
 
-        for_vector(CallExpr, call, allCallExprs) {
-          if (Symbol *accBaseSym = getCallBaseSymIfSuitable(call, forall)) {
-                                                      
-            LOG("Potential access", call);
+      for_vector(CallExpr, call, allCallExprs) {
+        if (Symbol *accBaseSym = getCallBaseSymIfSuitable(call, forall)) {
+                                                    
+          LOG("Potential access", call);
 
-            bool canOptimize = false;
+          bool canOptimize = false;
+
+          if (staticOpt) {
             // check for different patterns
             // forall i in A.domain do ... A[i] ...
             if (forall->optInfo.dotDomIterSym != NULL &&
@@ -745,10 +759,19 @@ void autoLocalAccess() {
               forall->optInfo.dynamicCandidates.push_back(call);
             }
           }
+          else {
+            if (forall->optInfo.iterCall != NULL) {
+              // the loop was not suitable for static optimization, but there
+              // was a CallExpr as the leading iterand. Could that be
+              // returning a suitable domain for optimizing this access? So,
+              // add this access to dynamicCandidates
+              forall->optInfo.dynamicCandidates.push_back(call);
+            }
+          }
         }
-
-        generateOptimizedLoops(forall);
       }
+
+      generateOptimizedLoops(forall);
       LOG("**** End forall ****", forall);
     }
   }
