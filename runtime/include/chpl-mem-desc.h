@@ -87,6 +87,7 @@
   m(GMP,                  "gmp data",                                 true ), \
   m(GETS_PUTS_STRIDES,    "put_strd/get_strd array of strides",       true ), \
   m(MLI_DATA,             "multilocale interop data",                 true ), \
+  m(REMOTE_CACHE,         "remote cache data",                        true ), \
   m(NUM,                  "*** this must be the last entry ***",      true )
 
 

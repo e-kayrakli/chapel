@@ -726,6 +726,7 @@ struct rdcache_s* cache_create(void) {
   total_size += CACHEPAGE_SIZE + CACHEPAGE_SIZE * cache_pages;
 
   // Now, allocate it all in one go.
+  /*buffer = chpl_mem_alloc(total_size, CHPL_RT_MD_REMOTE_CACHE, 0, 0);*/
   buffer = chpl_malloc(total_size);
   allocated_size = total_size;
 
