@@ -5231,7 +5231,10 @@ module FormattedIO {
   use SysCTypes;
   use SysBasic;
   use SysError;
+  use List;
 //use IO;
+
+  config param fastCompileFormatString = true;
 
 // ---------------------------------------------------------------
 // ---------------------------------------------------------------
@@ -6723,6 +6726,22 @@ proc channel.skipField() throws {
   if err then try this._ch_ioerror(err, "in skipField");
 }
 
+proc chopUpFormatString(const ref fmt): list(string) {
+  var l = new list(string);
+  var firstChunk = true;
+  for chunk in fmt.split("%") {
+    if firstChunk {
+      l.append(chunk);
+      firstChunk = false;
+    }
+    else {
+      l.append("%"+chunk);
+    }
+  }
+
+  return l;
+}
+
 /*
 
   Return a new string consisting of values formatted according to a
@@ -6735,18 +6754,29 @@ proc channel.skipField() throws {
   :throws SystemError: Thrown if the string could not be formatted.
  */
 proc string.format(args ...?k): string throws {
-  try {
-    return chpl_do_format(this, (...args));
-  } catch e: IllegalArgumentError {
-    throw e;
-  } catch e: SystemError {
-    try ioerror(e.err, "in string.format");
-  } catch e: DecodeError {
-    try ioerror(EILSEQ:syserr, "in string.format");
-  } catch {
-    try ioerror(EINVAL:syserr, "in string.format");
+  if fastCompileFormatString {
+    var formats = chopUpFormatString(this);
+
+    var s = "";
+    for param i in 0..#args.size {  // need to param iter a heterogeneous tuple
+      s += formats[i].format(args[i]);
+    }
+    return s;
   }
-  return "";
+  else {
+    try {
+      return chpl_do_format(this, (...args));
+    } catch e: IllegalArgumentError {
+      throw e;
+    } catch e: SystemError {
+      try ioerror(e.err, "in string.format");
+    } catch e: DecodeError {
+      try ioerror(EILSEQ:syserr, "in string.format");
+    } catch {
+      try ioerror(EINVAL:syserr, "in string.format");
+    }
+    return "";
+  }
 }
 
 /*
