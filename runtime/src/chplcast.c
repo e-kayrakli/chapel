@@ -90,6 +90,13 @@ static int illegalFirstUnsChar(char c) {
         str += 2;                                                       \
       }                                                                 \
     }                                                                   \
+    if (negative) {                                                     \
+      if (uns) {                                                        \
+        *invalid = 1;                                                   \
+        *invalidCh = *str;                                              \
+        return -1;                                                      \
+      }                                                                 \
+    }                                                                   \
     if (str[0] == '-' || str[0] == '+') {                               \
       *invalid = 1;                                                     \
       *invalidCh = *str;                                                \
