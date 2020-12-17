@@ -58,6 +58,10 @@ void returnStarTuplesByRefArgs() {
       INT_ASSERT(call && call->isPrimitive(PRIM_RETURN));
       call->get(1)->replace(new SymExpr(gVoid));
 
+      if (fn->id == 2291180) {
+        gdbShouldBreakHere();
+      }
+
       //
       // update call sites to new interface
       //
@@ -75,7 +79,9 @@ void returnStarTuplesByRefArgs() {
         }
         SymExpr* actual = toSymExpr(move->get(1));
         actual->remove();
-        if (actual->typeInfo() != arg->type) {
+        if (actual->typeInfo() != arg->type &&
+            strcmp(fn->name, "chpl__deserialize") != 0) {
+
           Symbol* tmp = newTemp(arg->type);
           move->insertBefore(new DefExpr(tmp));
           move->insertBefore(new CallExpr(PRIM_MOVE, tmp,

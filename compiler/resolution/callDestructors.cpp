@@ -947,6 +947,7 @@ fixupDestructors() {
                                               new CallExpr(PRIM_GET_MEMBER_VALUE, fn->_this, field)));
           fn->insertIntoEpilogue(new CallExpr(autoDestroyFn, tmp));
         } else if (FnSymbol* autoDestroyFn = getAutoDestroyForViewField(field, ct)) {
+        //} else if (false) {
           if (Symbol *unownedField = field->getValType()->getField("_unowned", false)) {
 
             VarSymbol* fieldTmp = newTemp("_field_destructor_tmp_", field->type);

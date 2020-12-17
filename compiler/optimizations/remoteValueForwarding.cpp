@@ -27,6 +27,7 @@
 #include "stlUtil.h"
 #include "stmt.h"
 #include "stringutil.h"
+#include "view.h"
 
 //#define DEBUG_SYNC_ACCESS_FUNCTION_SET
 
@@ -113,7 +114,12 @@ static void updateLoopBodyClasses(Map<Symbol*, Vec<SymExpr*>*>& defMap,
           if (isSafeToDerefField(defMap, useMap, field) == true) {
             Type* vt = field->getValType();
 
+            std::cout << "looking at field\n";
+            nprint_view(field);
+
             for_uses(use, useMap, field) {
+              std::cout << "found use\n";
+              nprint_view(use);
               CallExpr* call = toCallExpr(use->parentExpr);
 
               INT_ASSERT(call);
@@ -149,6 +155,15 @@ static void updateLoopBodyClasses(Map<Symbol*, Vec<SymExpr*>*>& defMap,
             field->type = vt;
             field->qual = QUAL_VAL;
           }
+          else {
+            std::cout << "not safe to deref\n";
+            nprint_view(field);
+          }
+        }
+        else {
+          std::cout << "not ref to immutable\n";
+          nprint_view(field);
+
         }
       }
     }
@@ -463,6 +478,9 @@ static VarSymbol* replaceArgWithDeserialized(FnSymbol* fn, ArgSymbol* arg,
                                 Type* oldArgType, FnSymbol* deserializeFn,
                                 bool needsRuntimeType)
 {
+  if (arg->type->symbol->hasFlag(FLAG_TUPLE)) {
+    gdbShouldBreakHere();
+  }
   VarSymbol* deserialized = newTemp(arg->cname, oldArgType->getValType());
   VarSymbol* dsRef = newTemp(arg->cname, QualifiedType(QUAL_REF, oldArgType->getValType()));
   for_SymbolSymExprs(se, arg) {

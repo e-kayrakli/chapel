@@ -73,6 +73,7 @@ module ChapelTuple {
   }
 
   proc _tuple.chpl__tupleIsSerializeable() param {
+    if size != 2 then return false;
     if size > maxSerializeableTupleSize {
       return false;
     }
@@ -116,6 +117,7 @@ module ChapelTuple {
   }
 
   proc type _tuple.chpl__tupleIsDeserializable(data) param {
+    if size != 2 then return false;
     if size > maxSerializeableTupleSize {
       return false;
     }
@@ -149,24 +151,44 @@ module ChapelTuple {
 
   pragma "no copy return"
   proc type _tuple.chpl__deserialize(data) where this.chpl__tupleIsDeserializable(data) {
-    if size == 1 then 
-      return (this[0].chpl__deserialize(data(0)), );
-    else if size == 2 then 
-      return (this[0].chpl__deserialize(data(0)),
-              this[1].chpl__deserialize(data(1)));
-    else if size == 3 then 
-      return (this[0].chpl__deserialize(data(0)),
-              this[1].chpl__deserialize(data(1)),
-              this[2].chpl__deserialize(data(2)));
-    else if size == 4 then
-      return (this[0].chpl__deserialize(data(0)),
-              this[1].chpl__deserialize(data(1)),
-              this[2].chpl__deserialize(data(2)),
-              this[3].chpl__deserialize(data(3)));
-    else
-      compilerError("_tuple.chpl__deserialize called with a tuple of size ",
-          size:string, " where the maximum serializeable tuple size is ",
-          maxSerializeableTupleSize:string);
+    //if size == 1 then 
+
+    pragma "no copy"
+    pragma "no auto destroy"
+    var x = this[0].chpl__deserialize(data(0)); // should remain view
+
+    pragma "no copy"
+    pragma "no auto destroy"
+    var y = this[1].chpl__deserialize(data(1)); // should remain view
+
+    pragma "no init"
+    var ret: _build_tuple_noref(__primitive("static typeof", x),
+                                __primitive("static typeof", y));
+
+    __primitive("=", ret[0], x);
+    __primitive("=", ret[1], y);
+
+    //__primitive("move", ret[0], x);
+    //ret[0] = x;  // view to view elemwise
+
+    return ret;
+
+    //else if size == 2 then 
+      //return (this[0].chpl__deserialize(data(0)),
+              //this[1].chpl__deserialize(data(1)));
+    //else if size == 3 then 
+      //return (this[0].chpl__deserialize(data(0)),
+              //this[1].chpl__deserialize(data(1)),
+              //this[2].chpl__deserialize(data(2)));
+    //else if size == 4 then
+      //return (this[0].chpl__deserialize(data(0)),
+              //this[1].chpl__deserialize(data(1)),
+              //this[2].chpl__deserialize(data(2)),
+              //this[3].chpl__deserialize(data(3)));
+    //else
+      //compilerError("_tuple.chpl__deserialize called with a tuple of size ",
+          //size:string, " where the maximum serializeable tuple size is ",
+          //maxSerializeableTupleSize:string);
   }
   
   pragma "tuple init fn"

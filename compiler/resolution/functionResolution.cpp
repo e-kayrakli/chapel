@@ -9280,6 +9280,18 @@ static FnSymbol* resolveNormalSerializer(CallExpr* call) {
   return ret;
 }
 
+static bool deserializerRetTypeMatchesType(Type* retType, AggregateType *at) {
+  if (AggregateType* retAggType = toAggregateType(retType)) {
+    if (at->symbol->hasFlag(FLAG_TUPLE)) {
+      if (computeNonRefTuple(at) == retType) {
+        return true;
+      }
+    }
+  }
+
+  return retType == at;
+}
+
 static bool resolveSerializeDeserialize(AggregateType* at) {
   SET_LINENO(at->symbol);
   VarSymbol* tmp          = newTemp(at);
@@ -9329,7 +9341,7 @@ static bool resolveSerializeDeserialize(AggregateType* at) {
         Type* retType = deserializeFn->retType->getValType();
         if (retType == dtVoid) {
           USR_FATAL(deserializeFn, "chpl__deserialize cannot return void");
-        } else if (retType != at) {
+        } else if (!deserializerRetTypeMatchesType(retType, at)) {
           const char* rt = (developer == false) ? retType->symbol->name
                                                 : retType->symbol->cname;
           const char* att =  (developer == false) ? at->symbol->name
