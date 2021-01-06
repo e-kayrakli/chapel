@@ -3,6 +3,8 @@ use BlockDist;
 use Random;
 use Time;
 
+config param useAggregators = false;
+
 config const arrSize = 1024;
 config const localRatio = 0.1;
 config const numIters = 10;
@@ -41,8 +43,15 @@ on Locales[0] {
   var indicesToGet = generateIndices();
   for i in 0..#numIters {
     if i > 0 then t.start();
-    forall i in dom.localSubdomain() {
-      A[i] = B[indicesToGet[i]];
+    if useAggregators {
+      forall i in dom.localSubdomain() with (var agg = newSrcAggregator(int)) {
+        agg.copy(A[i], B[indicesToGet[i]]);
+      }
+    }
+    else {
+      forall i in dom.localSubdomain() {
+        A[i] = B[indicesToGet[i]];
+      }
     }
     if i > 0 then t.stop();
   }
