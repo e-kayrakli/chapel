@@ -151,27 +151,67 @@ module ChapelTuple {
 
   pragma "no copy return"
   proc type _tuple.chpl__deserialize(data) where this.chpl__tupleIsDeserializable(data) {
-    //if size == 1 then 
 
-    pragma "no copy"
-    pragma "no auto destroy"
-    var x = this[0].chpl__deserialize(data(0)); // should remain view
+    if size >= 1 {
+      pragma "no copy" pragma "no auto destroy"
+      var x = this[0].chpl__deserialize(data(0));
+      if size >= 2 {
+        pragma "no copy" pragma "no auto destroy"
+        var y = this[1].chpl__deserialize(data(1));
+        if size >= 3 {
+          pragma "no copy" pragma "no auto destroy"
+          var z = this[2].chpl__deserialize(data(2));
+          if size >= 4 {
+            pragma "no copy" pragma "no auto destroy"
+            var t = this[3].chpl__deserialize(data(3));
+            if size > 4 {
+              compilerError("We cannot deserialize tuples of this size");
+            }
+            else {
+              pragma "no init"
+              var ret: _build_tuple_noref(__primitive("static typeof", x),
+                                          __primitive("static typeof", y),
+                                          __primitive("static typeof", z),
+                                          __primitive("static typeof", t));
+              __primitive("=", ret[0], x);
+              __primitive("=", ret[1], y);
+              __primitive("=", ret[2], z);
+              __primitive("=", ret[3], t);
+              return ret;
 
-    pragma "no copy"
-    pragma "no auto destroy"
-    var y = this[1].chpl__deserialize(data(1)); // should remain view
+            }
+          }
+          else {
+            pragma "no init"
+            var ret: _build_tuple_noref(__primitive("static typeof", x),
+                                        __primitive("static typeof", y),
+                                        __primitive("static typeof", z));
+            __primitive("=", ret[0], x);
+            __primitive("=", ret[1], y);
+            __primitive("=", ret[2], z);
+            return ret;
+          }
+        }
+        else {
+          pragma "no init"
+          var ret: _build_tuple_noref(__primitive("static typeof", x),
+                                      __primitive("static typeof", y));
+          __primitive("=", ret[0], x);
+          __primitive("=", ret[1], y);
+          return ret;
+        }
+      }
+      else {
+        pragma "no init"
+        var ret: _build_tuple_noref(__primitive("static typeof", x));
+        __primitive("=", ret[0], x);
+        return ret;
+      }
+    }
+    else {
+      compilerError("We cannot deserialize tuples of this size");
+    }
 
-    pragma "no init"
-    var ret: _build_tuple_noref(__primitive("static typeof", x),
-                                __primitive("static typeof", y));
-
-    __primitive("=", ret[0], x);
-    __primitive("=", ret[1], y);
-
-    //__primitive("move", ret[0], x);
-    //ret[0] = x;  // view to view elemwise
-
-    return ret;
 
     //else if size == 2 then 
       //return (this[0].chpl__deserialize(data(0)),
