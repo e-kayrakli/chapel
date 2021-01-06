@@ -51,6 +51,7 @@ extern Map<Type*,     FnSymbol*>        autoDestroyMap;
 extern Map<Type*,     FnSymbol*>        valueToRuntimeTypeMap;
 
 extern std::map<Type*,     Serializers> serializeMap;
+extern std::map<Type*,     FnSymbol*>   rvfHandlerMap;
 
 
 

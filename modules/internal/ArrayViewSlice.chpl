@@ -90,11 +90,12 @@ module ArrayViewSlice {
     // chpl__serialize() routine (and, we assume, chpl__deserialize())
     //
     proc chpl__rvfMe() param {
+      //return true;
       use Reflection;
 
-      if chpl_serializeSlices == false then
+      if chpl_serializeSlices == false {
         return false;
-      if (dom.dsiSupportsPrivatization() && arr.dsiSupportsPrivatization() &&
+      } else if (dom.dsiSupportsPrivatization() && arr.dsiSupportsPrivatization() &&
           canResolveMethod(dom, "chpl__serialize") &&
           canResolveMethod(arr, "chpl__serialize")) {
         return true;
@@ -191,6 +192,7 @@ module ArrayViewSlice {
     pragma "order independent yielding loops"
     iter these(param tag: iterKind, followThis) ref
       where tag == iterKind.follower {
+      printf("Slice follower %d, %d, %lld\n", this.locale.id, arr.locale.id, here.id);
       const ref myarr = arr;
       for i in privDom.these(tag, followThis) {
         yield myarr.dsiAccess[i];
@@ -294,8 +296,9 @@ module ArrayViewSlice {
     // the wrapped array
     override proc dsiSupportsPrivatization() param
     {
-      if chpl_serializeSlices then return false;
-      return _ArrInstance.dsiSupportsPrivatization();
+      return false;
+      //if chpl_serializeSlices then return false;
+      //return _ArrInstance.dsiSupportsPrivatization();
     }
 
     proc dsiGetPrivatizeData() {

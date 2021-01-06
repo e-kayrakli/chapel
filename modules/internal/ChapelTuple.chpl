@@ -48,6 +48,32 @@ module ChapelTuple {
     param size : int;
   }
 
+  proc homogeneousArrayViewSliceTuple(t) param {
+    use ArrayViewSlice;
+    if isHomogeneousTuple(t) {
+      if (isArray(t[0])) {
+        if (isSubtype(t[0]._instance.type, ArrayViewSliceArr)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  proc _tuple.chpl_postRVFFixup() where homogeneousArrayViewSliceTuple(this) {
+    printf("tuple fixup is called here=%lld, this.locale=%d\n", here.id,
+        this[0].locale.id);
+    use Reflection;
+    if canResolveMethod(this[0], "chpl_postRVFFixup") {
+      this[0].chpl_postRVFFixup();
+    }
+    if size > 1 {
+      if canResolveMethod(this[1], "chpl_postRVFFixup") {
+        this[1].chpl_postRVFFixup();
+      }
+    }
+  }
+
   pragma "tuple init fn"
   inline proc chpl__init_tuple(param size : int) {
     // body inserted during generic instantiation

@@ -161,6 +161,7 @@
  */
 module ChapelArray {
 
+      extern proc printf(s...);
   public use ChapelBase;
   use ChapelTuple;
   use ChapelLocale;
@@ -348,11 +349,11 @@ module ChapelArray {
   }
 
   pragma "no copy return"
-  proc _newArray(value) {
+  proc _newArray(value, pid=nullPid) {
     if _isPrivatized(value) then
       return new _array(_newPrivatizedClass(value), value);
     else
-      return new _array(nullPid, value);
+      return new _array(pid, value);
   }
 
   // It is intentional that there is no _getArray.
@@ -2485,7 +2486,52 @@ module ChapelArray {
       if _isPrivatized(_instance) {
         return chpl_getPrivatizedCopy(_instance.type, _pid);
       } else {
-        return _instance;
+        if isSubtype(_instance.type, ArrayViewSliceArr) {
+          //local {
+            //var ret = _instance;
+            //return ret;
+            //return __primitive("cast", __primitive("static typeof", _instance),
+                                       //__primitive("_wide_get_addr", _instance));
+            use CPtr;
+            type instType =  __primitive("static typeof", _instance);
+            //return __primitive("deref", _to_nonnil(__primitive("_wide_get_addr", _instance):instType?));
+            //return (__primitiv__primitive("_wide_get_addr", _instance)e("_wide_get_addr", _instance):instType?)!;
+            //return (__primitive("_wide_get_addr", _instance):c_ptr(instType)).deref();
+            return __primitive("cast", c_ptr(instType), __primitive("_wide_get_addr", _instance)).deref();
+            //return r;
+            //__primitive("_wide_get_addr", _instance)
+
+          //}
+          //if here.id == 1 {
+            //printf("_value returning instance on locale %d\n", _instance.locale.id);
+          //}
+        }
+        else {
+          return _instance;
+        }
+      }
+    }
+
+    proc chpl_postRVFFixup() {
+      local {
+        printf("Array post rvfed on LOCALE%lld\n", here.id);
+        if isSubtype(_instance.type, ArrayViewSliceArr) {
+          printf("\tpostrvf saw an array view slice whose instance is on LOCALE%d\n", _instance.locale.id);
+          if _instance.locale.id != here.id {
+            //printf("This is a record with remote reference to the instance. pid = %lld\n", _pid);
+            const upperHalf = getUpperHalf(_pid);
+            //printf("Upper half = %lld\n", upperHalf);
+            if upperHalf > 0 {
+              const lowerHalf = getLowerHalf(_pid);
+              const prevID = _instance.locale.id;
+
+              //_instance = _instance.type.chpl__deserialize((upperHalf, lowerHalf));
+              __primitive("=", _instance, _instance.type.chpl__deserialize((upperHalf, lowerHalf)));
+              const curID = _instance.locale.id;
+              printf("Instance was on %d but now it is on %d\n", prevID, curID);
+            }
+          }
+        }
       }
     }
 
@@ -2778,7 +2824,10 @@ module ChapelArray {
       // a slice's domain shouldn't generate a reallocate call for the
       // underlying array
       d._value.add_arr(a, locking=true, addToList=false);
-      return _newArray(a);
+      //return _newArray(a);
+      const retpid = combinePIDs(arrpid, d._pid);
+      //printf("Created arrayviewslice arr with combined pid %lld\n", retpid);
+      return _newArray(a, pid=retpid);
     }
 
     // array slicing by a tuple of ranges
@@ -2815,7 +2864,11 @@ module ChapelArray {
       // resizing a slice's domain shouldn't generate a reallocate
       // call for the underlying array
       d._value.add_arr(a, locking=false, addToList=false);
-      return _newArray(a);
+      //return _newArray(a);
+      //ref ret = _newArray(a);
+      const retpid = combinePIDs(arrpid, d._pid);
+      //printf("Created arrayviewslice arr with combined pid %lld\n", retpid);
+      return _newArray(a, pid=retpid);
     }
 
     // array rank change
@@ -2938,6 +2991,11 @@ module ChapelArray {
     pragma "reference to const when const this"
     iter these(param tag: iterKind, followThis, param fast: bool = false) ref
       where tag == iterKind.follower {
+
+        //if isSubtype(_instance.type, ArrayViewSliceArr) {
+          printf("Array record follower called on %lld, value locale %d instance locale %d this locale %d\n",
+            here.id, _value.locale.id, _instance.locale.id, this.locale.id);
+        //}
 
       if __primitive("method call resolves", _value, "these",
                      tag=tag, followThis, fast=fast) {

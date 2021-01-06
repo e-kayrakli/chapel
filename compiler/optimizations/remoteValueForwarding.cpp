@@ -27,6 +27,7 @@
 #include "stlUtil.h"
 #include "stmt.h"
 #include "stringutil.h"
+#include "view.h"
 
 //#define DEBUG_SYNC_ACCESS_FUNCTION_SET
 
@@ -256,6 +257,18 @@ static void updateTaskFunctions(Map<Symbol*, Vec<SymExpr*>*>& defMap,
             insertSerialization(fn, arg);
           } else {
             defaultForwarding(useMap, fn, arg);
+          }
+
+          if (AggregateType* at = toAggregateType(arg->type)) {
+            if (FnSymbol* rvfHandlerFn = rvfHandlerMap[at]) {
+              std::cout << "Found an rvf handler for type during RVF\n";
+              nprint_view(at);
+              nprint_view(rvfHandlerFn);
+
+              SET_LINENO(arg);
+
+              fn->insertAtHead(new CallExpr(rvfHandlerFn, arg));
+            }
           }
         }
       }

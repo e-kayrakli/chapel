@@ -114,6 +114,7 @@ Vec<CallExpr*>                     callStack;
 std::map<Type*,     FnSymbol*>     autoCopyMap;
 std::map<Type*,     FnSymbol*>     initCopyMap;
 std::map<Type*,     Serializers>   serializeMap;
+std::map<Type*,     FnSymbol*>     rvfHandlerMap;
 
 Map<Type*,          FnSymbol*>     autoDestroyMap;
 Map<FnSymbol*,      FnSymbol*>     coerceMoveFromCopyMap;
@@ -9350,6 +9351,25 @@ static void resolveBroadcasters(AggregateType* at) {
   ser.destroyer   = destroyFn;
 }
 
+static void resolveRVFHandlers(AggregateType *at) {
+  SET_LINENO(at->symbol);
+  VarSymbol* tmp          = newTemp(at);
+  chpl_gen_main->insertAtHead(new DefExpr(tmp));
+
+  CallExpr* postRVFFixupCall = new CallExpr("chpl_postRVFFixup", gMethodToken, tmp);
+  FnSymbol* postRVFFixupFn = resolveNormalSerializer(postRVFFixupCall);
+
+  if (postRVFFixupFn != NULL) {
+    resolveFunction(postRVFFixupFn);
+    rvfHandlerMap[at] = postRVFFixupFn;
+    std::cout << "Resolved the fixup function for type\n";
+    nprint_view(at);
+    nprint_view(postRVFFixupFn);
+  }
+
+  tmp->defPoint->remove();
+}
+
 static void resolveSerializers() {
   if (fNoRemoteSerialization == true) {
     return;
@@ -9367,6 +9387,7 @@ static void resolveSerializers() {
           if (success) {
             resolveBroadcasters(at);
           }
+          resolveRVFHandlers(at);
         }
       }
     }

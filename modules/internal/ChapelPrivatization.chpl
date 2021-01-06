@@ -40,4 +40,16 @@ module ChapelPrivatization {
     return __primitive("cast", objectType, chpl_privateObjects[objectPid].obj);
   }
 
+  proc combinePIDs(arrpid, dompid) {
+    return arrpid | (dompid << 32);
+  }
+
+  proc getLowerHalf(pid) {
+    return pid & ((1 << 32) - 1);
+  }
+
+  proc getUpperHalf(pid) {
+    return (pid & ~((1 << 32) - 1)) >> 32;
+  }
+
 }
