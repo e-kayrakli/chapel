@@ -9,6 +9,8 @@ config const arrSize = 1024;
 config const localRatio = 0.1;
 config const numIters = 10;
 
+var allLocal = false;
+
 var dom = newBlockDom(0..#arrSize);
 var A: [dom] int;
 var B: [dom] int;
@@ -31,6 +33,8 @@ proc generateIndices() {
 
   if numRemoteAccesses > 0 then
     indices[numLocalAccesses..numAccesses-1] = r.choice(remoteDom, size=numRemoteAccesses);
+  else 
+    allLocal = true;
 
   shuffle(indices);
 
@@ -39,21 +43,23 @@ proc generateIndices() {
 
 
 on Locales[0] {
-  var t = new Timer();
-  var indicesToGet = generateIndices();
-  for i in 0..#numIters {
-    if i > 0 then t.start();
-    if useAggregators {
-      forall i in dom.localSubdomain() with (var agg = newSrcAggregator(int)) {
-        agg.copy(A[i], B[indicesToGet[i]]);
+  local allLocal {
+    var t = new Timer();
+    var indicesToGet = generateIndices();
+    for i in 0..#numIters {
+      if i > 0 then t.start();
+      if useAggregators {
+        forall i in dom.localSubdomain() with (var agg = newSrcAggregator(int)) {
+          agg.copy(A[i], B[indicesToGet[i]]);
+        }
       }
-    }
-    else {
-      forall i in dom.localSubdomain() {
-        A[i] = B[indicesToGet[i]];
+      else {
+        forall i in dom.localSubdomain() {
+          A[i] = B[indicesToGet[i]];
+        }
       }
+      if i > 0 then t.stop();
     }
-    if i > 0 then t.stop();
+    writeln("Per access time (us): ", 1000000*t.elapsed()/(numIters-1)/dom.localSubdomain().size);
   }
-  writeln("Per access time (us): ", 1000000*t.elapsed()/(numIters-1)/dom.localSubdomain().size);
 }
