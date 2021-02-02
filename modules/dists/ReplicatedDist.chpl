@@ -604,6 +604,11 @@ proc ReplicatedDom.dsiBuildArray(type eltType, param initElts:bool)
   return result;
 }
 
+// for replicated arrays this is just a dsiAccess
+inline proc ReplicatedArr.dsiLocalAccess(indexx) ref {
+  return this.dsiAccess(indexx);
+}
+
 // Return the array element corresponding to the index - on the current locale
 proc ReplicatedArr.dsiAccess(indexx) ref {
   return chpl_myLocArr().arrLocalRep[indexx];
