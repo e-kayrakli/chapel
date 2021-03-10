@@ -32,6 +32,7 @@ module DefaultRectangular {
   public use ChapelArray;
   use ChapelDistribution, ChapelRange, SysBasic, SysError, SysCTypes, CPtr;
   use ChapelDebugPrint, ChapelLocks, OwnedObject, IO;
+  use ChapelBulkTransferCache;
   use DefaultSparse, DefaultAssociative;
   public use ExternalArray; // OK: currently expected to be available by
                             // default... though... why 'use' it here?
@@ -1015,6 +1016,8 @@ module DefaultRectangular {
     var deinitElts: bool = true;
     //var numelm: int = -1; // for correctness checking
 
+    var btdCache: chpl__btdCache(eltType);
+
     // fields end here
 
     proc init(type eltType, param rank, type idxType,
@@ -1898,6 +1901,26 @@ module DefaultRectangular {
     return transferHelper(this, destDom, srcClass, srcDom);
   }
 
+  proc DefaultRectangularArr.doiCachedTransferFromKnown(otherArr, cachedData: chpl__btdCacheValue(eltType)) {
+    if cachedData.isParallel {
+      _simpleParallelTransferHelper(this, otherArr,
+                                          cachedData.srcData,
+                                          cachedData.dstData,
+                                          cachedData.srcLocId,
+                                          cachedData.dstLocId,
+                                          cachedData.len);
+    }
+    else {
+      _simpleTransferHelper(this, otherArr,
+                                  cachedData.srcData,
+                                  cachedData.dstData,
+                                  cachedData.srcLocId,
+                                  cachedData.dstLocId,
+                                  cachedData.len);
+    }
+
+  }
+
   private proc transferHelper(A, aView, B, bView) : bool {
     if A.rank == B.rank &&
        (aView.stridable == false && bView.stridable == false) &&
@@ -1974,6 +1997,8 @@ module DefaultRectangular {
         }
       }
     }
+
+    A.btdCache.insert(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
 
     if doParallelAssign {
       _simpleParallelTransferHelper(A, B, Adata, Bdata, Alocid, Blocid, len);
