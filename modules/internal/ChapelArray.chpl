@@ -35,6 +35,8 @@ module ChapelArray {
   use ChapelPrivatization;
   public use ChapelDomain;
 
+  use ChapelBulkTransferCache;
+
   // Explicitly use a processor atomic, as most calls to this function are
   // likely be on locale 0
   pragma "no doc"
@@ -2275,13 +2277,36 @@ module ChapelArray {
     }
   }
 
+  proc chpl__cachedBulkTransferArray(ref a: [], b: []) {
+    if (a.locale == here) {
+      if (a.domain.definedConst) {
+        printf("lhs is local and based on a constant domain\n");
+        //const key = generateKeyFromArray(b);
+
+        if a._value.btdCache.contains(b) {
+          printf("cache contains info, will do cached transfer\n");
+          var val = a._value.btdCache.get(b);
+
+          a._value.doiCachedTransferFromKnown(b, val);
+          return true;
+        }
+      }
+    }
+
+    printf("cache doesn't contain info, will not do cached transfer\n");
+    return false;
+  }
+
+
   pragma "find user line"
   inline proc chpl__uncheckedArrayTransfer(ref a: [], b:[], param kind) {
 
     var done = false;
     if !chpl__serializeAssignment(a, b) {
       if chpl__compatibleForBulkTransfer(a, b, kind) {
-        done = chpl__bulkTransferArray(a, b);
+        done = chpl__cachedBulkTransferArray(a, b);
+        if !done then
+          done = chpl__bulkTransferArray(a, b);
       }
       else if chpl__compatibleForWidePtrBulkTransfer(a, b, kind) {
         done = chpl__bulkTransferPtrArray(a, b);
