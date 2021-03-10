@@ -2054,7 +2054,9 @@ module DefaultRectangular {
       }
     }
 
-    A.btdCache.insert(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
+    if useCachedBulkTransfer {
+      A.btdCache.insert(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
+    }
 
     if doParallelAssign {
       _simpleParallelTransferHelper(A, B, Adata, Bdata, Alocid, Blocid, len);

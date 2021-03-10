@@ -55,6 +55,8 @@ module ChapelArray {
   pragma "no doc"
   config param useBulkTransfer = true;
   pragma "no doc"
+  config param useCachedBulkTransfer = true;
+  pragma "no doc"
   config param useBulkTransferStride = true;
   pragma "no doc"
   config param useBulkPtrTransfer = useBulkTransfer;
@@ -2278,24 +2280,26 @@ module ChapelArray {
   }
 
   proc chpl__cachedBulkTransferArray(ref a: [], b: []) {
-    if (a.locale == here) {
-      if (a.domain.definedConst) {
-        if debugCachedBulkTransfer then
-          chpl_debug_writeln("lhs is local and based on a constant domain");
-
-        if a._value.btdCache.contains(b) {
+    if useCachedBulkTransfer {
+      if (a.locale == here) {
+        if (a.domain.definedConst) {
           if debugCachedBulkTransfer then
-            chpl_debug_writeln("cache contains info, will do cached transfer");
-          var val = a._value.btdCache.get(b);
+            chpl_debug_writeln("lhs is local and based on a constant domain");
 
-          a._value.doiCachedTransferFromKnown(b, val);
-          return true;
+          if a._value.btdCache.contains(b) {
+            if debugCachedBulkTransfer then
+              chpl_debug_writeln("cache contains info, will do cached transfer");
+            var val = a._value.btdCache.get(b);
+
+            a._value.doiCachedTransferFromKnown(b, val);
+            return true;
+          }
         }
       }
-    }
 
-    if debugCachedBulkTransfer then
-      chpl_debug_writeln("cache doesn't contain info, will not do cached transfer");
+      if debugCachedBulkTransfer then
+        chpl_debug_writeln("cache doesn't contain info, will not do cached transfer");
+    }
 
     return false;
   }
