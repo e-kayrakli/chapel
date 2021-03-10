@@ -7,6 +7,7 @@ config const niters = 5;
 config const verboseComm = false;
 config const commDiags = false;
 config const timing = false;
+config const printResult = false;
 
 var source: [0..#n] int;
 
@@ -21,7 +22,7 @@ on Locales[1] {
   if verboseComm then stopVerboseCommHere();
   if timing then t.stop();
 
-  writeln(dest);
+  if printResult then writeln(dest);
   if timing then writeln(t.elapsed());
 }
 
