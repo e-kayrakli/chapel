@@ -4045,18 +4045,20 @@ module ChapelArray {
 
   proc chpl__cachedBulkTransferArray(ref a: [], b: []) {
     if useCachedBulkTransfer {
-      if (a.locale == here) {
-        if (a.domain.definedConst) {
-          if debugCachedBulkTransfer then
-            chpl_debug_writeln("lhs is local and based on a constant domain");
-
-          if a._value.btdCache.contains(b) {
+      if (a._value.isDefaultRectangular() && b._value.isDefaultRectangular()) {
+        if (a.locale == here) {
+          if (a.domain.definedConst) {
             if debugCachedBulkTransfer then
-              chpl_debug_writeln("cache contains info, will do cached transfer");
-            var val = a._value.btdCache.get(b);
+              chpl_debug_writeln("lhs is local and based on a constant domain");
 
-            a._value.doiCachedTransferFromKnown(b, val);
-            return true;
+            if a._value.btdCache.contains(b) {
+              if debugCachedBulkTransfer then
+                chpl_debug_writeln("cache contains info, will do cached transfer");
+              var val = a._value.btdCache.get(b);
+
+              a._value.doiCachedTransferFromKnown(b, val);
+              return true;
+            }
           }
         }
       }
