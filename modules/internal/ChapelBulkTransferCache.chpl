@@ -1,5 +1,7 @@
 module ChapelBulkTransferCache {
-  extern proc printf(s...);
+
+  pragma "no doc"
+  config param debugCachedBulkTransfer = false;
 
   use ChapelBase;
   use CPtr;
@@ -48,7 +50,8 @@ module ChapelBulkTransferCache {
 
       const key = generateKeyFromArray(dstArr);
 
-      printf("inserting new data into cache key: %s\n", (key:string).c_str());
+      if debugCachedBulkTransfer then
+        chpl_debug_writeln("inserting new data into cache key: ", key:string);
 
       this.cache.add(key, new chpl__btdCacheValue(eltType,
                                            key=key,
@@ -63,8 +66,8 @@ module ChapelBulkTransferCache {
     proc contains(k) {
       const key = generateKeyFromArray(k._value);
 
-      printf("checking for cache key: %s\n", (key:string).c_str());
-
+      if debugCachedBulkTransfer then
+        chpl_debug_writeln("checking for cache key: ", key:string);
 
       return cache.contains(key);
     }

@@ -2280,11 +2280,12 @@ module ChapelArray {
   proc chpl__cachedBulkTransferArray(ref a: [], b: []) {
     if (a.locale == here) {
       if (a.domain.definedConst) {
-        printf("lhs is local and based on a constant domain\n");
-        //const key = generateKeyFromArray(b);
+        if debugCachedBulkTransfer then
+          chpl_debug_writeln("lhs is local and based on a constant domain");
 
         if a._value.btdCache.contains(b) {
-          printf("cache contains info, will do cached transfer\n");
+          if debugCachedBulkTransfer then
+            chpl_debug_writeln("cache contains info, will do cached transfer");
           var val = a._value.btdCache.get(b);
 
           a._value.doiCachedTransferFromKnown(b, val);
@@ -2293,7 +2294,9 @@ module ChapelArray {
       }
     }
 
-    printf("cache doesn't contain info, will not do cached transfer\n");
+    if debugCachedBulkTransfer then
+      chpl_debug_writeln("cache doesn't contain info, will not do cached transfer");
+
     return false;
   }
 
