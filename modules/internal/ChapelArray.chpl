@@ -2280,6 +2280,7 @@ module ChapelArray {
   }
 
   proc chpl__cachedBulkTransferArray(ref a: [], b: []) {
+    var success = false;
     if useCachedBulkTransfer {
       if (a._value.isDefaultRectangular() && b._value.isDefaultRectangular()) {
         if (a.locale == here) {
@@ -2289,16 +2290,32 @@ module ChapelArray {
             }
 
 
-            return a._value.doiBulkTransferFromRemotePair(b);
+            success = a._value.doiBulkTransferFromRemotePair(b._value);
+          }
+        }
+        if (b.locale == here) {
+          if (b.domain.definedConst) {
+            if debugCachedBulkTransfer {
+              chpl_debug_writeln("rhs is local and based on a constant domain");
+            }
+
+
+            success = b._value.doiBulkTransferToRemotePair(a._value);
           }
         }
       }
 
       if debugCachedBulkTransfer then
-        chpl_debug_writeln("cache doesn't contain info, will not do cached transfer");
+        if success then {
+          chpl_debug_writeln("remote pair transfer successful");
+        }
+        else {
+          chpl_debug_writeln("remote pair transfer failed");
+        }
     }
 
-    return false;
+
+    return success;
   }
 
 
