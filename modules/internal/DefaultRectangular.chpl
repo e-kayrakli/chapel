@@ -992,6 +992,44 @@ module DefaultRectangular {
     }
   }
 
+  record chpl_drRemotePair {
+    type eltType;
+
+    var otherAddr: c_void_ptr; // only used for sanity checking
+
+    var thisData: _ddata(eltType);
+    var otherData: _ddata(eltType);
+    var thisLocId: int;
+    var otherLocId: int;
+    var len: uint;
+    var isParallel: bool;
+
+    var ready = false;
+
+    proc set(otherInst, thisData, otherData, thisLocId, otherLocId, len,
+             isParallel) {
+
+      this.otherAddr = getAddrFromWidePtr(otherInst);
+
+      this.thisData = thisData;
+      this.otherData = otherData;
+      this.thisLocId = thisLocId;
+      this.otherLocId = otherLocId;
+      this.len = len;
+      this.isParallel = isParallel;
+
+      this.ready = true;
+    }
+
+    proc check(otherInst) {
+      return otherAddr == getAddrFromWidePtr(otherInst);
+    }
+
+    inline proc getAddrFromWidePtr(inst) {
+      return __primitive("_wide_get_addr", inst): c_void_ptr;
+    }
+  }
+
   class DefaultRectangularArr: BaseRectangularArr {
     /*type eltType;
     param rank : int;
@@ -1027,6 +1065,8 @@ module DefaultRectangular {
     //var numelm: int = -1; // for correctness checking
 
     var btdCache: chpl__btdCache(eltType);
+
+    var remotePair: chpl_drRemotePair(eltType);
 
     // fields end here
 
@@ -1977,6 +2017,34 @@ module DefaultRectangular {
 
   }
 
+  proc DefaultRectangularArr.doiBulkTransferFromRemotePair(otherArr) {
+    if !remotePair.ready then return false;
+
+    if remotePair.check(otherArr) {
+      remotePair.ready = false;
+      return false;
+    }
+
+    if remotePair.isParallel {
+      _simpleParallelTransferHelper(this, otherArr,
+                                          remotePair.thisData,
+                                          remotePair.otherData,
+                                          remotePair.thisLocId,
+                                          remotePair.otherLocId,
+                                          remotePair.len);
+    }
+    else {
+      _simpleTransferHelper(this, otherArr,
+                                  remotePair.thisData,
+                                  remotePair.otherData,
+                                  remotePair.thisLocId,
+                                  remotePair.otherLocId,
+                                  remotePair.len);
+    }
+
+    return true;
+  }
+
   private proc transferHelper(A, aView, B, bView) : bool {
     if A.rank == B.rank &&
        (aView.stridable == false && bView.stridable == false) &&
@@ -2055,7 +2123,8 @@ module DefaultRectangular {
     }
 
     if useCachedBulkTransfer {
-      A.btdCache.insert(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
+      //A.btdCache.insert(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
+      A.remotePair.set(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
     }
 
     if doParallelAssign {
