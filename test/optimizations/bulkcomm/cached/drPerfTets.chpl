@@ -10,6 +10,7 @@ config const timing = false;
 config const printResult = false;
 
 var source: [0..#n] int;
+forall (s,i) in zip(source, source.domain) do s=i+10;
 
 on Locales[1] {
   var dest: [0..#n] int;
@@ -24,5 +25,17 @@ on Locales[1] {
 
   if printResult then writeln(dest);
   if timing then writeln(t.elapsed());
+
+  var success = true;
+  for (s,d) in zip(source, dest) {
+    if s != d then {
+      writeln("Mismatch");
+      writeln(dest);
+      success  = false;
+    }
+  }
+
+  if success then writeln("Success");
 }
+
 
