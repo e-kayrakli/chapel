@@ -982,6 +982,27 @@ module DefaultRectangular {
     }
   }
 
+  private proc _registerRemotePair(A, B, Adata, Bdata, Alocid, Blocid, len,
+                                   isParallel) {
+
+    const hereID = here.id;
+
+    if A.dom.definedConst && B.dom.definedConst {
+      if Alocid == hereID {
+        A.remotePair.set(B, Adata, Bdata, Alocid, Blocid, len, isParallel, isLHS=true);
+      }
+      else if Blocid == hereID {
+        B.remotePair.set(A, Adata, Bdata, Alocid, Blocid, len, isParallel, isLHS=false);
+      }
+      else {
+        // this means either both sides were remote or local, do nothing
+      }
+    }
+    else {
+      // can't use this optimization if arrays aren't declared over const doms
+    }
+  }
+
   record chpl_drRemotePair {
     type eltType;
 
@@ -995,11 +1016,13 @@ module DefaultRectangular {
     var isParallel: bool;
 
     var ready = false;
+    var isLHS = false;
 
     proc set(otherInst, thisData, otherData, thisLocId, otherLocId, len,
-             isParallel) {
+             isParallel, isLHS) {
 
       this.otherAddr = getAddrFromWidePtr(otherInst);
+
 
       this.thisData = thisData;
       this.otherData = otherData;
@@ -1007,6 +1030,7 @@ module DefaultRectangular {
       this.otherLocId = otherLocId;
       this.len = len;
       this.isParallel = isParallel;
+      this.isLHS = isLHS;
 
       this.ready = true;
     }
@@ -1964,10 +1988,12 @@ module DefaultRectangular {
   proc DefaultRectangularArr.doiBulkTransferFromRemotePair(otherArr) {
     if !remotePair.ready then return false;
 
-    if remotePair.check(otherArr) {
+    if !remotePair.check(otherArr) {
       remotePair.ready = false;
       return false;
     }
+
+    if remotePair.isLHS == false then return false;
 
     if remotePair.isParallel {
       _simpleParallelTransferHelper(this, otherArr,
@@ -1983,6 +2009,36 @@ module DefaultRectangular {
                                   remotePair.otherData,
                                   remotePair.thisLocId,
                                   remotePair.otherLocId,
+                                  remotePair.len);
+    }
+
+    return true;
+  }
+
+  proc DefaultRectangularArr.doiBulkTransferToRemotePair(otherArr) {
+    if !remotePair.ready then return false;
+
+    if !remotePair.check(otherArr) {
+      remotePair.ready = false;
+      return false;
+    }
+
+    if remotePair.isLHS == true then return false;
+
+    if remotePair.isParallel {
+      _simpleParallelTransferHelper(otherArr, this,
+                                          remotePair.otherData,
+                                          remotePair.thisData,
+                                          remotePair.otherLocId,
+                                          remotePair.thisLocId,
+                                          remotePair.len);
+    }
+    else {
+      _simpleTransferHelper(otherArr, this,
+                                  remotePair.otherData,
+                                  remotePair.thisData,
+                                  remotePair.otherLocId,
+                                  remotePair.thisLocId,
                                   remotePair.len);
     }
 
@@ -2068,7 +2124,10 @@ module DefaultRectangular {
 
     if useCachedBulkTransfer {
       //A.btdCache.insert(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
-      A.remotePair.set(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
+      //A.remotePair.set(B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
+      if !isFullyLocal {
+        _registerRemotePair(A, B, Adata, Bdata, Alocid, Blocid, len, doParallelAssign);
+      }
     }
 
     if doParallelAssign {
