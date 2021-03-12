@@ -2163,10 +2163,6 @@ module ChapelArray {
       return;
     }
 
-    if a.sizeAs(uint) == 0 && b.sizeAs(uint) == 0 then
-      // Do nothing for zero-length assignments
-      return;
-
     if boundsChecking then
       checkArrayShapesUponAssignment(a, b);
 
@@ -2322,29 +2318,50 @@ module ChapelArray {
   pragma "find user line"
   inline proc chpl__uncheckedArrayTransfer(ref a: [], b:[], param kind) {
 
-    var done = false;
+    var nonZeroSizeChecked = false;
     if !chpl__serializeAssignment(a, b) {
       if chpl__compatibleForBulkTransfer(a, b, kind) {
-        done = chpl__cachedBulkTransferArray(a, b);
-        if !done then
-          done = chpl__bulkTransferArray(a, b);
-      }
-      else if chpl__compatibleForWidePtrBulkTransfer(a, b, kind) {
-        done = chpl__bulkTransferPtrArray(a, b);
-      }
-      // If we did a bulk transfer, it just bit copied, so need to
-      // run copy initializer still
-      if done {
-        if kind==_tElt.initCopy && !isPODType(a.eltType) {
-          initCopyAfterTransfer(a);
-        } else if kind==_tElt.move && (isSubtype(a.eltType, _array) ||
-                                       isSubtype(a.eltType, _domain)) {
-          fixEltRuntimeTypesAfterTransfer(a);
+
+        if chpl__cachedBulkTransferArray(a, b) {
+          chpl__runCopyInitAfterBulkTransfer(a, kind);
+          return;
         }
+
+        if a.size == 0 && b.size == 0 { // this can incur comm
+          return;
+        }
+        else {
+          nonZeroSizeChecked = true;
+        }
+
+        if chpl__bulkTransferArray(a, b) {
+          chpl__runCopyInitAfterBulkTransfer(a, kind);
+          return;
+        }
+      
+        if chpl__bulkTransferPtrArray(a, b) {
+          chpl__runCopyInitAfterBulkTransfer(a, kind);
+          return;
+        }
+
       }
     }
-    if !done {
-      chpl__transferArray(a, b, kind);
+
+    if !nonZeroSizeChecked {
+      if a.size == 0 && b.size == 0 { // this can incur comm
+        return;
+      }
+    }
+
+    chpl__transferArray(a, b, kind);
+  }
+
+  private proc chpl__runCopyInitAfterBulkTransfer(a, param kind) {
+    if kind==_tElt.initCopy && !isPODType(a.eltType) {
+      initCopyAfterTransfer(a);
+    } else if kind==_tElt.move && (isSubtype(a.eltType, _array) ||
+        isSubtype(a.eltType, _domain)) {
+      fixEltRuntimeTypesAfterTransfer(a);
     }
   }
 
