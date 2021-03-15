@@ -2338,12 +2338,20 @@ module ChapelArray {
           chpl__runCopyInitAfterBulkTransfer(a, kind);
           return;
         }
-      
+
+      }
+      else if chpl__compatibleForWidePtrBulkTransfer(a, b, kind) {
+        if a.size == 0 && b.size == 0 { // this can incur comm
+          return;
+        }
+        else {
+          nonZeroSizeChecked = true;
+        }
+
         if chpl__bulkTransferPtrArray(a, b) {
           chpl__runCopyInitAfterBulkTransfer(a, kind);
           return;
         }
-
       }
     }
 
