@@ -355,7 +355,7 @@ buildFollowLoop(VarSymbol* iter,
                 bool       forallExpr,
                 Expr*      iterExpr) {
   BlockStmt* followBlock = new BlockStmt();
-  ForLoop*   followBody  = new ForLoop(followIdx, followIter, loopBody,
+  ForLoop*   followBody  = new ForLoop(followIdx, followIter, NULL, loopBody,
                                        zippered,
                                        /*isLoweredForall*/ false,
                                        forallExpr);

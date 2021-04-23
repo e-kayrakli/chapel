@@ -942,6 +942,7 @@ checkIndices(BaseAST* indices) {
 static Expr* destructureIndicesAfter(Expr* insertAfter,
                                      BaseAST* indices,
                                      Expr* init,
+                                     std::vector<VarSymbol*> iterators,
                                      bool coforall);
 
 void destructureIndices(BlockStmt* block,
@@ -950,25 +951,42 @@ void destructureIndices(BlockStmt* block,
                         bool coforall) {
   Expr* insertPt = new CallExpr(PRIM_NOOP);
   block->insertAtHead(insertPt);
-  destructureIndicesAfter(insertPt, indices, init, coforall);
+  std::vector<VarSymbol*> dummy;
+  destructureIndicesAfter(insertPt, indices, init, dummy, coforall);
   insertPt->remove();
 }
+
+void destructureIndicesForZip(BlockStmt* block,
+                              BaseAST* indices,
+                              std::vector<VarSymbol*> iterators,
+                              bool coforall) {
+  Expr* insertPt = new CallExpr(PRIM_NOOP);
+  block->insertAtHead(insertPt);
+
+
+  destructureIndicesAfter(insertPt, indices, NULL, iterators, coforall);
+  insertPt->remove();
+}
+
 
 // Returns the next value for insertAfter
 static Expr* destructureIndicesAfter(Expr* insertAfter,
                                      BaseAST* indices,
                                      Expr* init,
+                                     std::vector<VarSymbol*> iterators,
                                      bool coforall) {
   if (CallExpr* call = toCallExpr(indices)) {
     if (call->isNamed("_build_tuple")) {
       int i = 0;
 
-      // Add checks that the index has tuple type of the right shape.
-      CallExpr* checkCall = new CallExpr("_check_tuple_var_decl",
-                                         init->copy(),
-                                         new_IntSymbol(call->numActuals()));
-      insertAfter->insertAfter(checkCall);
-      insertAfter = checkCall;
+      if (iterators.size() == 0) {
+        // Add checks that the index has tuple type of the right shape.
+        CallExpr* checkCall = new CallExpr("_check_tuple_var_decl",
+                                           init->copy(),
+                                           new_IntSymbol(call->numActuals()));
+        insertAfter->insertAfter(checkCall);
+        insertAfter = checkCall;
+      }
 
       for_actuals(actual, call) {
         if (UnresolvedSymExpr* use = toUnresolvedSymExpr(actual)) {
@@ -978,9 +996,17 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
           }
         }
 
-        CallExpr* call = new CallExpr(init->copy(), new_IntSymbol(i));
-        insertAfter = destructureIndicesAfter(insertAfter, actual,
-                                              call, coforall);
+        if (iterators.size() == 0) {
+          CallExpr* call = new CallExpr(init->copy(), new_IntSymbol(i));
+          insertAfter = destructureIndicesAfter(insertAfter, actual, 
+                                                call, iterators, coforall);
+        }
+        else {
+          insertAfter = destructureIndicesAfter(insertAfter, actual,
+                                                new CallExpr("iteratorIndex", iterators[i]),
+                                                iterators,
+                                                coforall);
+        }
         i++;
       }
     } else {

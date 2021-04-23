@@ -284,6 +284,17 @@ public:
 
   static  const     std::string tabText;
 
+  inline bool inTest() {
+    // return true;
+
+    if (strcmp(fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forZipTest.chpl") == 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+
 protected:
                     BaseAST(AstTag type);
   virtual          ~BaseAST() = default;
@@ -601,11 +612,13 @@ static inline const CallExpr* toConstCallExpr(const BaseAST* a)
       AST_CALL_LIST (_a, ForLoop,      body,           call, __VA_ARGS__); \
       AST_CALL_CHILD(_a, ForLoop,      indexGet(),     call, __VA_ARGS__); \
       AST_CALL_CHILD(_a, ForLoop,      iteratorGet(),  call, __VA_ARGS__); \
+      AST_CALL_CHILD(_a, ForLoop,      zipCallGet(),   call, __VA_ARGS__); \
                                                                            \
     } else if (isCoforallLoop(_a) == true) {                               \
       AST_CALL_LIST (_a, ForLoop,      body,           call, __VA_ARGS__); \
       AST_CALL_CHILD(_a, ForLoop,      indexGet(),     call, __VA_ARGS__); \
       AST_CALL_CHILD(_a, ForLoop,      iteratorGet(),  call, __VA_ARGS__); \
+      AST_CALL_CHILD(_a, ForLoop,      zipCallGet(),   call, __VA_ARGS__); \
                                                                            \
     } else if (isCForLoop(_a)     == true) {                               \
       AST_CALL_LIST (_a, CForLoop,     body,           call, __VA_ARGS__); \

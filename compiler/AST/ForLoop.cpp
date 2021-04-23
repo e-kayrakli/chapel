@@ -19,6 +19,7 @@
  */
 
 #include "ForLoop.h"
+#include "view.h"
 
 #include "astutil.h"
 #include "AstVisitor.h"
@@ -159,7 +160,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
   VarSymbol*   iterator      = newTemp("_iterator");
   CallExpr*    iterInit      = 0;
   CallExpr*    iterMove      = 0;
-  ForLoop*     loop          = new ForLoop(index, iterator, body,
+  ForLoop*     loop          = new ForLoop(index, iterator, iteratorExpr, body,
                                            zippered, isLoweredForall,
                                            isForExpr);
   LabelSymbol* continueLabel = new LabelSymbol("_continueLabel");
@@ -167,6 +168,8 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
   BlockStmt*   retval        = new BlockStmt();
 
   iterator->addFlag(FLAG_EXPR_TEMP);
+  
+  std::vector<VarSymbol*> iterators;
 
   // Unzippered loop, treat all objects (including tuples) the same
   if (zippered == false) {
@@ -190,7 +193,9 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
       // rewrite into a utility function for the other get*Zip
       // functions as we convert parallel loops over to use PRIM_ZIP).
       //
-      zipExpr->primitive = NULL;   // remove the primitive
+      if (!iteratorExpr->inTest()) {
+        zipExpr->primitive = NULL;   // remove the primitive
+      }
 
       // If there's just one argument...
       if (zipExpr->argList.length == 1) {
@@ -219,19 +224,49 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
         // Otherwise, if there's more than one argument, build up the
         // tuple by applying _getIterator() to each element.
         //
-        zipExpr->baseExpr = new UnresolvedSymExpr("_build_tuple");
-        Expr* arg = zipExpr->argList.first();
-        while (arg) {
-          Expr* next = arg->next;
-          Expr* argCopy = arg->copy();
-          arg->replace(new CallExpr("_getIterator", argCopy));
-          // try to optimize anonymous range iteration
-          tryToReplaceWithDirectRangeIterator(argCopy);
-          arg = next;
+        if (zipExpr->inTest()) {
+          INT_ASSERT(zipExpr == loop->zipCallGet());
+          for_actuals(actual, zipExpr) {
+            VarSymbol* iterTemp = newTemp("iterTemp");
+            Expr* actualCopy = actual->copy();
+            actual->replace(new SymExpr(iterTemp));
+
+            iterTemp->addFlag(FLAG_EXPR_TEMP);
+            iterTemp->addFlag(FLAG_MAYBE_PARAM);
+            iterTemp->addFlag(FLAG_MAYBE_TYPE);
+
+            //DefExpr* iterTempDef = new DefExpr(iterTemp);
+            //retval->insertAtTail(iterTempDef);
+            //retval->insertAtTail(new CallExpr("move", iterTemp,
+                                                    //new CallExpr("_getIterator",
+                                                                 //actualCopy)));
+            retval->insertAtTail(new DefExpr(iterTemp, new CallExpr("_getIterator",
+                                                                    actualCopy)));
+
+            tryToReplaceWithDirectRangeIterator(actualCopy);
+
+            iterators.push_back(iterTemp);
+          }
+        }
+        else {
+          zipExpr->baseExpr = new UnresolvedSymExpr("_build_tuple");
+          Expr* arg = zipExpr->argList.first();
+          while (arg) {
+            Expr* next = arg->next;
+            Expr* argCopy = arg->copy();
+            
+            arg->replace(new CallExpr("_getIterator", argCopy));
+            // try to optimize anonymous range iteration
+            tryToReplaceWithDirectRangeIterator(argCopy);
+            arg = next;
+          }
         }
       }
-      iterInit = new CallExpr(PRIM_MOVE, iterator, zipExpr);
-      assert(zipExpr == iteratorExpr);
+
+      if (!zipExpr->inTest()) {
+        iterInit = new CallExpr(PRIM_MOVE, iterator, zipExpr);
+        assert(zipExpr == iteratorExpr);
+      }
     } else {
       //
       // This is an old-style zippered loop so handle it in the old style
@@ -247,7 +282,9 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
     }
   }
 
-  index->addFlag(FLAG_INDEX_OF_INTEREST);
+  if (!body->inTest()) {
+    index->addFlag(FLAG_INDEX_OF_INTEREST);
+  }
 
   iterMove = new CallExpr(PRIM_MOVE, index, new CallExpr("iteratorIndex", iterator));
 
@@ -256,22 +293,48 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
   checkIndices(indices);
 
-  destructureIndices(loop, indices, new SymExpr(index), coforall);
+  if (iterators.size() > 0) {
+    std::cout << "destIndForZip " << loop->stringLoc() << std::endl;
+    nprint_view(indices);
+    destructureIndicesForZip(loop, indices, iterators, coforall);
 
-  if (coforall)
-    index->addFlag(FLAG_COFORALL_INDEX_VAR);
+    BlockStmt *deferBlock = new BlockStmt();
+    //DeferStmt *defer = new DeferStmt();
+    for_vector (VarSymbol, iterSym, iterators) {
+      deferBlock->insertAtTail(new CallExpr("_freeIterator", iterSym));
+    }
+    retval->insertAtTail(new DeferStmt(deferBlock));
+  }
+  else {
+    index->addFlag(FLAG_INDEX_OF_INTEREST);
+
+    iterMove = new CallExpr(PRIM_MOVE, index, new CallExpr("iteratorIndex", iterator));
+
+    destructureIndices(loop, indices, new SymExpr(index), coforall);
+
+    retval->insertAtTail(new DefExpr(index));
+    retval->insertAtTail(new DefExpr(iterator));
+
+    retval->insertAtTail(iterInit);
+    retval->insertAtTail(new DeferStmt(new CallExpr("_freeIterator", iterator)));
+    retval->insertAtTail(new BlockStmt(iterMove, BLOCK_TYPE));
+  }
+
+  //if (coforall) // destructureIndices does this already?
+    //index->addFlag(FLAG_COFORALL_INDEX_VAR);
 
   loop->mContinueLabel = continueLabel;
   loop->mBreakLabel    = breakLabel;
 
   loop->insertAtTail(new DefExpr(continueLabel));
 
-  retval->insertAtTail(new DefExpr(index));
-  retval->insertAtTail(new DefExpr(iterator));
+  // moved above
+  //retval->insertAtTail(new DefExpr(index));
+  //retval->insertAtTail(new DefExpr(iterator));
 
-  retval->insertAtTail(iterInit);
-  retval->insertAtTail(new DeferStmt(new CallExpr("_freeIterator", iterator)));
-  retval->insertAtTail(new BlockStmt(iterMove, BLOCK_TYPE));
+  //retval->insertAtTail(iterInit);
+  //retval->insertAtTail(new DeferStmt(new CallExpr("_freeIterator", iterator)));
+  //retval->insertAtTail(new BlockStmt(iterMove, BLOCK_TYPE));
 
   retval->insertAtTail(loop);
 
@@ -329,6 +392,7 @@ ForLoop::ForLoop() : LoopStmt(0)
 {
   mIndex    = 0;
   mIterator = 0;
+  mZipCall = 0;
   mZippered = false;
   mLoweredForall = false;
   mIsForExpr = false;
@@ -336,13 +400,45 @@ ForLoop::ForLoop() : LoopStmt(0)
 
 ForLoop::ForLoop(VarSymbol* index,
                  VarSymbol* iterator,
+                 Expr*      iterExpr,
                  BlockStmt* initBody,
                  bool       zippered,
                  bool       isLoweredForall,
                  bool       isForExpr) : LoopStmt(initBody)
 {
-  mIndex    = new SymExpr(index);
-  mIterator = new SymExpr(iterator);
+  mZipCall  = NULL;
+
+  if (initBody->inTest()) {
+    if (CallExpr* iterCall = toCallExpr(iterExpr)) {
+      bool shouldSetZipCall = false;
+      if (iterCall->isPrimitive(PRIM_ZIP)) {
+        shouldSetZipCall = true;
+        if (iterCall->numActuals() == 1) {
+          if (CallExpr *zipArgCall = toCallExpr(iterCall->argList.only())) {
+            if (zipArgCall->isPrimitive(PRIM_TUPLE_EXPAND)) {
+            shouldSetZipCall = false;
+
+            }
+          }
+        }
+      }
+
+      if (shouldSetZipCall) {
+        setZipCall(iterCall);
+      }
+    }
+  }
+
+  if (mZipCall == NULL) {
+    mIndex    = new SymExpr(index);
+    mIterator = new SymExpr(iterator);
+  }
+  else {
+    //mIndex    = new SymExpr(index);
+    mIndex = NULL;
+    mIterator = NULL;
+  }
+
   mZippered = zippered;
   mLoweredForall = isLoweredForall;
   mIsForExpr = isForExpr;
@@ -359,8 +455,18 @@ ForLoop* ForLoop::copyInner(SymbolMap* map)
   retval->mContinueLabel    = mContinueLabel;
   retval->mOrderIndependent = mOrderIndependent;
 
-  retval->mIndex            = mIndex->copy(map, true),
-  retval->mIterator         = mIterator->copy(map, true);
+  if (mIndex != NULL) {
+    retval->mIndex            = mIndex->copy(map, true);
+  }
+
+  if (mIterator != NULL) {
+    retval->mIterator         = mIterator->copy(map, true);
+  }
+
+  if (mZipCall != NULL) {
+    retval->mZipCall          = mZipCall->copy(map, true);
+  }
+
   retval->mZippered         = mZippered;
 
   // MPF 2020-01-21: It seems it should also copy mLoweredForall,
@@ -439,12 +545,37 @@ SymExpr* ForLoop::indexGet() const
 
 SymExpr* ForLoop::iteratorGet() const
 {
-  return mIterator;
+  if (mIterator != NULL) {
+    return mIterator;
+  }
+  else if (mZipCall != NULL) {
+    SymExpr *leadIterator = toSymExpr(mZipCall->get(1));
+    INT_ASSERT(leadIterator);
+    return leadIterator;
+  }
+  
+  //INT_FATAL("Malformed ForLoop");
+  return NULL;
 }
 
 bool ForLoop::zipperedGet() const
 {
   return mZippered;
+}
+
+CallExpr* ForLoop::zipCallGet() const
+{
+  return mZipCall;
+}
+
+void ForLoop::setZipCall(CallExpr *call) {
+  INT_ASSERT(!call->inTree());  // iterated expression is not in tree
+  INT_ASSERT(call->isPrimitive(PRIM_ZIP));
+  INT_ASSERT(this->mZipCall == NULL);
+
+  this->mZipCall = call;
+
+  parent_insert_help(this, call);
 }
 
 CallExpr* ForLoop::blockInfoGet() const
@@ -512,6 +643,9 @@ void ForLoop::accept(AstVisitor* visitor)
     if (iteratorGet() != 0)
       iteratorGet()->accept(visitor);
 
+    if (zipCallGet() != 0)
+      zipCallGet()->accept(visitor);
+
     if (useList)
       useList->accept(visitor);
 
@@ -538,6 +672,10 @@ void ForLoop::replaceChild(Expr* oldAst, Expr* newAst)
     INT_ASSERT(!newAst || se);
     mIterator = se;
   }
+  else if (oldAst == mZipCall)
+  {
+    INT_FATAL("Cannot replace the zip call");
+  }
   else
     LoopStmt::replaceChild(oldAst, newAst);
 }
@@ -551,6 +689,9 @@ Expr* ForLoop::getFirstExpr()
 
   else if (mIterator != 0)
     retval = mIterator;
+
+  else if (mZipCall != 0)
+    retval = mZipCall;
 
   else if (body.head != 0)
     retval = body.head->getFirstExpr();
@@ -572,6 +713,9 @@ Expr* ForLoop::getNextExpr(Expr* expr)
     retval = body.head->getFirstExpr();
 
   else if (expr == mIterator && body.head != NULL)
+    retval = body.head->getFirstExpr();
+
+  else if (expr == mZipCall && body.head != NULL)
     retval = body.head->getFirstExpr();
 
   return retval;

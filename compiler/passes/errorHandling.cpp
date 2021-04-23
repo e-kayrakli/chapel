@@ -824,6 +824,7 @@ bool ImplicitThrowsVisitor::enterCallExpr(CallExpr* node) {
 }
 
 bool ImplicitThrowsVisitor::enterForLoop (ForLoop*  node) {
+  // TODO
 
   SymExpr* it = node->iteratorGet();
 

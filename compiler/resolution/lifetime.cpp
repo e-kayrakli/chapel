@@ -2320,6 +2320,8 @@ bool InferLifetimesVisitor::enterForLoop(ForLoop* forLoop) {
   ForLoop* followerForLoop = NULL;
   std::vector<IteratorDetails> detailsVector;
 
+  // TODO
+  //
   gatherLoopDetails(forLoop, isForall, leaderDetails,
                     followerForLoop, detailsVector);
 

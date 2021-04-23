@@ -2429,6 +2429,7 @@ static bool shouldInsertCallTemps(CallExpr* call) {
       call->partialTag                                   ||
       call->isPrimitive(PRIM_TUPLE_EXPAND)               ||
       call->isPrimitive(PRIM_IF_VAR)                     ||
+      call->isPrimitive(PRIM_ZIP)                        ||
       (parentCall && parentCall->isPrimitive(PRIM_MOVE)) ||
       (parentCall && parentCall->isPrimitive(PRIM_NEW)) )
     return false;

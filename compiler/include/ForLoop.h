@@ -72,6 +72,7 @@ public:
                         ~ForLoop() override = default;
                          ForLoop(VarSymbol* index,
                                  VarSymbol* iterator,
+                                 Expr*      iterExpr,
                                  BlockStmt* initBody,
                                  bool       zippered,
                                  bool       isLoweredForall,
@@ -116,6 +117,8 @@ public:
   SymExpr*               indexGet()                                   const;
   SymExpr*               iteratorGet()                                const;
   bool                   zipperedGet()                                const;
+  CallExpr*              zipCallGet()                                 const;
+  void                   setZipCall(CallExpr* call);
 
   CallExpr*              blockInfoGet()                      const override;
   CallExpr*              blockInfoSet(CallExpr* expr)              override;
@@ -126,6 +129,7 @@ private:
   SymExpr*               mIndex;
   SymExpr*               mIterator;
   bool                   mZippered;
+  CallExpr*              mZipCall;
   bool                   mLoweredForall;
   bool                   mIsForExpr;
 };

@@ -1195,7 +1195,7 @@ static void handleRecursiveIter(ForallStmt* fs,
   PARBlock->insertAtTail(parIterCall->remove());
   PARBlock->insertAtTail(new CallExpr(PRIM_MOVE, parIter, callGetIter->remove()));
 
-  ForLoop* PARBody = new ForLoop(parIdx, parIter, NULL,
+  ForLoop* PARBody = new ForLoop(parIdx, parIter, NULL, NULL,
                                  /* zippered */ false,
                                  /*forall*/ true,
                                  /*isForExpr*/ fs->isForallExpr());

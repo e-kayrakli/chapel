@@ -586,6 +586,10 @@ static void deleteUnreachableBlocks(FnSymbol* fn, BasicBlockSet& reachable)
         // Do nothing. (NOTE 2)
         ;
 
+      else if (forLoop     && forLoop->zipCallGet()       == expr)
+        // Do nothing. (NOTE 2)
+        ;
+
       else
         expr->remove();
     }

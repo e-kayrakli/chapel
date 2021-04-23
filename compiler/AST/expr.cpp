@@ -184,7 +184,9 @@ bool Expr::isStmtExpr() const {
   // NOAKES 2014/11/30 A ForLoop is currently a BlockStmt
   // but needs special handling
   } else if (ForLoop* parent = toForLoop(parentExpr)) {
-    retval = (parent->indexGet() != this && parent->iteratorGet() != this) ? true : false;
+    retval = (parent->indexGet() != this &&
+              parent->iteratorGet() != this &&
+              parent->zipCallGet() != this ) ? true : false;
 
   } else {
     retval = isBlockStmt(parentExpr);
@@ -208,7 +210,9 @@ Expr* Expr::getStmtExpr() {
     // NOAKES 2014/11/30 A ForLoop is currently a BlockStmt
     // but needs special handling
     } else if (ForLoop* parent = toForLoop(parentExpr)) {
-      if (parent->indexGet() != this && parent->iteratorGet() != this)
+      if (parent->indexGet() != this &&
+          parent->iteratorGet() != this &&
+          parent->zipCallGet() != this)
         return expr;
 
     } else if (isBlockStmt(expr->parentExpr)) {
