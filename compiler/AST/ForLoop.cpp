@@ -297,6 +297,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
     INT_ASSERT(iterators.size() > 0);
 
     BlockStmt* userIdxSetup = NULL;
+    //DefExpr* userIdxDef = NULL;
     if (UnresolvedSymExpr* idxSE = toUnresolvedSymExpr(indices)) {
       if (iterators.size() > 1) {
         // zippering with a tuple index
@@ -309,13 +310,17 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
         // TODO should this go to loop body?
         CallExpr* tupTypeBuilder = new CallExpr("_build_tuple");
-        //CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, new UnresolvedSymExpr(userIdx),
-                                             //tupTypeBuilder);
-        DefExpr* userIdxDef = new DefExpr(new VarSymbol(userIdx), tupTypeBuilder);
+        CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, new UnresolvedSymExpr(userIdx),
+                                             tupTypeBuilder);
+        VarSymbol* userIdxSym = new VarSymbol(userIdx);
+        userIdxSym->addFlag(FLAG_INDEX_VAR);
+        userIdxSym->addFlag(FLAG_INSERT_AUTO_DESTROY);
+
+        DefExpr* userIdxDef = new DefExpr(userIdxSym);
         userIdxSetup->insertAtTail(userIdxDef);
 
         //userIdxSetup->insertAtTail(tupTypeMove);
-        //userIdxSetup->insertAtTail(new BlockStmt(tupTypeMove, BLOCK_TYPE));
+        userIdxSetup->insertAtTail(new BlockStmt(tupTypeMove, BLOCK_TYPE));
 
         CallExpr *zipIndexCall = new CallExpr(PRIM_ZIP_INDEX);
         for (i = 0 ; i < iterators.size() ; i++) {
@@ -329,12 +334,12 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
           //anchor->insertAfter(idxDef);
           //anchor = idxDef;
 
-          //CallExpr *setTupMem = new CallExpr(PRIM_SET_SVEC_MEMBER,
-                                             //new UnresolvedSymExpr(userIdx),
-                                             //new_IntSymbol(i),
-                                             //new UnresolvedSymExpr(idxTempName));
+          CallExpr *setTupMem = new CallExpr(PRIM_SET_SVEC_MEMBER,
+                                             new UnresolvedSymExpr(userIdx),
+                                             new_IntSymbol(i),
+                                             new UnresolvedSymExpr(idxTempName));
 
-          //userIdxSetup->insertAtTail(setTupMem);
+          userIdxSetup->insertAtTail(setTupMem);
 
           //anchor->insertAfter(setTupMem);
           //anchor = setTupMem;

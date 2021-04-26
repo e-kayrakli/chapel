@@ -2421,6 +2421,19 @@ static Symbol *insertCallTempsWithStmt(CallExpr* call, Expr* stmt) {
   return tmp;
 }
 
+static bool isPackedUserIndexGenerator(CallExpr* call) {
+  if (call->isPrimitive(PRIM_INIT_VAR)) {
+    if (SymExpr* lhsSE = toSymExpr(call->get(1))) {
+      if (lhsSE->symbol()->hasFlag(FLAG_INDEX_VAR)) {
+        if (CallExpr* rhsCall = toCallExpr(call->get(2))) {
+          return rhsCall->isNamed("_build_tuple");
+        }
+      }
+    }
+  }
+  return false;
+}
+
 static bool shouldInsertCallTemps(CallExpr* call) {
   Expr*     parentExpr = call->parentExpr;
   CallExpr* parentCall = toCallExpr(parentExpr);
@@ -2437,7 +2450,8 @@ static bool shouldInsertCallTemps(CallExpr* call) {
       call->isPrimitive(PRIM_ZIP)                        ||
       call->isPrimitive(PRIM_ZIP_INDEX)                  ||
       (parentCall && parentCall->isPrimitive(PRIM_MOVE)) ||
-      (parentCall && parentCall->isPrimitive(PRIM_NEW)) )
+      (parentCall && parentCall->isPrimitive(PRIM_NEW))  ||
+      (parentCall && isPackedUserIndexGenerator(parentCall)) )
     return false;
 
   // Don't normalize lifetime constraint clauses
