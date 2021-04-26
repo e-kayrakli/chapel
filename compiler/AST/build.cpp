@@ -1017,8 +1017,17 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
     DefExpr* def = new DefExpr(var);
     insertAfter->insertAfter(def);
     CallExpr* move = new CallExpr(PRIM_MOVE, var, init);
-    def->insertAfter(move);
-    insertAfter = move;
+    if (indices->inTest()) {
+      CallExpr* noop = new CallExpr(PRIM_NOOP);
+      BlockStmt* typeBlock = new BlockStmt(move, BLOCK_TYPE);
+      def->insertAfter(typeBlock);
+      typeBlock->insertAfter(noop);
+      insertAfter = noop;
+    }
+    else {
+      def->insertAfter(move);
+      insertAfter = move;
+    }
     var->addFlag(FLAG_INDEX_VAR);
     if (coforall)
       var->addFlag(FLAG_COFORALL_INDEX_VAR);
@@ -1027,8 +1036,17 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
     // BHARSH TODO: I think this should be a PRIM_ASSIGN. I've seen a case
     // where 'sym' becomes a reference.
     CallExpr* move = new CallExpr(PRIM_MOVE, sym->symbol(), init);
-    insertAfter->insertAfter(move);
-    insertAfter = move;
+    if (indices->inTest()) {
+      CallExpr* noop = new CallExpr(PRIM_NOOP);
+      BlockStmt *typeBlock = new BlockStmt(move, BLOCK_TYPE);
+      insertAfter->insertAfter(typeBlock);
+      typeBlock->insertAfter(noop);
+      insertAfter = noop;
+    }
+    else {
+      insertAfter->insertAfter(move);
+      insertAfter = move;
+    }
     sym->symbol()->addFlag(FLAG_INDEX_VAR);
     if (coforall)
       sym->symbol()->addFlag(FLAG_COFORALL_INDEX_VAR);

@@ -2256,21 +2256,40 @@ setupSimultaneousIterators(Vec<Symbol*>& iterators,
     }
   } else {
     if (loop->inTest()) {
-      iterators.add(iterator);
+      //iterators.add(iterator);
+
 
       if (SymExpr* indexSE   = toSymExpr(loop->indexGet())) {
+        USR_WARN("This shouldn't have happened");
         VarSymbol*   index     = toVarSymbol(indexSE->symbol());
         indices.add(index);
       }
       else if (CallExpr* indexCall = toCallExpr(loop->indexGet())) {
         INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
 
-        for_actuals (actual, indexCall) {
-          if (SymExpr* indexSE   = toSymExpr(actual)) {
-            VarSymbol*   index     = toVarSymbol(indexSE->symbol());
-            indices.add(index);
-          }
+        CallExpr* zipCall = loop->zipCallGet();
+        INT_ASSERT(zipCall);
+
+        const int numActuals = zipCall->numActuals();
+        INT_ASSERT(numActuals == indexCall->numActuals());
+
+        int i;
+        for (i = 1 ; i <= numActuals ; i++) {
+          SymExpr* indexSE   = toSymExpr(indexCall->get(i));
+          INT_ASSERT(indexSE);
+          indices.add(toVarSymbol(indexSE->symbol()));
+
+          SymExpr* iterSE   = toSymExpr(zipCall->get(i));
+          INT_ASSERT(iterSE);
+          iterators.add(toVarSymbol(iterSE->symbol()));
         }
+
+        //for_actuals (actual, indexCall) {
+          //if (SymExpr* indexSE   = toSymExpr(actual)) {
+            //VarSymbol*   index     = toVarSymbol(indexSE->symbol());
+            //indices.add(index);
+          //}
+        //}
       }
       else {
         INT_FATAL("Malformed for loop");
