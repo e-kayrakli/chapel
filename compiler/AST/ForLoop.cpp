@@ -293,15 +293,75 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
   checkIndices(indices);
 
-  if (iterators.size() > 0) {
+  if (loop->inTest()) {
+    INT_ASSERT(iterators.size() > 0);
+
+    BlockStmt* userIdxSetup = NULL;
+    if (UnresolvedSymExpr* idxSE = toUnresolvedSymExpr(indices)) {
+      if (iterators.size() > 1) {
+        // zippering with a tuple index
+        int i;
+
+        const char* userIdx= idxSE->unresolved;
+        userIdxSetup = new BlockStmt(BLOCK_SCOPELESS);
+
+
+
+        // TODO should this go to loop body?
+        CallExpr* tupTypeBuilder = new CallExpr("_build_tuple");
+        //CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, new UnresolvedSymExpr(userIdx),
+                                             //tupTypeBuilder);
+        DefExpr* userIdxDef = new DefExpr(new VarSymbol(userIdx), tupTypeBuilder);
+        userIdxSetup->insertAtTail(userIdxDef);
+
+        //userIdxSetup->insertAtTail(tupTypeMove);
+        //userIdxSetup->insertAtTail(new BlockStmt(tupTypeMove, BLOCK_TYPE));
+
+        CallExpr *zipIndexCall = new CallExpr(PRIM_ZIP_INDEX);
+        for (i = 0 ; i < iterators.size() ; i++) {
+          char idxTempName[32];
+
+          snprintf(idxTempName, 32, "chpl_indexTemp_%d", i);
+
+          //VarSymbol* idxTemp = newTemp(idxTempName);
+          //DefExpr* idxDef = new DefExpr(idxTemp);
+
+          //anchor->insertAfter(idxDef);
+          //anchor = idxDef;
+
+          //CallExpr *setTupMem = new CallExpr(PRIM_SET_SVEC_MEMBER,
+                                             //new UnresolvedSymExpr(userIdx),
+                                             //new_IntSymbol(i),
+                                             //new UnresolvedSymExpr(idxTempName));
+
+          //userIdxSetup->insertAtTail(setTupMem);
+
+          //anchor->insertAfter(setTupMem);
+          //anchor = setTupMem;
+
+          tupTypeBuilder->insertAtTail(new UnresolvedSymExpr(idxTempName));
+
+          zipIndexCall->insertAtTail(new UnresolvedSymExpr(idxTempName));
+        }
+
+        //userIdxDef->insertAfter(new BlockStmt(tupTypeBuilder, BLOCK_TYPE));
+
+        indices = zipIndexCall;
+      }
+    }
+
     std::cout << "destIndForZip " << loop->stringLoc() << std::endl;
     nprint_view(indices);
-    destructureIndicesForZip(loop, indices, iterators, coforall);
+    Expr* anchor = destructureIndicesForZip(loop, indices, iterators, coforall);
+    if (userIdxSetup) {
+      anchor->insertAfter(userIdxSetup);
+    }
 
     CallExpr *indexCall = toCallExpr(indices);
     INT_ASSERT(indexCall);
 
-    INT_ASSERT(indexCall->isNamed("_build_tuple"));
+    INT_ASSERT(indexCall->isNamed("_build_tuple") ||
+               indexCall->isPrimitive(PRIM_ZIP_INDEX));
 
     CallExpr *newIndexCall = new CallExpr(PRIM_ZIP_INDEX);
     for_actuals(actual, indexCall) {

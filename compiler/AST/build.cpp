@@ -956,7 +956,7 @@ void destructureIndices(BlockStmt* block,
   insertPt->remove();
 }
 
-void destructureIndicesForZip(BlockStmt* block,
+Expr* destructureIndicesForZip(BlockStmt* block,
                               BaseAST* indices,
                               std::vector<VarSymbol*> iterators,
                               bool coforall) {
@@ -964,8 +964,10 @@ void destructureIndicesForZip(BlockStmt* block,
   block->insertAtHead(insertPt);
 
 
-  destructureIndicesAfter(insertPt, indices, NULL, iterators, coforall);
+  Expr* ret = destructureIndicesAfter(insertPt, indices, NULL, iterators, coforall);
   insertPt->remove();
+
+  return ret;
 }
 
 
@@ -976,7 +978,8 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
                                      std::vector<VarSymbol*> iterators,
                                      bool coforall) {
   if (CallExpr* call = toCallExpr(indices)) {
-    if (call->isNamed("_build_tuple")) {
+    if (call->isNamed("_build_tuple") ||
+        call->isPrimitive(PRIM_ZIP_INDEX)) {
       int i = 0;
 
       if (iterators.size() == 0) {
