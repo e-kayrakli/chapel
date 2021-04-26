@@ -1177,10 +1177,26 @@ addByrefVars(BlockStmt* target, CallExpr* byrefVarsSource) {
 // explicit fork-join task creation via an EndCount.
 static BlockStmt* buildLoweredCoforall(Expr* indices,
                                        VarSymbol* iterator,
+                                       Expr* iteratorCall,
                                        CallExpr* byref_vars,
                                        BlockStmt* body,
                                        bool zippered,
                                        bool bounded) {
+
+  CallExpr* zipCall = NULL;
+  if (body->inTest()) {
+    if (zippered) {
+      zipCall = toCallExpr(iteratorCall);
+
+      INT_ASSERT(!bounded);
+      INT_ASSERT(zipCall);
+      INT_ASSERT(zipCall->isPrimitive(PRIM_ZIP));
+    }
+    else {
+      INT_ASSERT(!zipCall);
+      INT_ASSERT(iterator);
+    }
+  }
 
   BlockStmt* taskBlk = new BlockStmt();
   taskBlk->insertAtHead(body);
@@ -1210,11 +1226,20 @@ static BlockStmt* buildLoweredCoforall(Expr* indices,
     addByrefVars(taskBlk, byref_vars);
   }
 
+  Expr* iteratorExpr = NULL;
+  if (zippered && taskBlk->inTest()) {
+    iteratorExpr = zipCall;
+  }
+  else {
+    iteratorExpr = new SymExpr(iterator);
+  }
   BlockStmt* block = ForLoop::buildCoforallLoop(indices,
-                                                new SymExpr(iterator),
+                                                iteratorExpr,
                                                 taskBlk,
                                                 zippered);
   if (bounded) {
+    INT_ASSERT(!zippered); // don't know how to, yet
+    INT_ASSERT(iterator);
     if (!onBlock) { block->insertAtHead(new CallExpr("chpl_resetTaskSpawn", numTasks)); }
     block->insertAtHead(new CallExpr("_upEndCount", coforallCount, countRunningTasks, numTasks));
     block->insertAtHead(new CallExpr(PRIM_MOVE, numTasks, new CallExpr(".", iterator,  new_CStringSymbol("size"))));
@@ -1298,33 +1323,70 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
   if (!indices)
     indices = new UnresolvedSymExpr("chpl__elidedIdx");
   checkIndices(indices);
-  if (zippered) zipToTuple(iterator);
 
   SET_LINENO(body);
 
-  VarSymbol* tmpIter = newTemp("tmpIter");
-  tmpIter->addFlag(FLAG_EXPR_TEMP);
-  tmpIter->addFlag(FLAG_MAYBE_REF);
-  tmpIter->addFlag(FLAG_NO_COPY);
 
   BlockStmt* coforallBlk = new BlockStmt();
-  coforallBlk->insertAtTail(new DefExpr(tmpIter));
-  coforallBlk->insertAtTail(new CallExpr(PRIM_MOVE, tmpIter, iterator));
 
-  BlockStmt* vectorCoforallBlk = buildLoweredCoforall(indices, tmpIter, copyByrefVars(byref_vars), body->copy(), zippered, /*bounded=*/true);
-  BlockStmt* nonVectorCoforallBlk = buildLoweredCoforall(indices, tmpIter, byref_vars, body, zippered, /*bounded=*/false);
+  BlockStmt* nonVectorCoforallBlk = NULL;
+  VarSymbol* tmpIter = NULL;
+  if (body->inTest()) {
+    nonVectorCoforallBlk = buildLoweredCoforall(indices,
+                                                           NULL, /*iterator*/
+                                                           iterator,
+                                                           byref_vars,
+                                                           body,
+                                                           zippered,
+                                                           /*bounded=*/false);
+  }
+  else {
+    tmpIter = newTemp("tmpIter");
+    tmpIter->addFlag(FLAG_EXPR_TEMP);
+    tmpIter->addFlag(FLAG_MAYBE_REF);
+    tmpIter->addFlag(FLAG_NO_COPY);
+    coforallBlk->insertAtTail(new DefExpr(tmpIter));
+    coforallBlk->insertAtTail(new CallExpr(PRIM_MOVE, tmpIter, iterator));
 
-  VarSymbol* isRngDomArr = newTemp("isRngDomArr");
-  isRngDomArr->addFlag(FLAG_MAYBE_PARAM);
-  coforallBlk->insertAtTail(new DefExpr(isRngDomArr));
+    if (zippered) {
+      zipToTuple(iterator);
+    }
 
-  coforallBlk->insertAtTail(new CallExpr(PRIM_MOVE, isRngDomArr,
-                            new CallExpr("||", new CallExpr("isBoundedRange", tmpIter),
-                            new CallExpr("||", new CallExpr("isDomain", tmpIter), new CallExpr("isArray", tmpIter)))));
+    nonVectorCoforallBlk = buildLoweredCoforall(indices,
+                                                           tmpIter,
+                                                           NULL,
+                                                           byref_vars,
+                                                           body,
+                                                           zippered,
+                                                           /*bounded=*/false);
+  }
+  if (!zippered) {
+    BlockStmt* vectorCoforallBlk = buildLoweredCoforall(indices,
+                                                        tmpIter,
+                                                        NULL, /*zipCall*/
+                                                        copyByrefVars(byref_vars),
+                                                        body->copy(),
+                                                        zippered,
+                                                        /*bounded=*/true);
 
-  coforallBlk->insertAtTail(new CondStmt(new SymExpr(isRngDomArr),
-                                         vectorCoforallBlk,
-                                         nonVectorCoforallBlk));
+    VarSymbol* isRngDomArr = newTemp("isRngDomArr");
+    isRngDomArr->addFlag(FLAG_MAYBE_PARAM);
+    coforallBlk->insertAtTail(new DefExpr(isRngDomArr));
+
+    coforallBlk->insertAtTail(new CallExpr(PRIM_MOVE, isRngDomArr,
+                              new CallExpr("||", new CallExpr("isBoundedRange", tmpIter),
+                              new CallExpr("||", new CallExpr("isDomain", tmpIter),
+                                                 new CallExpr("isArray", tmpIter)))));
+
+    coforallBlk->insertAtTail(new CondStmt(new SymExpr(isRngDomArr),
+                                           vectorCoforallBlk,
+                                           nonVectorCoforallBlk));
+
+  }
+  else {
+    coforallBlk->insertAtTail(nonVectorCoforallBlk);
+  }
+
   return coforallBlk;
 }
 
