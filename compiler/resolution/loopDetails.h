@@ -38,6 +38,7 @@ struct IteratorDetails {
   int       indexTupleElement; // if != 0, index(idx) is the index
   Type*     iteratorClass;
   FnSymbol* iterator;
+  Expr*     indices;
 
   IteratorDetails()
     : iterable(NULL), iterableTupleElement(0),

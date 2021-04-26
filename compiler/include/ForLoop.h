@@ -114,7 +114,7 @@ public:
                                         SymbolMap* map,
                                         Symbol* continueSym);
 
-  SymExpr*               indexGet()                                   const;
+  Expr*                  indexGet()                                   const;
   SymExpr*               iteratorGet()                                const;
   bool                   zipperedGet()                                const;
   CallExpr*              zipCallGet()                                 const;
@@ -126,12 +126,13 @@ public:
 private:
                          ForLoop();
 
-  SymExpr*               mIndex;
+  Expr*                  mIndex;
   SymExpr*               mIterator;
   bool                   mZippered;
   CallExpr*              mZipCall;
   bool                   mLoweredForall;
   bool                   mIsForExpr;
+  bool                   mIsCoforallLoop;
 };
 
 #endif

@@ -298,6 +298,21 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
     nprint_view(indices);
     destructureIndicesForZip(loop, indices, iterators, coforall);
 
+    CallExpr *indexCall = toCallExpr(indices);
+    INT_ASSERT(indexCall);
+
+    INT_ASSERT(indexCall->isNamed("_build_tuple"));
+
+    CallExpr *newIndexCall = new CallExpr(PRIM_ZIP_INDEX);
+    for_actuals(actual, indexCall) {
+      newIndexCall->insertAtTail(actual->remove());
+    }
+    //indexCall->replace(newIndexCall);
+
+    loop->mIndex = newIndexCall;
+
+    
+
     BlockStmt *deferBlock = new BlockStmt();
     //DeferStmt *defer = new DeferStmt();
     for_vector (VarSymbol, iterSym, iterators) {
@@ -322,6 +337,10 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
   //if (coforall) // destructureIndices does this already?
     //index->addFlag(FLAG_COFORALL_INDEX_VAR);
+
+  if (coforall) {
+    loop->mIsCoforallLoop = true;
+  }
 
   loop->mContinueLabel = continueLabel;
   loop->mBreakLabel    = breakLabel;
@@ -525,7 +544,8 @@ void ForLoop::copyBodyHelper(Expr* beforeHere, int64_t i, SymbolMap* map,
 // own class that shares a common parent with ForLoop.
 bool ForLoop::isCoforallLoop() const
 {
-  return mIndex->symbol()->hasFlag(FLAG_COFORALL_INDEX_VAR);
+  return mIsCoforallLoop;
+  //return mIndex->symbol()->hasFlag(FLAG_COFORALL_INDEX_VAR);
 }
 
 bool ForLoop::isLoweredForallLoop() const
@@ -538,7 +558,7 @@ bool ForLoop::isForExpr() const
   return mIsForExpr;
 }
 
-SymExpr* ForLoop::indexGet() const
+Expr* ForLoop::indexGet() const
 {
   return mIndex;
 }
@@ -549,6 +569,7 @@ SymExpr* ForLoop::iteratorGet() const
     return mIterator;
   }
   else if (mZipCall != NULL) {
+    // TODO probably will need to do something here
     SymExpr *leadIterator = toSymExpr(mZipCall->get(1));
     INT_ASSERT(leadIterator);
     return leadIterator;
@@ -674,7 +695,13 @@ void ForLoop::replaceChild(Expr* oldAst, Expr* newAst)
   }
   else if (oldAst == mZipCall)
   {
-    INT_FATAL("Cannot replace the zip call");
+    if (newAst == NULL) {  // to allow removal
+      mZipCall = NULL;
+    }
+    else {
+      // I don't see why we cannot, but I don't see why we should either.
+      INT_FATAL("Cannot replace the zip call");
+    }
   }
   else
     LoopStmt::replaceChild(oldAst, newAst);

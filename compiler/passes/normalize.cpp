@@ -716,15 +716,20 @@ void checkUseBeforeDefs(FnSymbol* fn) {
       } else if (SymExpr* se = toSymExpr(ast)) {
         Symbol* sym = se->symbol();
 
+        CallExpr* parentCall = toCallExpr(se->parentExpr);
+
+        if (parentCall && parentCall->isPrimitive(PRIM_ZIP_INDEX)) {
+          continue;
+        }
+
         if (isModuleSymbol(sym)                    == true  &&
             isFnSymbol(fn->defPoint->parentSymbol) == false &&
             isUseStmt(se->parentExpr)              == false &&
             isImportStmt(se->parentExpr)           == false) {
 
-          if (CallExpr* call = toCallExpr(se->parentExpr)) {
-            if (call->isPrimitive(PRIM_REFERENCED_MODULES_LIST)) {
-              continue;
-            }
+          if (parentCall &&
+              parentCall->isPrimitive(PRIM_REFERENCED_MODULES_LIST)) {
+            continue;
           }
           SymExpr* prev = toSymExpr(se->prev);
 
@@ -2430,6 +2435,7 @@ static bool shouldInsertCallTemps(CallExpr* call) {
       call->isPrimitive(PRIM_TUPLE_EXPAND)               ||
       call->isPrimitive(PRIM_IF_VAR)                     ||
       call->isPrimitive(PRIM_ZIP)                        ||
+      call->isPrimitive(PRIM_ZIP_INDEX)                  ||
       (parentCall && parentCall->isPrimitive(PRIM_MOVE)) ||
       (parentCall && parentCall->isPrimitive(PRIM_NEW)) )
     return false;

@@ -1377,6 +1377,8 @@ expandRecursiveIteratorInline(ForLoop* forLoop)
 {
   SET_LINENO(forLoop);
 
+  INT_ASSERT(!forLoop->inTest());
+
   FnSymbol*  parent            = toFnSymbol(forLoop->parentSymbol);
 
   // create a nested function for the loop body (call->parentExpr), and then transform
@@ -1384,7 +1386,7 @@ expandRecursiveIteratorInline(ForLoop* forLoop)
   FnSymbol*  loopBodyFn        = new FnSymbol(astr("_rec_iter_loop_", parent->name));
 
   // The index is passed to the loop body function as its first argument.
-  Symbol*    index             = forLoop->indexGet()->symbol();
+  Symbol*    index             = toSymExpr(forLoop->indexGet())->symbol();
   ArgSymbol* indexArg          = new ArgSymbol(blankIntentForType(index->type), "_index", index->type);
 
   // The recursive iterator loop wrapper is ... .
@@ -1572,7 +1574,9 @@ expandIteratorInline(ForLoop* forLoop) {
   } else {
     SET_LINENO(forLoop);
 
-    Symbol*       index = forLoop->indexGet()->symbol();
+    INT_ASSERT(!forLoop->inTest());   // NOT READY YET
+
+    Symbol*       index = toSymExpr(forLoop->indexGet())->symbol();
     BlockStmt*    ibody = iterator->body->copy();
 
     if (! preserveInlinedLineNumbers)
@@ -2056,6 +2060,9 @@ expandBodyForIteratorInline(ForLoop*       forLoop,
         if (forLoop->isCoforallLoop()) {
           // parallel.cpp wants to know about these when considering whether
           // or not to insert autoCopies
+          if (forLoop->inTest()) {
+            INT_FATAL("Not ready yet");
+          }
           yieldedIndex->addFlag(FLAG_COFORALL_INDEX_VAR);
         }
 
@@ -2221,6 +2228,9 @@ setupSimultaneousIterators(Vec<Symbol*>& iterators,
                            Symbol*       index,
                            ForLoop*      loop) {
   if (iterator->type->symbol->hasFlag(FLAG_TUPLE)) {
+    if (loop->inTest()) {
+      INT_FATAL("Not ready yet");
+    }
     AggregateType* iteratorType = toAggregateType(iterator->type);
     AggregateType* indexType    = toAggregateType(index->type);
 
@@ -2245,8 +2255,34 @@ setupSimultaneousIterators(Vec<Symbol*>& iterators,
       setupSimultaneousIterators(iterators, indices, tmpIterator, tmpIndex, loop);
     }
   } else {
-    iterators.add(iterator);
-    indices.add(index);
+    if (loop->inTest()) {
+      iterators.add(iterator);
+
+      if (SymExpr* indexSE   = toSymExpr(loop->indexGet())) {
+        VarSymbol*   index     = toVarSymbol(indexSE->symbol());
+        indices.add(index);
+      }
+      else if (CallExpr* indexCall = toCallExpr(loop->indexGet())) {
+        INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
+
+        for_actuals (actual, indexCall) {
+          if (SymExpr* indexSE   = toSymExpr(actual)) {
+            VarSymbol*   index     = toVarSymbol(indexSE->symbol());
+            indices.add(index);
+          }
+        }
+      }
+      else {
+        INT_FATAL("Malformed for loop");
+      }
+
+
+
+    }
+    else {
+      iterators.add(iterator);
+      indices.add(index);
+    }
   }
 }
 
@@ -2357,17 +2393,36 @@ expandForLoop(ForLoop* forLoop) {
 
   if (!fNoInlineIterators)
   {
-    FnSymbol* iterFn = getTheIteratorFn(iterator->type);
-    if (iterFn->iteratorInfo                          &&
-        !iterator->type->symbol->hasFlag(FLAG_TUPLE)  &&
-        canInlineIterator(iterFn)                     &&
-        ! isVirtualIterator(iterFn)                   ) {
-      converted = expandIteratorInline(forLoop);
+    bool zippered = false;
+    if (forLoop->inTest()) {
+      zippered = forLoop->zipperedGet();
+      if (zippered) {
+        INT_ASSERT(forLoop->zipCallGet());
+        converted = false;
+      }
+    }
+    else {
+
+      FnSymbol* iterFn = getTheIteratorFn(iterator->type);
+      if (iterFn->iteratorInfo                          &&
+          !iterator->type->symbol->hasFlag(FLAG_TUPLE)  &&
+          canInlineIterator(iterFn)                     &&
+          ! isVirtualIterator(iterFn)                   ) {
+        converted = expandIteratorInline(forLoop);
+      }
     }
   }
 
   if (! converted)
   {
+    SET_LINENO(forLoop);
+
+    Vec<Symbol*> iterators;
+    Vec<Symbol*> indices;
+
+    if (forLoop->inTest()) {
+      gdbShouldBreakHere();
+    }
     // This code handles zippered iterators, dynamic iterators, and any other
     // iterator that cannot be inlined.
 
@@ -2386,11 +2441,6 @@ expandForLoop(ForLoop* forLoop) {
     // In zippered iterators, each clause may contain multiple calls to zip1(),
     // getValue(), etc.  These are inserted in the order shown.
 
-    SET_LINENO(forLoop);
-
-    Vec<Symbol*> iterators;
-    Vec<Symbol*> indices;
-
     FnSymbol* iterFn = getTheIteratorFn(iterator->type);
     if (iterFn->throwsError()) {
       // In this event, the error handling pass added a PRIM_CHECK_ERROR
@@ -2406,14 +2456,20 @@ expandForLoop(ForLoop* forLoop) {
       USR_STOP();
     }
 
-    SymExpr*     se1       = toSymExpr(forLoop->indexGet());
-    VarSymbol*   index     = toVarSymbol(se1->symbol());
-
     BlockStmt*   initBlock = new BlockStmt();
     BlockStmt*   testBlock = NULL;
     BlockStmt*   incrBlock = new BlockStmt();
 
-    setupSimultaneousIterators(iterators, indices, iterator, index, forLoop);
+    VarSymbol* index = NULL;
+    if (forLoop->inTest()) {
+      setupSimultaneousIterators(iterators, indices, iterator, NULL, forLoop);
+    }
+    else {
+      SymExpr*     se1       = toSymExpr(forLoop->indexGet());
+      index = toVarSymbol(se1->symbol());
+
+      setupSimultaneousIterators(iterators, indices, iterator, index, forLoop);
+    }
 
     bool allOrderIndependent = true;
     // For each iterator we add the zip* functions in the appropriate place and
@@ -2539,8 +2595,13 @@ expandForLoop(ForLoop* forLoop) {
     // to getValue is inserted.  Check the order in the generated code to see
     // if this is the case.  Avoid moving the global void value when it is
     // the loop index.
-    if (index != gNone)
-      forLoop->insertAtHead(index->defPoint->remove());
+    if (forLoop->inTest()) {
+      // do nothing?
+    }
+    else {
+      if (index != gNone)
+        forLoop->insertAtHead(index->defPoint->remove());
+    }
 
     // Ensure that the test clause for completely unbounded loops contains
     // something.

@@ -1526,7 +1526,10 @@ static ForallStmt* doReplaceWithForall(ForLoop* src)
 
   // convert src index variable to dest index variable
   // todo instead use the corresponding user variable
-  Symbol* srcIndex = src->indexGet()->symbol();
+  SymExpr* srcIndexSE = toSymExpr(src->indexGet());
+  INT_ASSERT(srcIndexSE); // we should handle PRIM_ZIP_INDEX, too
+
+  Symbol* srcIndex = srcIndexSE->symbol();
   src->indexGet()->remove(); // get it out of the way
   dest->inductionVariables().insertAtHead(srcIndex->defPoint->remove());
 

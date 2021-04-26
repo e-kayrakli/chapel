@@ -1926,7 +1926,14 @@ static Expr* unrollHetTupleLoop(CallExpr* call, Expr* tupExpr, Type* iterType) {
   // stamp out copies of the loop body for each element of the tuple;
   // this loop starts from 2 to skip over the size field (which is 1).
   //
-  Symbol* idxSym = theloop->indexGet()->symbol();
+  Symbol* idxSym = NULL;
+  if (theloop->inTest()) {
+    INT_FATAL("Not ready yet");
+  }
+  else {
+    idxSym = toSymExpr(theloop->indexGet())->symbol();
+    INT_ASSERT(idxSym);
+  }
   Symbol* continueSym = theloop->continueLabelGet();
   for (int i=2; i<=tupType->fields.length; i++) {
     SymbolMap map;

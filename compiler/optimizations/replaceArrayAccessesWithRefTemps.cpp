@@ -122,7 +122,8 @@ void replaceArrayAccessesWithRefTemps() {
       std::vector<BaseAST*>                             asts;
       std::map<Symbol*, std::vector<ContextCallExpr*> > arrayAccessMap;
 
-      SymExpr*  loopIdx   = forLoop->indexGet();
+      SymExpr*  loopIdx   = toSymExpr(forLoop->indexGet());
+      INT_ASSERT(loopIdx);   // NOT READY YET
       CallExpr* indexMove = NULL;
       Symbol*   indexVar  = NULL;
 

@@ -2008,11 +2008,12 @@ static void removeEndOfStatementMarkersElidedCopyPrimsZips() {
     if (call->isPrimitive(PRIM_ASSIGN_ELIDED_COPY))
       call->primitive = primitives[PRIM_ASSIGN];
 
-    // we keep PRIM_ZIPs after resolution as markers to avoid copy elision for
-    // symbols that are used in zip clauses. At this point, we no longer need
-    // those
-    if (call->isPrimitive(PRIM_ZIP))
-      call->remove();
+    // we keep PRIM_ZIPs of forallsafter resolution as markers to avoid copy
+    // elision for symbols that are used in zip clauses. At this point, we no
+    // longer need those 
+    if (isForallStmt(call->parentExpr))
+      if (call->isPrimitive(PRIM_ZIP))
+        call->remove();
   }
 }
 

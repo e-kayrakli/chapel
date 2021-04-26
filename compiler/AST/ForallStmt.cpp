@@ -692,9 +692,14 @@ static void gatherFollowerLoopBodies(BlockStmt* block,
                                      std::vector<BlockStmt*>& bodies) {
   for_alist(stmt, block->body) {
     if (ForLoop* forLoop = toForLoop(stmt)) {
-      if (SymExpr* indexSe = forLoop->indexGet())
-        if (indexSe->symbol()->hasFlag(FLAG_FOLLOWER_INDEX))
+      if (SymExpr* indexSe = toSymExpr(forLoop->indexGet())) {
+        if (indexSe->symbol()->hasFlag(FLAG_FOLLOWER_INDEX)) {
           bodies.push_back(forLoop);
+        }
+      }
+      else {
+        INT_FATAL("Not ready for this yet");
+      }
     } else if (BlockStmt* inner = toBlockStmt(stmt)) {
       if (inner->isRealBlockStmt())
         gatherFollowerLoopBodies(inner, bodies);

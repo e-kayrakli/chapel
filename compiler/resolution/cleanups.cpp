@@ -856,7 +856,9 @@ static void cleanupNothingVarsAndFields() {
   for_alive_in_Vec(BlockStmt, block, gBlockStmts) {
     if (ForLoop* loop = toForLoop(block)) {
       if (loop->indexGet() && loop->indexGet()->typeInfo() == dtNothing) {
-        loop->indexGet()->setSymbol(gNone);
+        SymExpr* loopIndexSE = toSymExpr(loop->indexGet());
+        INT_ASSERT(loopIndexSE); // NOT READY YET
+        loopIndexSE->setSymbol(gNone);
       }
     }
   }
