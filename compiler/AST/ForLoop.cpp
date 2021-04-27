@@ -480,6 +480,7 @@ ForLoop::ForLoop() : LoopStmt(0)
   mZipCall = 0;
   mZippered = false;
   mLoweredForall = false;
+  mFollowerLoop = false;
   mIsForExpr = false;
 }
 
@@ -527,11 +528,13 @@ ForLoop::ForLoop(VarSymbol* index,
   mZippered = zippered;
   mLoweredForall = isLoweredForall;
   mIsForExpr = isForExpr;
+  mFollowerLoop = false;   // should this be exposed as an arg?
 }
 
 ForLoop::ForLoop(CallExpr* indexCall,
                  CallExpr* iterCall,
-                 BlockStmt* initBody): LoopStmt(initBody) {
+                 BlockStmt* initBody,
+                 bool followerLoop): LoopStmt(initBody) {
 
   INT_ASSERT(initBody->inTest());
   INT_ASSERT(iterCall->isPrimitive(PRIM_ZIP));
@@ -544,6 +547,7 @@ ForLoop::ForLoop(CallExpr* indexCall,
 
   mZippered = true;
   mLoweredForall = false;
+  mFollowerLoop = followerLoop;
   mIsForExpr = false;
 }
 
@@ -575,6 +579,8 @@ ForLoop* ForLoop::copyInner(SymbolMap* map)
   // MPF 2020-01-21: It seems it should also copy mLoweredForall,
   // but doing so causes problems in lowerIterators.
   retval->mIsForExpr        = mIsForExpr;
+
+  retval->mFollowerLoop     = mFollowerLoop;
 
   for_alist(expr, body)
     retval->insertAtTail(expr->copy(map, true));
@@ -635,6 +641,11 @@ bool ForLoop::isCoforallLoop() const
 bool ForLoop::isLoweredForallLoop() const
 {
   return mLoweredForall;
+}
+
+bool ForLoop::isFollowerLoop() const
+{
+  return mFollowerLoop;
 }
 
 bool ForLoop::isForExpr() const

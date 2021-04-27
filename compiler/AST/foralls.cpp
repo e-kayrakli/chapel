@@ -1106,7 +1106,8 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
 
   CallExpr* followerZipIndexCall = forallZipIndexCall->copy();
 
-  ForLoop* followLoop = new ForLoop(followerZipIndexCall, followerZipCall, userBody);
+  ForLoop* followLoop = new ForLoop(followerZipIndexCall, followerZipCall,
+                                    userBody, /*followerLoop=*/true);
  
   // followIdx has a defPoint in the non-fast case
   // and no defPoint in the fast case i.e. for fastFollowIdx.

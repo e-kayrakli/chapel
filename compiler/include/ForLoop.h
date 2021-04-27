@@ -79,7 +79,8 @@ public:
                                  bool       isForExpr);
                          ForLoop(CallExpr* indexCall,
                                  CallExpr* iterCall,
-                                 BlockStmt* initBody);
+                                 BlockStmt* initBody,
+                                 bool followerLoop);
 
   DECLARE_COPY(ForLoop);
   ForLoop* copyInner(SymbolMap* map) override;
@@ -106,6 +107,8 @@ public:
   // This function should return `true` only for the loop implementing
   // standalone iteration or the loop implementing leader iteration.
   bool                   isLoweredForallLoop()                        const;
+
+  bool                   isFollowerLoop()                             const;
 
   // indicates this is a for-expression (as opposed to a for-statement)
   bool                   isForExpr()                                  const;
@@ -134,6 +137,7 @@ private:
   bool                   mZippered;
   CallExpr*              mZipCall;
   bool                   mLoweredForall;
+  bool                   mFollowerLoop;
   bool                   mIsForExpr;
   bool                   mIsCoforallLoop;
 };
