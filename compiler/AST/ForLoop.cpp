@@ -245,6 +245,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
             tryToReplaceWithDirectRangeIterator(actualCopy);
 
+            // TODO get rid of this vector and use the PRIM_ZIP, instead
             iterators.push_back(iterTemp);
           }
         }
@@ -526,6 +527,24 @@ ForLoop::ForLoop(VarSymbol* index,
   mZippered = zippered;
   mLoweredForall = isLoweredForall;
   mIsForExpr = isForExpr;
+}
+
+ForLoop::ForLoop(CallExpr* indexCall,
+                 CallExpr* iterCall,
+                 BlockStmt* initBody): LoopStmt(initBody) {
+
+  INT_ASSERT(initBody->inTest());
+  INT_ASSERT(iterCall->isPrimitive(PRIM_ZIP));
+  INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
+
+  //setZipCall(iterCall);
+  mZipCall = iterCall;
+  mIndex = indexCall;
+  mIterator = NULL;
+
+  mZippered = true;
+  mLoweredForall = false;
+  mIsForExpr = false;
 }
 
 ForLoop* ForLoop::copyInner(SymbolMap* map)

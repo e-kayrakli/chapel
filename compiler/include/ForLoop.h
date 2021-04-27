@@ -77,6 +77,9 @@ public:
                                  bool       zippered,
                                  bool       isLoweredForall,
                                  bool       isForExpr);
+                         ForLoop(CallExpr* indexCall,
+                                 CallExpr* iterCall,
+                                 BlockStmt* initBody);
 
   DECLARE_COPY(ForLoop);
   ForLoop* copyInner(SymbolMap* map) override;

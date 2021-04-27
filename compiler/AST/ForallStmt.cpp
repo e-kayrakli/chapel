@@ -44,6 +44,7 @@ ForallStmt::ForallStmt(BlockStmt* body):
   fLoopBody(body),
   fZippered(false),
   fZipCall(NULL),
+  fZipIndexCall(NULL),
   fFromForLoop(false),
   fFromReduce(false),
   fOverTupleExpand(false),
@@ -94,6 +95,7 @@ ForallStmt* ForallStmt::copyInner(SymbolMap* map) {
   _this->fRecIterGetIterator  = COPY_INT(fRecIterGetIterator);
   _this->fRecIterFreeIterator = COPY_INT(fRecIterFreeIterator);
   _this->fZipCall             = COPY_INT(fZipCall);
+  _this->fZipIndexCall        = COPY_INT(fZipIndexCall);
 
   return _this;
 }
@@ -112,6 +114,8 @@ void ForallStmt::replaceChild(Expr* oldAst, Expr* newAst) {
     fRecIterFreeIterator = toCallExpr(newAst);
   else if (oldAst == fZipCall)
     fZipCall = toCallExpr(newAst);
+  else if (oldAst == fZipIndexCall)
+    fZipIndexCall = toCallExpr(newAst);
 
   else
     INT_ASSERT(false);
@@ -202,6 +206,16 @@ void ForallStmt::setZipCall(CallExpr *call) {
   INT_ASSERT(this->fZipCall == NULL);
 
   this->fZipCall = call;
+
+  parent_insert_help(this, call);
+}
+
+void ForallStmt::setZipIndexCall(CallExpr *call) {
+  INT_ASSERT(!call->inTree());  // iterated expression is not in tree
+  INT_ASSERT(call->isPrimitive(PRIM_ZIP_INDEX));
+  INT_ASSERT(this->fZipIndexCall == NULL);
+
+  this->fZipIndexCall = call;
 
   parent_insert_help(this, call);
 }
