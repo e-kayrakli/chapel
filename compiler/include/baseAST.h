@@ -285,13 +285,13 @@ public:
   static  const     std::string tabText;
 
   inline bool inTest() {
-    // return true;
+     return true;
 
-    if (strcmp(fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forZipTest.chpl") == 0) {
-      return true;
-    }
+    //if (strcmp(fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forZipTest.chpl") == 0) {
+      //return true;
+    //}
 
-    return false;
+    //return false;
   }
 
 

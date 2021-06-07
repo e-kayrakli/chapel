@@ -1122,7 +1122,7 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
   for_actuals (actual, followerZipCall) {
     iterators.push_back(toVarSymbol(toSymExpr(actual)->symbol()));
   }
-  destructureIndicesForZip(followLoop, followerZipIndexCall, iterators, false);
+  destructureIndicesForZip(followLoop, followerZipIndexCall, NULL, iterators, false, false);
 
   followBlock->insertAtTail(followLoop);
 

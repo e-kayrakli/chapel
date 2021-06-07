@@ -171,6 +171,10 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
   
   std::vector<VarSymbol*> iterators;
 
+  bool zipArgsAreExplicit = true;
+  bool zipOverTupleExpansion = false;
+  Expr* tupExpr = NULL;
+
   // Unzippered loop, treat all objects (including tuples) the same
   if (zippered == false) {
     iterInit = new CallExpr(PRIM_MOVE, iterator, new CallExpr("_getIterator",    iteratorExpr));
@@ -208,10 +212,17 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
         // tuples than the user introduced themselves.
         //
         if (zipArgCall && zipArgCall->isPrimitive(PRIM_TUPLE_EXPAND)) {
-          zipExpr->baseExpr = new UnresolvedSymExpr("_getIteratorZip");
-          Expr* tupleArg = zipArgCall->argList.only();
-          tupleArg->remove();
-          zipArgCall->replace(tupleArg);
+          // do nothing, we'll fixup once the PRIM_TUPLE_EXPAND is resolved
+          //zipExpr->baseExpr = new UnresolvedSymExpr("_getIteratorZip");
+          //Expr* tupleArg = zipArgCall->argList.only();
+          //tupleArg->remove();
+          //zipArgCall->replace(tupleArg);
+          zipOverTupleExpansion = true;
+          tupExpr = zipArgCall->argList.only()->copy();
+
+          //if (CallExpr* indicesCall = toCallExpr(indices)) {
+            //numIterands = indicesCall->numActuals();
+          //}
         } else {
           // ...otherwise, make the expression into a _getIterator()
           // call
@@ -264,22 +275,28 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
         }
       }
 
-      if (!zipExpr->inTest()) {
-        iterInit = new CallExpr(PRIM_MOVE, iterator, zipExpr);
-        assert(zipExpr == iteratorExpr);
-      }
+      //if (!zipExpr->inTest()) {
+        //iterInit = new CallExpr(PRIM_MOVE, iterator, zipExpr);
+        //assert(zipExpr == iteratorExpr);
+      //}
     } else {
       //
       // This is an old-style zippered loop so handle it in the old style
       //
-      iterInit = new CallExpr(PRIM_MOVE, iterator,
-                              new CallExpr("_getIteratorZip", iteratorExpr));
+      //
+      // ENGIN: This happens for a for expression that uses a tuple expansion as
+      // the zip clause arguments. Such for expressions are lowered during
+      // resolution, TODO adjust that part of the resolution to avoid this here.
+      //iterInit = new CallExpr(PRIM_MOVE, iterator,
+                              //new CallExpr("_getIteratorZip", iteratorExpr));
 
-      // try to optimize anonymous range iteration
-      if (CallExpr* call = toCallExpr(iteratorExpr))
-        if (call->isNamed("_build_tuple"))
-          for_actuals(actual, call)
-            tryToReplaceWithDirectRangeIterator(actual);
+      //// try to optimize anonymous range iteration
+      //if (CallExpr* call = toCallExpr(iteratorExpr))
+        //if (call->isNamed("_build_tuple"))
+          //for_actuals(actual, call)
+            //tryToReplaceWithDirectRangeIterator(actual);
+
+      //zipArgsAreExplicit = false;
     }
   }
 
@@ -294,8 +311,9 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
   checkIndices(indices);
 
-  if (loop->inTest()) {
-    INT_ASSERT(iterators.size() > 0);
+  //if (loop->inTest()) {
+  if (loop->inTest() && zippered && zipArgsAreExplicit) {
+    //INT_ASSERT(iterators.size() > 0);
 
     BlockStmt* userIdxSetup = NULL;
     //DefExpr* userIdxDef = NULL;
@@ -358,24 +376,28 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
     std::cout << "destIndForZip " << loop->stringLoc() << std::endl;
     nprint_view(indices);
-    Expr* anchor = destructureIndicesForZip(loop, indices, iterators, coforall);
+
+    Expr* anchor = destructureIndicesForZip(loop, indices, tupExpr, iterators, coforall, zipOverTupleExpansion);
     if (userIdxSetup) {
       anchor->insertAfter(userIdxSetup);
     }
 
-    CallExpr *indexCall = toCallExpr(indices);
-    INT_ASSERT(indexCall);
+    if (CallExpr *indexCall = toCallExpr(indices)) {
 
-    INT_ASSERT(indexCall->isNamed("_build_tuple") ||
-               indexCall->isPrimitive(PRIM_ZIP_INDEX));
+      INT_ASSERT(indexCall->isNamed("_build_tuple") ||
+                 indexCall->isPrimitive(PRIM_ZIP_INDEX));  // don't do anything if this is the case?
 
-    CallExpr *newIndexCall = new CallExpr(PRIM_ZIP_INDEX);
-    for_actuals(actual, indexCall) {
-      newIndexCall->insertAtTail(actual->remove());
+      CallExpr *newIndexCall = new CallExpr(PRIM_ZIP_INDEX);
+      for_actuals(actual, indexCall) {
+        newIndexCall->insertAtTail(actual->remove());
+      }
+      //indexCall->replace(newIndexCall);
+
+      loop->mIndex = newIndexCall;
     }
-    //indexCall->replace(newIndexCall);
-
-    loop->mIndex = newIndexCall;
+    else if (isUnresolvedSymExpr(indices)) {
+        loop->mIndex = indices;
+    }
 
     
 
@@ -501,9 +523,8 @@ ForLoop::ForLoop(VarSymbol* index,
         shouldSetZipCall = true;
         if (iterCall->numActuals() == 1) {
           if (CallExpr *zipArgCall = toCallExpr(iterCall->argList.only())) {
-            if (zipArgCall->isPrimitive(PRIM_TUPLE_EXPAND)) {
-            shouldSetZipCall = false;
-
+            if (!zipArgCall->isPrimitive(PRIM_TUPLE_EXPAND)) {
+              shouldSetZipCall = false;
             }
           }
         }
@@ -665,9 +686,16 @@ SymExpr* ForLoop::iteratorGet() const
   }
   else if (mZipCall != NULL) {
     // TODO probably will need to do something here
-    SymExpr *leadIterator = toSymExpr(mZipCall->get(1));
-    INT_ASSERT(leadIterator);
-    return leadIterator;
+
+    if (SymExpr *leadIterator = toSymExpr(mZipCall->get(1))) {
+      return leadIterator;
+    }
+    else if (CallExpr *tupExp = toCallExpr(mZipCall->get(1))) {
+      INT_ASSERT(tupExp->isPrimitive(PRIM_TUPLE_EXPAND));
+      return toSymExpr(tupExp->argList.only());
+    }
+
+    INT_FATAL("Malformed zip call in ForLoop");
   }
   
   //INT_FATAL("Malformed ForLoop");

@@ -109,8 +109,10 @@ void       destructureIndices(BlockStmt* block,
                               bool       coforall);
 Expr*      destructureIndicesForZip(BlockStmt*              block,
                                     BaseAST*                indices,
+                                    Expr*                   init,
                                     std::vector<VarSymbol*> iterators,
-                                    bool                    coforall);
+                                    bool                    coforall,
+                                    bool                    zipOverTupleExpansion);
 BlockStmt* buildCoforallLoopStmt(Expr* indices,
                                  Expr* iterator,
                                  CallExpr* byref_vars,

@@ -943,7 +943,8 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
                                      BaseAST* indices,
                                      Expr* init,
                                      std::vector<VarSymbol*> iterators,
-                                     bool coforall);
+                                     bool coforall,
+                                     bool zipOverTupleExpansion);
 
 void destructureIndices(BlockStmt* block,
                         BaseAST* indices,
@@ -952,19 +953,23 @@ void destructureIndices(BlockStmt* block,
   Expr* insertPt = new CallExpr(PRIM_NOOP);
   block->insertAtHead(insertPt);
   std::vector<VarSymbol*> dummy;
-  destructureIndicesAfter(insertPt, indices, init, dummy, coforall);
+  destructureIndicesAfter(insertPt, indices, init, dummy, coforall,
+                          /*zipOverTupleExpansion=*/false);
   insertPt->remove();
 }
 
 Expr* destructureIndicesForZip(BlockStmt* block,
                               BaseAST* indices,
+                              Expr* init,
                               std::vector<VarSymbol*> iterators,
-                              bool coforall) {
+                              bool coforall,
+                              bool zipOverTupleExpansion) {
   Expr* insertPt = new CallExpr(PRIM_NOOP);
   block->insertAtHead(insertPt);
 
 
-  Expr* ret = destructureIndicesAfter(insertPt, indices, NULL, iterators, coforall);
+  Expr* ret = destructureIndicesAfter(insertPt, indices, init, iterators, coforall,
+                                      zipOverTupleExpansion);
   insertPt->remove();
 
   return ret;
@@ -976,13 +981,14 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
                                      BaseAST* indices,
                                      Expr* init,
                                      std::vector<VarSymbol*> iterators,
-                                     bool coforall) {
+                                     bool coforall,
+                                     bool zipOverTupleExpansion) {
   if (CallExpr* call = toCallExpr(indices)) {
     if (call->isNamed("_build_tuple") ||
         call->isPrimitive(PRIM_ZIP_INDEX)) {
       int i = 0;
 
-      if (iterators.size() == 0) {
+      if (!zipOverTupleExpansion && iterators.size() == 0) {
         // Add checks that the index has tuple type of the right shape.
         CallExpr* checkCall = new CallExpr("_check_tuple_var_decl",
                                            init->copy(),
@@ -1002,13 +1008,15 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
         if (iterators.size() == 0) {
           CallExpr* call = new CallExpr(init->copy(), new_IntSymbol(i));
           insertAfter = destructureIndicesAfter(insertAfter, actual, 
-                                                call, iterators, coforall);
+                                                call, iterators, coforall,
+                                                zipOverTupleExpansion);
         }
         else {
           insertAfter = destructureIndicesAfter(insertAfter, actual,
                                                 new CallExpr("iteratorIndex", iterators[i]),
                                                 iterators,
-                                                coforall);
+                                                coforall,
+                                                zipOverTupleExpansion);
         }
         i++;
       }
@@ -1020,7 +1028,8 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
     DefExpr* def = new DefExpr(var);
     insertAfter->insertAfter(def);
     CallExpr* move = new CallExpr(PRIM_MOVE, var, init);
-    if (indices->inTest()) {
+    //if (indices->inTest()) {
+    if (false) {
       CallExpr* noop = new CallExpr(PRIM_NOOP);
       BlockStmt* typeBlock = new BlockStmt(move, BLOCK_TYPE);
       def->insertAfter(typeBlock);
@@ -1039,7 +1048,8 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
     // BHARSH TODO: I think this should be a PRIM_ASSIGN. I've seen a case
     // where 'sym' becomes a reference.
     CallExpr* move = new CallExpr(PRIM_MOVE, sym->symbol(), init);
-    if (indices->inTest()) {
+    //if (indices->inTest()) {
+    if (false) {
       CallExpr* noop = new CallExpr(PRIM_NOOP);
       BlockStmt *typeBlock = new BlockStmt(move, BLOCK_TYPE);
       insertAfter->insertAfter(typeBlock);
@@ -1176,25 +1186,29 @@ addByrefVars(BlockStmt* target, CallExpr* byrefVarsSource) {
 // Build up a "lowered" coforall loop. We lower coforalls into for-loops with
 // explicit fork-join task creation via an EndCount.
 static BlockStmt* buildLoweredCoforall(Expr* indices,
-                                       VarSymbol* iterator,
-                                       Expr* iteratorCall,
+                                       Expr* iterator,
+                                       //Expr* iteratorCall,
                                        CallExpr* byref_vars,
                                        BlockStmt* body,
                                        bool zippered,
                                        bool bounded) {
 
   CallExpr* zipCall = NULL;
+  Expr* iteratorExpr = NULL;
   if (body->inTest()) {
     if (zippered) {
-      zipCall = toCallExpr(iteratorCall);
+      zipCall = toCallExpr(iterator);
+      iteratorExpr = zipCall;
 
-      INT_ASSERT(!bounded);
+      INT_ASSERT(!bounded);  // why?
       INT_ASSERT(zipCall);
       INT_ASSERT(zipCall->isPrimitive(PRIM_ZIP));
     }
     else {
+      iteratorExpr = toSymExpr(iterator);
+
       INT_ASSERT(!zipCall);
-      INT_ASSERT(iterator);
+      INT_ASSERT(iteratorExpr);
     }
   }
 
@@ -1226,18 +1240,22 @@ static BlockStmt* buildLoweredCoforall(Expr* indices,
     addByrefVars(taskBlk, byref_vars);
   }
 
-  Expr* iteratorExpr = NULL;
-  if (zippered && taskBlk->inTest()) {
-    iteratorExpr = zipCall;
-  }
-  else {
-    iteratorExpr = new SymExpr(iterator);
-  }
+  //Expr* iteratorExpr = NULL;
+  //if (zippered && taskBlk->inTest()) {
+    //iteratorExpr = zipCall;
+  //}
+  //else {
+    //iteratorExpr = new SymExpr(iterator);
+  //}
   BlockStmt* block = ForLoop::buildCoforallLoop(indices,
                                                 iteratorExpr,
                                                 taskBlk,
                                                 zippered);
   if (bounded) {
+    SymExpr *iteratorSymExpr = toSymExpr(iteratorExpr);
+    INT_ASSERT(iteratorSymExpr);
+
+    VarSymbol* iterator = toVarSymbol(iteratorSymExpr->symbol());
     INT_ASSERT(!zippered); // don't know how to, yet
     INT_ASSERT(iterator);
     if (!onBlock) { block->insertAtHead(new CallExpr("chpl_resetTaskSpawn", numTasks)); }
@@ -1331,9 +1349,10 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
 
   BlockStmt* nonVectorCoforallBlk = NULL;
   VarSymbol* tmpIter = NULL;
-  if (body->inTest()) {
+  //if (body->inTest()) {
+  if (zippered) {
     nonVectorCoforallBlk = buildLoweredCoforall(indices,
-                                                           NULL, /*iterator*/
+                                                           //NULL, [>iterator<]
                                                            iterator,
                                                            byref_vars,
                                                            body,
@@ -1353,8 +1372,8 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
     }
 
     nonVectorCoforallBlk = buildLoweredCoforall(indices,
-                                                           tmpIter,
-                                                           NULL,
+                                                           new SymExpr(tmpIter),
+                                                           //NULL,
                                                            byref_vars,
                                                            body,
                                                            zippered,
@@ -1362,8 +1381,8 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
   }
   if (!zippered) {
     BlockStmt* vectorCoforallBlk = buildLoweredCoforall(indices,
-                                                        tmpIter,
-                                                        NULL, /*zipCall*/
+                                                        new SymExpr(tmpIter),
+                                                        //NULL, [>zipCall<]
                                                         copyByrefVars(byref_vars),
                                                         body->copy(),
                                                         zippered,
