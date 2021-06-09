@@ -93,6 +93,31 @@ LoopExpr::LoopExpr(Expr* indices,
 
   defIndices.parent = this;
   gLoopExprs.add(this);
+
+  if (CallExpr* indicesCall = toCallExpr(this->indices)) {
+    if (indicesCall->isNamed("_build_tuple")) {
+      CallExpr* newIndicesCall = new CallExpr(PRIM_ZIP_INDEX);
+      for_actuals (actual, indicesCall) {
+        newIndicesCall->insertAtTail(actual->remove());
+      }
+
+      this->indices = newIndicesCall;
+    }
+  }
+
+  if (zippered) {
+    CallExpr* iterCall = toCallExpr(iteratorExpr);
+    INT_ASSERT(iterCall);
+    INT_ASSERT(iterCall->isNamed("_build_tuple"));
+
+    CallExpr* newIterCall = new CallExpr(PRIM_ZIP);
+    for_actuals (actual, iterCall) {
+      newIterCall->insertAtTail(actual->remove());
+    }
+
+    //iterCall->replace(newIterCall);
+    this->iteratorExpr = newIterCall;
+  }
 }
 
 LoopExpr::LoopExpr(bool forall, bool zippered, bool maybeArrayType) :
@@ -235,12 +260,12 @@ void lowerLoopExprs(BaseAST* ast) {
 }
 
 
-static Expr* getShapeForZippered(Expr* tupleRef) {
-  CallExpr* buildTup = toCallExpr(getDefOfTemp(toSymExpr(tupleRef)));
-  INT_ASSERT(buildTup->isNamed("_build_tuple"));
-  // The shape comes from the first tuple component.
-  return buildTup->get(1);
-}
+//static Expr* getShapeForZippered(Expr* tupleRef) {
+  //CallExpr* buildTup = toCallExpr(getDefOfTemp(toSymExpr(tupleRef)));
+  //INT_ASSERT(buildTup->isNamed("_build_tuple"));
+  //// The shape comes from the first tuple component.
+  //return buildTup->get(1);
+//}
 
 // 'forallExprCall', during resolution, returns an iterator record
 // for the forall expression. Ensure it will get a shape.
@@ -250,7 +275,7 @@ static void addIterRecShape(CallExpr* forallExprCall,
     if (move->isPrimitive(PRIM_MOVE)) {
       Expr* dest = move->get(1)->copy();
       Expr* shape = forallExprCall->get(1);
-      if (zippered) shape = getShapeForZippered(shape);
+      //if (zippered) shape = getShapeForZippered(shape);
       move->getStmtExpr()->insertAfter(
         new CallExpr(PRIM_ITERATOR_RECORD_SET_SHAPE, dest,
                      shape->copy(), parallel ? gFalse : gTrue));
@@ -395,7 +420,8 @@ static FnSymbol* buildSerialIteratorFn(const char* iteratorName,
                                        Expr* indices,
                                        bool zippered,
                                        bool forall,
-                                       Expr*& stmt)
+                                       Expr*& stmt,
+                                       int numIterands)
 {
   FnSymbol* sifn = new FnSymbol(iteratorName);
   sifn->addFlag(FLAG_ITERATOR_FN);
@@ -407,8 +433,26 @@ static FnSymbol* buildSerialIteratorFn(const char* iteratorName,
   }
   sifn->setGeneric(true);
 
-  ArgSymbol* sifnIterator = new ArgSymbol(INTENT_BLANK, "iterator", dtAny);
-  sifn->insertFormalAtTail(sifnIterator);
+  Expr* iteratorExpr = NULL;
+  if (numIterands == 1) {
+    ArgSymbol* sifnIterator = new ArgSymbol(INTENT_BLANK, "iterator", dtAny);
+    sifn->insertFormalAtTail(sifnIterator);
+    iteratorExpr = new SymExpr(sifnIterator);
+  }
+  else if (numIterands > 1) {
+    CallExpr* iteratorCall = new CallExpr(PRIM_ZIP);
+    for (int i=0 ; i<numIterands ; i++) {
+      char argName[32];
+      snprintf(argName, 31, "iterator%d", i);
+      ArgSymbol* sifnIterator = new ArgSymbol(INTENT_BLANK, argName, dtAny);
+      sifn->insertFormalAtTail(sifnIterator);
+      iteratorCall->insertAtTail(sifnIterator);
+    }
+    iteratorExpr = iteratorCall;
+  }
+  else {
+    INT_FATAL("numIterands must be >=1");
+  }
 
   // Note: 'stmt' is later used to generate the follower body
   Expr* last = loopBody->body.tail->remove();
@@ -419,7 +463,7 @@ static FnSymbol* buildSerialIteratorFn(const char* iteratorName,
     stmt = new CondStmt(new CallExpr("_cond_test", cond), stmt);
 
   sifn->insertAtTail(ForLoop::buildForLoop(indices,
-                                           new SymExpr(sifnIterator),
+                                           iteratorExpr,
                                            new BlockStmt(stmt),
                                            zippered,
                                            /*isForExpr*/ true));
@@ -639,7 +683,7 @@ static CallExpr* buildCallAndArgs(FnSymbol* fn,
                                   Expr* iteratorExpr,
                                   std::set<Symbol*>& outerVars,
                                   SymbolMap* outerMap,
-                                  ArgSymbol** iteratorExprArg) {
+                                  std::vector<ArgSymbol*>& iteratorExprArgs) {
 
   // MPF: We'll add the iteratorExpr to the call, so we need an
   // argument to accept it in the new function. This way,
@@ -647,11 +691,36 @@ static CallExpr* buildCallAndArgs(FnSymbol* fn,
   // is being iterated over (e.g. a domain literal) is in the
   // caller, where the iteration most likely occurs. That way,
   // the iterator can capture such a domain by reference.
-  ArgSymbol* iterArg = new ArgSymbol(INTENT_BLANK, "iterExpr", dtAny);
-  fn->insertFormalAtTail(iterArg);
-  *iteratorExprArg = iterArg;
 
-  CallExpr* ret = new CallExpr(fn->name, iteratorExpr);
+  CallExpr* ret = new CallExpr(fn->name);
+
+  if (SymExpr* iterSymExpr = toSymExpr(iteratorExpr)) {
+    ArgSymbol* iterArg = new ArgSymbol(INTENT_BLANK, "iterExpr", dtAny);
+    fn->insertFormalAtTail(iterArg);
+    iteratorExprArgs.push_back(iterArg);
+
+    ret->insertAtTail(iteratorExpr);
+  }
+  else if (CallExpr* iterCallExpr = toCallExpr(iteratorExpr)) {
+    INT_ASSERT(iterCallExpr->isPrimitive(PRIM_ZIP));
+
+    int i = 0;
+    for_actuals (actual, iterCallExpr) {
+      char argName[32];
+      snprintf(argName, 31, "iterExpr%d", i++);
+      ArgSymbol* iterArg = new ArgSymbol(INTENT_BLANK, argName, dtAny);
+      fn->insertFormalAtTail(iterArg);
+      iteratorExprArgs.push_back(iterArg);
+
+      ret->insertAtTail(actual->copy());
+    }
+  }
+  
+  //ArgSymbol* iterArg = new ArgSymbol(INTENT_BLANK, "iterExpr", dtAny);
+  //fn->insertFormalAtTail(iterArg);
+  //*iteratorExprArg = iterArg;
+
+  //CallExpr* ret = new CallExpr(fn->name, iteratorExpr);
 
   for_set(Symbol, sym, outerVars) {
     ArgSymbol* arg = newOuterVarArg(sym);
@@ -768,8 +837,9 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
 
   SymbolMap outerMap;
   ArgSymbol* iteratorExprArg = NULL;
+  std::vector<ArgSymbol*> iteratorExprArgs;
   CallExpr* ret = buildCallAndArgs(fn, iteratorExpr, outerVars, &outerMap,
-                                   &iteratorExprArg);
+                                   iteratorExprArgs);
 
   BlockStmt* block = fn->body;
 
@@ -778,18 +848,22 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
     // handle e.g. type t = [1..3] int;
     // as in test/arrays/deitz/part4/test_array_type_alias.chpl
     // where "[1..3] int" is syntactically a "forall loop expression"
+    INT_FATAL("Is this a zippered forall expression?"); // TODO take care of this case
     INT_ASSERT(!cond);
     block = handleArrayTypeCase(loopExpr, fn, indices,
                                 iteratorExprArg, loopBody);
   }
 
-  VarSymbol* iterator = newTemp("_iterator");
-  iterator->addFlag(FLAG_EXPR_TEMP);
-  iterator->addFlag(FLAG_MAYBE_REF);
-  block->insertAtTail(new DefExpr(iterator));
-  block->insertAtTail(new CallExpr(PRIM_MOVE, iterator, iteratorExprArg));
+  //VarSymbol* iterator = newTemp("_iterator");
+  //iterator->addFlag(FLAG_EXPR_TEMP);
+  //iterator->addFlag(FLAG_MAYBE_REF);
+  //block->insertAtTail(new DefExpr(iterator));
+  //block->insertAtTail(new CallExpr(PRIM_MOVE, iterator, iteratorExprArg));
   const char* iteratorName = astr(astr_loopexpr_iter, istr(loopexpr_uid-1));
-  CallExpr*   iterCall     = new CallExpr(iteratorName, iterator);
+  CallExpr*   iterCall     = new CallExpr(iteratorName);
+  for_vector (ArgSymbol, iterand, iteratorExprArgs) {
+    iterCall->insertAtTail(iterand);
+  }
   CallExpr* retCall = new CallExpr(PRIM_RETURN, iterCall);
   for_set(Symbol, sym, outerVars) iterCall->insertAtTail(sym);
   block->insertAtTail(retCall);
@@ -801,7 +875,7 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
 
   Expr* stmt = NULL; // Initialized by buildSerialIteratorFn.
   sifn = buildSerialIteratorFn(iteratorName, loopBody, cond, indices,
-                               zippered, forall, stmt);
+                               zippered, forall, stmt, iteratorExprArgs.size());
 
   if (forall) {
     lifn = buildLeaderIteratorFn(iteratorName, zippered);

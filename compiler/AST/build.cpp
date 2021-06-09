@@ -931,7 +931,8 @@ BlockStmt* buildSerialStmt(Expr* cond, BlockStmt* body) {
 void
 checkIndices(BaseAST* indices) {
   if (CallExpr* call = toCallExpr(indices)) {
-    if (!call->isNamed("_build_tuple"))
+    if (!call->isNamed("_build_tuple") &&
+        !call->isPrimitive(PRIM_ZIP_INDEX))
       USR_FATAL(indices, "invalid index expression");
     for_actuals(actual, call)
       checkIndices(actual);
