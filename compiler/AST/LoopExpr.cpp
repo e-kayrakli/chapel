@@ -671,6 +671,16 @@ static ArgSymbol* newOuterVarArg(Symbol* ovar) {
   return ret;
 }
 
+static bool nonZipperedIteratorExpr(Expr* iteratorExpr) {
+  if (isSymExpr(iteratorExpr)) return true;
+
+  if (CallExpr* iterCall = toCallExpr(iteratorExpr)) {
+    if (!iterCall->isPrimitive(PRIM_ZIP)) return true;
+  }
+
+  return false;
+}
+
 //
 // Builds the call that will eventually replace the LoopExpr. ArgSymbols will
 // be added as needed. There will always be at least one formal, for the
@@ -694,7 +704,7 @@ static CallExpr* buildCallAndArgs(FnSymbol* fn,
 
   CallExpr* ret = new CallExpr(fn->name);
 
-  if (SymExpr* iterSymExpr = toSymExpr(iteratorExpr)) {
+  if (nonZipperedIteratorExpr(iteratorExpr)) {
     ArgSymbol* iterArg = new ArgSymbol(INTENT_BLANK, "iterExpr", dtAny);
     fn->insertFormalAtTail(iterArg);
     iteratorExprArgs.push_back(iterArg);
