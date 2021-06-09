@@ -846,7 +846,6 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
   }
 
   SymbolMap outerMap;
-  ArgSymbol* iteratorExprArg = NULL;
   std::vector<ArgSymbol*> iteratorExprArgs;
   CallExpr* ret = buildCallAndArgs(fn, iteratorExpr, outerVars, &outerMap,
                                    iteratorExprArgs);
@@ -858,10 +857,12 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
     // handle e.g. type t = [1..3] int;
     // as in test/arrays/deitz/part4/test_array_type_alias.chpl
     // where "[1..3] int" is syntactically a "forall loop expression"
-    INT_FATAL("Is this a zippered forall expression?"); // TODO take care of this case
     INT_ASSERT(!cond);
+
+    // these expressions cannot be zippered, make sure that that's true
+    INT_ASSERT(iteratorExprArgs.size() == 1);
     block = handleArrayTypeCase(loopExpr, fn, indices,
-                                iteratorExprArg, loopBody);
+                                iteratorExprArgs[0], loopBody);
   }
 
   //VarSymbol* iterator = newTemp("_iterator");

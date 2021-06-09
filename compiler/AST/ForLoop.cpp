@@ -300,12 +300,6 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
     }
   }
 
-  if (!body->inTest()) {
-    index->addFlag(FLAG_INDEX_OF_INTEREST);
-  }
-
-  iterMove = new CallExpr(PRIM_MOVE, index, new CallExpr("iteratorIndex", iterator));
-
   if (indices == 0)
     indices = new UnresolvedSymExpr("chpl__elidedIdx");
 
