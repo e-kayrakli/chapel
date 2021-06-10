@@ -142,4 +142,8 @@ private:
   bool                   mIsCoforallLoop;
 };
 
+void tryToReplaceWithDirectRangeIterator(Expr* iteratorExpr);
+
+
+
 #endif

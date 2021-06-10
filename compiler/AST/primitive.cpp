@@ -1074,6 +1074,8 @@ initPrimitive() {
   prim_def(PRIM_STACK_ALLOCATE_CLASS, "stack allocate class", returnInfoFirst);
   prim_def(PRIM_ZIP, "zip", returnInfoVoid, false, false);
   prim_def(PRIM_ZIP_INDEX, "zip index", returnInfoVoid, false, false);
+  prim_def(PRIM_ZIP_EXPAND_ITERATOR_INDEX, "tuple expand placeholder for iteratorIndex", returnInfoVoid, false, false);
+  prim_def(PRIM_ZIP_EXPAND_FREE_ITERATOR, "tuple expand placeholder for freeIterator", returnInfoVoid, false, false);
   prim_def(PRIM_REQUIRE, "require", returnInfoVoid, false, false);
 
   // used in error-handling conditional. args: error variable

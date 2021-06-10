@@ -77,7 +77,7 @@
  * functions/iterators but there's not really a way around it this early in
  * compilation. If the iterator can't be replaced, it is left unchanged.
  */
-static void tryToReplaceWithDirectRangeIterator(Expr* iteratorExpr)
+void tryToReplaceWithDirectRangeIterator(Expr* iteratorExpr)
 {
   if (fNoOptimizeRangeIteration)
     return;
@@ -142,6 +142,79 @@ static void tryToReplaceWithDirectRangeIterator(Expr* iteratorExpr)
   }
 }
 
+static bool isTupleExpandCall(Expr* e) {
+  if (CallExpr* call = toCallExpr(e)) {
+    return call->isPrimitive(PRIM_TUPLE_EXPAND);
+  }
+  return false;
+}
+
+static void standardizeForLoopIndicesAndIteration(Expr*& indices,
+                                                  Expr*& iteratorExpr) {
+  bool zippered = false;
+  if (CallExpr *iterCall = toCallExpr(iteratorExpr)) {
+    if (iterCall->isNamed("_build_tuple")) {
+      INT_FATAL("_build_tuple is no longer a supported iteratorExpr");
+    }
+
+    if (iterCall->isPrimitive(PRIM_ZIP)) {
+      if (iterCall->numActuals() == 1) {
+        if (isTupleExpandCall(iterCall->get(1))) {
+          zippered = true;
+        }
+        else {
+          zippered = false;
+        }
+      }
+      else {
+        for_actuals(actual, iterCall) {
+          if (isTupleExpandCall(actual)) {
+            USR_FATAL("Tuple expansion expressions cannot be zippered with other expressions");
+          }
+        }
+        zippered = true;
+      }
+      
+      if (!zippered) {
+        iteratorExpr = iterCall->get(1);
+      }
+    }
+  }
+
+  if (zippered) {
+    if (CallExpr* indCall = toCallExpr(indices)) {
+      if (indCall->isNamed("_build_tuple")) {
+        CallExpr* newCall = new CallExpr(PRIM_ZIP_INDEX);
+
+        for_actuals(actual, indCall) {
+          newCall->insertAtTail(actual->remove());
+        }
+
+        indices = newCall;
+      }
+      else if (indCall->isPrimitive(PRIM_ZIP_INDEX)) {
+        // all's good
+      }
+      else {
+        INT_FATAL("Unsupported call for loop index");
+      }
+    }
+    else if (SymExpr* indSymExpr = toSymExpr(indices)) {
+      CallExpr* newCall = new CallExpr(PRIM_ZIP_INDEX, indSymExpr);
+
+      indices = newCall;
+    }
+    else if (UnresolvedSymExpr* indSymExpr = toUnresolvedSymExpr(indices)) {
+      CallExpr* newCall = new CallExpr(PRIM_ZIP_INDEX, indSymExpr);
+
+      indices = newCall;
+    }
+    else {
+      INT_FATAL("Unexpected AST type for loop index expression");
+    }
+  }
+}
+
 /************************************ | *************************************
 *                                                                           *
 * Factory methods for the Parser                                            *
@@ -156,6 +229,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
                           bool       isLoweredForall,
                           bool       isForExpr)
 {
+  standardizeForLoopIndicesAndIteration(indices, iteratorExpr);
   VarSymbol*   index         = newTemp("_indexOfInterest");
   VarSymbol*   iterator      = newTemp("_iterator");
   CallExpr*    iterInit      = 0;
@@ -396,9 +470,14 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
     
 
     BlockStmt *deferBlock = new BlockStmt();
-    //DeferStmt *defer = new DeferStmt();
-    for_vector (VarSymbol, iterSym, iterators) {
-      deferBlock->insertAtTail(new CallExpr("_freeIterator", iterSym));
+    if (zipOverTupleExpansion) {
+      INT_ASSERT(tupExpr);
+      deferBlock->insertAtTail(new CallExpr(PRIM_ZIP_EXPAND_FREE_ITERATOR, tupExpr->copy()));
+    }
+    else {
+      for_vector (VarSymbol, iterSym, iterators) {
+        deferBlock->insertAtTail(new CallExpr("_freeIterator", iterSym));
+      }
     }
     retval->insertAtTail(new DeferStmt(deferBlock));
   }
@@ -515,13 +594,13 @@ ForLoop::ForLoop(VarSymbol* index,
       bool shouldSetZipCall = false;
       if (iterCall->isPrimitive(PRIM_ZIP)) {
         shouldSetZipCall = true;
-        if (iterCall->numActuals() == 1) {
-          if (CallExpr *zipArgCall = toCallExpr(iterCall->argList.only())) {
-            if (!zipArgCall->isPrimitive(PRIM_TUPLE_EXPAND)) {
-              shouldSetZipCall = false;
-            }
-          }
-        }
+        //if (iterCall->numActuals() == 1) {
+          //if (CallExpr *zipArgCall = toCallExpr(iterCall->argList.only())) {
+            //if (!zipArgCall->isPrimitive(PRIM_TUPLE_EXPAND)) {
+              //shouldSetZipCall = false;
+            //}
+          //}
+        //}
       }
 
       if (shouldSetZipCall) {
@@ -679,8 +758,6 @@ SymExpr* ForLoop::iteratorGet() const
     return mIterator;
   }
   else if (mZipCall != NULL) {
-    // TODO probably will need to do something here
-
     if (SymExpr *leadIterator = toSymExpr(mZipCall->get(1))) {
       return leadIterator;
     }
@@ -749,8 +826,8 @@ void ForLoop::verify()
   if (mIndex    == 0)
     INT_FATAL(this, "ForLoop::verify. index     is NULL");
 
-  if (mIterator == 0)
-    INT_FATAL(this, "ForLoop::verify. iterator  is NULL");
+  //if (mIterator == 0)
+    //INT_FATAL(this, "ForLoop::verify. iterator  is NULL");
 
   if (useList   != 0)
     INT_FATAL(this, "ForLoop::verify. useList   is not NULL");

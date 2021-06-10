@@ -696,6 +696,11 @@ static void normalizeBase(BaseAST* base, bool addEndOfStatements) {
 
 static Symbol* theDefinedSymbol(BaseAST* ast);
 
+static bool isZipPlaceholderCall(CallExpr* call) {
+  return call->isPrimitive(PRIM_ZIP_EXPAND_ITERATOR_INDEX) ||
+         call->isPrimitive(PRIM_ZIP_EXPAND_FREE_ITERATOR);
+}
+
 void checkUseBeforeDefs(FnSymbol* fn) {
   if (fn->defPoint->parentSymbol) {
     ModuleSymbol*         mod = fn->getModule();
@@ -765,7 +770,8 @@ void checkUseBeforeDefs(FnSymbol* fn) {
         if (call == NULL ||
             (call->baseExpr                              != use   &&
              call->isPrimitive(PRIM_CAPTURE_FN_FOR_CHPL) == false &&
-             call->isPrimitive(PRIM_CAPTURE_FN_FOR_C)    == false)) {
+             call->isPrimitive(PRIM_CAPTURE_FN_FOR_C)    == false &&
+             isZipPlaceholderCall(call)                  == false)) {
           if (isFnSymbol(fn->defPoint->parentSymbol) == false) {
             const char* name = use->unresolved;
 

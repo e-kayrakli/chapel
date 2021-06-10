@@ -173,7 +173,7 @@ static bool
 moreSpecific(FnSymbol* fn, Type* actualType, Type* formalType);
 static BlockStmt* getParentBlock(Expr* expr);
 
-static void resolveTupleExpand(CallExpr* call);
+static void resolveTupleExpand(CallExpr* call, Expr* expansionPoint=NULL);
 static void resolveSetMember(CallExpr* call);
 static void resolveInitField(CallExpr* call);
 static void resolveMove(CallExpr* call);
@@ -6380,13 +6380,31 @@ void printTaskOrForallConstErrorNote(Symbol* aVar) {
 *                                                                             *
 ************************************** | *************************************/
 
-static void resolveTupleExpand(CallExpr* call) {
+//static Expr*        getInsertPointForTupleExpand(CallExpr* call) {
+  //Expr* stmtExpr = call->getStmtExpr();
+  //if (CallExpr* stmtCall = toCallExpr(stmtExpr)) {
+    //if (stmtCall->isPrimitive(PRIM_ZIP)) {
+      //ForLoop* loop = toForLoop(stmtCall->parentExpr);
+      //INT_ASSERT(loop);
+
+      //Expr* prevLoop = loop->prev;
+      //if (isDeferStmt(prevLoop)) {
+        //return prevLoop;
+      //}
+    //}
+  //}
+  //return stmtExpr;
+//}
+
+
+static void resolveTupleExpand(CallExpr* call, Expr* expansionPoint) {
   SymExpr*  sym    = toSymExpr(call->get(1));
   Type*     type   = sym->symbol()->getValType();
 
   CallExpr* parent = toCallExpr(call->parentExpr);
   CallExpr* noop   = new CallExpr(PRIM_NOOP);
-  Expr*     stmt   = call->getStmtExpr();
+  //Expr*     stmt   = getInsertPointForTupleExpand(call);
+  Expr*     stmt   = expansionPoint ? expansionPoint : call->getStmtExpr();
 
   int       size   = 0;
 
@@ -6407,7 +6425,8 @@ static void resolveTupleExpand(CallExpr* call) {
 
   if (parent != NULL && parent->primitive != NULL) {
     if (!parent->isPrimitive(PRIM_ITERATOR_RECORD_SET_SHAPE) &&
-        !parent->isPrimitive(PRIM_NEW)) {
+        !parent->isPrimitive(PRIM_NEW) &&
+        !parent->isPrimitive(PRIM_ZIP)) {
       USR_FATAL(parent, "illegal tuple expansion context");
     }
   }
@@ -8627,6 +8646,85 @@ static bool        isStringLiteral(Symbol* sym);
 
 static void        resolveExprMaybeIssueError(CallExpr* call);
 
+static CallExpr*   getFreeIteratorPlaceholder(ForLoop* loop) {
+  if (DeferStmt* defer = toDeferStmt(loop->prev)) {
+    if (CallExpr* call = toCallExpr(defer->body()->body.get(1))) {
+      if (call->isPrimitive(PRIM_ZIP_EXPAND_FREE_ITERATOR)) {
+        return call;
+      }
+    }
+  }
+  return NULL;
+}
+
+static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
+  if (CallExpr* zipCall = loop->zipCallGet()) {
+    INT_ASSERT(zipCall->isPrimitive(PRIM_ZIP));
+    if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
+
+    }
+
+    if (CallExpr* argCall = toCallExpr(zipCall->get(1))) {
+      INT_ASSERT(zipCall->numActuals() == 1);
+      INT_ASSERT(argCall->isPrimitive(PRIM_TUPLE_EXPAND));
+
+      //VarSymbol* tupleSym = toVarSymbol(toSymExpr(argCall->get(1))->symbol());
+
+      Expr* cleanupDefer = loop->prev;
+      INT_ASSERT(isDeferStmt(cleanupDefer));
+
+      BlockStmt* expansionBlock = new BlockStmt(BLOCK_SCOPELESS);
+      cleanupDefer->insertBefore(expansionBlock);
+      CallExpr* noop = new CallExpr(PRIM_NOOP);
+      expansionBlock->insertAtTail(noop);
+
+      //resolveExpr(argCall);
+      resolveTupleExpand(argCall, noop);
+
+      for_actuals(actual, zipCall) {
+        VarSymbol* iterTemp = newTemp("iterTemp");
+        Expr* actualCopy = actual->copy();
+        actual->replace(new SymExpr(iterTemp));
+
+        iterTemp->addFlag(FLAG_EXPR_TEMP);
+        iterTemp->addFlag(FLAG_MAYBE_PARAM);
+        iterTemp->addFlag(FLAG_MAYBE_TYPE);
+
+        expansionBlock->insertAtTail(new DefExpr(iterTemp, new CallExpr("_getIterator",
+                                                                        actualCopy)));
+
+        tryToReplaceWithDirectRangeIterator(actualCopy);
+
+        //iterators.push_back(iterTemp);
+      }
+
+      normalize(expansionBlock);
+      resolveBlockStmt(expansionBlock);
+
+      if (CallExpr* freeIterPlaceholder = getFreeIteratorPlaceholder(loop)) {
+        for_actuals(actual, zipCall) {
+          freeIterPlaceholder->insertBefore(new CallExpr("_freeIterator",
+                                                         actual->copy()));
+          freeIterPlaceholder->insertBefore(new CallExpr(PRIM_END_OF_STATEMENT,
+                                                         actual->copy()));
+        }
+        CallExpr* prevEndOfStatement = toCallExpr(freeIterPlaceholder->next);
+        INT_ASSERT(prevEndOfStatement);
+        INT_ASSERT(prevEndOfStatement->isPrimitive(PRIM_END_OF_STATEMENT));
+
+        freeIterPlaceholder->remove();
+        prevEndOfStatement->remove();
+      }
+
+    }
+
+    if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
+
+    }
+  }
+}
+
+
 Expr* resolveExpr(Expr* expr) {
   FnSymbol* fn     = toFnSymbol(expr->parentSymbol);
   Expr*     retval = NULL;
@@ -8645,6 +8743,7 @@ Expr* resolveExpr(Expr* expr) {
   // This must be after isParamResolved
   } else if (BlockStmt* block = toBlockStmt(expr)) {
     if (ForLoop* forLoop = toForLoop(block)) {
+      resolveZipExpandAndAdjustLoop(forLoop);
       retval = replaceForWithForallIfNeeded(forLoop);
     } else {
       retval = expr;

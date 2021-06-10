@@ -435,9 +435,19 @@ static FnSymbol* buildSerialIteratorFn(const char* iteratorName,
 
   Expr* iteratorExpr = NULL;
   if (numIterands == 1) {
-    ArgSymbol* sifnIterator = new ArgSymbol(INTENT_BLANK, "iterator", dtAny);
-    sifn->insertFormalAtTail(sifnIterator);
-    iteratorExpr = new SymExpr(sifnIterator);
+    if (zippered) {
+      //CallExpr* iteratorCall = new CallExpr(PRIM_ZIP);
+      ArgSymbol* sifnIterator = new ArgSymbol(INTENT_BLANK, "varIterator", dtAny, NULL, NULL,
+                                              new SymExpr(gUninstantiated));
+      sifn->insertFormalAtTail(sifnIterator);
+      iteratorExpr = new CallExpr(PRIM_ZIP,
+                                  new CallExpr(PRIM_TUPLE_EXPAND, sifnIterator));
+    }
+    else {
+      ArgSymbol* sifnIterator = new ArgSymbol(INTENT_BLANK, "iterator", dtAny);
+      sifn->insertFormalAtTail(sifnIterator);
+      iteratorExpr = new SymExpr(sifnIterator);
+    }
   }
   else if (numIterands > 1) {
     CallExpr* iteratorCall = new CallExpr(PRIM_ZIP);
@@ -714,15 +724,27 @@ static CallExpr* buildCallAndArgs(FnSymbol* fn,
   else if (CallExpr* iterCallExpr = toCallExpr(iteratorExpr)) {
     INT_ASSERT(iterCallExpr->isPrimitive(PRIM_ZIP));
 
-    int i = 0;
-    for_actuals (actual, iterCallExpr) {
-      char argName[32];
-      snprintf(argName, 31, "iterExpr%d", i++);
-      ArgSymbol* iterArg = new ArgSymbol(INTENT_BLANK, argName, dtAny);
+    if (iterCallExpr->numActuals() == 1) {
+      CallExpr* tupleExpCall = toCallExpr(iterCallExpr->argList.only());
+      INT_ASSERT(tupleExpCall);
+
+      ArgSymbol* iterArg = new ArgSymbol(INTENT_BLANK, "varIterArg", dtAny, NULL,
+                                         NULL, new SymExpr(gUninstantiated));
       fn->insertFormalAtTail(iterArg);
       iteratorExprArgs.push_back(iterArg);
+      ret->insertAtTail(tupleExpCall->copy());
+    }
+    else {
+      int i = 0;
+      for_actuals (actual, iterCallExpr) {
+        char argName[32];
+        snprintf(argName, 31, "iterExpr%d", i++);
+        ArgSymbol* iterArg = new ArgSymbol(INTENT_BLANK, argName, dtAny);
+        fn->insertFormalAtTail(iterArg);
+        iteratorExprArgs.push_back(iterArg);
 
-      ret->insertAtTail(actual->copy());
+        ret->insertAtTail(actual->copy());
+      }
     }
   }
   
@@ -784,6 +806,16 @@ static void scopeResolveAndNormalize(FnSymbol* fn) {
   fn->accept(&vis);
   resolveUnresolvedSymExprs(fn);
   normalize(fn);
+}
+
+static bool isVariadicArgument(ArgSymbol *arg) {
+  if (arg->variableExpr) {
+    if (SymExpr *varSymExpr = toSymExpr(arg->variableExpr->body.get(1))) {
+      return varSymExpr->symbol() == gUninstantiated;
+    }
+  }
+
+  return false;
 }
 
 // Returns a call to the top-level function wrapper for this loop-expr
@@ -873,7 +905,12 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
   const char* iteratorName = astr(astr_loopexpr_iter, istr(loopexpr_uid-1));
   CallExpr*   iterCall     = new CallExpr(iteratorName);
   for_vector (ArgSymbol, iterand, iteratorExprArgs) {
-    iterCall->insertAtTail(iterand);
+    if (isVariadicArgument(iterand)) {
+      iterCall->insertAtTail(new CallExpr(PRIM_TUPLE_EXPAND, iterand));
+    }
+    else {
+      iterCall->insertAtTail(iterand);
+    }
   }
   CallExpr* retCall = new CallExpr(PRIM_RETURN, iterCall);
   for_set(Symbol, sym, outerVars) iterCall->insertAtTail(sym);

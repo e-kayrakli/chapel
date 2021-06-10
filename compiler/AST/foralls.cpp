@@ -1140,10 +1140,6 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
       zippered = true;
   }
 
-  if (pfs->inTest()) {
-    gdbShouldBreakHere();
-  }
-
   VarSymbol* followIdx = NULL;
   if (!pfs->inTest()) {
     DefExpr*  followIdxDef = toDefExpr(pfs->loopBody()->body.head->remove());
