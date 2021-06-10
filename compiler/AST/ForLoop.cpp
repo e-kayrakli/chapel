@@ -930,6 +930,9 @@ Expr* ForLoop::getNextExpr(Expr* expr)
   if (expr == mIndex && mIterator != NULL)
     retval = mIterator;
 
+  else if (expr == mIndex && mZipCall != NULL)
+    retval = mZipCall;
+
   else if (expr == mIndex    && body.head != NULL)
     retval = body.head->getFirstExpr();
 

@@ -26,6 +26,7 @@
 #endif
 
 #include "resolution.h"
+#include "view.h"
 
 #include "AstCount.h"
 #include "astutil.h"
@@ -2565,6 +2566,22 @@ static bool resolveBuiltinCastCall(CallExpr* call);
 static bool resolveClassBorrowMethod(CallExpr* call);
 static void resolveCoerceCopyMove(CallExpr* call);
 static void resolvePrimInit(CallExpr* call);
+static void resolveZipExpandAndAdjustLoop(ForLoop* loop);
+
+static void resolveZip(CallExpr* call) {
+  ForLoop* parentLoop = toForLoop(call->parentExpr);
+  INT_ASSERT(parentLoop);
+
+  resolveZipExpandAndAdjustLoop(parentLoop);
+  // we only need to resolve if there's a tuple expansion argument
+  //if (call->numActuals() == 1) {
+    //if (CallExpr* innerCall = toCallExpr(call->argList.only())) {
+      //INT_ASSERT(innerCall->isPrimitive(PRIM_TUPLE_EXPAND));
+
+      //resolveTupleExpand(innerCall);
+    //}
+  //}
+}
 
 void resolveCall(CallExpr* call) {
   if (call->primitive) {
@@ -2611,6 +2628,11 @@ void resolveCall(CallExpr* call) {
     case PRIM_RESOLUTION_POINT:
       resolveForResolutionPoint(call);
       break;
+
+    case PRIM_ZIP:
+      resolveZip(call);
+      break;
+      
 
     default:
       break;
@@ -7414,12 +7436,25 @@ static bool isMoveFromMain(CallExpr* call) {
   return false;
 }
 
+static bool shouldDelayMoveResolution(CallExpr* call) {
+  if (call->isPrimitive(PRIM_MOVE)) {
+    if (CallExpr* rhsCall = toCallExpr(call->get(2))) {
+      if (rhsCall->isPrimitive(PRIM_ZIP_EXPAND_ITERATOR_INDEX)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 static void resolveMove(CallExpr* call) {
   if (call->id == breakOnResolveID) {
     gdbShouldBreakHere();
   }
 
+  if (shouldDelayMoveResolution(call)) {
+    return;
+  }
 
   if (moveIsAcceptable(call) == false) {
     // NB: This call will not return
@@ -8609,6 +8644,10 @@ static Expr* resolveTypeOrParamExpr(Expr* expr) {
 
 void resolveBlockStmt(BlockStmt* blockStmt) {
   for_exprs_postorder(expr, blockStmt) {
+    if (blockStmt->id == 433299) {
+      std::cout << "IN HERE\n";
+      nprint_view(expr);
+    }
     expr = resolveExpr(expr);
     INT_ASSERT(expr != NULL);
   }
@@ -8658,6 +8697,8 @@ static CallExpr*   getFreeIteratorPlaceholder(ForLoop* loop) {
 }
 
 static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
+  SET_LINENO(loop);
+
   if (CallExpr* zipCall = loop->zipCallGet()) {
     INT_ASSERT(zipCall->isPrimitive(PRIM_ZIP));
     if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
@@ -8716,6 +8757,31 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
         prevEndOfStatement->remove();
       }
 
+      int iterandIdx = 1;
+      for_alist(expr, loop->body) {
+        if (CallExpr* call = toCallExpr(expr)) {
+          if (call->isPrimitive(PRIM_MOVE)) {
+            if (CallExpr* rhsCall = toCallExpr(call->get(2))) {
+              if (rhsCall->isPrimitive(PRIM_ZIP_EXPAND_ITERATOR_INDEX)) {
+                rhsCall->replace(new CallExpr("iteratorIndex",
+                                              zipCall->get(iterandIdx++)->copy()));
+                // call will be visited in order later. So, no need to resolve
+                // here, yet.
+                //call = toCallExpr(resolveExpr(call));
+                //INT_ASSERT(call);
+              }
+            }
+          }
+        }
+
+        if (iterandIdx > zipCall->numActuals()) {
+          break;
+        }
+      }
+
+      if (iterandIdx <= zipCall->numActuals()) {
+        INT_FATAL("Not enough iteratorIndex placeholders in the loop body");
+      }
     }
 
     if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
