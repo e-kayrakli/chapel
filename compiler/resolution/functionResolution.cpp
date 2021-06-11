@@ -8696,6 +8696,142 @@ static CallExpr*   getFreeIteratorPlaceholder(ForLoop* loop) {
   return NULL;
 }
 
+BlockStmt* createZipExpansionBlock(ForLoop* loop) {
+  Expr* cleanupDefer = loop->prev;
+  INT_ASSERT(isDeferStmt(cleanupDefer));
+
+  BlockStmt* expansionBlock = new BlockStmt(BLOCK_SCOPELESS);
+  cleanupDefer->insertBefore(expansionBlock);
+  CallExpr* noop = new CallExpr(PRIM_NOOP);
+  expansionBlock->insertAtTail(noop);
+
+  return expansionBlock;
+
+}
+
+void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock) {
+  INT_ASSERT(zipCall->isPrimitive(PRIM_ZIP));
+
+  ForLoop* loop = toForLoop(zipCall->parentExpr);
+
+  for_actuals(actual, zipCall) {
+    VarSymbol* iterTemp = newTemp("_iterator");
+    Expr* actualCopy = actual->copy();
+    actual->replace(new SymExpr(iterTemp));
+
+    iterTemp->addFlag(FLAG_EXPR_TEMP);
+    iterTemp->addFlag(FLAG_MAYBE_PARAM);
+    iterTemp->addFlag(FLAG_MAYBE_TYPE);
+
+    expansionBlock->insertAtTail(new DefExpr(iterTemp));
+    expansionBlock->insertAtTail(new CallExpr(PRIM_MOVE, iterTemp, new CallExpr("_getIterator",
+                                                                                actualCopy)));
+
+    tryToReplaceWithDirectRangeIterator(actualCopy);
+
+    //iterators.push_back(iterTemp);
+  }
+
+  normalize(expansionBlock);
+
+  if (CallExpr* freeIterPlaceholder = getFreeIteratorPlaceholder(loop)) {
+    for_actuals(actual, zipCall) {
+      freeIterPlaceholder->insertBefore(new CallExpr("_freeIterator",
+                                                     actual->copy()));
+      freeIterPlaceholder->insertBefore(new CallExpr(PRIM_END_OF_STATEMENT,
+                                                     actual->copy()));
+    }
+    CallExpr* oldEndOfStatement = toCallExpr(freeIterPlaceholder->next);
+    if (oldEndOfStatement) {
+      INT_ASSERT(oldEndOfStatement->isPrimitive(PRIM_END_OF_STATEMENT));
+      oldEndOfStatement->remove();
+    }
+
+    freeIterPlaceholder->remove();
+  }
+  
+  CallExpr* indexCall = toCallExpr(loop->indexGet());
+  INT_ASSERT(indexCall);
+  INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
+
+  Symbol* packedIndex = NULL;
+  if (indexCall->numActuals() != zipCall->numActuals()) {
+    // this is only acceptable if indexCall has only one argument. And that
+    // would mean we'll need to pack the indices into a tuple in the loop
+    // body
+
+    if (indexCall->numActuals() == 1) {
+      packedIndex = toSymExpr(indexCall->argList.only())->symbol();
+    }
+    else {
+      INT_FATAL("The number of indices is not right for this zippered loop");
+    }
+  }
+
+
+
+  int iterandIdx = 1;
+  for_alist(expr, loop->body) {
+    if (CallExpr* call = toCallExpr(expr)) {
+      if (call->isPrimitive(PRIM_MOVE)) {
+        if (CallExpr* rhsCall = toCallExpr(call->get(2))) {
+          if (rhsCall->isPrimitive(PRIM_ZIP_EXPAND_ITERATOR_INDEX)) {
+            if (packedIndex) {
+              indexCall->get(1)->remove();
+              CallExpr* usrTupleBuild = new CallExpr("_build_tuple");
+
+              // get def point of the user's index
+              Expr* anchor = packedIndex->defPoint;
+              // before that add new defs of temp indices, and put them in
+              // zip index call
+              for_actuals(actual, zipCall) {
+
+                char idxTempName[32];
+                snprintf(idxTempName, 32, "chpl_indexTemp_%d", iterandIdx-1);
+                VarSymbol* idxTemp = newTemp(idxTempName);
+                DefExpr* idxDef = new DefExpr(idxTemp);
+                CallExpr* idxMove = new CallExpr(PRIM_MOVE,
+                                                 new SymExpr(idxTemp),
+                                                 new CallExpr("iteratorIndex",
+                                                              actual->copy()));
+
+                anchor->insertBefore(idxDef);
+                anchor->insertBefore(idxMove);
+
+                usrTupleBuild->insertAtTail(new SymExpr(idxTemp));
+                indexCall->insertAtTail(new SymExpr(idxTemp));
+
+                iterandIdx += 1;
+              }
+              // finally replace this place holder with a build tuple call
+              // on compiler indices
+              rhsCall->replace(usrTupleBuild);
+
+            }
+            else {
+              rhsCall->replace(new CallExpr("iteratorIndex",
+                                            zipCall->get(iterandIdx++)->copy()));
+            }
+            // call will be visited in order later. So, no need to resolve
+            // here, yet.
+            //call = toCallExpr(resolveExpr(call));
+            //INT_ASSERT(call);
+          }
+        }
+      }
+    }
+
+    if (iterandIdx > zipCall->numActuals()) {
+      break;
+    }
+  }
+
+  if (iterandIdx <= zipCall->numActuals()) {
+    INT_FATAL("Not enough iteratorIndex placeholders in the loop body");
+  }
+
+}
+
 static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
   SET_LINENO(loop);
 
@@ -8709,135 +8845,16 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
       INT_ASSERT(zipCall->numActuals() == 1);
       INT_ASSERT(argCall->isPrimitive(PRIM_TUPLE_EXPAND));
 
-      //VarSymbol* tupleSym = toVarSymbol(toSymExpr(argCall->get(1))->symbol());
+      BlockStmt* expansionBlock = createZipExpansionBlock(loop);
+      CallExpr* noop = toCallExpr(expansionBlock->body.only());
 
-      Expr* cleanupDefer = loop->prev;
-      INT_ASSERT(isDeferStmt(cleanupDefer));
+      INT_ASSERT(noop);
 
-      BlockStmt* expansionBlock = new BlockStmt(BLOCK_SCOPELESS);
-      cleanupDefer->insertBefore(expansionBlock);
-      CallExpr* noop = new CallExpr(PRIM_NOOP);
-      expansionBlock->insertAtTail(noop);
-
-      //resolveExpr(argCall);
       resolveTupleExpand(argCall, noop);
 
-      for_actuals(actual, zipCall) {
-        VarSymbol* iterTemp = newTemp("_iterator");
-        Expr* actualCopy = actual->copy();
-        actual->replace(new SymExpr(iterTemp));
+      adjustLoopAfterZipExpansion(zipCall, expansionBlock);
 
-        iterTemp->addFlag(FLAG_EXPR_TEMP);
-        iterTemp->addFlag(FLAG_MAYBE_PARAM);
-        iterTemp->addFlag(FLAG_MAYBE_TYPE);
-
-        expansionBlock->insertAtTail(new DefExpr(iterTemp));
-        expansionBlock->insertAtTail(new CallExpr(PRIM_MOVE, iterTemp, new CallExpr("_getIterator",
-                                                                                    actualCopy)));
-
-        tryToReplaceWithDirectRangeIterator(actualCopy);
-
-        //iterators.push_back(iterTemp);
-      }
-
-      normalize(expansionBlock);
       resolveBlockStmt(expansionBlock);
-
-      if (CallExpr* freeIterPlaceholder = getFreeIteratorPlaceholder(loop)) {
-        for_actuals(actual, zipCall) {
-          freeIterPlaceholder->insertBefore(new CallExpr("_freeIterator",
-                                                         actual->copy()));
-          freeIterPlaceholder->insertBefore(new CallExpr(PRIM_END_OF_STATEMENT,
-                                                         actual->copy()));
-        }
-        CallExpr* oldEndOfStatement = toCallExpr(freeIterPlaceholder->next);
-        if (oldEndOfStatement) {
-          INT_ASSERT(oldEndOfStatement->isPrimitive(PRIM_END_OF_STATEMENT));
-          oldEndOfStatement->remove();
-        }
-
-        freeIterPlaceholder->remove();
-      }
-      
-      CallExpr* indexCall = toCallExpr(loop->indexGet());
-      INT_ASSERT(indexCall);
-      INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
-
-      Symbol* packedIndex = NULL;
-      if (indexCall->numActuals() != zipCall->numActuals()) {
-        // this is only acceptable if indexCall has only one argument. And that
-        // would mean we'll need to pack the indices into a tuple in the loop
-        // body
-
-        if (indexCall->numActuals() == 1) {
-          packedIndex = toSymExpr(indexCall->argList.only())->symbol();
-        }
-        else {
-          INT_FATAL("The number of indices is not right for this zippered loop");
-        }
-      }
-
-
-
-      int iterandIdx = 1;
-      for_alist(expr, loop->body) {
-        if (CallExpr* call = toCallExpr(expr)) {
-          if (call->isPrimitive(PRIM_MOVE)) {
-            if (CallExpr* rhsCall = toCallExpr(call->get(2))) {
-              if (rhsCall->isPrimitive(PRIM_ZIP_EXPAND_ITERATOR_INDEX)) {
-                if (packedIndex) {
-                  indexCall->get(1)->remove();
-                  CallExpr* usrTupleBuild = new CallExpr("_build_tuple");
-
-                  // get def point of the user's index
-                  Expr* anchor = packedIndex->defPoint;
-                  // before that add new defs of temp indices, and put them in
-                  // zip index call
-                  for_actuals(actual, zipCall) {
-
-                    char idxTempName[32];
-                    snprintf(idxTempName, 32, "chpl_indexTemp_%d", iterandIdx-1);
-                    VarSymbol* idxTemp = newTemp(idxTempName);
-                    DefExpr* idxDef = new DefExpr(idxTemp);
-                    CallExpr* idxMove = new CallExpr(PRIM_MOVE,
-                                                     new SymExpr(idxTemp),
-                                                     new CallExpr("iteratorIndex",
-                                                                  actual->copy()));
-
-                    anchor->insertBefore(idxDef);
-                    anchor->insertBefore(idxMove);
-
-                    usrTupleBuild->insertAtTail(new SymExpr(idxTemp));
-                    indexCall->insertAtTail(new SymExpr(idxTemp));
-
-                    iterandIdx += 1;
-                  }
-                  // finally replace this place holder with a build tuple call
-                  // on compiler indices
-                  rhsCall->replace(usrTupleBuild);
-
-                }
-                else {
-                  rhsCall->replace(new CallExpr("iteratorIndex",
-                                                zipCall->get(iterandIdx++)->copy()));
-                }
-                // call will be visited in order later. So, no need to resolve
-                // here, yet.
-                //call = toCallExpr(resolveExpr(call));
-                //INT_ASSERT(call);
-              }
-            }
-          }
-        }
-
-        if (iterandIdx > zipCall->numActuals()) {
-          break;
-        }
-      }
-
-      if (iterandIdx <= zipCall->numActuals()) {
-        INT_FATAL("Not enough iteratorIndex placeholders in the loop body");
-      }
     }
 
     if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {

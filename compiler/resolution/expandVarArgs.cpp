@@ -24,6 +24,7 @@
 #include "astutil.h"
 #include "callInfo.h"
 #include "expr.h"
+#include "ForLoop.h"
 #include "PartialCopyData.h"
 #include "passes.h"
 #include "resolution.h"
@@ -713,6 +714,11 @@ static void substituteVarargTupleRefs(BlockStmt*     block,
   for_vector(SymExpr, se, symExprs) {
     if (se->symbol() == formal) {
       if (CallExpr* parent = toCallExpr(se->parentExpr)) {
+
+        if (strcmp(parent->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
+
+        }
+
         SET_LINENO(parent);
 
         if (parent->isPrimitive(PRIM_TUPLE_EXPAND) == true) {
@@ -721,8 +727,15 @@ static void substituteVarargTupleRefs(BlockStmt*     block,
             parent->insertBefore(new SymExpr(arg));
           }
 
+          CallExpr* parentCall = toCallExpr(parent->parentExpr);
+
           parent->remove();
 
+          if (parentCall && parentCall->isPrimitive(PRIM_ZIP)) {
+            ForLoop* parentFor = toForLoop(parentCall->parentExpr);
+            BlockStmt* expansionBlock = createZipExpansionBlock(parentFor);
+            adjustLoopAfterZipExpansion(parentCall, expansionBlock);
+          }
         } else {
           int idxNum = varargAccessIndex(se, parent, numArgs);
           if (idxNum != -1) {

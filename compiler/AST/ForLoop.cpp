@@ -473,7 +473,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
     BlockStmt *deferBlock = new BlockStmt();
     if (zipOverTupleExpansion) {
       INT_ASSERT(tupExpr);
-      deferBlock->insertAtTail(new CallExpr(PRIM_ZIP_EXPAND_FREE_ITERATOR, tupExpr->copy()));
+      deferBlock->insertAtTail(new CallExpr(PRIM_ZIP_EXPAND_FREE_ITERATOR));
     }
     else {
       for_vector (VarSymbol, iterSym, iterators) {
@@ -755,23 +755,23 @@ Expr* ForLoop::indexGet() const
 
 SymExpr* ForLoop::iteratorGet() const
 {
-  if (mIterator != NULL) {
+  //if (mIterator != NULL) {
     return mIterator;
-  }
-  else if (mZipCall != NULL) {
-    if (SymExpr *leadIterator = toSymExpr(mZipCall->get(1))) {
-      return leadIterator;
-    }
-    else if (CallExpr *tupExp = toCallExpr(mZipCall->get(1))) {
-      INT_ASSERT(tupExp->isPrimitive(PRIM_TUPLE_EXPAND));
-      return toSymExpr(tupExp->argList.only());
-    }
+  //}
+  //else if (mZipCall != NULL) {
+    //if (SymExpr *leadIterator = toSymExpr(mZipCall->get(1))) {
+      //return leadIterator;
+    //}
+    //else if (CallExpr *tupExp = toCallExpr(mZipCall->get(1))) {
+      //INT_ASSERT(tupExp->isPrimitive(PRIM_TUPLE_EXPAND));
+      //return toSymExpr(tupExp->argList.only());
+    //}
 
-    INT_FATAL("Malformed zip call in ForLoop");
-  }
+    //INT_FATAL("Malformed zip call in ForLoop");
+  //}
   
   //INT_FATAL("Malformed ForLoop");
-  return NULL;
+  //return NULL;
 }
 
 bool ForLoop::zipperedGet() const

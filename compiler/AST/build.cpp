@@ -1009,7 +1009,7 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
         if (iterators.size() == 0) {
           CallExpr* initCall;
           if (zipOverTupleExpansion) {
-            initCall = new CallExpr(PRIM_ZIP_EXPAND_ITERATOR_INDEX, init->copy(), new_IntSymbol(i));
+            initCall = new CallExpr(PRIM_ZIP_EXPAND_ITERATOR_INDEX);
           }
           else {
             initCall = new CallExpr(init->copy(), new_IntSymbol(i));

@@ -125,7 +125,12 @@ void BasicBlock::buildBasicBlocks(FnSymbol* fn, Expr* stmt, bool mark) {
 
       } else if (ForLoop* forLoop = toForLoop(stmt)) {
         append(forLoop->indexGet(),    true);
-        append(forLoop->iteratorGet(), true);
+        if (Expr* iterator = forLoop->iteratorGet()) {
+          append(iterator, true);
+        }
+        if (Expr* zipCall = forLoop->zipCallGet()) {
+          append(zipCall, true);
+        }
 
       // PARAM_LOOP
       } else {

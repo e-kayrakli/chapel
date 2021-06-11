@@ -143,6 +143,8 @@ private:
 };
 
 void tryToReplaceWithDirectRangeIterator(Expr* iteratorExpr);
+BlockStmt* createZipExpansionBlock(ForLoop* loop);
+void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock);
 
 
 
