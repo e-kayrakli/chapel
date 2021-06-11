@@ -8763,14 +8763,14 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
       INT_ASSERT(indexCall);
       INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
 
-      bool packIndices = false;
+      Symbol* packedIndex = NULL;
       if (indexCall->numActuals() != zipCall->numActuals()) {
         // this is only acceptable if indexCall has only one argument. And that
         // would mean we'll need to pack the indices into a tuple in the loop
         // body
 
         if (indexCall->numActuals() == 1) {
-          packIndices = true;
+          packedIndex = toSymExpr(indexCall->argList.only())->symbol();
         }
         else {
           INT_FATAL("The number of indices is not right for this zippered loop");
@@ -8785,17 +8785,36 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
           if (call->isPrimitive(PRIM_MOVE)) {
             if (CallExpr* rhsCall = toCallExpr(call->get(2))) {
               if (rhsCall->isPrimitive(PRIM_ZIP_EXPAND_ITERATOR_INDEX)) {
-                if (packIndices) {
+                if (packedIndex) {
+                  indexCall->get(1)->remove();
+                  CallExpr* usrTupleBuild = new CallExpr("_build_tuple");
 
                   // get def point of the user's index
-                  //
+                  Expr* anchor = packedIndex->defPoint;
                   // before that add new defs of temp indices, and put them in
                   // zip index call
-                  //
-                  // maybe keep the defexprs and initialization seperate
-                  //
+                  for_actuals(actual, zipCall) {
+
+                    char idxTempName[32];
+                    snprintf(idxTempName, 32, "chpl_indexTemp_%d", iterandIdx-1);
+                    VarSymbol* idxTemp = newTemp(idxTempName);
+                    DefExpr* idxDef = new DefExpr(idxTemp);
+                    CallExpr* idxMove = new CallExpr(PRIM_MOVE,
+                                                     new SymExpr(idxTemp),
+                                                     new CallExpr("iteratorIndex",
+                                                                  actual->copy()));
+
+                    anchor->insertBefore(idxDef);
+                    anchor->insertBefore(idxMove);
+
+                    usrTupleBuild->insertAtTail(new SymExpr(idxTemp));
+                    indexCall->insertAtTail(new SymExpr(idxTemp));
+
+                    iterandIdx += 1;
+                  }
                   // finally replace this place holder with a build tuple call
                   // on compiler indices
+                  rhsCall->replace(usrTupleBuild);
 
                 }
                 else {

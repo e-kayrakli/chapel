@@ -395,6 +395,8 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
         userIdxSetup = new BlockStmt(BLOCK_SCOPELESS);
 
 
+
+        // TODO should this go to loop body?
         CallExpr* tupTypeBuilder = new CallExpr("_build_tuple");
         CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, new UnresolvedSymExpr(userIdx),
                                              tupTypeBuilder);
