@@ -826,9 +826,19 @@ bool ImplicitThrowsVisitor::enterCallExpr(CallExpr* node) {
 bool ImplicitThrowsVisitor::enterForLoop (ForLoop*  node) {
   // TODO
 
-  SymExpr* it = node->iteratorGet();
+  FnSymbol* itFn = NULL;
 
-  FnSymbol* itFn = getTheIteratorFn(it->symbol()->type);
+  if (SymExpr* it = node->iteratorGet()) {
+    itFn = getTheIteratorFn(it->symbol()->type);
+  }
+  else if (CallExpr* zipCall = node->zipCallGet()) {
+    SymExpr* firstSymExpr = toSymExpr(zipCall->get(1));
+    INT_ASSERT(firstSymExpr);
+    itFn = getTheIteratorFn(firstSymExpr->symbol()->type);
+  }
+  else {
+    INT_FATAL("Malformed ForLoop");
+  }
 
   handleCallToFunction(itFn, node);
 
