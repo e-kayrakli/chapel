@@ -8723,7 +8723,7 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
       resolveTupleExpand(argCall, noop);
 
       for_actuals(actual, zipCall) {
-        VarSymbol* iterTemp = newTemp("iterTemp");
+        VarSymbol* iterTemp = newTemp("_iterator");
         Expr* actualCopy = actual->copy();
         actual->replace(new SymExpr(iterTemp));
 
@@ -8731,8 +8731,9 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
         iterTemp->addFlag(FLAG_MAYBE_PARAM);
         iterTemp->addFlag(FLAG_MAYBE_TYPE);
 
-        expansionBlock->insertAtTail(new DefExpr(iterTemp, new CallExpr("_getIterator",
-                                                                        actualCopy)));
+        expansionBlock->insertAtTail(new DefExpr(iterTemp));
+        expansionBlock->insertAtTail(new CallExpr(PRIM_MOVE, iterTemp, new CallExpr("_getIterator",
+                                                                                    actualCopy)));
 
         tryToReplaceWithDirectRangeIterator(actualCopy);
 
@@ -8749,13 +8750,34 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
           freeIterPlaceholder->insertBefore(new CallExpr(PRIM_END_OF_STATEMENT,
                                                          actual->copy()));
         }
-        CallExpr* prevEndOfStatement = toCallExpr(freeIterPlaceholder->next);
-        INT_ASSERT(prevEndOfStatement);
-        INT_ASSERT(prevEndOfStatement->isPrimitive(PRIM_END_OF_STATEMENT));
+        CallExpr* oldEndOfStatement = toCallExpr(freeIterPlaceholder->next);
+        if (oldEndOfStatement) {
+          INT_ASSERT(oldEndOfStatement->isPrimitive(PRIM_END_OF_STATEMENT));
+          oldEndOfStatement->remove();
+        }
 
         freeIterPlaceholder->remove();
-        prevEndOfStatement->remove();
       }
+      
+      CallExpr* indexCall = toCallExpr(loop->indexGet());
+      INT_ASSERT(indexCall);
+      INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
+
+      bool packIndices = false;
+      if (indexCall->numActuals() != zipCall->numActuals()) {
+        // this is only acceptable if indexCall has only one argument. And that
+        // would mean we'll need to pack the indices into a tuple in the loop
+        // body
+
+        if (indexCall->numActuals() == 1) {
+          packIndices = true;
+        }
+        else {
+          INT_FATAL("The number of indices is not right for this zippered loop");
+        }
+      }
+
+
 
       int iterandIdx = 1;
       for_alist(expr, loop->body) {
@@ -8763,8 +8785,23 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
           if (call->isPrimitive(PRIM_MOVE)) {
             if (CallExpr* rhsCall = toCallExpr(call->get(2))) {
               if (rhsCall->isPrimitive(PRIM_ZIP_EXPAND_ITERATOR_INDEX)) {
-                rhsCall->replace(new CallExpr("iteratorIndex",
-                                              zipCall->get(iterandIdx++)->copy()));
+                if (packIndices) {
+
+                  // get def point of the user's index
+                  //
+                  // before that add new defs of temp indices, and put them in
+                  // zip index call
+                  //
+                  // maybe keep the defexprs and initialization seperate
+                  //
+                  // finally replace this place holder with a build tuple call
+                  // on compiler indices
+
+                }
+                else {
+                  rhsCall->replace(new CallExpr("iteratorIndex",
+                                                zipCall->get(iterandIdx++)->copy()));
+                }
                 // call will be visited in order later. So, no need to resolve
                 // here, yet.
                 //call = toCallExpr(resolveExpr(call));

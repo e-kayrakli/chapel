@@ -325,8 +325,9 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
             //retval->insertAtTail(new CallExpr("move", iterTemp,
                                                     //new CallExpr("_getIterator",
                                                                  //actualCopy)));
-            retval->insertAtTail(new DefExpr(iterTemp, new CallExpr("_getIterator",
-                                                                    actualCopy)));
+            retval->insertAtTail(new DefExpr(iterTemp));
+            retval->insertAtTail(new CallExpr(PRIM_MOVE, iterTemp, new CallExpr("_getIterator",
+                                                                                actualCopy)));
 
             tryToReplaceWithDirectRangeIterator(actualCopy);
 
@@ -394,8 +395,6 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
         userIdxSetup = new BlockStmt(BLOCK_SCOPELESS);
 
 
-
-        // TODO should this go to loop body?
         CallExpr* tupTypeBuilder = new CallExpr("_build_tuple");
         CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, new UnresolvedSymExpr(userIdx),
                                              tupTypeBuilder);
