@@ -1024,6 +1024,10 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
                                                 iterators,
                                                 coforall,
                                                 zipOverTupleExpansion);
+          BlockStmt* typeBlock = new BlockStmt(BLOCK_TYPE);
+          insertAfter->insertAfter(typeBlock);
+          typeBlock->insertAtTail(insertAfter->remove());
+          insertAfter = typeBlock;
         }
         i++;
       }
