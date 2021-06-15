@@ -221,6 +221,23 @@ static void standardizeForLoopIndicesAndIteration(Expr*& indices,
 *                                                                           *
 ************************************* | ************************************/
 
+static UnresolvedSymExpr* getUserIndexForExpansion(ForLoop* loop, Expr* indices) {
+  if (CallExpr* indexCall = toCallExpr(indices)) {
+    INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
+    if (indexCall->numActuals() == 1) {
+      if (CallExpr* zipCall = toCallExpr(loop->zipCallGet())) {
+        INT_ASSERT(zipCall->isPrimitive(PRIM_ZIP));
+        if (zipCall->numActuals() > 1) {
+          if (UnresolvedSymExpr* ret = toUnresolvedSymExpr(indexCall->argList.only())) {
+            return ret;
+          }
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
 BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
                           Expr*      iteratorExpr,
                           BlockStmt* body,
@@ -380,13 +397,16 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
   checkIndices(indices);
 
+  if (strcmp("/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl", loop->fname()) == 0) {
+
+  }
   //if (loop->inTest()) {
   if (loop->inTest() && zippered && zipArgsAreExplicit) {
     //INT_ASSERT(iterators.size() > 0);
 
     BlockStmt* userIdxSetup = NULL;
     //DefExpr* userIdxDef = NULL;
-    if (UnresolvedSymExpr* idxSE = toUnresolvedSymExpr(indices)) {
+    if (UnresolvedSymExpr* idxSE = getUserIndexForExpansion(loop, indices)) {
       if (iterators.size() > 1) {
         // zippering with a tuple index
         int i;
@@ -396,7 +416,6 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
 
 
-        // TODO should this go to loop body?
         CallExpr* tupTypeBuilder = new CallExpr("_build_tuple");
         CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, new UnresolvedSymExpr(userIdx),
                                              tupTypeBuilder);
