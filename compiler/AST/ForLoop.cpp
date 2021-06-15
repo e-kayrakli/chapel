@@ -221,7 +221,7 @@ static void standardizeForLoopIndicesAndIteration(Expr*& indices,
 *                                                                           *
 ************************************* | ************************************/
 
-static UnresolvedSymExpr* getUserIndexForExpansion(ForLoop* loop, Expr* indices) {
+static Expr* getUserIndexForExpansion(ForLoop* loop, Expr* indices) {
   if (CallExpr* indexCall = toCallExpr(indices)) {
     INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
     if (indexCall->numActuals() == 1) {
@@ -230,6 +230,12 @@ static UnresolvedSymExpr* getUserIndexForExpansion(ForLoop* loop, Expr* indices)
         if (zipCall->numActuals() > 1) {
           if (UnresolvedSymExpr* ret = toUnresolvedSymExpr(indexCall->argList.only())) {
             return ret;
+          }
+          else if (SymExpr* ret = toSymExpr(indexCall->argList.only())) {
+            return ret;
+          }
+          else {
+            INT_FATAL("Malformed for loop");
           }
         }
       }
@@ -406,20 +412,24 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
     BlockStmt* userIdxSetup = NULL;
     //DefExpr* userIdxDef = NULL;
-    if (UnresolvedSymExpr* idxSE = getUserIndexForExpansion(loop, indices)) {
+    if (Expr* idxSE = getUserIndexForExpansion(loop, indices)) {
       if (iterators.size() > 1) {
         // zippering with a tuple index
         int i;
 
-        const char* userIdx= idxSE->unresolved;
+        //const char* userIdx= idxSE->unresolved;
         userIdxSetup = new BlockStmt(BLOCK_SCOPELESS);
 
 
 
         CallExpr* tupTypeBuilder = new CallExpr("_build_tuple");
-        CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, new UnresolvedSymExpr(userIdx),
+        CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, idxSE->copy(),
                                              tupTypeBuilder);
-        VarSymbol* userIdxSym = new VarSymbol(userIdx);
+        VarSymbol* userIdxSym = isSymExpr(idxSE) ? toVarSymbol(toSymExpr(idxSE)->symbol()) :
+                                                   new VarSymbol(toUnresolvedSymExpr(idxSE)->unresolved);
+
+        INT_ASSERT(userIdxSym);
+
         userIdxSym->addFlag(FLAG_INDEX_VAR);
         userIdxSym->addFlag(FLAG_INSERT_AUTO_DESTROY);
 
@@ -442,7 +452,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
           //anchor = idxDef;
 
           CallExpr *setTupMem = new CallExpr(PRIM_SET_SVEC_MEMBER,
-                                             new UnresolvedSymExpr(userIdx),
+                                             idxSE->copy(),
                                              new_IntSymbol(i),
                                              new UnresolvedSymExpr(idxTempName));
 
