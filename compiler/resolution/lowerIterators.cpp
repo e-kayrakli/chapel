@@ -2609,6 +2609,8 @@ expandForLoop(ForLoop* forLoop) {
     // scope to another if done in mid-transformation.
     CForLoop* cforLoop = CForLoop::buildWithBodyFrom(forLoop);
 
+    // hoist def points outside the loop if they are in the body
+
     Symbol* firstIterator = NULL;
     if (forLoop->zipperedGet()) {
       firstIterator = toSymExpr(forLoop->zipCallGet()->get(1))->symbol();
@@ -2628,6 +2630,15 @@ expandForLoop(ForLoop* forLoop) {
     cforLoop->loopHeaderSet(initBlock, testBlock, incrBlock);
 
     forLoop->replace(cforLoop);
+
+    std::vector<DefExpr*> defs;
+    collectDefExprs(cforLoop, defs);
+
+    for_vector (DefExpr, defExpr, defs) {
+      if (defExpr->sym->hasFlag(FLAG_FOLLOWER_INDEX)) {
+        cforLoop->insertBefore(defExpr->remove());
+      }
+    }
   }
 }
 

@@ -872,28 +872,52 @@ static void addParIdxVarsAndRestruct(ForallStmt* fs, VarSymbol* parIdx) {
   // Ex. test/functions/ferguson/ref-pair/iterating-over-arrays.chpl
 
   // The induction variable of the follower loop.
-  VarSymbol* followIdx = NULL;
+  //VarSymbol* followIdx = NULL;
   AList& indvars = fs->inductionVariables();
   // TODO do we alrady do this, and can we remove the following block?
-  if (!fs->inTest()) {
-    followIdx = newTemp("chpl__followIdx");
-    userLoopBody->insertBefore(new DefExpr(followIdx));
+  //if (!fs->inTest()) {
+    //followIdx = newTemp("chpl__followIdx");
+    //userLoopBody->insertBefore(new DefExpr(followIdx));
 
-    int idx = indvars.length;
+    //int idx = indvars.length;
 
-    if (idx == 1) {
-      // If only one induction var, treat as non-zippered.
-      fs->setNotZippered();
-      userLoopBody->insertAtHead("'move'(%S,%S)",
-                                 toDefExpr(indvars.head)->sym, followIdx);
+    //if (idx == 1) {
+      //// If only one induction var, treat as non-zippered.
+      //fs->setNotZippered();
+      //userLoopBody->insertAtHead("'move'(%S,%S)",
+                                 //toDefExpr(indvars.head)->sym, followIdx);
 
-    }
-    else {
-      for_alist_backward(def, indvars)
-        userLoopBody->insertAtHead("'move'(%S,%S(%S))", toDefExpr(def)->sym,
-                                   followIdx, new_IntSymbol(--idx));
-    }
-  }
+    //}
+    //else {
+      //for_alist_backward(def, indvars)
+        //userLoopBody->insertAtHead("'move'(%S,%S(%S))", toDefExpr(def)->sym,
+                                   //followIdx, new_IntSymbol(--idx));
+    //}
+  //}
+  //else {
+    //int idx = indvars.length;
+
+    //if (idx == 1) {
+      //fs->setNotZippered();
+      //VarSymbol* followIdx = newTemp("chpl__followIdx");
+      //userLoopBody->insertBefore(new DefExpr(followIdx));
+      //userLoopBody->insertAtHead("'move'(%S,%S)",
+                                 //toDefExpr(indvars.head)->sym, followIdx);
+    //}
+    //else {
+      //for_alist_backward(def, indvars) {
+        //char followIdxName[32];
+        //snprintf(followIdxName, 31, "chpl__followIdx%d", idx-1);
+
+        //VarSymbol* followIdx = newTemp(followIdxName);
+        //userLoopBody->insertBefore(new DefExpr(followIdx));
+
+        //userLoopBody->insertAtHead("'move'(%S,%S(%S))", toDefExpr(def)->sym,
+                                   //followIdx, new_IntSymbol(--idx));
+      //}
+    //}
+
+  //}
   CallExpr* zipIndexCall = new CallExpr(PRIM_ZIP_INDEX);
 
   // Move induction variables' DefExprs to the loop body.
@@ -919,13 +943,13 @@ static void addParIdxVarsAndRestruct(ForallStmt* fs, VarSymbol* parIdx) {
   // Cf. if gotSA, the original forall's induction variable remains that.
   indvars.insertAtHead(new DefExpr(parIdx));
 
-  if (followIdx != NULL) {
-    followIdx->addFlag(FLAG_INDEX_OF_INTEREST);
-    followIdx->addFlag(FLAG_INDEX_VAR);
-    //followIdx->addFlag(FLAG_INSERT_AUTO_DESTROY);
-  }
+  //if (followIdx != NULL) {
+    //followIdx->addFlag(FLAG_INDEX_OF_INTEREST);
+    //followIdx->addFlag(FLAG_INDEX_VAR);
+    ////followIdx->addFlag(FLAG_INSERT_AUTO_DESTROY);
+  //}
 
-  INT_ASSERT(fs->numInductionVars() == 1);
+  //INT_ASSERT(fs->numInductionVars() == 1);
 }
 
 static RetTag iteratorTag(FnSymbol* iterFn) {
@@ -1072,7 +1096,7 @@ static CallExpr *generateFastFollowCheck(Expr *e, bool isStatic) {
 }
 
 static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
-                                  VarSymbol* followIdx, BlockStmt* userBody,
+                                  BlockStmt* userBody,
                                   bool fast) {
   INT_ASSERT(pfs->inTest());
 
@@ -1092,17 +1116,33 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
 
   CallExpr* followerZipCall = new CallExpr(PRIM_ZIP);
 
-  for_actuals (actual, forallZipCall) {
+  //for_actuals (actual, forallZipCall) {
+  for (int i=1 ; i<=numActuals ; i++) {
+    SymExpr* iterand = toSymExpr(forallZipCall->get(i));
+    INT_ASSERT(iterand);
+
     VarSymbol* iterTemp = newTemp("iterTemp");
     iterTemp->addFlag(FLAG_EXPR_TEMP);
     iterTemp->addFlag(FLAG_MAYBE_PARAM);
     iterTemp->addFlag(FLAG_MAYBE_TYPE);
     
-    CallExpr* getFollower = new CallExpr(fnName, actual->copy(), followThis);
+    CallExpr* getFollower = new CallExpr(fnName, iterand->copy(), followThis);
 
+    // TODO split this def expr into def +move to avoid initCopy
     followBlock->insertAtTail(new DefExpr(iterTemp, new CallExpr("_getIterator",
                                                                  getFollower)));
     followerZipCall->insertAtTail(new SymExpr(iterTemp));
+
+    Symbol* followIdx = toSymExpr(forallZipIndexCall->get(i))->symbol();
+    followIdx->addFlag(FLAG_FOLLOWER_INDEX);
+    followIdx->addFlag(FLAG_INDEX_OF_INTEREST);
+
+    if (followIdx->defPoint == NULL) {
+      followBlock->insertAtTail(new DefExpr(followIdx));
+    } else {
+      //followBlock->insertAtTail(followIdx->defPoint);
+    }
+    followBlock->insertAtTail("{TYPE 'move'(%S, iteratorIndex(%S)) }", followIdx, iterTemp);
   }
 
   CallExpr* followerZipIndexCall = forallZipIndexCall->copy();
@@ -1110,20 +1150,21 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
   ForLoop* followLoop = new ForLoop(followerZipIndexCall, followerZipCall,
                                     userBody, /*followerLoop=*/true);
  
-  // followIdx has a defPoint in the non-fast case
-  // and no defPoint in the fast case i.e. for fastFollowIdx.
-  //if (followIdx->defPoint == NULL) {
-    //followBlock->insertAtTail(new DefExpr(followIdx));
-  //} else {
-    //followBlock->insertAtTail(followIdx->defPoint);
-  //}
-  //followBlock->insertAtTail("{TYPE 'move'(%S, iteratorIndex(%S)) }", followIdx, followIter);
+   //followIdx has a defPoint in the non-fast case
+   //and no defPoint in the fast case i.e. for fastFollowIdx.
 
-  std::vector<VarSymbol*> iterators;
-  for_actuals (actual, followerZipCall) {
-    iterators.push_back(toVarSymbol(toSymExpr(actual)->symbol()));
-  }
-  destructureIndicesForZip(followLoop, followerZipIndexCall, NULL, iterators, false, false);
+  //const numIterands = forallZipCall->numActuals();
+  //INT_ASSERT(numIterands == forallZipIndexCall->numActuals());
+
+  //for (int i=1 ; i<=numActuals ; i++) {
+  //}
+
+
+  //std::vector<VarSymbol*> iterators;
+  //for_actuals (actual, followerZipCall) {
+    //iterators.push_back(toVarSymbol(toSymExpr(actual)->symbol()));
+  //}
+  //destructureIndicesForZip(followLoop, followerZipIndexCall, NULL, iterators, false, false);
 
   followBlock->insertAtTail(followLoop);
 
@@ -1131,7 +1172,6 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
 }
 
 static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
-  VarSymbol* leadIdxCopy = parIdxVar(pfs);
   bool       zippered    = false;
   CallExpr*  iterCall = toCallExpr(iterExpr);
 
@@ -1143,8 +1183,8 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
 
   VarSymbol* followIdx = NULL;
   if (!pfs->inTest()) {
-    DefExpr*  followIdxDef = toDefExpr(pfs->loopBody()->body.head->remove());
-    followIdx = toVarSymbol(followIdxDef->sym);
+    //DefExpr*  followIdxDef = toDefExpr(pfs->loopBody()->body.head->remove());
+    //followIdx = toVarSymbol(followIdxDef->sym);
   }
 
   BlockStmt*    userBody = toBlockStmt(pfs->loopBody()->body.tail->remove());
@@ -1172,11 +1212,12 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
 
   Expr* toNormalize = preFS->body.tail;
 
-  if (pfs->inTest()) {
-    followBlock = buildFollowLoop(pfs, iterExpr, followIdx,
+  if (zippered) {
+    followBlock = buildFollowLoop(pfs, iterExpr,
                                   userBody, /*fast=*/false);
   }
   else {
+    VarSymbol* leadIdxCopy = parIdxVar(pfs);
     followBlock = buildFollowLoop(iterRec,
                                   leadIdxCopy,
                                   followIter,
@@ -1250,13 +1291,14 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
 
     adjustPrimsInFastFollowerBody(userBodyForFast);
 
-    if (pfs->inTest()) {
-      fastFollowBlock = buildFollowLoop(pfs, iterExpr, fastFollowIdx,
+    if (zippered) {
+      fastFollowBlock = buildFollowLoop(pfs, iterExpr,
                                         userBodyForFast, /*fast=*/true);
   
 
     }
     else {
+      VarSymbol* leadIdxCopy = parIdxVar(pfs);
       fastFollowBlock = buildFollowLoop(iterRec,
                                         leadIdxCopy,
                                         fastFollowIter,
