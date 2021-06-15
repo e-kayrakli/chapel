@@ -1128,9 +1128,10 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
     
     CallExpr* getFollower = new CallExpr(fnName, iterand->copy(), followThis);
 
-    // TODO split this def expr into def +move to avoid initCopy
-    followBlock->insertAtTail(new DefExpr(iterTemp, new CallExpr("_getIterator",
-                                                                 getFollower)));
+    followBlock->insertAtTail(new DefExpr(iterTemp));
+    followBlock->insertAtTail(new CallExpr(PRIM_MOVE, new SymExpr(iterTemp),
+                                           new CallExpr("_getIterator",
+                                                        getFollower)));
     followerZipCall->insertAtTail(new SymExpr(iterTemp));
 
     Symbol* followIdx = toSymExpr(forallZipIndexCall->get(i))->symbol();
