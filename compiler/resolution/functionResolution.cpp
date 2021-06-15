@@ -8788,7 +8788,7 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
         if (CallExpr* rhsCall = toCallExpr(call->get(2))) {
           if (rhsCall->isPrimitive(PRIM_ZIP_EXPAND_ITERATOR_INDEX)) {
             if (packedIndex) {
-              indexCall->get(1)->remove();
+              indexCall->get(1)->remove(); // why?
               CallExpr* usrTupleBuild = new CallExpr("_build_tuple");
 
               // get def point of the user's index
@@ -8807,7 +8807,7 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
                                                               actual->copy()));
 
                 anchor->insertBefore(idxDef);
-                anchor->insertBefore(idxMove);
+                anchor->insertBefore(new BlockStmt(idxMove, BLOCK_TYPE));
 
                 usrTupleBuild->insertAtTail(new SymExpr(idxTemp));
                 indexCall->insertAtTail(new SymExpr(idxTemp));
@@ -8822,6 +8822,9 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
             else {
               rhsCall->replace(new CallExpr("iteratorIndex",
                                             zipCall->get(iterandIdx++)->copy()));
+              BlockStmt* typeBlock = new BlockStmt(BLOCK_TYPE);
+              call->insertAfter(typeBlock);
+              typeBlock->insertAtTail(call->remove());
             }
             // call will be visited in order later. So, no need to resolve
             // here, yet.
