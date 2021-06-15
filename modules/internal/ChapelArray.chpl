@@ -2965,8 +2965,8 @@ module ChapelArray {
     /* Yield the array elements */
     pragma "reference to const when const this"
     iter these() ref {
-      for i in _value.these() {
-        yield i;
+      for lookForMe in _value.these() {
+        yield lookForMe;
       }
     }
 
@@ -4233,9 +4233,9 @@ module ChapelArray {
           }
 
         } else {
-          [ (aa,bb) in zip(a,b) ] {
-            __primitive("=", aa, __primitive("steal", bb));
-            fixRuntimeType(a.eltType, aa);
+          [ (aaHeyo,bbHeyo) in zip(a,b) ] {
+            __primitive("=", aaHeyo, __primitive("steal", bbHeyo));
+            fixRuntimeType(a.eltType, aaHeyo);
           }
         }
       } else if kind==_tElt.initCopy {

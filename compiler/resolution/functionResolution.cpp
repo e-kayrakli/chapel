@@ -8709,7 +8709,8 @@ BlockStmt* createZipExpansionBlock(ForLoop* loop) {
 
 }
 
-void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock) {
+void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
+                                 bool shouldResolve) {
   INT_ASSERT(zipCall->isPrimitive(PRIM_ZIP));
 
   ForLoop* loop = toForLoop(zipCall->parentExpr);
@@ -8733,6 +8734,9 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock) {
   }
 
   normalize(expansionBlock);
+  if (shouldResolve) {
+    resolveBlockStmt(expansionBlock);
+  };
 
   if (CallExpr* freeIterPlaceholder = getFreeIteratorPlaceholder(loop)) {
     for_actuals(actual, zipCall) {
@@ -8741,6 +8745,7 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock) {
       freeIterPlaceholder->insertBefore(new CallExpr(PRIM_END_OF_STATEMENT,
                                                      actual->copy()));
     }
+
     CallExpr* oldEndOfStatement = toCallExpr(freeIterPlaceholder->next);
     if (oldEndOfStatement) {
       INT_ASSERT(oldEndOfStatement->isPrimitive(PRIM_END_OF_STATEMENT));
@@ -8748,6 +8753,12 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock) {
     }
 
     freeIterPlaceholder->remove();
+
+    DeferStmt* defer = toDeferStmt(loop->prev);
+
+    if (shouldResolve) {
+      resolveBlockStmt(defer->body());
+    }
   }
   
   CallExpr* indexCall = toCallExpr(loop->indexGet());
@@ -8852,9 +8863,8 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
 
       resolveTupleExpand(argCall, noop);
 
-      adjustLoopAfterZipExpansion(zipCall, expansionBlock);
-
-      resolveBlockStmt(expansionBlock);
+      adjustLoopAfterZipExpansion(zipCall, expansionBlock,
+                                  /*shouldResolve=*/ true);
     }
 
     if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {

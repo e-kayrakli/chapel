@@ -1572,9 +1572,9 @@ expandIteratorInline(ForLoop* forLoop) {
     }
 
   } else {
-    SET_LINENO(forLoop);
+    INT_ASSERT(!forLoop->zipperedGet());
 
-    INT_ASSERT(!forLoop->inTest());   // NOT READY YET
+    SET_LINENO(forLoop);
 
     Symbol*       index = toSymExpr(forLoop->indexGet())->symbol();
     BlockStmt*    ibody = iterator->body->copy();
@@ -2046,6 +2046,8 @@ expandBodyForIteratorInline(ForLoop*       forLoop,
                             bool           inTaskFn,
                             TaskFnCopyMap& taskFnCopies,
                             bool&          addErrorArgToCall) {
+
+  INT_ASSERT(!forLoop->zipperedGet());
   bool removeReturn = !inTaskFn;
   std::vector<CallExpr*> bodyCalls;
   collectCallExprs(ibody, bodyCalls);
@@ -2060,9 +2062,6 @@ expandBodyForIteratorInline(ForLoop*       forLoop,
         if (forLoop->isCoforallLoop()) {
           // parallel.cpp wants to know about these when considering whether
           // or not to insert autoCopies
-          if (forLoop->inTest()) {
-            INT_FATAL("Not ready yet");
-          }
           yieldedIndex->addFlag(FLAG_COFORALL_INDEX_VAR);
         }
 
@@ -2227,81 +2226,40 @@ setupSimultaneousIterators(Vec<Symbol*>& iterators,
                            Symbol*       iterator,
                            Symbol*       index,
                            ForLoop*      loop) {
-  if (iterator->type->symbol->hasFlag(FLAG_TUPLE)) {
-    if (loop->inTest()) {
-      INT_FATAL("Not ready yet");
+  if (SymExpr* indexSE   = toSymExpr(loop->indexGet())) {
+    USR_WARN("This shouldn't have happened");
+    VarSymbol*   index     = toVarSymbol(indexSE->symbol());
+    indices.add(index);
+  }
+  else if (CallExpr* indexCall = toCallExpr(loop->indexGet())) {
+    INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
+
+    CallExpr* zipCall = loop->zipCallGet();
+    INT_ASSERT(zipCall);
+
+    const int numActuals = zipCall->numActuals();
+    INT_ASSERT(numActuals == indexCall->numActuals());
+
+    int i;
+    for (i = 1 ; i <= numActuals ; i++) {
+      SymExpr* indexSE   = toSymExpr(indexCall->get(i));
+      INT_ASSERT(indexSE);
+      indices.add(toVarSymbol(indexSE->symbol()));
+
+      SymExpr* iterSE   = toSymExpr(zipCall->get(i));
+      INT_ASSERT(iterSE);
+      iterators.add(toVarSymbol(iterSE->symbol()));
     }
-    AggregateType* iteratorType = toAggregateType(iterator->type);
-    AggregateType* indexType    = toAggregateType(index->type);
 
-    for (int i = 1; i <= iteratorType->fields.length; i++) {
-      Symbol* tmpIterator = newTemp("_iterator", iteratorType->getField(i)->type);
-      Symbol* tmpIndex    = newTemp("_index",    indexType->getField(i)->type);
-
-      loop->insertBefore(new DefExpr(tmpIterator));
-      loop->insertBefore(new CallExpr(PRIM_MOVE,
-                                      tmpIterator,
-                                      new CallExpr(PRIM_GET_MEMBER_VALUE,
-                                                   iterator,
-                                                   iteratorType->getField(i))));
-
-      loop->insertAtHead(new CallExpr(PRIM_SET_MEMBER,
-                                      index,
-                                      indexType->getField(i),
-                                      tmpIndex));
-
-      loop->insertAtHead(new DefExpr(tmpIndex));
-
-      setupSimultaneousIterators(iterators, indices, tmpIterator, tmpIndex, loop);
-    }
-  } else {
-    if (loop->inTest()) {
-      //iterators.add(iterator);
-
-
-      if (SymExpr* indexSE   = toSymExpr(loop->indexGet())) {
-        USR_WARN("This shouldn't have happened");
-        VarSymbol*   index     = toVarSymbol(indexSE->symbol());
-        indices.add(index);
-      }
-      else if (CallExpr* indexCall = toCallExpr(loop->indexGet())) {
-        INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
-
-        CallExpr* zipCall = loop->zipCallGet();
-        INT_ASSERT(zipCall);
-
-        const int numActuals = zipCall->numActuals();
-        INT_ASSERT(numActuals == indexCall->numActuals());
-
-        int i;
-        for (i = 1 ; i <= numActuals ; i++) {
-          SymExpr* indexSE   = toSymExpr(indexCall->get(i));
-          INT_ASSERT(indexSE);
-          indices.add(toVarSymbol(indexSE->symbol()));
-
-          SymExpr* iterSE   = toSymExpr(zipCall->get(i));
-          INT_ASSERT(iterSE);
-          iterators.add(toVarSymbol(iterSE->symbol()));
-        }
-
-        //for_actuals (actual, indexCall) {
-          //if (SymExpr* indexSE   = toSymExpr(actual)) {
-            //VarSymbol*   index     = toVarSymbol(indexSE->symbol());
-            //indices.add(index);
-          //}
-        //}
-      }
-      else {
-        INT_FATAL("Malformed for loop");
-      }
-
-
-
-    }
-    else {
-      iterators.add(iterator);
-      indices.add(index);
-    }
+    //for_actuals (actual, indexCall) {
+    //if (SymExpr* indexSE   = toSymExpr(actual)) {
+    //VarSymbol*   index     = toVarSymbol(indexSE->symbol());
+    //indices.add(index);
+    //}
+    //}
+  }
+  else {
+    INT_FATAL("Malformed for loop");
   }
 }
 
@@ -2401,26 +2359,52 @@ buildIteratorCall(Symbol* ret, int fnid, Symbol* iterator, Vec<Type*>& children)
   return outerBlock;
 }
 
+static void errorIfThrowingIterator(Symbol* iterSym, ForLoop* forLoop) {
+  FnSymbol* iterFn = getTheIteratorFn(iterSym->type);
+  if (iterFn->throwsError()) {
+    // In this event, the error handling pass added a PRIM_CHECK_ERROR
+    // after the call to the iterator function.
+    // Scroll backwards to find the error handling block.
+
+    // TODO: finish this case, see GitHub #7134
+    //       I think we need to use the ForLoop's break label
+
+    USR_FATAL_CONT(forLoop,
+        "throwing non-inlined iterators are not yet supported");
+    USR_PRINT(iterFn, "the invoked iterator is here");
+    USR_STOP();
+  }
+}
+
+static void errorIfHasThrowingIterator(ForLoop* forLoop) {
+  if (forLoop->zipperedGet()) {
+    for_actuals(iterator, forLoop->zipCallGet()) {
+      errorIfThrowingIterator(toSymExpr(iterator)->symbol(), forLoop);
+    }
+  }
+  else {
+    errorIfThrowingIterator(toSymExpr(forLoop->iteratorGet())->symbol(), forLoop);
+  }
+}
+
+
 // Replace a ForLoop with its inline equivalent, if possible.
 // Otherwise, convert it into a C-style for loop.
 // The given forLoop is converted unconditionally.
 static void
 expandForLoop(ForLoop* forLoop) {
-  SymExpr*   se2      = forLoop->iteratorGet();
-  VarSymbol* iterator = toVarSymbol(se2->symbol());
   bool converted = false;
 
   if (!fNoInlineIterators)
   {
-    bool zippered = false;
-    if (forLoop->inTest()) {
-      zippered = forLoop->zipperedGet();
-      if (zippered) {
-        INT_ASSERT(forLoop->zipCallGet());
-        converted = false;
-      }
+    bool zippered = forLoop->zipperedGet();
+    if (zippered) {
+      INT_ASSERT(forLoop->zipCallGet());
+      converted = false;
     }
     else {
+      SymExpr*   se2      = forLoop->iteratorGet();
+      VarSymbol* iterator = toVarSymbol(se2->symbol());
 
       FnSymbol* iterFn = getTheIteratorFn(iterator->type);
       if (iterFn->iteratorInfo                          &&
@@ -2439,9 +2423,9 @@ expandForLoop(ForLoop* forLoop) {
     Vec<Symbol*> iterators;
     Vec<Symbol*> indices;
 
-    if (forLoop->inTest()) {
-      gdbShouldBreakHere();
-    }
+    //if (forLoop->inTest()) {
+      //gdbShouldBreakHere();
+    //}
     // This code handles zippered iterators, dynamic iterators, and any other
     // iterator that cannot be inlined.
 
@@ -2460,35 +2444,22 @@ expandForLoop(ForLoop* forLoop) {
     // In zippered iterators, each clause may contain multiple calls to zip1(),
     // getValue(), etc.  These are inserted in the order shown.
 
-    FnSymbol* iterFn = getTheIteratorFn(iterator->type);
-    if (iterFn->throwsError()) {
-      // In this event, the error handling pass added a PRIM_CHECK_ERROR
-      // after the call to the iterator function.
-      // Scroll backwards to find the error handling block.
-
-      // TODO: finish this case, see GitHub #7134
-      //       I think we need to use the ForLoop's break label
-
-      USR_FATAL_CONT(forLoop,
-        "throwing non-inlined iterators are not yet supported");
-      USR_PRINT(iterFn, "the invoked iterator is here");
-      USR_STOP();
-    }
+    errorIfHasThrowingIterator(forLoop);
 
     BlockStmt*   initBlock = new BlockStmt();
     BlockStmt*   testBlock = NULL;
     BlockStmt*   incrBlock = new BlockStmt();
 
-    VarSymbol* index = NULL;
-    if (forLoop->inTest()) {
-      setupSimultaneousIterators(iterators, indices, iterator, NULL, forLoop);
-    }
-    else {
-      SymExpr*     se1       = toSymExpr(forLoop->indexGet());
-      index = toVarSymbol(se1->symbol());
+    //VarSymbol* index = NULL;
+    //if (forLoop->inTest()) {
+      setupSimultaneousIterators(iterators, indices, NULL, NULL, forLoop);
+    //}
+    //else {
+      //SymExpr*     se1       = toSymExpr(forLoop->indexGet());
+      //index = toVarSymbol(se1->symbol());
 
-      setupSimultaneousIterators(iterators, indices, iterator, index, forLoop);
-    }
+      //setupSimultaneousIterators(iterators, indices, iterator, index, forLoop);
+    //}
 
     bool allOrderIndependent = true;
     // For each iterator we add the zip* functions in the appropriate place and
@@ -2618,8 +2589,8 @@ expandForLoop(ForLoop* forLoop) {
       // do nothing?
     }
     else {
-      if (index != gNone)
-        forLoop->insertAtHead(index->defPoint->remove());
+      //if (index != gNone)
+        //forLoop->insertAtHead(index->defPoint->remove());
     }
 
     // Ensure that the test clause for completely unbounded loops contains
@@ -2638,7 +2609,14 @@ expandForLoop(ForLoop* forLoop) {
     // scope to another if done in mid-transformation.
     CForLoop* cforLoop = CForLoop::buildWithBodyFrom(forLoop);
 
-    addIteratorBreakBlocksJumptable(forLoop, iterator,
+    Symbol* firstIterator = NULL;
+    if (forLoop->zipperedGet()) {
+      firstIterator = toSymExpr(forLoop->zipCallGet()->get(1))->symbol();
+    }
+    else {
+      firstIterator = toSymExpr(forLoop->iteratorGet())->symbol();
+    }
+    addIteratorBreakBlocksJumptable(forLoop, firstIterator,
                                     (BlockStmt*)cforLoop, iterators);
 
     // Even for zippered iterators we only have one conditional test for the
@@ -2665,9 +2643,17 @@ inlineIterators() {
       continue;
 
     if (ForLoop* forLoop = toForLoop(block)) {
-      Symbol*   iterator = toSymExpr(forLoop->iteratorGet())->symbol();
-      FnSymbol* ifn = getTheIteratorFn(iterator);
-      if (ifn->hasFlag(FLAG_INLINE_ITERATOR)) {
+      bool shouldInline = true;
+      if (forLoop->zipperedGet()) {
+        shouldInline = false;
+      }
+      else {
+        Symbol*   iterator = toSymExpr(forLoop->iteratorGet())->symbol();
+        FnSymbol* ifn = getTheIteratorFn(iterator);
+        shouldInline = ifn->hasFlag(FLAG_INLINE_ITERATOR);
+      }
+
+      if (shouldInline) {
         // The Boolean return value from expandIteratorInline() is being
         // ignored here, which means that forLoop might not have been replaced.
         // However, all ForLoops that remain in the tree after the call to

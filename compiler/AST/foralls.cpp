@@ -874,6 +874,7 @@ static void addParIdxVarsAndRestruct(ForallStmt* fs, VarSymbol* parIdx) {
   // The induction variable of the follower loop.
   VarSymbol* followIdx = NULL;
   AList& indvars = fs->inductionVariables();
+  // TODO do we alrady do this, and can we remove the following block?
   if (!fs->inTest()) {
     followIdx = newTemp("chpl__followIdx");
     userLoopBody->insertBefore(new DefExpr(followIdx));

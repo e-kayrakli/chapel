@@ -303,16 +303,17 @@ void gatherLoopDetails(ForLoop*  forLoop,
                        ForLoop*& followerForLoop,
                        std::vector<IteratorDetails>& detailsVector)
 {
-  if (forLoop->inTest()) {
-    gdbShouldBreakHere();
-  }
+  //if (forLoop->inTest()) {
+    //gdbShouldBreakHere();
+  //}
 
   bool isFollower = false;
   bool isLeader = false;
   bool isPar = false;
 
   Symbol* index = NULL;
-  if (!forLoop->inTest()) {
+  //if (!forLoop->inTest()) {
+  if (isForall) {
     SymExpr* indexSE = toSymExpr(forLoop->indexGet());
     INT_ASSERT(indexSE);
 
@@ -349,7 +350,6 @@ void gatherLoopDetails(ForLoop*  forLoop,
   }
 
 
-  Symbol* iterator = forLoop->iteratorGet()->symbol();
 
   bool forall = false;
   bool zippered = false;
@@ -359,6 +359,7 @@ void gatherLoopDetails(ForLoop*  forLoop,
     zippered = forLoop->zipperedGet();
   }
   else {
+    Symbol* iterator = forLoop->iteratorGet()->symbol();
 
     // find the variable marked with "chpl__iter" variable
     // in the loop header.
@@ -390,6 +391,13 @@ void gatherLoopDetails(ForLoop*  forLoop,
   if (!forall) {
     // Handle for loops first
     if (! zippered) {
+      SymExpr* indexSE = toSymExpr(forLoop->indexGet());
+      INT_ASSERT(indexSE);
+
+      index = indexSE->symbol();
+
+      Symbol* iterator = forLoop->iteratorGet()->symbol();
+
       // simple case of serial, non-zippered iteration
       // i.e. a non-zippered for loop
       // Find the PRIM_MOVE setting iterator
@@ -514,51 +522,47 @@ void gatherLoopDetails(ForLoop*  forLoop,
         //   p_followerIterator = _toFollowerZip(call_tmp)
         //   _iterator = _getIteratorZip(p_followerIterator)
 
-        SymExpr* tupleIterator = NULL;
-        CallExpr* call = toCallExpr(findExprProducing(iterator));
-        FnSymbol* calledFn = call?call->resolvedOrVirtualFunction():NULL;
-        if (calledFn && !calledFn->hasFlag(FLAG_BUILD_TUPLE)) {
-          // expecting call is e.g. _getIteratorZip
-          SymExpr* otherSe = toSymExpr(call->get(1));
-          INT_ASSERT(otherSe);
-          CallExpr* otherCall = toCallExpr(findExprProducing(otherSe->symbol()));
-          if (otherCall) {
-            call = otherCall;
-            calledFn = call->resolvedOrVirtualFunction();
-            if (calledFn && !calledFn->hasFlag(FLAG_BUILD_TUPLE)) {
-              // expecting call is e.g. _toFollowerZip
-              SymExpr* anotherSe = toSymExpr(call->get(1));
-              INT_ASSERT(anotherSe);
-              CallExpr* anotherCall =
-                toCallExpr(findExprProducing(anotherSe->symbol()));
-              if (anotherCall) {
-                call = anotherCall;
-              } else {
-                call = NULL;
-                tupleIterator = otherSe;
-              }
-            }
-          } else {
-            call = NULL;
-            tupleIterator = otherSe;
-          }
-        }
+        //SymExpr* tupleIterator = NULL;
+        //CallExpr* call = toCallExpr(findExprProducing(iterator));
+        //FnSymbol* calledFn = call?call->resolvedOrVirtualFunction():NULL;
+        //if (calledFn && !calledFn->hasFlag(FLAG_BUILD_TUPLE)) {
+          //// expecting call is e.g. _getIteratorZip
+          //SymExpr* otherSe = toSymExpr(call->get(1));
+          //INT_ASSERT(otherSe);
+          //CallExpr* otherCall = toCallExpr(findExprProducing(otherSe->symbol()));
+          //if (otherCall) {
+            //call = otherCall;
+            //calledFn = call->resolvedOrVirtualFunction();
+            //if (calledFn && !calledFn->hasFlag(FLAG_BUILD_TUPLE)) {
+              //// expecting call is e.g. _toFollowerZip
+              //SymExpr* anotherSe = toSymExpr(call->get(1));
+              //INT_ASSERT(anotherSe);
+              //CallExpr* anotherCall =
+                //toCallExpr(findExprProducing(anotherSe->symbol()));
+              //if (anotherCall) {
+                //call = anotherCall;
+              //} else {
+                //call = NULL;
+                //tupleIterator = otherSe;
+              //}
+            //}
+          //} else {
+            //call = NULL;
+            //tupleIterator = otherSe;
+          //}
+        //}
 
-        CallExpr* buildTupleCall = call;
-        FnSymbol* buildTupleFn   = NULL;
+        //CallExpr* buildTupleCall = call;
+        //FnSymbol* buildTupleFn   = NULL;
 
-        if (buildTupleCall) {
-          buildTupleFn = buildTupleCall->resolvedOrVirtualFunction();
-        }
+        //if (buildTupleCall) {
+          //buildTupleFn = buildTupleCall->resolvedOrVirtualFunction();
+        //}
 
-        if (buildTupleFn && buildTupleFn->hasFlag(FLAG_BUILD_TUPLE)) {
+        //if (buildTupleFn && buildTupleFn->hasFlag(FLAG_BUILD_TUPLE)) {
 
           // build up the detailsVector
-          for_formals_actuals(formal, actual, buildTupleCall) {
-            // Ignore the RETARG
-            if (formal->hasFlag(FLAG_RETARG))
-              continue;
-
+          for_actuals(actual, forLoop->zipCallGet()) {
             SymExpr* actualSe = toSymExpr(actual);
             INT_ASSERT(actualSe); // otherwise not normalized
             // Find the single definition of actualSe->var to find
@@ -584,30 +588,31 @@ void gatherLoopDetails(ForLoop*  forLoop,
 
             detailsVector.push_back(details);
           }
-        } else {
-          INT_ASSERT(tupleIterator);
-          // Can't find build_tuple call, so fall back on
-          // storing tuple elements in iterator details.
-          AggregateType* tupleItType = toAggregateType(tupleIterator->typeInfo());
-          if (tupleItType->symbol->hasFlag(FLAG_TUPLE)) {
-            int i = 0;
-            for_fields(field, tupleItType) {
-              IteratorDetails details;
-              details.iterable = tupleIterator;
-              details.iterableTupleElement = i+1;
-              detailsVector.push_back(details);
+        //} else {
+          //INT_ASSERT(tupleIterator);
+          //// Can't find build_tuple call, so fall back on
+          //// storing tuple elements in iterator details.
+          //AggregateType* tupleItType = toAggregateType(tupleIterator->typeInfo());
+          //if (tupleItType->symbol->hasFlag(FLAG_TUPLE)) {
+            //int i = 0;
+            //for_fields(field, tupleItType) {
+              //IteratorDetails details;
+              //details.iterable = tupleIterator;
+              //details.iterableTupleElement = i+1;
+              //detailsVector.push_back(details);
 
-              i++;
-            }
-          }
-        }
+              //i++;
+            //}
+          //}
+        //}
 
         // Figure out iterator class of zippered followers from
         // the tuple type.
-        AggregateType* tupleType = toAggregateType(iterator->type);
+        //AggregateType* tupleType = toAggregateType(iterator->type);
         int i = 0;
-        for_fields(field, tupleType) {
-          detailsVector[i].iteratorClass = field->type;
+        for_actuals(actual, forLoop->zipCallGet()) {
+          Symbol* actualSym = toSymExpr(actual)->symbol();
+          detailsVector[i].iteratorClass = actualSym->type;
           detailsVector[i].iterator =
             getTheIteratorFn(detailsVector[i].iteratorClass);
 
@@ -618,7 +623,14 @@ void gatherLoopDetails(ForLoop*  forLoop,
         // a tuple (of references typically). We need to find the
         // un-packed elements.
 
-        findZipperedIndexVariables(index, detailsVector);
+        //findZipperedIndexVariables(index, detailsVector);
+
+        CallExpr* indexCall = toCallExpr(forLoop->indexGet());
+        INT_ASSERT(indexCall);
+        i = 0;
+        for_actuals(actual, indexCall) {
+          detailsVector[i].index = toSymExpr(actual)->symbol();
+        };
 
         IteratorDetails emptyDetails;
         leaderDetails = emptyDetails;
@@ -627,6 +639,8 @@ void gatherLoopDetails(ForLoop*  forLoop,
       }
     }
   } else {
+    Symbol* iterator = forLoop->iteratorGet()->symbol();
+    INT_ASSERT(iterator);
     // Handle forall loops
 
     // It could be:
@@ -675,6 +689,7 @@ void gatherLoopDetails(ForLoop*  forLoop,
       } else {
         CallExpr* buildTupleCall = toCallExpr(iterable);
         INT_ASSERT(buildTupleCall && buildTupleCall->resolvedOrVirtualFunction());
+        INT_FATAL("what's this?");
         // build up the detailsVector
         for_formals_actuals(formal, actual, buildTupleCall) {
           // Ignore the RETARG

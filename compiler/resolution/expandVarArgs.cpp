@@ -734,7 +734,8 @@ static void substituteVarargTupleRefs(BlockStmt*     block,
           if (parentCall && parentCall->isPrimitive(PRIM_ZIP)) {
             ForLoop* parentFor = toForLoop(parentCall->parentExpr);
             BlockStmt* expansionBlock = createZipExpansionBlock(parentFor);
-            adjustLoopAfterZipExpansion(parentCall, expansionBlock);
+            adjustLoopAfterZipExpansion(parentCall, expansionBlock,
+                                        /*shouldResolve=*/ false);
           }
         } else {
           int idxNum = varargAccessIndex(se, parent, numArgs);
