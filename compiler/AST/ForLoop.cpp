@@ -193,6 +193,7 @@ static void standardizeForLoopIndicesAndIteration(Expr*& indices,
         indices = newCall;
       }
       else if (indCall->isPrimitive(PRIM_ZIP_INDEX)) {
+        INT_ASSERT(indCall->numActuals() > 0);
         // all's good
       }
       else {
@@ -482,16 +483,19 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
     if (CallExpr *indexCall = toCallExpr(indices)) {
 
-      INT_ASSERT(indexCall->isNamed("_build_tuple") ||
-                 indexCall->isPrimitive(PRIM_ZIP_INDEX));  // don't do anything if this is the case?
-
-      CallExpr *newIndexCall = new CallExpr(PRIM_ZIP_INDEX);
-      for_actuals(actual, indexCall) {
-        newIndexCall->insertAtTail(actual->remove());
+      if (indexCall->isNamed("_build_tuple")) {
+        CallExpr *newIndexCall = new CallExpr(PRIM_ZIP_INDEX);
+        for_actuals(actual, indexCall) {
+          newIndexCall->insertAtTail(actual->copy());
+        }
+        loop->mIndex = newIndexCall;
       }
-      //indexCall->replace(newIndexCall);
-
-      loop->mIndex = newIndexCall;
+      else if (indexCall->isPrimitive(PRIM_ZIP_INDEX)) {
+        loop->mIndex = indexCall;
+      }
+      else {
+        INT_FATAL("Malformed for loop");
+      }
     }
     else if (isUnresolvedSymExpr(indices)) {
         loop->mIndex = indices;

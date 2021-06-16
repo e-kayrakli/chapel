@@ -482,16 +482,15 @@ static FnSymbol* buildSerialIteratorFn(const char* iteratorName,
 }
 
 static Expr* buildLeaderIteratorWhereClause(ArgSymbol* lifnTag,
-                                       ArgSymbol* lifnIterator, bool zippered)
+                                            ArgSymbol* lifnIterator)
 {
-  Symbol* tlsym = new_StringSymbol(zippered ? "_toLeaderZip" : "_toLeader");
+  Symbol* tlsym = new_StringSymbol("_toLeader");
   Expr* checkTag = new CallExpr("==", lifnTag, gLeaderTag);
   Expr* checkToLeader = new CallExpr(PRIM_CALL_RESOLVES, tlsym, lifnIterator);
   return new CallExpr("&&", checkTag, checkToLeader);
 }
 
-static FnSymbol* buildLeaderIteratorFn(const char* iteratorName,
-                                       bool zippered)
+static FnSymbol* buildLeaderIteratorFn(const char* iteratorName)
 {
   FnSymbol* lifn = new FnSymbol(iteratorName);
   lifn->addFlag(FLAG_FN_RETURNS_ITERATOR);
@@ -506,17 +505,13 @@ static FnSymbol* buildLeaderIteratorFn(const char* iteratorName,
   lifn->insertFormalAtTail(lifnIterator);
 
   lifn->where = new BlockStmt(buildLeaderIteratorWhereClause(
-                                lifnTag, lifnIterator, zippered));
+                              lifnTag, lifnIterator));
 
   VarSymbol* leaderIterator = newTempConst("_leaderIterator");
   leaderIterator->addFlag(FLAG_EXPR_TEMP);
   lifn->insertAtTail(new DefExpr(leaderIterator));
 
-  if( !zippered ) {
-    lifn->insertAtTail(new CallExpr(PRIM_MOVE, leaderIterator, new CallExpr("_toLeader", lifnIterator)));
-  } else {
-    lifn->insertAtTail(new CallExpr(PRIM_MOVE, leaderIterator, new CallExpr("_toLeaderZip", lifnIterator)));
-  }
+  lifn->insertAtTail(new CallExpr(PRIM_MOVE, leaderIterator, new CallExpr("_toLeader", lifnIterator)));
 
   lifn->insertAtTail(new CallExpr(PRIM_RETURN, leaderIterator));
 
@@ -526,7 +521,8 @@ static FnSymbol* buildLeaderIteratorFn(const char* iteratorName,
 static FnSymbol* buildFollowerIteratorFn(const char* iteratorName,
                                          bool zippered,
                                          bool forall,
-                                         VarSymbol*& followerIterator)
+                                         Expr*& followerIterator,
+                                         int numIterands)
 {
   FnSymbol* fifn = new FnSymbol(iteratorName);
   fifn->addFlag(FLAG_ITERATOR_FN);
@@ -546,18 +542,52 @@ static FnSymbol* buildFollowerIteratorFn(const char* iteratorName,
   ArgSymbol* fifnFollower = new ArgSymbol(INTENT_BLANK, iterFollowthisArgname, dtAny);
   fifn->insertFormalAtTail(fifnFollower);
 
-  ArgSymbol* fifnIterator = new ArgSymbol(INTENT_BLANK, "iterator", dtAny);
-  fifn->insertFormalAtTail(fifnIterator);
 
   fifn->where = new BlockStmt(new CallExpr("==", fifnTag, tag->copy()));
-  followerIterator = newTempConst("_followerIterator");
-  followerIterator->addFlag(FLAG_EXPR_TEMP);
-  fifn->insertAtTail(new DefExpr(followerIterator));
 
   if( !zippered ) {
-    fifn->insertAtTail(new CallExpr(PRIM_MOVE, followerIterator, new CallExpr("_toFollower", fifnIterator, fifnFollower)));
+    ArgSymbol* fifnIterator = new ArgSymbol(INTENT_BLANK, "iterator", dtAny);
+    fifn->insertFormalAtTail(fifnIterator);
+    VarSymbol* followerIteratorSymbol = newTempConst("_followerIterator");
+    //followerIterator = newTempConst("_followerIterator");
+    followerIteratorSymbol->addFlag(FLAG_EXPR_TEMP);
+    fifn->insertAtTail(new DefExpr(followerIteratorSymbol));
+    fifn->insertAtTail(new CallExpr(PRIM_MOVE,
+                                    new SymExpr(followerIteratorSymbol),
+                                    new CallExpr("_toFollower", fifnIterator, fifnFollower)));
+    followerIterator = new SymExpr(followerIteratorSymbol);
   } else {
-    fifn->insertAtTail(new CallExpr(PRIM_MOVE, followerIterator, new CallExpr("_toFollowerZip", fifnIterator, fifnFollower)));
+    if (numIterands == 1) {
+      ArgSymbol* fifnIterator = new ArgSymbol(INTENT_BLANK, "iterator", dtAny,
+                                              NULL, NULL, new SymExpr(gUninstantiated));
+      fifn->insertFormalAtTail(fifnIterator);
+      followerIterator = new CallExpr(PRIM_ZIP, new CallExpr(PRIM_TUPLE_EXPAND,
+                                                             fifnIterator));
+    }
+    else {
+      CallExpr* iteratorCall = new CallExpr(PRIM_ZIP);
+      for (int i=0 ; i<numIterands ; i++) {
+        char argName[32];
+        snprintf(argName, 31, "iterator%d", i);
+        ArgSymbol* fifnIterator = new ArgSymbol(INTENT_BLANK, argName, dtAny);
+        fifn->insertFormalAtTail(fifnIterator);
+
+        snprintf(argName, 31, "_followerIterator%d", i);
+        VarSymbol* followerIteratorSymbol = newTempConst("_followerIterator");
+        followerIteratorSymbol->addFlag(FLAG_EXPR_TEMP);
+        fifn->insertAtTail(new DefExpr(followerIteratorSymbol));
+        fifn->insertAtTail(new CallExpr(PRIM_MOVE,
+                                        new SymExpr(followerIteratorSymbol),
+                                        new CallExpr("_toFollower", fifnIterator, fifnFollower)));
+
+
+
+        iteratorCall->insertAtTail(new SymExpr(followerIteratorSymbol));
+      }
+      followerIterator = iteratorCall;
+
+
+    }
   }
 
   return fifn;
@@ -926,12 +956,8 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
                                zippered, forall, stmt, iteratorExprArgs.size());
 
   if (forall) {
-    lifn = buildLeaderIteratorFn(iteratorName, zippered);
+    lifn = buildLeaderIteratorFn(iteratorName);
     addOuterVariableFormals(lifn, outerVars);
-
-    VarSymbol* followerIterator; // Initialized by buildFollowerIteratorFn.
-    fifn = buildFollowerIteratorFn(iteratorName, zippered, forall,
-                                   followerIterator);
 
     // do we need to use this map since symbols have not been resolved?
     SymbolMap map;
@@ -940,9 +966,16 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
       indDefCopies.insertAtTail(defI->copy(&map));
     Expr* indicesCopy = (indices) ? indices->copy(&map) : NULL;
     Expr* bodyCopy = stmt->copy(&map);
+
+    //VarSymbol* followerIterator; // Initialized by buildFollowerIteratorFn.
+    Expr* followerIterator;
+    fifn = buildFollowerIteratorFn(iteratorName, zippered, forall,
+                                   followerIterator,
+                                   iteratorExprArgs.size());
+
     fifn->insertAtTail(
         ForLoop::buildLoweredForallLoop(
-          indicesCopy, new SymExpr(followerIterator), new BlockStmt(bodyCopy),
+          indicesCopy, followerIterator, new BlockStmt(bodyCopy),
           zippered,
           /* isForExpr */ true));
     addOuterVariableFormals(fifn, outerVars);
