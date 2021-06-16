@@ -1295,6 +1295,11 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
     if (zippered) {
       fastFollowBlock = buildFollowLoop(pfs, iterExpr,
                                         userBodyForFast, /*fast=*/true);
+      // TODO: we need to remove this because the followers already have their
+      // own respective PRIMs. If we keep them in, the SymExprs within don't
+      // verify because there's no DefExprs for symbols in it. This should
+      // probably be handled in a better way.
+      pfs->zipIndexCall()->remove();
   
 
     }

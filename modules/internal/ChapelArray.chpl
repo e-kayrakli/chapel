@@ -5210,9 +5210,9 @@ module ChapelArray {
           __primitive("=", r, copy);
         }
       } else {
-        forall (r, src) in zip(result, ir) {
+        forall (r, srcHeyo) in zip(result, ir) {
           pragma "no auto destroy"
-          var copy = src; // init copy, might be elided
+          var copy = srcHeyo; // init copy, might be elided
           __primitive("=", r, copy);
         }
       }
