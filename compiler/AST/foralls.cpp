@@ -491,9 +491,37 @@ static void removeOrigIterCallIfPossible(SymExpr* origSE)
 // we can do what we couldn't during parsing.
 // The case numInductionVars==1 is special.
 static void checkWhenOverTupleExpand(ForallStmt* fs) {
-  if (fs->overTupleExpand() && fs->numInductionVars() > 1)
-    fsCheckNumIdxVarsVsIterables(fs, fs->numInductionVars(),
-                                     fs->numIteratedExprs());
+  if (fs->overTupleExpand()) {
+    if (fs->numInductionVars() > 1) {
+      fsCheckNumIdxVarsVsIterables(fs, fs->numInductionVars(),
+                                       fs->numIteratedExprs());
+    }
+    else {
+      AList& indvars = fs->inductionVariables();
+      //CallExpr* zipIndex = new CallExpr(PRIM_ZIP_INDEX);
+      CallExpr* buildUserIdx = new CallExpr("_build_tuple");
+      for (int i=0 ; i<fs->numIteratedExprs() ; i++) {
+        char idxTempName[32];
+        snprintf(idxTempName, 32, "chpl_indexTemp_%d", i);
+        VarSymbol* idxTemp = newTemp(idxTempName);
+        idxTemp->addFlag(FLAG_INDEX_VAR);
+        indvars.insertAtTail(new DefExpr(idxTemp));
+        buildUserIdx->insertAtTail(new SymExpr(idxTemp));
+      }
+
+      CallExpr* anchor = new CallExpr(PRIM_NOOP);
+      fs->loopBody()->insertAtHead(anchor);
+
+      DefExpr* userIdxDef = toDefExpr(indvars.get(1)->remove());
+      Symbol* userIdxSym = userIdxDef->sym;
+      userIdxSym->removeFlag(FLAG_INDEX_VAR);
+      anchor->insertBefore(userIdxDef);
+      anchor->insertBefore(new CallExpr(PRIM_MOVE, new SymExpr(userIdxSym),
+                                        buildUserIdx));
+
+      //fs->setZipIndexCall(zipIndex);
+    }
+  }
 }
 
 // Replaces 'origSE' in the tree with the result.
