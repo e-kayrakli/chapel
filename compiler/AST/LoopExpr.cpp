@@ -944,8 +944,8 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
   }
   CallExpr* retCall = new CallExpr(PRIM_RETURN, iterCall);
   for_set(Symbol, sym, outerVars) iterCall->insertAtTail(sym);
-  std::cout << "Will call as\n";
-  nprint_view(ret);
+  //std::cout << "Will call as\n";
+  //nprint_view(ret);
   block->insertAtTail(retCall);
   update_symbols(fn, &outerMap);
 

@@ -437,7 +437,6 @@ void gatherLoopDetails(ForLoop*  forLoop,
       detailsVector.push_back(details);
       return;
     } else {
-      std::cout << forLoop->stringLoc() << std::endl;
       if (forLoop->inTest()) {
         int i;
 

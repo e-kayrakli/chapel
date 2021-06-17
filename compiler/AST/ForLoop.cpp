@@ -473,8 +473,8 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
       }
     }
 
-    std::cout << "destIndForZip " << loop->stringLoc() << std::endl;
-    nprint_view(indices);
+    //std::cout << "destIndForZip " << loop->stringLoc() << std::endl;
+    //nprint_view(indices);
 
     Expr* anchor = destructureIndicesForZip(loop, indices, tupExpr, iterators, coforall, zipOverTupleExpansion);
     if (userIdxSetup) {
