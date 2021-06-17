@@ -2227,8 +2227,13 @@ setupSimultaneousIterators(Vec<Symbol*>& iterators,
                            Symbol*       index,
                            ForLoop*      loop) {
   if (SymExpr* indexSE   = toSymExpr(loop->indexGet())) {
-    USR_WARN("This shouldn't have happened");
+    SymExpr* iteratorSE = toSymExpr(loop->iteratorGet());
+
+    INT_ASSERT(iteratorSE);
+
     VarSymbol*   index     = toVarSymbol(indexSE->symbol());
+    VarSymbol*   iterator  = toVarSymbol(iteratorSE->symbol());
+    iterators.add(iterator);
     indices.add(index);
   }
   else if (CallExpr* indexCall = toCallExpr(loop->indexGet())) {
@@ -2394,6 +2399,10 @@ static void errorIfHasThrowingIterator(ForLoop* forLoop) {
 static void
 expandForLoop(ForLoop* forLoop) {
   bool converted = false;
+
+  if (strcmp(forLoop->stringLoc(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/modules/internal/ChapelArray.chpl:2968") == 0) {
+
+  }
 
   if (!fNoInlineIterators)
   {

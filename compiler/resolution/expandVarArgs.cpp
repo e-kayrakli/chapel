@@ -97,6 +97,7 @@ static void      cacheExtend(FnSymbol* fn, FnSymbol* expansion);
 ************************************** | *************************************/
 
 static bool hasVariableArgs(FnSymbol* fn);
+static bool canExpandForCall(FnSymbol* fn, CallInfo& info);
 
 
 FnSymbol* expandIfVarArgs(FnSymbol* fn, CallInfo& info) {
@@ -107,15 +108,67 @@ FnSymbol* expandIfVarArgs(FnSymbol* fn, CallInfo& info) {
 
     // No substitution found
     if (retval == NULL) {
-      retval = expandVarArgs(fn, info);
+      if (canExpandForCall(fn, info)) {
+        retval = expandVarArgs(fn, info);
 
-      if (retval != NULL) {
-        cacheExtend(fn, retval);
+        if (retval != NULL) {
+          cacheExtend(fn, retval);
+        }
+      }
+      else {
+        retval = NULL;
       }
     }
   }
 
   return retval;
+}
+
+static bool canExpandForCall(FnSymbol* fn, CallInfo& info) {
+
+  if (info.call->id == 1386311) {
+
+  }
+  bool callHasTag = false;
+  bool callHasFollowThis = false;
+
+  bool fnHasTag = false;
+  bool fnHasFollowThis = false;
+
+  for_actuals (actual, info.call) {
+    SymExpr* actualSymExpr= NULL;
+    if (NamedExpr* actualNamedExpr = toNamedExpr(actual)) {
+      actualSymExpr = toSymExpr(actualNamedExpr->actual);
+      if (strcmp(actualNamedExpr->name, "followThis") == 0) {
+        callHasFollowThis = true;
+      }
+    }
+    else {
+      actualSymExpr = toSymExpr(actual);
+    }
+
+    if (actualSymExpr) {
+      // we want these to be matched to only explicit formals
+      Symbol* actualSym = actualSymExpr->symbol();
+      if (actualSym == gStandaloneTag ||
+          actualSym == gLeaderTag ||
+          actualSym == gFollowerTag) {
+        callHasTag = true;
+      }
+    }
+  }
+
+  for_formals (formal, fn) {
+    if (formal->name == astrTag) {
+      fnHasTag = true;
+    }
+
+    if (strcmp(formal->name, "followThis") == 0) {
+      fnHasFollowThis = true;
+    }
+  }
+
+  return (callHasTag == fnHasTag) && (callHasFollowThis == fnHasFollowThis);
 }
 
 static bool hasVariableArgs(FnSymbol* fn) {

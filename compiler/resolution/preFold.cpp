@@ -1380,8 +1380,13 @@ static Expr* preFoldPrimOp(CallExpr* call) {
       }
       // Note: this can add a use formal outside of its function
       // This is cleaned up in cleanupLeaderFollowerIteratorCalls
-      followerCall->insertAtTail(new NamedExpr(formal->name,
-                                   createSymExprPropagatingParam(formal)));
+      if (formal->hasFlag(FLAG_EXPANDED_VARARGS)) {
+        followerCall->insertAtTail(createSymExprPropagatingParam(formal));
+      }
+      else {
+        followerCall->insertAtTail(new NamedExpr(formal->name,
+                                     createSymExprPropagatingParam(formal)));
+      }
     }
 
     // "tag", "followThis" and optionally "fast" should be placed at the end

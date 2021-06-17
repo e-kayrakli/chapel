@@ -709,6 +709,7 @@ ForLoop* ForLoop::copyInner(SymbolMap* map)
   retval->mIsForExpr        = mIsForExpr;
 
   retval->mFollowerLoop     = mFollowerLoop;
+  retval->mLoweredForall    = mLoweredForall;
 
   for_alist(expr, body)
     retval->insertAtTail(expr->copy(map, true));

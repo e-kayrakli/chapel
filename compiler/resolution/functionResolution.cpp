@@ -8715,6 +8715,17 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
 
   ForLoop* loop = toForLoop(zipCall->parentExpr);
 
+  Symbol* followThis = NULL;
+  if (loop->isLoweredForallLoop()) {
+    if (FnSymbol* parentFn = toFnSymbol(loop->parentSymbol)) {
+      for_formals (formal, parentFn) {
+        if (strcmp(formal->name, "followThis") == 0) {
+          followThis = formal;
+        }
+      }
+    }
+  }
+
   for_actuals(actual, zipCall) {
     VarSymbol* iterTemp = newTemp("_iterator");
     Expr* actualCopy = actual->copy();
@@ -8725,10 +8736,19 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
     iterTemp->addFlag(FLAG_MAYBE_TYPE);
 
     expansionBlock->insertAtTail(new DefExpr(iterTemp));
-    expansionBlock->insertAtTail(new CallExpr(PRIM_MOVE, iterTemp, new CallExpr("_getIterator",
-                                                                                actualCopy)));
 
-    tryToReplaceWithDirectRangeIterator(actualCopy);
+    CallExpr* getIterator = new CallExpr("_getIterator");
+
+    if (followThis) {
+      getIterator->insertAtTail(new CallExpr("_toFollower", actualCopy, followThis));
+    }
+    else {
+      getIterator->insertAtTail(actualCopy);
+    }
+
+    expansionBlock->insertAtTail(new CallExpr(PRIM_MOVE, iterTemp, getIterator));
+
+    //tryToReplaceWithDirectRangeIterator(actualCopy);
 
     //iterators.push_back(iterTemp);
   }

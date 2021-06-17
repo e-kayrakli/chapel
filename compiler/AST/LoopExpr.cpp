@@ -37,6 +37,7 @@
 #include "stringutil.h"
 #include "symbol.h"
 #include "TransformLogicalShortCircuit.h"
+#include "view.h"
 #include "wellknown.h"
 
 #include <vector>
@@ -911,7 +912,6 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
   std::vector<ArgSymbol*> iteratorExprArgs;
   CallExpr* ret = buildCallAndArgs(fn, iteratorExpr, outerVars, &outerMap,
                                    iteratorExprArgs);
-
   BlockStmt* block = fn->body;
 
   // Only possibly true for forall-exprs
@@ -944,6 +944,8 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
   }
   CallExpr* retCall = new CallExpr(PRIM_RETURN, iterCall);
   for_set(Symbol, sym, outerVars) iterCall->insertAtTail(sym);
+  std::cout << "Will call as\n";
+  nprint_view(ret);
   block->insertAtTail(retCall);
   update_symbols(fn, &outerMap);
 
