@@ -149,8 +149,9 @@ static bool isTupleExpandCall(Expr* e) {
   return false;
 }
 
-static void standardizeForLoopIndicesAndIteration(Expr*& indices,
-                                                  Expr*& iteratorExpr) {
+static std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indices,
+                                                                     Expr*& iteratorExpr) {
+  std::vector<BlockStmt*> tupleBlocks;
   bool zippered = false;
   if (CallExpr *iterCall = toCallExpr(iteratorExpr)) {
     if (iterCall->isNamed("_build_tuple")) {
@@ -182,12 +183,38 @@ static void standardizeForLoopIndicesAndIteration(Expr*& indices,
   }
 
   if (zippered) {
+    if (!indices) return tupleBlocks; // elided index, don't worry about it
+
     if (CallExpr* indCall = toCallExpr(indices)) {
       if (indCall->isNamed("_build_tuple")) {
         CallExpr* newCall = new CallExpr(PRIM_ZIP_INDEX);
 
         for_actuals(actual, indCall) {
-          newCall->insertAtTail(actual->remove());
+          if (CallExpr* actualCall = toCallExpr(actual)) {
+            INT_ASSERT(actualCall->isNamed("_build_tuple"));
+
+            BlockStmt* tupleBlock = new BlockStmt();
+
+            for_actuals (userIdx, actualCall) {
+              if (UnresolvedSymExpr* userIdxSE = toUnresolvedSymExpr(userIdx)) {
+                VarSymbol* userIdxSym = new VarSymbol(userIdxSE->unresolved);
+                tupleBlock->insertAtTail(new DefExpr(userIdxSym));
+              }
+              else {
+                INT_FATAL("Unexpected index type in ForLoop");
+              }
+            }
+            tupleBlocks.push_back(buildTupleVarDeclStmt(tupleBlock, NULL,
+                                                        new UnresolvedSymExpr("detupleIndex")));
+
+            newCall->insertAtTail(new UnresolvedSymExpr("detupleIndex"));
+          }
+          else if (isSymExpr(actual) || isUnresolvedSymExpr(actual)) {
+            newCall->insertAtTail(actual->remove());
+          }
+          else {
+            INT_FATAL("Malformed indices for a ForLoop");
+          }
         }
 
         indices = newCall;
@@ -214,6 +241,8 @@ static void standardizeForLoopIndicesAndIteration(Expr*& indices,
       INT_FATAL("Unexpected AST type for loop index expression");
     }
   }
+
+  return tupleBlocks;
 }
 
 /************************************ | *************************************
@@ -253,7 +282,13 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
                           bool       isLoweredForall,
                           bool       isForExpr)
 {
-  standardizeForLoopIndicesAndIteration(indices, iteratorExpr);
+  std::vector<BlockStmt*> tupleBlocks = standardizeForLoopIndicesAndIteration(indices,
+                                                                              iteratorExpr);
+  for_vector (BlockStmt, tupleBlock, tupleBlocks) {
+    body->insertAtHead(tupleBlock);
+    tupleBlock->flattenAndRemove();
+  }
+
   VarSymbol*   index         = newTemp("_indexOfInterest");
   VarSymbol*   iterator      = newTemp("_iterator");
   CallExpr*    iterInit      = 0;
@@ -264,6 +299,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
   LabelSymbol* continueLabel = new LabelSymbol("_continueLabel");
   LabelSymbol* breakLabel    = new LabelSymbol("_breakLabel");
   BlockStmt*   retval        = new BlockStmt();
+
 
   iterator->addFlag(FLAG_EXPR_TEMP);
   

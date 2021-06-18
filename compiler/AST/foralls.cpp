@@ -725,8 +725,18 @@ static void hzsBuildZipperedForLoop(ForallStmt* fs, FnSymbol* origIterFn,
 
   ForLoop* forLoop = toForLoop(origLoopBody->parentExpr);
 
-  SymExpr* loopIterDef = forLoop->iteratorGet()->symbol()->getSingleDef();
-  normalize(loopIterDef->parentExpr); // because of buildForLoop()
+  if (SymExpr* loopIter = toSymExpr(forLoop->iteratorGet())) {
+    SymExpr* loopIterDef = loopIter->symbol()->getSingleDef();
+    normalize(loopIterDef->parentExpr); // because of buildForLoop()
+  }
+  else if (CallExpr* loopIter = toCallExpr(forLoop->zipCallGet())) {
+    for_actuals (actual, loopIter) {
+      if (SymExpr* actualSymExpr = toSymExpr(actual)) {
+        SymExpr* loopIterDef = actualSymExpr->symbol()->getSingleDef();
+        normalize(loopIterDef->parentExpr);
+      }
+    }
+  }
 
   // Move the index variables' DefExprs to 'forLoop'.
   while (Expr* inddef = fs->inductionVariables().tail)
@@ -900,8 +910,18 @@ static void addParIdxVarsAndRestruct(ForallStmt* fs, VarSymbol* parIdx) {
   // Ex. test/functions/ferguson/ref-pair/iterating-over-arrays.chpl
 
   // The induction variable of the follower loop.
-  //VarSymbol* followIdx = NULL;
+  VarSymbol* followIdx = NULL;
   AList& indvars = fs->inductionVariables();
+
+  if (!fs->zippered() && indvars.length == 1) {
+    followIdx = newTemp("chpl__followIdx");
+    userLoopBody->insertBefore(new DefExpr(followIdx));
+    userLoopBody->insertAtHead("'move'(%S,%S)",
+                               toDefExpr(indvars.head)->sym, followIdx);
+
+    userLoopBody->insertAtHead(indvars.head->remove());
+  }
+
   // TODO do we alrady do this, and can we remove the following block?
   //if (!fs->inTest()) {
     //followIdx = newTemp("chpl__followIdx");
@@ -946,24 +966,25 @@ static void addParIdxVarsAndRestruct(ForallStmt* fs, VarSymbol* parIdx) {
     //}
 
   //}
-  CallExpr* zipIndexCall = new CallExpr(PRIM_ZIP_INDEX);
+  else {
+    CallExpr* zipIndexCall = new CallExpr(PRIM_ZIP_INDEX);
 
-  // Move induction variables' DefExprs to the loop body.
-  // That's where their scope is; ex. deinit them at end of each iteration.
-  // Do it now, before the loop body gets cloned for and dissolves into
-  // the scaffolding for fast-followers.
-  //
-  for_alist_backward(def, indvars) {
-    userLoopBody->insertAtHead(def->remove());
+    // TODO:
+    // Move induction variables' DefExprs to the loop body.
+    // That's where their scope is; ex. deinit them at end of each iteration.
+    // Do it now, before the loop body gets cloned for and dissolves into
+    // the scaffolding for fast-followers.
+    //
+    for_alist_backward(def, indvars) {
+      userLoopBody->insertAtHead(def->remove());
 
-    Symbol* indVarSym = toDefExpr(def)->sym;
-    // not sure if this is necessary
-    // indVarSym->addFlag(FLAG_INDEX_OF_INTEREST);
-    // indVarSym->addFlag(FLAG_INDEX_VAR);
-    zipIndexCall->insertAtHead(new SymExpr(indVarSym));
-  }
+      Symbol* indVarSym = toDefExpr(def)->sym;
+      // not sure if this is necessary
+      // indVarSym->addFlag(FLAG_INDEX_OF_INTEREST);
+      // indVarSym->addFlag(FLAG_INDEX_VAR);
+      zipIndexCall->insertAtHead(new SymExpr(indVarSym));
+    }
 
-  if (fs->inTest()) {
     fs->setZipIndexCall(zipIndexCall);
   }
 
@@ -1210,10 +1231,12 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
       zippered = true;
   }
 
+  // we need this in the outer scope because we use it to create the symbol map
+  // for creating the fast follower body
   VarSymbol* followIdx = NULL;
-  if (!pfs->inTest()) {
-    //DefExpr*  followIdxDef = toDefExpr(pfs->loopBody()->body.head->remove());
-    //followIdx = toVarSymbol(followIdxDef->sym);
+  if (!pfs->zippered()) {
+    DefExpr*  followIdxDef = toDefExpr(pfs->loopBody()->body.head->remove());
+    followIdx = toVarSymbol(followIdxDef->sym);
   }
 
   BlockStmt*    userBody = toBlockStmt(pfs->loopBody()->body.tail->remove());
@@ -1310,17 +1333,19 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
     BlockStmt* userBodyForFast = NULL;
 
     if (pfs->inTest()) {
-      userBodyForFast = userBody->copy();
+      //userBodyForFast = userBody->copy();
     }
     else {
-      SymbolMap map;
-      map.put(followIdx, fastFollowIdx);
-      userBodyForFast = userBody->copy(&map);
+      //SymbolMap map;
+      //map.put(followIdx, fastFollowIdx);
+      //userBodyForFast = userBody->copy(&map);
     }
 
-    adjustPrimsInFastFollowerBody(userBodyForFast);
 
     if (zippered) {
+      userBodyForFast = userBody->copy();
+      adjustPrimsInFastFollowerBody(userBodyForFast);
+
       fastFollowBlock = buildFollowLoop(pfs, iterExpr,
                                         userBodyForFast, /*fast=*/true);
       // TODO: we need to remove this because the followers already have their
@@ -1332,6 +1357,12 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
 
     }
     else {
+      INT_ASSERT(followIdx);
+      SymbolMap map;
+      map.put(followIdx, fastFollowIdx);
+      userBodyForFast = userBody->copy(&map);
+      adjustPrimsInFastFollowerBody(userBodyForFast);
+
       VarSymbol* leadIdxCopy = parIdxVar(pfs);
       fastFollowBlock = buildFollowLoop(iterRec,
                                         leadIdxCopy,
