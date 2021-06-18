@@ -153,13 +153,11 @@ static std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indi
                                                                      Expr*& iteratorExpr) {
   std::vector<BlockStmt*> tupleBlocks;
   bool zippered = false;
+  int numIterands;
   if (CallExpr *iterCall = toCallExpr(iteratorExpr)) {
-    if (iterCall->isNamed("_build_tuple")) {
-      INT_FATAL("_build_tuple is no longer a supported iteratorExpr");
-    }
-
     if (iterCall->isPrimitive(PRIM_ZIP)) {
-      if (iterCall->numActuals() == 1) {
+      numIterands = iterCall->numActuals();
+      if (numIterands == 1) {
         if (isTupleExpandCall(iterCall->get(1))) {
           zippered = true;
         }
@@ -180,12 +178,25 @@ static std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indi
         iteratorExpr = iterCall->get(1);
       }
     }
+    else if (iterCall->isNamed("_build_tuple")) {
+      INT_FATAL("_build_tuple is no longer a supported iteratorExpr");
+    }
+    else {
+      // not zippered
+    }
   }
 
   if (zippered) {
-    if (!indices) return tupleBlocks; // elided index, don't worry about it
-
-    if (CallExpr* indCall = toCallExpr(indices)) {
+    if (!indices) {
+      CallExpr* newCall = new CallExpr(PRIM_ZIP_INDEX);
+      for (int i=0 ; i<numIterands ; i++) {
+        char elidedIdxName[32];
+        snprintf(elidedIdxName, 31, "chpl__elidedIndex%d", i);
+        newCall->insertAtTail(new UnresolvedSymExpr(elidedIdxName));
+      }
+      indices = newCall;
+    }
+    else if (CallExpr* indCall = toCallExpr(indices)) {
       if (indCall->isNamed("_build_tuple")) {
         CallExpr* newCall = new CallExpr(PRIM_ZIP_INDEX);
 
@@ -209,8 +220,16 @@ static std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indi
 
             newCall->insertAtTail(new UnresolvedSymExpr("detupleIndex"));
           }
-          else if (isSymExpr(actual) || isUnresolvedSymExpr(actual)) {
+          else if (isSymExpr(actual)) {
             newCall->insertAtTail(actual->remove());
+          }
+          else if (UnresolvedSymExpr* actualUnresolved = toUnresolvedSymExpr(actual)) {
+            if (strcmp(actualUnresolved->unresolved, "chpl__tuple_blank") == 0) {
+              newCall->insertAtTail(new UnresolvedSymExpr("chpl__elidedIndex"));
+            }
+            else {
+              newCall->insertAtTail(actual->remove());
+            }
           }
           else {
             INT_FATAL("Malformed indices for a ForLoop");
