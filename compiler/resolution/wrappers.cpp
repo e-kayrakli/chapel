@@ -1970,16 +1970,15 @@ static void       buildFollowerIterator(PromotionInfo& promotion,
                                         Expr*     iterator,
                                         CallExpr* wrapCall);
 
-static CondStmt*  selectFollower(ArgSymbol* fastFollower,
-                                 Expr*      iterator,
-                                 VarSymbol* followerIterator,
-                                 SymbolMap& followerMap,
-                                 ArgSymbol* fiFnFollower);
+//static CondStmt*  selectFollower(ArgSymbol* fastFollower,
+                                 //Expr*      iterator,
+                                 //VarSymbol* followerIterator,
+                                 //SymbolMap& followerMap,
+                                 //ArgSymbol* fiFnFollower);
 
 static BlockStmt* followerForLoop(PromotionInfo& promotion,
                                   Expr*      indices,
                                   Expr*      iterator,
-                                  VarSymbol* followerIterator,
                                   SymbolMap& followerMap,
                                   CallExpr* wrapCall);
 
@@ -2463,20 +2462,37 @@ static void buildFollowerIterator(PromotionInfo& promotion,
 
   fiFn->where = new BlockStmt(new CallExpr("==", fiFnTag, gFollowerTag));
 
-  fiFn->insertAtTail(new DefExpr(followerIterator));
+  BlockStmt* fastBlock = new BlockStmt();
+  BlockStmt* slowBlock = new BlockStmt();
+  CondStmt* followerCondStmt = new CondStmt(new SymExpr(fastFollower),
+                                            fastBlock, slowBlock);
 
-  fiFn->insertAtTail(selectFollower(fastFollower,
-                                    iterator,
-                                    followerIterator,
-                                    followerMap,
-                                    fiFnFollower));
+  CallExpr* callFast = NULL;
+  CallExpr* callSlow = NULL;
 
-  fiFn->insertAtTail(followerForLoop(promotion,
-                                     indices,
-                                     iterator,
-                                     followerIterator,
-                                     followerMap,
-                                     wrapCall));
+  if (CallExpr* iterCall = toCallExpr(iterator)) {
+    callFast = generateFastFollowersForZip(iterCall, fiFnFollower, &followerMap,
+                                           /*getIterator=*/false);
+    callSlow = generateRegularFollowersForZip(iterCall, fiFnFollower, &followerMap,
+                                           /*getIterator=*/false);
+  }
+  else {
+    callFast = new CallExpr("_toFastFollower", iterator->copy(&followerMap), fiFnFollower);
+    callSlow = new CallExpr("_toFollower", iterator->copy(&followerMap), fiFnFollower);
+  }
+
+  fastBlock->insertAtTail(followerForLoop(promotion,
+                                          indices,
+                                          callFast,
+                                          followerMap,
+                                          wrapCall));
+  slowBlock->insertAtTail(followerForLoop(promotion,
+                                          indices,
+                                          callSlow,
+                                          followerMap,
+                                          wrapCall));
+
+  fiFn->insertAtTail(followerCondStmt);
 
   fn->defPoint->getModule()->block->insertAtHead(new DefExpr(fiFn));
 
@@ -2487,40 +2503,39 @@ static void buildFollowerIterator(PromotionInfo& promotion,
   fixUnresolvedSymExprsForPromotionWrapper(fiFn, fn);
 }
 
-static CondStmt* selectFollower(ArgSymbol* fastFollower,
-                                Expr*      iterator,
-                                VarSymbol* followerIterator,
-                                SymbolMap& followerMap,
-                                ArgSymbol* fiFnFollower) {
-  CallExpr*   callFast = NULL;
-  CallExpr*   moveFast = NULL;
+//static CondStmt* selectFollower(ArgSymbol* fastFollower,
+                                //Expr*      iterator,
+                                //VarSymbol* followerIterator,
+                                //SymbolMap& followerMap,
+                                //ArgSymbol* fiFnFollower) {
+  //CallExpr*   callFast = NULL;
+  //CallExpr*   moveFast = NULL;
 
-  CallExpr*   callSlow = NULL;
-  CallExpr*   moveSlow = NULL;
+  //CallExpr*   callSlow = NULL;
+  //CallExpr*   moveSlow = NULL;
 
-  if (CallExpr *iterCall = toCallExpr(iterator)) {
-    INT_ASSERT(iterCall->isPrimitive(PRIM_ZIP));
+  //if (CallExpr *iterCall = toCallExpr(iterator)) {
+    //INT_ASSERT(iterCall->isPrimitive(PRIM_ZIP));
 
-    callFast = generateFastFollowersForZip(iterCall, fiFnFollower, &followerMap,
-                                           /*getIterator=*/false);
-    callSlow = generateRegularFollowersForZip(iterCall, fiFnFollower, &followerMap,
-                                           /*getIterator=*/false);
-  } else {
-    callFast = new CallExpr("_toFastFollower", iterator->copy(&followerMap), fiFnFollower);
-    callSlow = new CallExpr("_toFollower", iterator->copy(&followerMap), fiFnFollower);
-  }
+    //callFast = generateFastFollowersForZip(iterCall, fiFnFollower, &followerMap,
+                                           //[>getIterator=<]false);
+    //callSlow = generateRegularFollowersForZip(iterCall, fiFnFollower, &followerMap,
+                                           //[>getIterator=<]false);
+  //} else {
+    //callFast = new CallExpr("_toFastFollower", iterator->copy(&followerMap), fiFnFollower);
+    //callSlow = new CallExpr("_toFollower", iterator->copy(&followerMap), fiFnFollower);
+  //}
 
 
-  moveFast = new CallExpr(PRIM_MOVE, followerIterator, callFast);
-  moveSlow = new CallExpr(PRIM_MOVE, followerIterator, callSlow);
+  //moveFast = new CallExpr(PRIM_MOVE, followerIterator, callFast);
+  //moveSlow = new CallExpr(PRIM_MOVE, followerIterator, callSlow);
 
-  return new CondStmt(new SymExpr(fastFollower), moveFast, moveSlow);
-}
+  //return new CondStmt(new SymExpr(fastFollower), moveFast, moveSlow);
+//}
 
 static BlockStmt* followerForLoop(PromotionInfo& promotion,
                                   Expr*      indices,
                                   Expr*      iterator,
-                                  VarSymbol* followerIterator,
                                   SymbolMap& followerMap,
                                   CallExpr*  wrapCall) {
   VarSymbol* yieldTmp = newTemp("p_yield");
@@ -2532,11 +2547,14 @@ static BlockStmt* followerForLoop(PromotionInfo& promotion,
 
   insertAndSaveWrapCall(promotion, block, yieldTmp, wrapCallCopy);
 
-  return ForLoop::buildForLoop(indices->copy(&followerMap),
-                               new SymExpr(followerIterator),
+  BlockStmt* ret =  ForLoop::buildForLoop(indices->copy(&followerMap),
+                               iterator,
                                block,
                                promotion.zippered,
                                /* isForExpr */ true);
+
+  resolveExpr(ret);
+  return ret;
 }
 
 // The returned string is canonical ie from astr().
@@ -2823,7 +2841,7 @@ static void fixUnresolvedSymExprsForPromotionWrapper(FnSymbol* wrapper,
   collectCallExprs(wrapper, calls);
 
   for_vector(CallExpr, call, calls) {
-    if (call->resolvedFunction() == fn) {
+    if (call->resolvedFunction() == fn || call->isPrimitive(PRIM_ZIP_INDEX)) {
       for_actuals(actual, call) {
         if (UnresolvedSymExpr* unsym = toUnresolvedSymExpr(actual)) {
           std::vector<DefExpr*> defs;
@@ -2831,8 +2849,13 @@ static void fixUnresolvedSymExprsForPromotionWrapper(FnSymbol* wrapper,
           BlockStmt*            loop      = NULL;
           bool                  found = false;
 
-          callBlock = toBlockStmt(call->getStmtExpr()->parentExpr);
-          loop      = toBlockStmt(callBlock->parentExpr);
+          if (call->isPrimitive(PRIM_ZIP_INDEX)) {
+            loop = toBlockStmt(call->parentExpr);
+          }
+          else {
+            callBlock = toBlockStmt(call->getStmtExpr()->parentExpr);
+            loop      = toBlockStmt(callBlock->parentExpr);
+          }
 
           INT_ASSERT(loop && loop->isLoopStmt());
 
@@ -2851,6 +2874,9 @@ static void fixUnresolvedSymExprsForPromotionWrapper(FnSymbol* wrapper,
         }
       }
     }
+    //else if (call->isPrimitive(PRIM_ZIP_INDEX)) {
+
+    //}
   }
 }
 

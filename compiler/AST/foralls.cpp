@@ -313,18 +313,19 @@ static CallExpr *generateFollowersForZipHelp(CallExpr *iterCall,
                                              const char *fnName) {
   INT_ASSERT(iterCall->isPrimitive(PRIM_ZIP));
 
-  CallExpr *tupler = new CallExpr("_build_tuple");
+  //CallExpr *tupler = new CallExpr("_build_tuple");
+  CallExpr *newIter = new CallExpr(PRIM_ZIP);
 
   for_actuals(actual, iterCall) {
     if (getIterator) {
-      tupler->insertAtTail(new CallExpr("_getIterator", new CallExpr(fnName, actual->copy(map), leadIdxCopy)));
+      newIter->insertAtTail(new CallExpr("_getIterator", new CallExpr(fnName, actual->copy(map), leadIdxCopy)));
     }
     else {
-      tupler->insertAtTail(new CallExpr(fnName, actual->copy(map), leadIdxCopy));
+      newIter->insertAtTail(new CallExpr(fnName, actual->copy(map), leadIdxCopy));
     }
   }
 
-  return tupler;
+  return newIter;
 }
 
 CallExpr *generateFastFollowersForZip(CallExpr *iterCall,
@@ -373,6 +374,7 @@ buildFollowLoop(VarSymbol* iter,
   if (fast) {
 
     if (zippered) {
+      INT_FATAL("Zippered followers should be created with a different overload");
       CallExpr *iterCall = toCallExpr(iterExpr);
       INT_ASSERT(iterCall);
       INT_ASSERT(iterCall->isPrimitive(PRIM_ZIP));
@@ -387,6 +389,7 @@ buildFollowLoop(VarSymbol* iter,
   } else {
 
     if (zippered) {
+      INT_FATAL("Zippered followers should be created with a different overload");
       CallExpr *iterCall = toCallExpr(iterExpr);
       INT_ASSERT(iterCall);
       INT_ASSERT(iterCall->isPrimitive(PRIM_ZIP));
