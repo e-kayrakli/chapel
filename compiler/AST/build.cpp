@@ -1052,6 +1052,7 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
       insertAfter = move;
     }
     var->addFlag(FLAG_INDEX_VAR);
+    var->addFlag(FLAG_INDEX_OF_INTEREST);
     if (coforall)
       var->addFlag(FLAG_COFORALL_INDEX_VAR);
     var->addFlag(FLAG_INSERT_AUTO_DESTROY);
@@ -1072,6 +1073,7 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
       insertAfter = move;
     }
     sym->symbol()->addFlag(FLAG_INDEX_VAR);
+    sym->symbol()->addFlag(FLAG_INDEX_OF_INTEREST);
     if (coforall)
       sym->symbol()->addFlag(FLAG_COFORALL_INDEX_VAR);
     sym->symbol()->addFlag(FLAG_INSERT_AUTO_DESTROY);

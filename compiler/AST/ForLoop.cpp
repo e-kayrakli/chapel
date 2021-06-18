@@ -494,6 +494,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
         //userIdxSetup->insertAtTail(tupTypeMove);
         userIdxSetup->insertAtTail(new BlockStmt(tupTypeMove, BLOCK_TYPE));
+        //userIdxSetup->insertAtTail(tupTypeMove);
 
         CallExpr *zipIndexCall = new CallExpr(PRIM_ZIP_INDEX);
         for (i = 0 ; i < iterators.size() ; i++) {
@@ -507,10 +508,15 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
           //anchor->insertAfter(idxDef);
           //anchor = idxDef;
 
-          CallExpr *setTupMem = new CallExpr(PRIM_SET_SVEC_MEMBER,
+          //CallExpr *setTupMem = new CallExpr(PRIM_SET_SVEC_MEMBER,
+          CallExpr *setTupMem = new CallExpr(PRIM_SET_MEMBER,
                                              idxSE->copy(),
                                              new_IntSymbol(i),
                                              new UnresolvedSymExpr(idxTempName));
+
+          //CallExpr* setTupMem = new CallExpr(PRIM_ASSIGN, new CallExpr(userIdxSym,
+                                                        //new_IntSymbol(i)),
+                                             //new UnresolvedSymExpr(idxTempName));
 
           userIdxSetup->insertAtTail(setTupMem);
 

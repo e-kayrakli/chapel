@@ -8748,7 +8748,7 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
 
     expansionBlock->insertAtTail(new CallExpr(PRIM_MOVE, iterTemp, getIterator));
 
-    //tryToReplaceWithDirectRangeIterator(actualCopy);
+    tryToReplaceWithDirectRangeIterator(actualCopy);
 
     //iterators.push_back(iterTemp);
   }

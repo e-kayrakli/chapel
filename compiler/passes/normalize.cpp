@@ -2445,6 +2445,10 @@ static bool shouldInsertCallTemps(CallExpr* call) {
   CallExpr* parentCall = toCallExpr(parentExpr);
   Expr*     stmt       = call->getStmtExpr();
 
+  if (call->id == 207915) {
+
+  }
+
   if (parentExpr == NULL                                 ||
       isDefExpr(parentExpr)                              ||
       isContextCallExpr(parentExpr)                      ||
