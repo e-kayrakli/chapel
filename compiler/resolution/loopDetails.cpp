@@ -867,7 +867,7 @@ void gatherLoopDetails(ForallStmt* fs,
       Symbol* followerIterator = NULL;
 
       if (fs->inTest()) {
-        INT_FATAL("Not ready yet");
+        //INT_FATAL("Not ready yet");
       }
       else {
         followerIndex = toSymExpr(followerFor->indexGet())->symbol();
@@ -884,19 +884,39 @@ void gatherLoopDetails(ForallStmt* fs,
         detailsVector[0].iterator = getTheIteratorFn(detailsVector[0].iteratorClass);
       } else {
         // Set detailsVector[i].index
-        findZipperedIndexVariables(followerIndex, detailsVector);
+        //findZipperedIndexVariables(followerIndex, detailsVector);
+        CallExpr* iterCall = toCallExpr(followerFor->zipCallGet());
+        CallExpr* indexCall = toCallExpr(followerFor->indexGet());
+
+        INT_ASSERT(iterCall);
+        INT_ASSERT(indexCall);
+        INT_ASSERT(iterCall->numActuals() == indexCall->numActuals());
+
+        int numActuals = iterCall->numActuals();
+
+        for (int i=0 ; i<numActuals ; i++) {
+          SymExpr* curIndex = toSymExpr(indexCall->get(1));
+          SymExpr* curIter = toSymExpr(iterCall->get(1));
+          INT_ASSERT(curIndex);
+          INT_ASSERT(curIter);
+
+          detailsVector[i].index = curIndex->symbol();
+          detailsVector[i].iteratorClass = curIter->symbol()->type;
+          detailsVector[i].iterator =
+            getTheIteratorFn(detailsVector[i].iteratorClass);
+        }
 
         // Figure out iterator class of zippered followers from
         // the tuple type.
-        AggregateType* tupleType = toAggregateType(followerIterator->type);
-        int i = 0;
-        for_fields(field, tupleType) {
-          detailsVector[i].iteratorClass = field->type;
-          detailsVector[i].iterator =
-            getTheIteratorFn(detailsVector[i].iteratorClass);
+        //AggregateType* tupleType = toAggregateType(followerIterator->type);
+        //int i = 0;
+        //for_fields(field, tupleType) {
+          //detailsVector[i].iteratorClass = field->type;
+          //detailsVector[i].iterator =
+            //getTheIteratorFn(detailsVector[i].iteratorClass);
 
-          i++;
-        }
+          //i++;
+        //}
       }
       return;
     }
