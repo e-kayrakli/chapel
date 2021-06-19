@@ -870,14 +870,19 @@ void gatherLoopDetails(ForallStmt* fs,
         //INT_FATAL("Not ready yet");
       }
       else {
-        followerIndex = toSymExpr(followerFor->indexGet())->symbol();
-        followerIterator = followerFor->iteratorGet()->symbol();
+        //followerIndex = toSymExpr(followerFor->indexGet())->symbol();
+        //followerIterator = followerFor->iteratorGet()->symbol();
 
-        INT_ASSERT(followerIndex);
-        INT_ASSERT(followerIterator);
+        //INT_ASSERT(followerIndex);
+        //INT_ASSERT(followerIterator);
       }
 
       if (!zippered) {
+        followerIndex = toSymExpr(followerFor->indexGet())->symbol();
+        followerIterator = followerFor->iteratorGet()->symbol();
+        INT_ASSERT(followerIndex);
+        INT_ASSERT(followerIterator);
+
         followerIndex = collapseIndexVarReferences(followerIndex);
         detailsVector[0].index = followerIndex;
         detailsVector[0].iteratorClass = followerIterator->typeInfo();

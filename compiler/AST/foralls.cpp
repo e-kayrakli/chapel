@@ -1167,6 +1167,8 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
   VarSymbol* followThis = parIdxVar(pfs);
 
   CallExpr* followerZipCall = new CallExpr(PRIM_ZIP);
+  CallExpr* followerZipIndexCall = forallZipIndexCall->copy();  // should we create a new one?
+  SymbolMap fastFollowerMap;
 
   //for_actuals (actual, forallZipCall) {
   for (int i=1 ; i<=numActuals ; i++) {
@@ -1186,19 +1188,33 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
                                                         getFollower)));
     followerZipCall->insertAtTail(new SymExpr(iterTemp));
 
-    Symbol* followIdx = toSymExpr(forallZipIndexCall->get(i))->symbol();
+    Symbol* forallIdx = toSymExpr(forallZipIndexCall->get(i))->symbol();
+    VarSymbol* followIdx = NULL;
+    if (fast) {
+      const int nameLen = strlen(forallIdx->name);
+      char fastFollowIdxName[nameLen+6];
+      snprintf(fastFollowIdxName, nameLen+5, "%s_fast", forallIdx->name);
+      followIdx = newTemp(fastFollowIdxName);
+      fastFollowerMap.put(forallIdx, followIdx);
+    }
+    else {
+      followIdx = toVarSymbol(forallIdx);
+    }
+
+    INT_ASSERT(followIdx);
+
     followIdx->addFlag(FLAG_FOLLOWER_INDEX);
     followIdx->addFlag(FLAG_INDEX_OF_INTEREST);
 
     if (followIdx->defPoint == NULL) {
       followBlock->insertAtTail(new DefExpr(followIdx));
     } else {
-      //followBlock->insertAtTail(followIdx->defPoint);
+      followBlock->insertAtTail(followIdx->defPoint->remove());
     }
     followBlock->insertAtTail("{TYPE 'move'(%S, iteratorIndex(%S)) }", followIdx, iterTemp);
   }
 
-  CallExpr* followerZipIndexCall = forallZipIndexCall->copy();
+  update_symbols(userBody, &fastFollowerMap);
 
   ForLoop* followLoop = new ForLoop(followerZipIndexCall, followerZipCall,
                                     userBody, /*followerLoop=*/true);
