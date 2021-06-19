@@ -1377,7 +1377,10 @@ expandRecursiveIteratorInline(ForLoop* forLoop)
 {
   SET_LINENO(forLoop);
 
-  INT_ASSERT(!forLoop->inTest());
+  if (forLoop->zipperedGet()) {
+    // TODO: somehow we are not hitting this assertion
+    INT_FATAL("zippering over recursive iterators is not supported");
+  }
 
   FnSymbol*  parent            = toFnSymbol(forLoop->parentSymbol);
 
