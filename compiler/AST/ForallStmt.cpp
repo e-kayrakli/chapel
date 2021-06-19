@@ -647,19 +647,19 @@ ForallStmt* ForallStmt::fromForLoop(ForLoop* forLoop) {
 }
 
 // "Undo" the tuple for a zippered 'fs'.
-static void destructZipperedIterables(ForallStmt* fs, SymExpr* dataExpr) {
-  CallExpr* zipcall = toCallExpr(getDefOfTemp(dataExpr));
-  INT_ASSERT(zipcall->isPrimitive(PRIM_ZIP));
+static void destructZipperedIterables(ForallStmt* fs, Expr* dataExpr) {
+  CallExpr* zipcall = toCallExpr(dataExpr);
+  INT_ASSERT(zipcall != NULL && zipcall->isPrimitive(PRIM_ZIP));
   for_actuals(actual, zipcall)
     fs->iteratedExpressions().insertAtTail(actual->remove());
 
   // Ensure removing zipcall is OK.
-  CallExpr* move = toCallExpr(zipcall->parentExpr);
-  INT_ASSERT(move->isPrimitive(PRIM_MOVE));
-  move->remove();
+  //CallExpr* move = toCallExpr(zipcall->parentExpr);
+  //INT_ASSERT(move->isPrimitive(PRIM_MOVE));
+  //move->remove();
 }
 
-ForallStmt* ForallStmt::fromReduceExpr(VarSymbol* idx, SymExpr* dataExpr,
+ForallStmt* ForallStmt::fromReduceExpr(VarSymbol* idx, Expr* dataExpr,
                                        ShadowVarSymbol* svar,
                                        bool zippered, bool requireSerial)
 {

@@ -116,7 +116,7 @@ public:
 
   static ForallStmt* fromForLoop(ForLoop* forLoop);
 
-  static ForallStmt* fromReduceExpr(VarSymbol* idx, SymExpr* dataExpr,
+  static ForallStmt* fromReduceExpr(VarSymbol* idx, Expr* dataExpr,
                                     ShadowVarSymbol* svar,
                                     bool zippered, bool requireSerial);
 

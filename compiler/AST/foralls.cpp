@@ -1875,25 +1875,29 @@ static SymExpr* elemTypeIfIterableIIT(Expr* ref, SymExpr* iitr,
 // Given a reduce expression like "op reduce data", return op(inputType).
 // inputType is the type of things being reduced - when iterating over 'data'.
 // This matches the case where inputType is provided by the user.
-static Expr* lowerReduceOp(Expr* ref, SymExpr* opSE, SymExpr* dataSE,
+static Expr* lowerReduceOp(Expr* ref, Expr* opSE, Expr* data,
                            bool zippered)
 {
   CallExpr* iit = NULL;
   if (zippered) {
     // Cf. destructZipperedIterables. 'zipcall' will be removed there.
-    CallExpr* zipcall = toCallExpr(getDefOfTemp(dataSE)->copy());
-    INT_ASSERT(zipcall->isPrimitive(PRIM_ZIP));
+    CallExpr* zipcall = toCallExpr(data);
+    INT_ASSERT(zipcall != NULL && zipcall->isPrimitive(PRIM_ZIP));
     iit = new CallExpr("iteratorIndexTypeZip");
     for_actuals(actual, zipcall)
       iit->insertAtTail(toSymExpr(actual)->symbol());
   } else {
+    SymExpr* dataSE = toSymExpr(data);
     iit = new CallExpr("iteratorIndexType", dataSE->symbol());
   }
 
   ref->insertBefore(iit);
   Expr* iitR = resolveExpr(iit)->remove();
   if (!isSymExpr(iitR)) iitR = normalizeIITR(ref, iitR);
-  iitR = elemTypeIfIterableIIT(ref, toSymExpr(iitR), dataSE);
+
+  if (SymExpr* dataSE = toSymExpr(data)) {
+    iitR = elemTypeIfIterableIIT(ref, toSymExpr(iitR), dataSE);
+  }
 
   return new CallExpr(opSE, iitR);
 }
@@ -1924,15 +1928,19 @@ Expr* lowerPrimReduce(CallExpr* call) {
   CallExpr*   noop = new CallExpr(PRIM_NOOP);
   callStmt->insertBefore(noop);
 
+  if (!isSymExpr(call->get(2))) {
+    //INT_FATAL("There we go");
+  }
+
   SymExpr*   opSE = toSymExpr(call->get(1)->remove());           // 1st arg
-  SymExpr* dataSE = toSymExpr(call->get(1)->remove());           // 2nd arg
+  Expr* data      = call->get(1)->remove();  //2nd arg: iterand or PRIM_ZIP_CALL
   bool   zippered = toSymExpr(call->get(1))->symbol() == gTrue;  // 3rd arg
   bool  reqSerial = false; // We may need it for #11819, otherwise remove it.
 
   if (!isTypeSymbol(opSE->symbol()))
     USR_FATAL(opSE, "'reduce' expressions where the reduction is defined by a value, not a type, are currently not implemented; a workaround is to replace it with a forall loop with a reduce intent");
 
-  Expr* opExpr = lowerReduceOp(callStmt, opSE, dataSE, zippered);
+  Expr* opExpr = lowerReduceOp(callStmt, opSE, data, zippered);
 
   Symbol* result = NULL;
   if (callStmt == call) {
@@ -1948,7 +1956,7 @@ Expr* lowerPrimReduce(CallExpr* call) {
   VarSymbol*       idx  = newTemp("chpl_redIdx");
   ShadowVarSymbol* svar = new ShadowVarSymbol(TFI_REDUCE, "chpl_redSVar",
                                               new SymExpr(result), opExpr);
-  ForallStmt*      fs   = ForallStmt::fromReduceExpr(idx, dataSE, svar,
+  ForallStmt*      fs   = ForallStmt::fromReduceExpr(idx, data, svar,
                                                      zippered, reqSerial);
   if (callStmt == call) {
     callStmt->insertBefore(fs);

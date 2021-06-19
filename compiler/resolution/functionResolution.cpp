@@ -2570,9 +2570,14 @@ static void resolveZipExpandAndAdjustLoop(ForLoop* loop);
 
 static void resolveZip(CallExpr* call) {
   ForLoop* parentLoop = toForLoop(call->parentExpr);
-  INT_ASSERT(parentLoop);
+  //INT_ASSERT(parentLoop);
 
-  resolveZipExpandAndAdjustLoop(parentLoop);
+  if (parentLoop) {
+    resolveZipExpandAndAdjustLoop(parentLoop);
+  }
+  else {
+    //resolveNormalCall(call);
+  }
   // we only need to resolve if there's a tuple expansion argument
   //if (call->numActuals() == 1) {
     //if (CallExpr* innerCall = toCallExpr(call->argList.only())) {
