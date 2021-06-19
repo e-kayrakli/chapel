@@ -1882,14 +1882,18 @@ static Expr* unrollHetTupleLoop(CallExpr* call, Expr* tupExpr, Type* iterType) {
   //
   ForLoop* theloop = NULL;
   Expr* nextStmt = noop->next;
+  DeferStmt* deferToRemove = NULL;
+  BlockStmt* blockToRemove = NULL;
   if (DeferStmt* defer = toDeferStmt(nextStmt)) {
     nextStmt = nextStmt->next;
-    defer->remove();
+    deferToRemove = defer;
     if (BlockStmt* block = toBlockStmt(nextStmt)) {
       nextStmt = nextStmt->next;
-      block->remove();
+      blockToRemove = block;
       if (ForLoop* loop = toForLoop(nextStmt)) {
-        theloop = loop;
+        if (!loop->zipperedGet()) {
+          theloop = loop;
+        }
       }
     }
   }
@@ -1924,6 +1928,9 @@ static Expr* unrollHetTupleLoop(CallExpr* call, Expr* tupExpr, Type* iterType) {
     return NULL;
   }
 
+  deferToRemove->remove();
+  blockToRemove->remove();
+
   // grab the tuple's type
   //
   AggregateType* tupType = toAggregateType(iterType);
@@ -1931,14 +1938,9 @@ static Expr* unrollHetTupleLoop(CallExpr* call, Expr* tupExpr, Type* iterType) {
   // stamp out copies of the loop body for each element of the tuple;
   // this loop starts from 2 to skip over the size field (which is 1).
   //
-  Symbol* idxSym = NULL;
-  if (theloop->inTest()) {
-    INT_FATAL("Not ready yet");
-  }
-  else {
-    idxSym = toSymExpr(theloop->indexGet())->symbol();
-    INT_ASSERT(idxSym);
-  }
+  Symbol* idxSym = toSymExpr(theloop->indexGet())->symbol();
+  INT_ASSERT(idxSym);
+
   Symbol* continueSym = theloop->continueLabelGet();
   for (int i=2; i<=tupType->fields.length; i++) {
     SymbolMap map;
