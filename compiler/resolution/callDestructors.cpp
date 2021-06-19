@@ -1989,9 +1989,10 @@ static void destroyFormalInTaskFn(ArgSymbol* formal, FnSymbol* taskFn) {
   CallExpr* downEndCount = findDownEndCount(taskFn);
   INT_ASSERT(downEndCount);
   FnSymbol* autoDestroyFn = autoDestroyMap.get(formal->type);
-  INT_ASSERT(autoDestroyFn);
-  CallExpr* autoDestroyCall = new CallExpr(autoDestroyFn, formal);
-  downEndCount->insertBefore(autoDestroyCall);
+  if (autoDestroyFn) {
+    CallExpr* autoDestroyCall = new CallExpr(autoDestroyFn, formal);
+    downEndCount->insertBefore(autoDestroyCall);
+  }
 }
 
 /************************************* | **************************************

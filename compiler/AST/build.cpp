@@ -1052,9 +1052,10 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
       insertAfter = move;
     }
     var->addFlag(FLAG_INDEX_VAR);
-    var->addFlag(FLAG_INDEX_OF_INTEREST);
     if (coforall)
       var->addFlag(FLAG_COFORALL_INDEX_VAR);
+    else
+      var->addFlag(FLAG_INDEX_OF_INTEREST);
     var->addFlag(FLAG_INSERT_AUTO_DESTROY);
   } else if (SymExpr* sym = toSymExpr(indices)) {
     // BHARSH TODO: I think this should be a PRIM_ASSIGN. I've seen a case
@@ -1073,9 +1074,10 @@ static Expr* destructureIndicesAfter(Expr* insertAfter,
       insertAfter = move;
     }
     sym->symbol()->addFlag(FLAG_INDEX_VAR);
-    sym->symbol()->addFlag(FLAG_INDEX_OF_INTEREST);
     if (coforall)
       sym->symbol()->addFlag(FLAG_COFORALL_INDEX_VAR);
+    else
+      sym->symbol()->addFlag(FLAG_INDEX_OF_INTEREST);
     sym->symbol()->addFlag(FLAG_INSERT_AUTO_DESTROY);
   } else {
     INT_FATAL("Unexpected");

@@ -488,10 +488,10 @@ proc Block.init(boundingBox: domain,
   // Use a zippered coforall to get nonblocking ons but create
   // the reference into locDistTemp before launching the remote task.
   const boundingBoxDims = boundingBox.dims();
-  coforall (locid, loc, locDistTempElt)
+  coforall (locidHeyo, loc, locDistTempElt)
            in zip(targetLocDom, targetLocales, locDistTemp) {
     on loc {
-      locDistTempElt = new unmanaged LocBlock(rank, idxType, locid,
+      locDistTempElt = new unmanaged LocBlock(rank, idxType, locidHeyo,
                                               boundingBox, boundingBoxDims,
                                               targetLocDom);
     }
