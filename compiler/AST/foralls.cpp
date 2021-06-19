@@ -1167,7 +1167,7 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
   VarSymbol* followThis = parIdxVar(pfs);
 
   CallExpr* followerZipCall = new CallExpr(PRIM_ZIP);
-  CallExpr* followerZipIndexCall = forallZipIndexCall->copy();  // should we create a new one?
+  CallExpr* followerZipIndexCall = new CallExpr(PRIM_ZIP_INDEX);
   SymbolMap fastFollowerMap;
 
   //for_actuals (actual, forallZipCall) {
@@ -1205,6 +1205,8 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
 
     followIdx->addFlag(FLAG_FOLLOWER_INDEX);
     followIdx->addFlag(FLAG_INDEX_OF_INTEREST);
+
+    followerZipIndexCall->insertAtTail(new SymExpr(followIdx));
 
     if (followIdx->defPoint == NULL) {
       followBlock->insertAtTail(new DefExpr(followIdx));
