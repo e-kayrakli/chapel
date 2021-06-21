@@ -178,11 +178,13 @@ static std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indi
         iteratorExpr = iterCall->get(1);
       }
     }
-    else if (iterCall->isNamed("_build_tuple")) {
-      INT_FATAL("_build_tuple is no longer a supported iteratorExpr");
-    }
     else {
       // not zippered
+      // note that we may still get "_build_tuple" here for things like:
+      //
+      // for item in (a,b,c,d)
+      //
+      // which is just a loop over a tuple literal.
     }
   }
 
