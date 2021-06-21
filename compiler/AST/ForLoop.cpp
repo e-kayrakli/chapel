@@ -769,10 +769,14 @@ ForLoop* ForLoop::copyInner(SymbolMap* map)
 
   // MPF 2020-01-21: It seems it should also copy mLoweredForall,
   // but doing so causes problems in lowerIterators.
+  // ENGIN 2021-6-21: this has to do with ErrorHandling not doing anything for
+  // loweredForalls. See ErrorHandlingVisitor::enterForLoop(ForLoop* node).
+  // Currently, we are dropping mLoweredForall on the floor when doing generic
+  // instantiation and luckily this works well with the rest of the compilation.
   retval->mIsForExpr        = mIsForExpr;
 
   retval->mFollowerLoop     = mFollowerLoop;
-  retval->mLoweredForall    = mLoweredForall;
+
 
   for_alist(expr, body)
     retval->insertAtTail(expr->copy(map, true));

@@ -2386,9 +2386,7 @@ static void errorIfThrowingIterator(Symbol* iterSym, ForLoop* forLoop) {
 
 static void errorIfHasThrowingIterator(ForLoop* forLoop) {
   if (forLoop->zipperedGet()) {
-    for_actuals(iterator, forLoop->zipCallGet()) {
-      errorIfThrowingIterator(toSymExpr(iterator)->symbol(), forLoop);
-    }
+    errorIfThrowingIterator(toSymExpr(forLoop->zipCallGet()->get(1))->symbol(), forLoop);
   }
   else {
     errorIfThrowingIterator(toSymExpr(forLoop->iteratorGet())->symbol(), forLoop);

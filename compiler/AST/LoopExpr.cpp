@@ -935,6 +935,9 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
   const char* iteratorName = astr(astr_loopexpr_iter, istr(loopexpr_uid-1));
   CallExpr*   iterCall     = new CallExpr(iteratorName);
   for_vector (ArgSymbol, iterand, iteratorExprArgs) {
+    iterand->addFlag(FLAG_EXPR_TEMP);
+    iterand->addFlag(FLAG_MAYBE_REF);
+
     if (isVariadicArgument(iterand)) {
       iterCall->insertAtTail(new CallExpr(PRIM_TUPLE_EXPAND, iterand));
     }
