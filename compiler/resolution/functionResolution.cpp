@@ -8876,9 +8876,9 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
 
   if (CallExpr* zipCall = loop->zipCallGet()) {
     INT_ASSERT(zipCall->isPrimitive(PRIM_ZIP));
-    if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
+    //if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
 
-    }
+    //}
 
     if (CallExpr* argCall = toCallExpr(zipCall->get(1))) {
       INT_ASSERT(zipCall->numActuals() == 1);
@@ -8895,9 +8895,9 @@ static void        resolveZipExpandAndAdjustLoop(ForLoop* loop) {
                                   /*shouldResolve=*/ true);
     }
 
-    if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
+    //if (strcmp(loop->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
 
-    }
+    //}
   }
 }
 

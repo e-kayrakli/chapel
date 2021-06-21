@@ -461,9 +461,9 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
   checkIndices(indices);
 
-  if (strcmp("/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl", loop->fname()) == 0) {
+  //if (strcmp("/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl", loop->fname()) == 0) {
 
-  }
+  //}
   //if (loop->inTest()) {
   if (loop->inTest() && zippered && zipArgsAreExplicit) {
     //INT_ASSERT(iterators.size() > 0);

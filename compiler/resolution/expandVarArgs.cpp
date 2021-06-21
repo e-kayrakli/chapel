@@ -768,9 +768,9 @@ static void substituteVarargTupleRefs(BlockStmt*     block,
     if (se->symbol() == formal) {
       if (CallExpr* parent = toCallExpr(se->parentExpr)) {
 
-        if (strcmp(parent->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
+        //if (strcmp(parent->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/forExpr.chpl") == 0) {
 
-        }
+        //}
 
         SET_LINENO(parent);
 
