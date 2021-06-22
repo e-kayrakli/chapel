@@ -715,6 +715,10 @@ static ArgSymbol* newOuterVarArg(Symbol* ovar) {
 static bool nonZipperedIteratorExpr(Expr* iteratorExpr) {
   if (isSymExpr(iteratorExpr)) return true;
 
+  // loopexprs can also be used as iterator exprs. We don't need to do anything
+  // special for them
+  if (isLoopExpr(iteratorExpr)) return true;
+
   if (CallExpr* iterCall = toCallExpr(iteratorExpr)) {
     if (!iterCall->isPrimitive(PRIM_ZIP)) return true;
   }
