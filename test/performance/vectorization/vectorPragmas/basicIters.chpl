@@ -12,8 +12,8 @@ module iters {
   // for loop in standalone with yield should get vector pragma
   iter myiter(nn: int, nt: int, param tag: iterKind) where tag == iterKind.standalone {
     coforall i in 0..#nt {
-      for jHeyo in i*nn..#nn {
-        yield jHeyo;
+      for j in i*nn..#nn {
+        yield j;
       }
     }
   }
