@@ -2405,6 +2405,10 @@ expandForLoop(ForLoop* forLoop) {
 
   }
 
+  if (forLoop->id == 1258789) {
+
+  }
+
   if (!fNoInlineIterators)
   {
     bool zippered = forLoop->zipperedGet();
@@ -2612,6 +2616,13 @@ expandForLoop(ForLoop* forLoop) {
 
       testBlock->insertAtTail(new SymExpr(gTrue));
     }
+
+    //std::cout << "here: " << forLoop->stringLoc() << std::endl;
+    if (strcmp(forLoop->stringLoc(),
+               "test/performance/vectorization/vectorPragmas/InvokeIters.chpl:15") == 0) {
+      gdbShouldBreakHere();
+                   
+                 }
 
     // NOAKES 2014/11/19: An error occurs if the replacement is moved to
     // earlier in the pass.  I have yet to identify the issue but suspect
