@@ -1208,6 +1208,9 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
 
     followerZipIndexCall->insertAtTail(new SymExpr(followIdx));
 
+    followBlock->insertAtTail(new DeferStmt(new CallExpr("_freeIterator",
+                                                         new SymExpr(iterTemp))));
+
     if (followIdx->defPoint == NULL) {
       followBlock->insertAtTail(new DefExpr(followIdx));
     } else {

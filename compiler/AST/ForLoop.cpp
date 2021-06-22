@@ -774,9 +774,7 @@ ForLoop* ForLoop::copyInner(SymbolMap* map)
   // Currently, we are dropping mLoweredForall on the floor when doing generic
   // instantiation and luckily this works well with the rest of the compilation.
   retval->mIsForExpr        = mIsForExpr;
-
-  retval->mFollowerLoop     = mFollowerLoop;
-
+  //retval->mIsCoforallLoop   = mIsCoforallLoop;
 
   for_alist(expr, body)
     retval->insertAtTail(expr->copy(map, true));
@@ -830,8 +828,13 @@ void ForLoop::copyBodyHelper(Expr* beforeHere, int64_t i, SymbolMap* map,
 // own class that shares a common parent with ForLoop.
 bool ForLoop::isCoforallLoop() const
 {
-  return mIsCoforallLoop;
-  //return mIndex->symbol()->hasFlag(FLAG_COFORALL_INDEX_VAR);
+  //return mIsCoforallLoop;
+  if (SymExpr* indexSymExpr = toSymExpr(mIndex)) {
+    return indexSymExpr->symbol()->hasFlag(FLAG_COFORALL_INDEX_VAR);
+  }
+  else {
+    return toSymExpr(toCallExpr(mIndex)->get(1))->symbol()->hasFlag(FLAG_COFORALL_INDEX_VAR);
+  }
 }
 
 bool ForLoop::isLoweredForallLoop() const
