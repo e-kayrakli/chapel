@@ -1377,6 +1377,7 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
                                                            body,
                                                            zippered,
                                                            /*bounded=*/false);
+    coforallBlk->insertAtTail(nonVectorCoforallBlk);
   }
   else {
     tmpIter = newTemp("tmpIter");
@@ -1390,15 +1391,7 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
       zipToTuple(iterator);
     }
 
-    nonVectorCoforallBlk = buildLoweredCoforall(indices,
-                                                           new SymExpr(tmpIter),
-                                                           //NULL,
-                                                           byref_vars,
-                                                           body,
-                                                           zippered,
-                                                           /*bounded=*/false);
-  }
-  if (!zippered) {
+    // the order matters: buildLoweredCoforall changes `body`
     BlockStmt* vectorCoforallBlk = buildLoweredCoforall(indices,
                                                         new SymExpr(tmpIter),
                                                         //NULL, [>zipCall<]
@@ -1406,6 +1399,14 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
                                                         body->copy(),
                                                         zippered,
                                                         /*bounded=*/true);
+
+    nonVectorCoforallBlk = buildLoweredCoforall(indices,
+                                                           new SymExpr(tmpIter),
+                                                           //NULL,
+                                                           byref_vars,
+                                                           body,
+                                                           zippered,
+                                                           /*bounded=*/false);
 
     VarSymbol* isRngDomArr = newTemp("isRngDomArr");
     isRngDomArr->addFlag(FLAG_MAYBE_PARAM);
@@ -1420,9 +1421,6 @@ BlockStmt* buildCoforallLoopStmt(Expr* indices,
                                            vectorCoforallBlk,
                                            nonVectorCoforallBlk));
 
-  }
-  else {
-    coforallBlk->insertAtTail(nonVectorCoforallBlk);
   }
 
   return coforallBlk;
