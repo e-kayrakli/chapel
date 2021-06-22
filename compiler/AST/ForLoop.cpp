@@ -480,7 +480,7 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
 
 
 
-        CallExpr* tupTypeBuilder = new CallExpr("_build_tuple");
+        CallExpr* tupTypeBuilder = new CallExpr("_build_tuple_always_allow_ref");
         CallExpr* tupTypeMove = new CallExpr(PRIM_MOVE, idxSE->copy(),
                                              tupTypeBuilder);
         VarSymbol* userIdxSym = isSymExpr(idxSE) ? toVarSymbol(toSymExpr(idxSE)->symbol()) :
