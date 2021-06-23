@@ -88,7 +88,7 @@ LoopExpr::LoopExpr(Expr* indices,
     this->loopBody = new BlockStmt(loopBody);
   }
 
-  if (!zippered && indices != NULL) {
+  if (indices != NULL) {
     findLoopExprDefs(this, indices, defIndices);
   }
 

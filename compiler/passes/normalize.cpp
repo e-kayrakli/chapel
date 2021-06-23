@@ -833,6 +833,9 @@ static Symbol* theDefinedSymbol(BaseAST* ast) {
           checkSelfDef(call, se->symbol());
         }
       }
+      //else if (call->isPrimitive(PRIM_ZIP_INDEX)) {
+        //retval = se->symbol();
+      //}
       // Allow for init() for a task-private variable, which occurs in
       // ShadowVarSymbol::initBlock(), which does not include its DefExpr.
       else if (ShadowVarSymbol* svar = toShadowVarSymbol(se->symbol())) {

@@ -491,8 +491,10 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
         userIdxSym->addFlag(FLAG_INDEX_VAR);
         userIdxSym->addFlag(FLAG_INSERT_AUTO_DESTROY);
 
-        DefExpr* userIdxDef = new DefExpr(userIdxSym);
-        userIdxSetup->insertAtTail(userIdxDef);
+        if (userIdxSym->defPoint == NULL) {
+          DefExpr* userIdxDef = new DefExpr(userIdxSym);
+          userIdxSetup->insertAtTail(userIdxDef);
+        }
 
         //userIdxSetup->insertAtTail(tupTypeMove);
         userIdxSetup->insertAtTail(new BlockStmt(tupTypeMove, BLOCK_TYPE));

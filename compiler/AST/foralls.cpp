@@ -636,14 +636,14 @@ static ParIterFlavor findParIter(ForallStmt* pfs, CallExpr* iterCall,
       else if (!noniterFn) noniterFn = igroup->noniterL;
     } else {
       gotLeader = tryResolveCall(iterCall);
-      if (!gotLeader) {
-        CallExpr* potentialLeaderCall = iterCall->copy();
-        // too fragile
-        while (potentialLeaderCall->numActuals() > 2) {
-          potentialLeaderCall->get(2)->remove();
-        }
-        gotLeader = tryResolveCall(potentialLeaderCall);
-      }
+      //if (!gotLeader) {
+        //CallExpr* potentialLeaderCall = iterCall->copy();
+        //// too fragile
+        //while (potentialLeaderCall->numActuals() > 2) {
+          //potentialLeaderCall->get(2)->remove();
+        //}
+        //gotLeader = tryResolveCall(potentialLeaderCall);
+      //}
     }
     if (gotLeader) retval = PIF_LEADER;
   }
