@@ -146,6 +146,9 @@ void tryToReplaceWithDirectRangeIterator(Expr* iteratorExpr);
 BlockStmt* createZipExpansionBlock(ForLoop* loop);
 void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
                                  bool shouldResolve);
+std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indices,
+                                                                     Expr*& iteratorExpr,
+                                                                     bool* zippered);
 
 
 
