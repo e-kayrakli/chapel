@@ -426,6 +426,7 @@ static FnSymbol* buildSerialIteratorFn(const char* iteratorName,
 {
   FnSymbol* sifn = new FnSymbol(iteratorName);
   sifn->addFlag(FLAG_ITERATOR_FN);
+  sifn->addFlag(FLAG_LOOP_EXPR_SERIAL_ITER);
   if (forall) {
     sifn->addFlag(FLAG_ORDER_INDEPENDENT_YIELDING_LOOPS);
     sifn->addFlag(FLAG_NO_REDUNDANT_ORDER_INDEPENDENT_PRAGMA_WARNING);
@@ -491,10 +492,11 @@ static Expr* buildLeaderIteratorWhereClause(ArgSymbol* lifnTag,
   return new CallExpr("&&", checkTag, checkToLeader);
 }
 
-static FnSymbol* buildLeaderIteratorFn(const char* iteratorName)
+static FnSymbol* buildLeaderIteratorFn(const char* iteratorName, int numIterands)
 {
   FnSymbol* lifn = new FnSymbol(iteratorName);
   lifn->addFlag(FLAG_FN_RETURNS_ITERATOR);
+  lifn->addFlag(FLAG_LOOP_EXPR_LEADER_ITER);
   lifn->setGeneric(true);
 
   Expr* tag = new SymExpr(gLeaderTag);
@@ -502,11 +504,18 @@ static FnSymbol* buildLeaderIteratorFn(const char* iteratorName)
                                      new CallExpr(PRIM_TYPEOF, tag));
   lifn->insertFormalAtTail(lifnTag);
 
-  ArgSymbol* lifnIterator = new ArgSymbol(INTENT_BLANK, "iterator", dtAny);
+  ArgSymbol* lifnIterator = new ArgSymbol(INTENT_BLANK, "iterator0", dtAny);
   lifn->insertFormalAtTail(lifnIterator);
 
   lifn->where = new BlockStmt(buildLeaderIteratorWhereClause(
                               lifnTag, lifnIterator));
+
+  for (int i = 1; i < numIterands ; i++) {
+    char argName[32];
+    snprintf(argName, 31, "iterator%d", i);
+    ArgSymbol* dummyArg = new ArgSymbol(INTENT_BLANK, argName, dtAny);
+    lifn->insertFormalAtTail(dummyArg);
+  }
 
   VarSymbol* leaderIterator = newTempConst("_leaderIterator");
   leaderIterator->addFlag(FLAG_EXPR_TEMP);
@@ -527,6 +536,7 @@ static FnSymbol* buildFollowerIteratorFn(const char* iteratorName,
 {
   FnSymbol* fifn = new FnSymbol(iteratorName);
   fifn->addFlag(FLAG_ITERATOR_FN);
+  fifn->addFlag(FLAG_LOOP_EXPR_FOLLOWER_ITER);
   if (forall) {
     fifn->addFlag(FLAG_ORDER_INDEPENDENT_YIELDING_LOOPS);
     fifn->addFlag(FLAG_NO_REDUNDANT_ORDER_INDEPENDENT_PRAGMA_WARNING);
@@ -965,7 +975,7 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
                                zippered, forall, stmt, iteratorExprArgs.size());
 
   if (forall) {
-    lifn = buildLeaderIteratorFn(iteratorName);
+    lifn = buildLeaderIteratorFn(iteratorName, iteratorExprArgs.size());
     addOuterVariableFormals(lifn, outerVars);
 
     // do we need to use this map since symbols have not been resolved?

@@ -201,6 +201,10 @@ static void checkParallelIterator(FnSymbol* serial, Expr* call,
   BlockStmt* container = new BlockStmt(repCall);
   call->getStmtExpr()->insertAfter(container);
 
+  if (strcmp(serial->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/test/arrays/deitz/parallelism/test_reduction_of_forall_expression_is_parallel.chpl") == 0) {
+
+  }
+
   if (FnSymbol* parIter = tryResolveCall(repCall)) {
     // Got it.
     if (isIteratorOrForwarder(parIter)) {
@@ -237,6 +241,10 @@ void resolveAlsoParallelIterators(FnSymbol* serial, Expr* call) {
   IteratorGroup* igroup = new IteratorGroup();
   igroup->serial = serial;
   serial->iteratorGroup = igroup;
+
+  if (strcmp(serial->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/test/arrays/deitz/parallelism/test_reduction_of_forall_expression_is_parallel.chpl") == 0) {
+
+  }
 
   checkParallelIterator(serial, call, gStandaloneTag, igroup,
                         igroup->standalone, igroup->noniterSA);

@@ -609,6 +609,10 @@ static ParIterFlavor findParIter(ForallStmt* pfs, CallExpr* iterCall,
   NamedExpr* tag = new NamedExpr("tag", new SymExpr(gStandaloneTag));
   iterCall->insertAtTail(tag);
 
+  if (strcmp(pfs->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/test/arrays/deitz/parallelism/test_reduction_of_forall_expression_is_parallel.chpl") == 0) {
+
+  }
+
   // try standalone
   if (!pfs->zippered()) {
     bool gotSA = false;
@@ -632,6 +636,14 @@ static ParIterFlavor findParIter(ForallStmt* pfs, CallExpr* iterCall,
       else if (!noniterFn) noniterFn = igroup->noniterL;
     } else {
       gotLeader = tryResolveCall(iterCall);
+      if (!gotLeader) {
+        CallExpr* potentialLeaderCall = iterCall->copy();
+        // too fragile
+        while (potentialLeaderCall->numActuals() > 2) {
+          potentialLeaderCall->get(2)->remove();
+        }
+        gotLeader = tryResolveCall(potentialLeaderCall);
+      }
     }
     if (gotLeader) retval = PIF_LEADER;
   }
@@ -1433,6 +1445,9 @@ CallExpr* resolveForallHeader(ForallStmt* pfs, SymExpr* origSE)
 
   checkWhenOverTupleExpand(pfs);
 
+  if (strcmp(pfs->fname(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/test/arrays/deitz/parallelism/test_reduction_of_forall_expression_is_parallel.chpl") == 0) {
+
+  }
   FnSymbol* origTarget = NULL;
   CallExpr* iterCall = buildForallParIterCall(pfs, origSE, origTarget);
 
