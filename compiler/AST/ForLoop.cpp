@@ -776,6 +776,7 @@ ForLoop* ForLoop::copyInner(SymbolMap* map)
   // Currently, we are dropping mLoweredForall on the floor when doing generic
   // instantiation and luckily this works well with the rest of the compilation.
   retval->mIsForExpr        = mIsForExpr;
+  //retval->mLoweredForall    = mLoweredForall; // we need this
   //retval->mIsCoforallLoop   = mIsCoforallLoop;
 
   for_alist(expr, body)

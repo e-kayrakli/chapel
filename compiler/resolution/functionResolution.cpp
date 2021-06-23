@@ -8721,8 +8721,17 @@ void adjustLoopAfterZipExpansion(CallExpr* zipCall, BlockStmt* expansionBlock,
   ForLoop* loop = toForLoop(zipCall->parentExpr);
 
   Symbol* followThis = NULL;
-  if (loop->isLoweredForallLoop()) {
-    if (FnSymbol* parentFn = toFnSymbol(loop->parentSymbol)) {
+
+  // ENGIN: instead of checking the flag on the parent function, I want to be
+  // able to use mLoweredForall field in the ForLoop. However, that's not
+  // working properly now (TODO create an issue). The downside of this is that
+  // this is only checking for forall expression that zip over tuple expansions
+  // and not forall statements. However, at the time of writing this, it is OK.
+  // Because forall statements are lowered after the tuples are expanded, so the
+  // for loop that we write for forall statements that zip over tuple expansions
+  // do not zip over expansions, and doesn't exercise this code path.
+  if (FnSymbol* parentFn = toFnSymbol(loop->parentSymbol)) {
+    if (parentFn->hasFlag(FLAG_LOOP_EXPR_FOLLOWER_ITER)) {
       for_formals (formal, parentFn) {
         if (strcmp(formal->name, "followThis") == 0) {
           followThis = formal;
