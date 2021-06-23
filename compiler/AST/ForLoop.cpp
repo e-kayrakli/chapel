@@ -150,19 +150,19 @@ static bool isTupleExpandCall(Expr* e) {
 }
 
 static std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indices,
-                                                                     Expr*& iteratorExpr) {
+                                                                     Expr*& iteratorExpr,
+                                                                     bool* zippered) {
   std::vector<BlockStmt*> tupleBlocks;
-  bool zippered = false;
   int numIterands;
   if (CallExpr *iterCall = toCallExpr(iteratorExpr)) {
     if (iterCall->isPrimitive(PRIM_ZIP)) {
       numIterands = iterCall->numActuals();
       if (numIterands == 1) {
         if (isTupleExpandCall(iterCall->get(1))) {
-          zippered = true;
+          *zippered = true;
         }
         else {
-          zippered = false;
+          *zippered = false;
         }
       }
       else {
@@ -171,10 +171,10 @@ static std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indi
             USR_FATAL("Tuple expansion expressions cannot be zippered with other expressions");
           }
         }
-        zippered = true;
+        *zippered = true;
       }
       
-      if (!zippered) {
+      if (!*zippered) {
         iteratorExpr = iterCall->get(1);
       }
     }
@@ -188,7 +188,7 @@ static std::vector<BlockStmt*> standardizeForLoopIndicesAndIteration(Expr*& indi
     }
   }
 
-  if (zippered) {
+  if (*zippered) {
     if (!indices) {
       CallExpr* newCall = new CallExpr(PRIM_ZIP_INDEX);
       for (int i=0 ; i<numIterands ; i++) {
@@ -304,7 +304,8 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
                           bool       isForExpr)
 {
   std::vector<BlockStmt*> tupleBlocks = standardizeForLoopIndicesAndIteration(indices,
-                                                                              iteratorExpr);
+                                                                              iteratorExpr,
+                                                                              &zippered);
   for_vector (BlockStmt, tupleBlock, tupleBlocks) {
     body->insertAtHead(tupleBlock);
     tupleBlock->flattenAndRemove();

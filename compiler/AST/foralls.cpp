@@ -928,7 +928,8 @@ static void addParIdxVarsAndRestruct(ForallStmt* fs, VarSymbol* parIdx) {
   VarSymbol* followIdx = NULL;
   AList& indvars = fs->inductionVariables();
 
-  if (!fs->zippered() && indvars.length == 1) {
+  //if (!fs->zippered() && indvars.length == 1) {
+  if (indvars.length == 1) {
     followIdx = newTemp("chpl__followIdx");
     userLoopBody->insertBefore(new DefExpr(followIdx));
     userLoopBody->insertAtHead("'move'(%S,%S)",
@@ -1080,7 +1081,7 @@ static Expr* rebuildIterableCall(ForallStmt* pfs,
 
   int origLength = pfs->iteratedExpressions().length;
   if (origLength == 1) {
-    INT_ASSERT(!pfs->zippered());
+    //INT_ASSERT(!pfs->zippered()); // forall a in zip(A) is still zippered
     // no tuple building here
     return origExprFlw;
   }
@@ -1260,19 +1261,20 @@ static BlockStmt* buildFollowLoop(ForallStmt* pfs, Expr* iterExpr,
 }
 
 static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
-  bool       zippered    = false;
+  bool       actuallyZippered    = false;
+  //bool       actuallyZippered    = pfs->zippered();
   CallExpr*  iterCall = toCallExpr(iterExpr);
 
   if (iterCall) {
     INT_ASSERT(iterCall->isPrimitive(PRIM_ZIP));
     if (iterCall->numActuals() > 1)
-      zippered = true;
+      actuallyZippered = true;
   }
 
   // we need this in the outer scope because we use it to create the symbol map
   // for creating the fast follower body
   VarSymbol* followIdx = NULL;
-  if (!pfs->zippered()) {
+  if (!actuallyZippered) {
     DefExpr*  followIdxDef = toDefExpr(pfs->loopBody()->body.head->remove());
     followIdx = toVarSymbol(followIdxDef->sym);
   }
@@ -1292,7 +1294,7 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
   iterRec->addFlag(FLAG_CHPL__ITER);
   iterRec->addFlag(FLAG_CHPL__ITER_NEWSTYLE);
 
-  if (zippered) {
+  if (iterCall && iterCall->isPrimitive(PRIM_ZIP)) {
     pfs->setZipCall(iterCall->copy());
   }
   else {
@@ -1302,7 +1304,7 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
 
   Expr* toNormalize = preFS->body.tail;
 
-  if (zippered) {
+  if (actuallyZippered) {
     followBlock = buildFollowLoop(pfs, iterExpr,
                                   userBody, /*fast=*/false);
   }
@@ -1315,7 +1317,7 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
                                   userBody,
                                   pfs,
                                   /* fast */ false,
-                                  zippered,
+                                  /* zippered */ false,
                                   pfs->isForallExpr(),
                                   iterExpr);
   }
@@ -1338,7 +1340,7 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
     leadForLoop->insertAtTail(new DefExpr(T1));
     leadForLoop->insertAtTail(new DefExpr(T2));
 
-    if (zippered == false) {
+    if (!actuallyZippered) {
       leadForLoop->insertAtTail("'move'(%S, chpl__staticFastFollowCheck(%S))",    T1, iterRec);
       leadForLoop->insertAtTail(new CondStmt(new SymExpr(T1),
                                           new_Expr("'move'(%S, chpl__dynamicFastFollowCheck(%S))",    T2, iterRec),
@@ -1380,7 +1382,7 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
     }
 
 
-    if (zippered) {
+    if (actuallyZippered) {
       userBodyForFast = userBody->copy();
       adjustPrimsInFastFollowerBody(userBodyForFast);
 
@@ -1409,7 +1411,7 @@ static void buildLeaderLoopBody(ForallStmt* pfs, Expr* iterExpr) {
                                         userBodyForFast,
                                         pfs,
                                         /* fast */ true,
-                                        zippered,
+                                        /* zippered */ false,
                                         pfs->isForallExpr(),
                                         iterExpr);
     }
