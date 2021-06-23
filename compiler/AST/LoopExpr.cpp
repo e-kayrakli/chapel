@@ -504,7 +504,8 @@ static FnSymbol* buildLeaderIteratorFn(const char* iteratorName, int numIterands
                                      new CallExpr(PRIM_TYPEOF, tag));
   lifn->insertFormalAtTail(lifnTag);
 
-  ArgSymbol* lifnIterator = new ArgSymbol(INTENT_BLANK, "iterator0", dtAny);
+  const char* leadIterName = numIterands == 1 ? "iterator" : "iterator0";
+  ArgSymbol* lifnIterator = new ArgSymbol(INTENT_BLANK, leadIterName, dtAny);
   lifn->insertFormalAtTail(lifnIterator);
 
   lifn->where = new BlockStmt(buildLeaderIteratorWhereClause(
