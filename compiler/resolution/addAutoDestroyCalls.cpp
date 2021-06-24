@@ -237,6 +237,22 @@ static Expr* walkBlockStmt(FnSymbol*         fn,
       walkBlock(fn, &scope, defer->body(), ignoredVariables, lmm);
       scope.deferAdd(defer);
 
+    } else if (ForLoop* forLoop = toForLoop(stmt)) {
+      AutoDestroyScope innerScope(&scope, forLoop);
+
+      if (CallExpr* indexCall = toCallExpr(forLoop->indexGet())) {
+        INT_ASSERT(indexCall->isPrimitive(PRIM_ZIP_INDEX));
+        for_actuals (actual, indexCall) {
+          SymExpr* actualSE = toSymExpr(actual);
+          VarSymbol* toDeinit = toVarSymbol(actualSE->symbol());
+          if (isAutoDestroyedOrSplitInitedVariable(toDeinit)) {
+            innerScope.variableAdd(toDeinit);
+            innerScope.addInitialization(toDeinit);
+          }
+        }
+      }
+
+      walkBlockWithScope(innerScope, fn, forLoop, ignoredVariables, lmm);
     // AutoDestroy primary locals at start of function epilogue (2)
     } else if (scope.handlingFormalTemps(stmt) == true) {
       scope.insertAutoDestroys(fn, stmt, ignoredVariables);
@@ -288,6 +304,22 @@ static Expr* walkBlockStmt(FnSymbol*         fn,
             if (VarSymbol* var = toVarSymbol(se->symbol()))
               if (isAutoDestroyedOrSplitInitedVariable(var))
                 scope.addEarlyDeinit(var);
+
+      if (CallExpr* call = toCallExpr(stmt)) {
+      if (strcmp(call->stringLoc(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/test/functions/iterators/vass/defer-in-iterators/defer-in-iterators.chpl:81") == 0) {
+
+      }
+        if (call->isPrimitive(PRIM_ZIP_INDEX)) {
+          for_actuals (actual, call) {
+            SymExpr* actualSE = toSymExpr(actual);
+            VarSymbol* toDeinit = toVarSymbol(actualSE->symbol());
+            if (isAutoDestroyedOrSplitInitedVariable(toDeinit)) {
+              //scope.variableAdd(toDeinit);
+              //scope.addInitialization(toDeinit);
+            }
+          }
+        }
+      }
 
     // Recurse in to a BlockStmt (or sub-classes of BlockStmt e.g. a loop)
     } else if (BlockStmt* subBlock = toBlockStmt(stmt)) {
@@ -532,8 +564,23 @@ static void walkBlockWithScope(AutoDestroyScope& scope,
     //
     // Handle the current statement
     //
+
+    if (ForLoop* parentFor = toForLoop(stmt)) {
+
+          std::cout << "here " << parentFor->stringLoc() << isDeadCode << std::endl;
+    }
     stmt = walkBlockStmt(fn, scope, retLabel, isDeadCode, false, stmt,
                          ignoredVariables, lmm);
+
+    //if (ForLoop* parentFor = toForLoop(stmt->parentExpr)) {
+      //if (CallExpr* call = toCallExpr(stmt)) {
+        //if (call->isPrimitive(PRIM_ZIP_INDEX)) {
+          //std::cout << parentFor->stringLoc() << std::endl;
+
+        //}
+
+      //}
+    //}
 
     //
     // Handle the end of a block

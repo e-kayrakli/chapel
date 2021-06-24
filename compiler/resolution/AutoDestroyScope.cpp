@@ -377,6 +377,11 @@ void AutoDestroyScope::variablesDestroy(Expr*      refStmt,
                                         VarSymbol* excludeVar,
                                         const std::set<VarSymbol*>& ignored,
                                         AutoDestroyScope* startingScope) const {
+
+  if (strcmp(startingScope->mBlock->stringLoc(), "/Users/ekayraklio/code/chapel/versions/f01/chapel/test/functions/iterators/vass/defer-in-iterators/defer-in-iterators.chpl:81") == 0) {
+
+  }
+
   // Handle the primary locals
   if (mLocalsHandled == false) {
     Expr*  insertBeforeStmt = refStmt;

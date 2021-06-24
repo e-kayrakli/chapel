@@ -325,17 +325,17 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
                           bool       isLoweredForall,
                           bool       isForExpr)
 {
-  std::cout << "indicesBefore: " << indices << std::endl;
-  nprint_view(indices);
-  std::cout << "iteratorBefore: " << iteratorExpr << std::endl;
-  nprint_view(iteratorExpr);
+  //std::cout << "indicesBefore: " << indices << std::endl;
+  //nprint_view(indices);
+  //std::cout << "iteratorBefore: " << iteratorExpr << std::endl;
+  //nprint_view(iteratorExpr);
   std::vector<BlockStmt*> tupleBlocks = standardizeForLoopIndicesAndIteration(indices,
                                                                               iteratorExpr,
                                                                               &zippered);
-  std::cout << "indicesAfter: " << indices << std::endl;
-  nprint_view(indices);
-  std::cout << "iteratorAfter: " << iteratorExpr << std::endl;
-  nprint_view(iteratorExpr);
+  //std::cout << "indicesAfter: " << indices << std::endl;
+  //nprint_view(indices);
+  //std::cout << "iteratorAfter: " << iteratorExpr << std::endl;
+  //nprint_view(iteratorExpr);
 
   for_vector (BlockStmt, tupleBlock, tupleBlocks) {
     body->insertAtHead(tupleBlock);

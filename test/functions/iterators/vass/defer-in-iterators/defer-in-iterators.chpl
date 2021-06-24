@@ -22,8 +22,7 @@ iter myIter1() {
   ref r1a = loc1a;
   yield new RRR(33);
 
-  defer { writeln("myIter1 defer 400"); }
-  var loc1b = new RRR(400);
+  defer { writeln("myIter1 defer 400"); } var loc1b = new RRR(400);
   ref r1b = loc1b;
   yield new RRR(44);
 
@@ -81,10 +80,10 @@ proc test1zip {
 
   for (p1,q1) in zip(myIter1(),myIter1()) {
     writeln("test1zip ", p1.jj, ",", q1.jj);
-    if doIdx == p1.jj {
-      if doBreak then break;
-      if doReturn then return;
-    }
+    //if doIdx == p1.jj {
+      //if doBreak then break;
+      //if doReturn then return;
+    //}
   }
   writeln("test1zip finish");
 }
@@ -125,8 +124,8 @@ proc main {
   else
     writeln("not breaking");
 
-  test1nz;
+  //test1nz;
   test1zip;
-  test2nz;
-  test2zip;
+  //test2nz;
+  //test2zip;
 }

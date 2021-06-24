@@ -867,8 +867,8 @@ static bool isVariadicArgument(ArgSymbol *arg) {
 // Returns a call to the top-level function wrapper for this loop-expr
 static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
 
-  std::cout << loopExpr->indices << std::endl;
-  nprint_view(loopExpr->indices);
+  //std::cout << loopExpr->indices << std::endl;
+  //nprint_view(loopExpr->indices);
   SET_LINENO(loopExpr);
   INT_ASSERT(loopExpr->inTree()); //otherwise no need to remove() loopExpr's pieces
 
@@ -895,8 +895,8 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
 
   //std::vector<BlockStmt*> tupleBlocks =
     //standardizeForLoopIndicesAndIteration(indices, iteratorExpr, &zippered);
-  std::cout << indices << std::endl;
-  nprint_view(indices);
+  //std::cout << indices << std::endl;
+  //nprint_view(indices);
 
   const char* wrapperName = forall ? astr_forallexpr : astr_forexpr;
   FnSymbol* fn = new FnSymbol(astr(wrapperName, istr(loopexpr_uid++)));
@@ -979,8 +979,8 @@ static CallExpr* buildLoopExprFunctions(LoopExpr* loopExpr) {
   FnSymbol* lifn = NULL;
   FnSymbol* fifn = NULL;
 
-  std::cout << indices << std::endl;
-  nprint_view(indices);
+  //std::cout << indices << std::endl;
+  //nprint_view(indices);
   Expr* stmt = NULL; // Initialized by buildSerialIteratorFn.
   sifn = buildSerialIteratorFn(iteratorName, loopBody, cond, indices,
                                zippered, forall, stmt, iteratorExprArgs.size());
