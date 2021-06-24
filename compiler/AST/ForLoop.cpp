@@ -505,7 +505,6 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
     if (Expr* idxSE = getUserIndexForExpansion(loop, indices)) {
       if (iterators.size() > 1) {
         // zippering with a tuple index
-        int i;
 
         //const char* userIdx= idxSE->unresolved;
         userIdxSetup = new BlockStmt(BLOCK_SCOPELESS);
@@ -533,10 +532,10 @@ BlockStmt* ForLoop::doBuildForLoop(Expr*      indices,
         //userIdxSetup->insertAtTail(tupTypeMove);
 
         CallExpr *zipIndexCall = new CallExpr(PRIM_ZIP_INDEX);
-        for (i = 0 ; i < iterators.size() ; i++) {
+        for (size_t i = 0 ; i < iterators.size() ; i++) {
           char idxTempName[32];
 
-          snprintf(idxTempName, 32, "chpl_indexTemp_%d", i);
+          snprintf(idxTempName, 32, "chpl_indexTemp_%zu", i);
 
           //VarSymbol* idxTemp = newTemp(idxTempName);
           //DefExpr* idxDef = new DefExpr(idxTemp);

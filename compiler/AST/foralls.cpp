@@ -1707,7 +1707,7 @@ static void checkZipperedParallelIterators(ForLoop* loop) {
 static bool invokesParallelIterator(ForLoop* forLoop)
 {
   if (forLoop->inTest()) {
-    if (CallExpr* zipCall = forLoop->zipCallGet()) {
+    if (isCallExpr(forLoop->zipCallGet())) {
       checkZipperedParallelIterators(forLoop);
       return false;
     }
