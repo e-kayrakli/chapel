@@ -124,8 +124,8 @@ proc main {
   else
     writeln("not breaking");
 
-  //test1nz;
+  test1nz;
   test1zip;
-  //test2nz;
-  //test2zip;
+  test2nz;
+  test2zip;
 }

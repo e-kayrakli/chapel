@@ -567,7 +567,7 @@ static void walkBlockWithScope(AutoDestroyScope& scope,
 
     if (ForLoop* parentFor = toForLoop(stmt)) {
 
-          std::cout << "here " << parentFor->stringLoc() << isDeadCode << std::endl;
+          //std::cout << "here " << parentFor->stringLoc() << isDeadCode << std::endl;
     }
     stmt = walkBlockStmt(fn, scope, retLabel, isDeadCode, false, stmt,
                          ignoredVariables, lmm);

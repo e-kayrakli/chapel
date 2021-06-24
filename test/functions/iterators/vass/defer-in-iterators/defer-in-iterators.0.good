@@ -22,15 +22,15 @@ RRR.init { 33
 RRR.init { 300
 RRR.init { 33
 test1zip 33,33
-RRR.fini } 33 ?
-RRR.fini } 33 ?
+RRR.fini } 33
+RRR.fini } 33
 RRR.init { 400
 RRR.init { 44
 RRR.init { 400
 RRR.init { 44
 test1zip 44,44
-RRR.fini } 44 ?
-RRR.fini } 44 ?
+RRR.fini } 44
+RRR.fini } 44
 myIter1 exit
 RRR.fini } 400
 myIter1 defer 400
