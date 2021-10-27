@@ -51,11 +51,17 @@ chpl_localeID_t chpl__initCopy_chpl_rt_localeID_t(chpl_localeID_t initial) {
   return initial;
 }
 
+#ifdef HAS_GPU_LOCALE
+#define GPU_QUAL __host__ __device__
+#else
+#define GPU_QUAL
+#endif
+
 //
 // These functions are used by the module code to assemble and
 // disassemble global locale IDs.
 //
-static inline
+GPU_QUAL static inline
 chpl_localeID_t chpl_rt_buildLocaleID(c_nodeid_t node, c_sublocid_t subloc) {
   chpl_localeID_t loc = { node, subloc };
   return loc;

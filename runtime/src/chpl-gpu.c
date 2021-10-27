@@ -378,7 +378,8 @@ void* chpl_gpu_mem_memalign(size_t boundary, size_t size,
 void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
 
-  CHPL_GPU_LOG("chpl_gpu_mem_free called. Ptr=%p\n", memAlloc);
+  CHPL_GPU_LOG("chpl_gpu_mem_free called. Ptr:%p file:%s line:%d\n", memAlloc,
+               chpl_lookupFilename(filename), lineno);
 
   assert(chpl_gpu_is_device_ptr(memAlloc));
 

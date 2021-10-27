@@ -36,6 +36,13 @@
 extern "C" {
 #endif
 
+#ifdef HAS_GPU_LOCALE
+#define GPU_QUAL __host__ __device__
+#else
+#define GPU_QUAL
+#endif
+
+
 //
 // Shared interface (implemented in chpl-comm.c)
 //
@@ -49,7 +56,7 @@ extern c_nodeid_t chpl_nodeID; // unique ID for each node: 0, 1, 2, ...
 //
 // Helper function for Chapel to get the value of chpl_nodeID
 //
-static inline c_nodeid_t get_chpl_nodeID(void) {
+GPU_QUAL static inline c_nodeid_t get_chpl_nodeID(void) {
   return chpl_nodeID;
 }
 

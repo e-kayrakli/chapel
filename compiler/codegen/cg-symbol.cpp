@@ -2218,6 +2218,8 @@ void FnSymbol::codegenPrototype() {
     if (generatingGPUKernel) {
       func->setConvergent();
       func->setCallingConv(llvm::CallingConv::PTX_Kernel);
+
+      std::cout << "Codegening " << this->stringLoc() << std::endl;
     }
 
     func->setDSOLocal(true);

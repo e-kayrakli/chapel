@@ -827,6 +827,7 @@ iter BlockDom.these(param tag: iterKind) where tag == iterKind.leader {
   const hereIgnoreRunning = if here.runningTasks() == 1 then true
                             else ignoreRunning;
   coforall locDom in locDoms do on locDom {
+    writeln(locDom, " is here ", here);
     const myIgnoreRunning = if here.id == hereId then hereIgnoreRunning
       else ignoreRunning;
     // Use the internal function for untranslate to avoid having to do
@@ -843,8 +844,10 @@ iter BlockDom.these(param tag: iterKind) where tag == iterKind.leader {
     }
     // Forward to defaultRectangular
     for followThis in tmpBlock.these(iterKind.leader, maxTasks,
-                                     myIgnoreRunning, minSize, locOffset) do
+                                     myIgnoreRunning, minSize, locOffset) {
+      writeln("yielding ", followThis);
       yield followThis;
+    }
   }
 }
 

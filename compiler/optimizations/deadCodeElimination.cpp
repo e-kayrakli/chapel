@@ -60,7 +60,7 @@ static bool shouldOutlineLoopHelp(BlockStmt* blk,
 static unsigned int deadBlockCount;
 static unsigned int deadModuleCount;
 
-bool debugPrintGPUChecks = false;
+bool debugPrintGPUChecks = true;
 bool allowFnCallsFromGPU = false;
 int indentGPUChecksLevel = 0;
 
@@ -1064,7 +1064,7 @@ extern int classifyPrimitive(CallExpr *call, bool inLocal);
 extern bool inLocalBlock(CallExpr *call);
 
 static bool shouldOutlineLoop(BlockStmt* blk, bool allowFnCalls) {
-  if (!blk->inTree() || blk->getModule()->modTag != MOD_USER)
+  if (!blk->inTree())
     return false;
 
   if (CForLoop* cfl = toCForLoop(blk))
