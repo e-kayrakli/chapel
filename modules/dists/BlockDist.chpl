@@ -807,6 +807,7 @@ iter BlockDom.these() {
 }
 
 iter BlockDom.these(param tag: iterKind) where tag == iterKind.leader {
+  writeln("blockdom  iterator leader");
   const maxTasks = dist.dataParTasksPerLocale;
   const ignoreRunning = dist.dataParIgnoreRunningTasks;
   const minSize = dist.dataParMinGranularity;
@@ -842,6 +843,8 @@ iter BlockDom.these(param tag: iterKind) where tag == iterKind.leader {
         // (since locOffset is unsigned in that case)
       locOffset(i) = tmpBlock.dim(i).first / stride:idxType;
     }
+
+    writeln("tmpBlock: ", tmpBlock);
     // Forward to defaultRectangular
     for followThis in tmpBlock.these(iterKind.leader, maxTasks,
                                      myIgnoreRunning, minSize, locOffset) {

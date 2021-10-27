@@ -359,6 +359,8 @@ module DefaultRectangular {
 
       const numSublocs = here.getChildCount();
 
+      writeln("in drdom leader ", numSublocs);
+
       if localeModelHasSublocales && numSublocs != 0 {
         var dptpl = if tasksPerLocale==0 then here.maxTaskPar
                     else tasksPerLocale;
