@@ -269,6 +269,12 @@ static void handleIsWidePointer();
 
 static bool isLocalBlock(Expr* stmt) {
   BlockStmt* block = toBlockStmt(stmt);
+  //if (FnSymbol* parentFn = toFnSymbol(block->parentSymbol)) {
+    //if (parentFn->hasFlag(FLAG_GPU_CODEGEN)) {
+      //return true;
+    //}
+  //}
+
   return block &&
          block->inTree() &&
          block->isLoopStmt() == false &&
