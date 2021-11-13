@@ -131,6 +131,8 @@ endif
 ifeq ($(CHPL_MAKE_LOCALE_MODEL),gpu)
 RUNTIME_INCLS += -I$(CHPL_MAKE_CUDA_PATH)/include
 RUNTIME_DEFS += -DHAS_GPU_LOCALE
+RUNTIME_CFLAGS += -x cuda -Wno-unknown-cuda-version --cuda-gpu-arch=sm_60
+RUNTIME_CFLAGS += -std=c++11
 endif
 
 RUNTIME_CFLAGS += $(RUNTIME_DEFS)
