@@ -244,7 +244,7 @@ static int32_t _argNumLocales = 0;
 
 void parseNumLocales(const char* numPtr, int32_t lineno, int32_t filename) {
   int invalid;
-  char invalidChars[2] = "\0\0";
+  char invalidChars[2] = "\0";
   _argNumLocales = c_string_to_int32_t_precise(numPtr, &invalid, invalidChars);
   if (invalid) {
     char* message = chpl_glom_strings(3, "\"", numPtr,

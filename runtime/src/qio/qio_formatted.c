@@ -299,7 +299,7 @@ qioerr _append_byte(char* restrict * restrict buf, size_t* restrict buf_len, siz
     newsz = 2 * max_in;
     if( newsz < 16  ) newsz = 16;
     if( newsz < need  ) newsz = need;
-    newbuf = qio_realloc(buf_in, newsz);
+    newbuf = (char *)qio_realloc(buf_in, newsz);
     if( ! newbuf ) return QIO_ENOMEM;
     buf_in = newbuf;
     max_in = newsz;
@@ -344,7 +344,7 @@ qioerr _append_char(char* restrict * restrict buf, size_t* restrict buf_len, siz
     newsz = 2 * max_in;
     if( newsz < 16  ) newsz = 16;
     if( newsz < need  ) newsz = need;
-    newbuf = qio_realloc(buf_in, newsz);
+    newbuf = (char *)qio_realloc(buf_in, newsz);
     if( ! newbuf ) return QIO_ENOMEM;
     buf_in = newbuf;
     max_in = newsz;
@@ -453,7 +453,7 @@ qioerr qio_channel_read_string(const int threadsafe, const int byteorder, const 
 
  
   // Now read that many bytes into an allocated area.
-  ret = qio_malloc(len + 1); // room for \0.
+  ret = (char *)qio_malloc(len + 1); // room for \0.
   if( ! ret ) {
     err = QIO_ENOMEM;
     goto rewind;
@@ -2021,7 +2021,7 @@ qioerr qio_quote_string(uint8_t string_start, uint8_t string_end, uint8_t string
   if( ! out ) return 0;
 
   // Now, allocate a string of the right size
-  ret = qio_malloc(ti.ret_bytes + 1); // room for \0.
+  ret = (char *)qio_malloc(ti.ret_bytes + 1); // room for \0.
   if( !ret ) {
     return QIO_ENOMEM;
   }
@@ -3590,7 +3590,7 @@ qioerr qio_channel_print_int(const int threadsafe, qio_channel_t* restrict ch, c
   // Try printing it directly into the buffer.
   if( qio_space_in_ptr_diff(max, ch->cached_end,ch->cached_cur) ) {
     // Print it all directly into the buffer.
-    got = _ltoa(ch->cached_cur, qio_ptr_diff(ch->cached_end,ch->cached_cur), 
+    got = _ltoa((char *)ch->cached_cur, qio_ptr_diff(ch->cached_end,ch->cached_cur), 
                 num, isneg, base, style);
     if( got < 0 ) {
       QIO_GET_CONSTANT_ERROR(err, EINVAL, "unknown base or bad width");
@@ -3691,7 +3691,7 @@ qioerr qio_channel_print_float_or_imag(const int threadsafe, qio_channel_t* rest
   if( err ) goto error;
 
   // Try printing it directly into the buffer.
-  got = _ftoa(ch->cached_cur, qio_ptr_diff(ch->cached_end, ch->cached_cur),
+  got = _ftoa((char* restrict)ch->cached_cur, qio_ptr_diff(ch->cached_end, ch->cached_cur),
               num, base, needs_i, style, &extra);
 
   if( got < 0 ) {
@@ -4350,7 +4350,7 @@ qioerr _qio_channel_read_char_slow_unlocked(qio_channel_t* restrict ch, int32_t*
     // Fast path: an entire multi-byte sequence
     // is stored in the buffers.
     if( qio_space_in_ptr_diff(MB_LEN_MAX, ch->cached_end, ch->cached_cur) ) {
-      got = mbrtowc(&tmp_chr, ch->cached_cur, MB_LEN_MAX, &ps);
+      got = mbrtowc(&tmp_chr, (const char* restrict)ch->cached_cur, MB_LEN_MAX, &ps);
       if( got == 0 ) {
         *chr = 0;
       } else if( got == (size_t) -1 || got == (size_t) -2 ) {
@@ -4419,7 +4419,7 @@ c_string qio_encode_to_string(int32_t chr)
     return NULL;
   }
   
-  buf = qio_malloc(nbytes + 1);
+  buf = (char *)qio_malloc(nbytes + 1);
   if( ! buf ) return NULL;
 
   err = qio_encode_char_buf(buf, chr);

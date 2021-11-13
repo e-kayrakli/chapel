@@ -74,7 +74,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstdio>
-#include <cstdint>
+#include <stdint.h>
 #include <climits>
 #else
 #include <errno.h>

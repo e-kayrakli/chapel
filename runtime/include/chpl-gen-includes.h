@@ -38,12 +38,6 @@
 extern "C" {
 #endif
 
-#ifdef HAS_GPU_LOCALE
-#define GPU_QUAL __host__ __device__
-#else
-#define GPU_QUAL
-#endif
-
 //
 // Call a function in the compiler-produced function table, passing it
 // one argument.
@@ -75,7 +69,6 @@ static inline
 chpl_localeID_t chpl_gen_getLocaleID(void)
 {
   chpl_localeID_t localeID;
-  //localeID = {0,0};
   chpl_getLocaleID(&localeID, 0, 0);
   return localeID;
 }

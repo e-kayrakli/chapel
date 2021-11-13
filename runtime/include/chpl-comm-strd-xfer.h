@@ -129,10 +129,14 @@ void put_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t dstlocale,
 
   // Communications callback support
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_strd)) {
-      chpl_comm_cb_info_t cb_data =
-        {chpl_comm_cb_event_kind_put_strd, chpl_nodeID, dstlocale,
-         .iu.comm_strd={srcaddr_arg, srcstrides, dstaddr_arg, dststrides, count,
-                        stridelevels, elemSize, commID, ln, fn}};
+      chpl_comm_cb_info_t cb_data;
+
+      cb_data.event_kind = chpl_comm_cb_event_kind_put_strd;
+      cb_data.localNodeID = chpl_nodeID;
+      cb_data.remoteNodeID = dstlocale;
+      cb_data.iu.comm_strd = {srcaddr_arg, srcstrides, dstaddr_arg, dststrides,
+                              count, stridelevels, elemSize, commID, ln, fn};
+
       chpl_comm_do_callbacks (&cb_data);
   }
 
@@ -212,8 +216,8 @@ void put_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t dstlocale,
       total=total*cnt[i+1];
 
     //displacement from the dstaddr and srcaddr start points
-    srcdisp=chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
-    dstdisp=chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
+    srcdisp=(int *)chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
+    dstdisp=(int *)chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
 
     for (j=0; j<total; j++) {
       carry=1;
@@ -275,10 +279,13 @@ void get_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
 
   // Communications callback support
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_strd)) {
-    chpl_comm_cb_info_t cb_data =
-      {chpl_comm_cb_event_kind_get_strd, chpl_nodeID, srclocale,
-       .iu.comm_strd={srcaddr_arg, srcstrides, dstaddr_arg, dststrides, count,
-                      stridelevels, elemSize, commID, ln, fn}};
+    chpl_comm_cb_info_t cb_data;
+
+    cb_data.event_kind = chpl_comm_cb_event_kind_get_strd;
+    cb_data.localNodeID = chpl_nodeID;
+    cb_data.remoteNodeID = srclocale;
+    cb_data.iu.comm_strd = {srcaddr_arg, srcstrides, dstaddr_arg, dststrides,
+                            count, stridelevels, elemSize, commID, ln, fn};
     chpl_comm_do_callbacks (&cb_data);
   }
 
@@ -361,8 +368,8 @@ void get_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
       total=total*cnt[i+1];
 
     //displacement from the dstaddr and srcaddr start points
-    srcdisp=chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
-    dstdisp=chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
+    srcdisp=(int *)chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
+    dstdisp=(int *)chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
 
     for (j=0; j<total; j++) {
       carry=1;
@@ -494,8 +501,8 @@ void strd_common_call(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
       total=total*cnt[i+1];
 
     //displacement from the dstaddr and srcaddr start points
-    srcdisp=chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
-    dstdisp=chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
+    srcdisp=(int *)chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
+    dstdisp=(int *)chpl_mem_allocMany(total,sizeof(int),CHPL_RT_MD_GETS_PUTS_STRIDES,0,0);
 
     for (j=0; j<total; j++) {
       carry=1;
