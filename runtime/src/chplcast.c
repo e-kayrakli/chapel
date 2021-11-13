@@ -237,7 +237,7 @@ _define_string_to_imag_precise(imag, 64, "%lf")
       int numitems;                                                     \
       int posAfterReal, posBeforeSign, posBeforeImag;                   \
       val_im = 0.0; /* reset */                                         \
-      numitems = sscanf(str, format "%n %n%c %n" format "%c%n",            \
+      numitems = sscanf(str, format"%n %n%c %n"format"%c%n",            \
                         &(val_re), &posAfterReal, &posBeforeSign,       \
                         &sign, &posBeforeImag, &(val_im), &i,           \
                         &numbytes);                                     \
@@ -305,11 +305,9 @@ _define_string_to_complex_precise(complex, 128, "%lf", 64)
 
 #define _define_string_to_int_type(base, width)                             \
   _type(base, width) c_string_to_##base##width##_t(c_string str, chpl_bool* err,\
-                                                   int lineno, int32_t filename); \
-  _type(base, width) c_string_to_##base##width##_t(c_string str, chpl_bool* err,\
                                                    int lineno, int32_t filename) { \
     int invalid;                                                        \
-    char invalidStr[2] = "\0";                                        \
+    char invalidStr[2] = "\0\0";                                        \
     _type(base, width) val = 0;                                         \
     if (!str) {                                                         \
       invalid = 1;                                                      \
@@ -336,11 +334,9 @@ _define_string_to_int_type(uint, 64)
 
 #define _define_string_to_real_type(base, width)                        \
   _##base##width c_string_to_##base##width(c_string str, chpl_bool* err, \
-                                           int lineno, int32_t filename); \
-  _##base##width c_string_to_##base##width(c_string str, chpl_bool* err, \
                                            int lineno, int32_t filename) { \
     int invalid;                                                        \
-    char invalidStr[2] = "\0";                                        \
+    char invalidStr[2] = "\0\0";                                        \
     _##base##width val = 0.0;                                           \
     if (!str) {                                                         \
       invalid = 1;                                                      \

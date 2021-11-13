@@ -31,15 +31,13 @@
 #endif
 
 #define _POSIX_C_SOURCE 200112L
-#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 600
-#define HAS_STRERROR_R
-#endif
 #undef _GNU_SOURCE
 
 #include <string.h>
 #include <errno.h>
 
+#define HAS_STRERROR_R
 
 int sys_xsi_strerror_r(int errnum, char* buf, size_t buflen);
 

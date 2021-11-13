@@ -258,6 +258,12 @@ c_sublocid_t chpl_task_getSubloc(void);
 void chpl_task_setSubloc(c_sublocid_t);
 #endif
 
+#ifdef HAS_GPU_LOCALE
+#define GPU_QUAL __host__ __device__
+#else
+#define GPU_QUAL
+#endif
+
 //
 // Get the sublocale the caller specified at the time the task was created.
 //

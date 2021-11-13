@@ -132,6 +132,12 @@ static inline chpl_task_infoChapel_t* chpl_task_getInfoChapel(void)
     return NULL;
 }
 
+#ifdef HAS_GPU_LOCALE
+#define GPU_QUAL __host__ __device__
+#else
+#define GPU_QUAL
+#endif
+
 
 //
 // Sublocale support
@@ -150,6 +156,7 @@ c_sublocid_t chpl_task_getRequestedSubloc(void)
     }
     return c_sublocid_any;
 }
+
 
 #ifdef CHPL_TASK_GETSUBLOC_IMPL_DECL
 #error "CHPL_TASK_GETSUBLOC_IMPL_DECL is already defined!"

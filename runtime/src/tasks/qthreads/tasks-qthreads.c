@@ -751,7 +751,7 @@ typedef struct {
 
 static void *comm_task_wrapper(void *arg)
 {
-    comm_task_wrapper_info_t *rarg = (comm_task_wrapper_info_t *)arg;
+    comm_task_wrapper_info_t *rarg = arg;
     (*(chpl_fn_p)(rarg->fn))(rarg->arg);
     return 0;
 }
@@ -767,11 +767,11 @@ void chpl_task_callMain(void (*chpl_main)(void))
         (chpl_task_bundle_t)
         { .kind            = CHPL_ARG_BUNDLE_KIND_TASK,
           .is_executeOn    = false,
-          .lineno          = 0,
-          .filename        = CHPL_FILE_IDX_MAIN_TASK,
           .requestedSubloc = c_sublocid_any_val,
           .requested_fid   = FID_NONE,
           .requested_fn    = (void(*)(void*)) chpl_main,
+          .lineno          = 0,
+          .filename        = CHPL_FILE_IDX_MAIN_TASK,
           .id              = chpl_qthread_process_bundle.id,
         };
 

@@ -56,7 +56,7 @@ extern char** environ;
 const char* qio_spawn_strdup(const char* str)
 {
   size_t len = strlen(str);
-  char* ret = (char *)sys_malloc(len + 1);
+  char* ret = sys_malloc(len + 1);
   // note: also copies '\0' at end of string.
   memcpy(ret, str, len + 1);
   return ret;
@@ -64,7 +64,7 @@ const char* qio_spawn_strdup(const char* str)
 
 const char** qio_spawn_allocate_ptrvec(size_t count)
 {
-  char** ret = (char **)sys_calloc(count, sizeof(char*));
+  char** ret = sys_calloc(count, sizeof(char*));
   return (const char**) ret;
 }
 
