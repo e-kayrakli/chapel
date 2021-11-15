@@ -67,19 +67,13 @@ void chpl_task_setSubloc(c_sublocid_t subloc) {
   // nothing to do
 }
 
-#ifdef HAS_GPU_LOCALE
-#define GPU_QUAL __host__ __device__
-#else
-#define GPU_QUAL
-#endif
-
 
 #ifdef CHPL_TASK_GETREQUESTEDSUBLOC_IMPL_DECL
 #error "CHPL_TASK_GETREQUESTEDSUBLOC_IMPL_DECL is already defined!"
 #else
 #define CHPL_TASK_GETREQUESTEDSUBLOC_IMPL_DECL 1
 #endif
-GPU_QUAL static inline
+static inline
 c_sublocid_t chpl_task_getRequestedSubloc(void) {
   return c_sublocid_any;
 }

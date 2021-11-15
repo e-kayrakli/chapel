@@ -64,6 +64,8 @@ RUNTIME_INCLS += \
         -I. \
         -I$(RUNTIME_INCLUDE_ROOT)/localeModels/$(CHPL_MAKE_LOCALE_MODEL) \
         -I$(RUNTIME_INCLUDE_ROOT)/localeModels \
+        -I$(RUNTIME_INCLUDE_ROOT)/gpu/$(CHPL_MAKE_GPU) \
+        -I$(RUNTIME_INCLUDE_ROOT)/gpu \
         -I$(RUNTIME_INCLUDE_ROOT)/comm/$(CHPL_MAKE_COMM) \
         -I$(RUNTIME_INCLUDE_ROOT)/comm \
         -I$(RUNTIME_INCLUDE_ROOT)/tasks/$(CHPL_MAKE_TASKS) \
@@ -131,8 +133,7 @@ endif
 ifeq ($(CHPL_MAKE_LOCALE_MODEL),gpu)
 RUNTIME_INCLS += -I$(CHPL_MAKE_CUDA_PATH)/include
 RUNTIME_DEFS += -DHAS_GPU_LOCALE
-RUNTIME_CFLAGS += -x cuda -Wno-unknown-cuda-version --cuda-gpu-arch=sm_60
-RUNTIME_CFLAGS += -std=c++11
+#RUNTIME_CFLAGS += -Wno-unknown-cuda-version --cuda-gpu-arch=sm_60
 endif
 
 RUNTIME_CFLAGS += $(RUNTIME_DEFS)

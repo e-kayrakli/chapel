@@ -58,6 +58,7 @@ include src/tasks/$(CHPL_MAKE_TASKS)/Makefile.include
 include src/threads/$(CHPL_MAKE_THREADS)/Makefile.include
 include src/timers/$(CHPL_MAKE_TIMERS)/Makefile.include
 include src/comm/$(CHPL_MAKE_COMM)/Makefile.include
+include src/gpu/$(CHPL_MAKE_GPU)/Makefile.include
 include src/launch/$(CHPL_MAKE_LAUNCHER)/Makefile.include
 include src/mem/$(CHPL_MAKE_MEM)/Makefile.include
 include src/topo/$(CHPL_MAKE_TOPO)/Makefile.include
@@ -79,6 +80,7 @@ RUNTIME_OBJS = \
 	$(THREADS_OBJS) \
 	$(TIMERS_OBJS) \
 	$(COMM_OBJS) \
+	$(GPU_OBJS) \
 	$(MEM_COMMON_OBJS) \
 	$(QIO_OBJS) \
 	$(REGEX_OBJS) \

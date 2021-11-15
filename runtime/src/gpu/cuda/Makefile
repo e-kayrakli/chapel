@@ -16,8 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-RUNTIME_ROOT = ..
-RUNTIME_SUBDIR = src
+RUNTIME_ROOT = ../../..
+RUNTIME_SUBDIR = src/gpu/cuda
 
 ifndef CHPL_MAKE_HOME
 export CHPL_MAKE_HOME=$(shell pwd)/$(RUNTIME_ROOT)/..
@@ -28,43 +28,19 @@ endif
 #
 include $(RUNTIME_ROOT)/make/Makefile.runtime.head
 
-#
-# include source subdirectories here
-#
-
-COMMON_OBJDIR = $(RUNTIME_OBJDIR)
-COMMON_LAUNCHER_OBJDIR = $(LAUNCHER_OBJDIR)
+GPU_OBJDIR = $(RUNTIME_OBJDIR)
+GPU_LAUNCHER_OBJDIR = $(LAUNCHER_OBJDIR)
 include Makefile.share
 
-ifneq ($(MAKE_LAUNCHER),1)
+#ifneq ($(MAKE_LAUNCHER),1)
 TARGETS = \
-	$(COMMON_OBJS) \
-	$(MAIN_OBJS) \
-	$(MAIN_MLI_OBJS) \
-	$(RUNTIME_MALLOC_OBJS) \
+	$(GPU_OBJS) \
 
-SUBDIRS = \
-	comm \
-	gpu \
-	mem \
-	tasks \
-	threads \
-	timers \
-	topo \
-	qio \
+#else
+#TARGETS = \
+	#$(GPU_LAUNCHER_OBJS) \
 
-else
-TARGETS = \
-	$(MAIN_LAUNCHER_OBJS) \
-	$(COMMON_LAUNCHER_OBJS) \
-	$(ONLY_LAUNCHER_OBJS)
-
-SUBDIRS = \
-	comm \
-	gpu \
-	launch \
-
-endif
+#endif
 
 include $(RUNTIME_ROOT)/make/Makefile.runtime.subdirrules
 
@@ -72,11 +48,3 @@ include $(RUNTIME_ROOT)/make/Makefile.runtime.subdirrules
 # standard footer
 #
 include $(RUNTIME_ROOT)/make/Makefile.runtime.foot
-
-#
-# turn on debugging for gdb.c to help make debugging test uniform
-# for developers and users
-#
-$(RUNTIME_OBJ_DIR)/gdb.o: gdb.c $(RUNTIME_OBJ_DIR_STAMP)
-	@if [ `grep "chplrt.h" $< | wc -l` -ne 1 ]; then echo "PROBLEM:  $< does not include 'chplrt.h'."; exit 1; fi
-	$(CC) -c -g $(RUNTIME_CFLAGS) $(RUNTIME_INCLS) -o $@ $<

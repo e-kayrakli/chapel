@@ -58,21 +58,6 @@ void chpl_gpu_copy_host_to_device(void* dst, void* src, size_t n);
 
 bool chpl_gpu_is_device_ptr(void* ptr);
 
-// TODO
-__device__ static inline
-c_sublocid_t chpl_task_getRequestedSubloc(void)
-{
-  return 1;
-}
-
-__device__ static inline
-chpl_localeID_t chpl_gen_getLocaleID(void)
-{
-  chpl_localeID_t localeID;
-  localeID = {chpl_nodeID,chpl_task_getRequestedSubloc()};
-  return localeID;
-}
-
                            
 #endif // HAS_GPU_LOCALE
 
