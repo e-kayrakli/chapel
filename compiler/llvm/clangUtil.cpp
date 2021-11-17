@@ -4119,7 +4119,7 @@ void makeBinaryLLVM(void) {
       }
 
 
-      std::string ptxCmd = std::string("ptxas -m64 --gpu-name ") + fCUDAArch +
+      std::string ptxCmd = std::string("ptxas --compile-only -m64 --gpu-name ") + fCUDAArch +
                            std::string(" --output-file ") +
                            ptxObjectFilename.c_str() +
                            " " + asmFilename.c_str();
