@@ -387,9 +387,11 @@ void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {
   CHPL_GPU_LOG("chpl_gpu_mem_free called. Ptr:%p file:%s line:%d\n", memAlloc,
                chpl_lookupFilename(filename), lineno);
 
-  assert(chpl_gpu_is_device_ptr(memAlloc));
+  if (memAlloc != NULL) {
+    assert(chpl_gpu_is_device_ptr(memAlloc));
 
-  CUDA_CALL(cuMemFree((CUdeviceptr)memAlloc));
+    CUDA_CALL(cuMemFree((CUdeviceptr)memAlloc));
+  }
 }
 
 #endif // HAS_GPU_LOCALE
