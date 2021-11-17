@@ -120,7 +120,7 @@ static void* chpl_gpu_getKernel(const char* fatbinFile, const char* kernelName) 
   }
 
   // Create module for object
-  CUDA_CALL(cuModuleLoadData(&cudaModule, buffer));
+  CUDA_CALL(cuModuleLoadFatBinary(&cudaModule, buffer));
 
   // Get kernel function
   CUDA_CALL(cuModuleGetFunction(&function, cudaModule, kernelName));

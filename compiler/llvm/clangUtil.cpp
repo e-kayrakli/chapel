@@ -4133,6 +4133,8 @@ void makeBinaryLLVM(void) {
       std::string computeCap = std::string("compute_") + fCUDAArch[3] +
                                                          fCUDAArch[4];
       std::string fatbinaryCmd = std::string("fatbinary -64 ") +
+                                 std::string("--device-c ") +
+                                 std::string("--link ") +
                                  std::string("--create ") +
                                  fatbinFilename.c_str() +
                                  std::string(" --image=profile=") + fCUDAArch +
