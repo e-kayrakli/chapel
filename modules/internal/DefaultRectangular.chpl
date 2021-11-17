@@ -433,11 +433,17 @@ module DefaultRectangular {
           }
         }
       } else {
+        extern proc chpl_task_getRequestedSubloc(): int;
 
-        if debugDefaultDist then
+        if debugDefaultDist {
           chpl_debug_writeln("*** In domain/array leader code:"); // this = ", this);
+          chpl_debug_writeln(chpl_task_getRequestedSubloc());
+          chpl_debug_writeln(here.maxTaskPar);
+        }
         const numTasks = if tasksPerLocale==0 then here.maxTaskPar
                          else tasksPerLocale;
+
+        /*const numTasks = 1;*/
 
         if debugDefaultDist then
           chpl_debug_writeln("    numTasks=", numTasks, " (", ignoreRunning,

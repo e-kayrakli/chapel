@@ -243,7 +243,7 @@ module LocaleModelHelpSetup {
       }
       else {
         dst.childLocales[i] = new unmanaged GPULocale(i:chpl_sublocID_t, dst);
-        dst.maxTaskPar = 1;
+        dst.childLocales[i].maxTaskPar = 1;
       }
     }
     chpl_task_setSubloc(origSubloc);
