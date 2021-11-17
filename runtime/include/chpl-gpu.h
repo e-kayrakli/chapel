@@ -27,6 +27,8 @@ extern "C" {
 
 #ifdef HAS_GPU_LOCALE
 
+//#include "chpl-gpu-gen-includes.h"
+
 void chpl_gpu_init(void);
 bool chpl_gpu_has_context(void);
 bool chpl_gpu_running_on_gpu_locale(void);
@@ -58,7 +60,6 @@ void chpl_gpu_copy_host_to_device(void* dst, void* src, size_t n);
 
 bool chpl_gpu_is_device_ptr(void* ptr);
 
-                           
 #endif // HAS_GPU_LOCALE
 
 #ifdef __cplusplus

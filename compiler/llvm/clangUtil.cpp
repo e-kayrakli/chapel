@@ -4119,7 +4119,7 @@ void makeBinaryLLVM(void) {
       }
 
 
-      std::string ptxCmd = std::string("ptxas --compile-only -m64 --gpu-name ") + fCUDAArch +
+      std::string ptxCmd = std::string("ptxas -m64 --gpu-name ") + fCUDAArch +
                            std::string(" --output-file ") +
                            ptxObjectFilename.c_str() +
                            " " + asmFilename.c_str();
@@ -4133,8 +4133,8 @@ void makeBinaryLLVM(void) {
       std::string computeCap = std::string("compute_") + fCUDAArch[3] +
                                                          fCUDAArch[4];
       std::string fatbinaryCmd = std::string("fatbinary -64 ") +
-                                 std::string("--device-c ") +
-                                 std::string("--link ") +
+                                 //std::string("--device-c ") +
+                                 //std::string("--link ") +
                                  std::string("--create ") +
                                  fatbinFilename.c_str() +
                                  std::string(" --image=profile=") + fCUDAArch +

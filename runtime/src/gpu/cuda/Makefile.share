@@ -32,7 +32,7 @@ GPU_OBJS = \
 #GPU_LAUNCHER_OBJS = \
 	#$(GPU_LAUNCHER_SRCS:%.c=$(GPU_LAUNCHER_OBJDIR)/%.o)
 
-CUDA_FLAGS = -x cuda -fgpu-rdc -Wno-unknown-cuda-version --cuda-gpu-arch=sm_60 -std=c++11
+CUDA_FLAGS = -x cuda -Wno-unknown-cuda-version --cuda-gpu-arch=sm_60 -std=c++11
 
 $(RUNTIME_OBJ_DIR)/gpu-cuda.o: gpu-cuda.c $(RUNTIME_OBJ_DIR_STAMP)
 	$(CC) -c $(RUNTIME_CFLAGS) $(CUDA_FLAGS) $(RUNTIME_INCLS) -o $@ $<

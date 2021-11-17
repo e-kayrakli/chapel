@@ -27,6 +27,7 @@
 
 #ifdef HAS_GPU_LOCALE
 
+
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <assert.h>
@@ -310,10 +311,15 @@ void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
   CHPL_GPU_LOG("chpl_gpu_mem_alloc called. Size:%d file:%s line:%d\n", size,
                chpl_lookupFilename(filename), lineno);
 
-  CUdeviceptr ptr;
-  CUDA_CALL(cuMemAllocManaged(&ptr, size, CU_MEM_ATTACH_GLOBAL));
+  CUdeviceptr ptr = 0;
+  if (size > 0) {
+    CUDA_CALL(cuMemAllocManaged(&ptr, size, CU_MEM_ATTACH_GLOBAL));
+    CHPL_GPU_LOG("chpl_gpu_mem_alloc returning %p\n", (void*)ptr);
+  }
+  else {
+    CHPL_GPU_LOG("chpl_gpu_mem_alloc returning NULL (size was 0)\n");
+  }
 
-  CHPL_GPU_LOG("chpl_gpu_mem_alloc returning %p\n", (void*)ptr);
 
   return (void*)ptr;
 
