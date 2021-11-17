@@ -1,5 +1,6 @@
 #include "chpltypes.h"
 #include "chpl-comm.h"
+#include "gpu-cuda.h"
 
 // TODO
 __device__ inline c_sublocid_t chpl_task_getRequestedSubloc(void)
