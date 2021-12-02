@@ -1358,7 +1358,7 @@ proc Block.init(other: Block, privateData,
   this.sparseLayoutType = sparseLayoutType;
 }
 
-override proc Block.dsiSupportsPrivatization() param return true;
+override proc Block.dsiSupportsPrivatization() param return false;
 
 proc Block.dsiGetPrivatizeData() {
   return (boundingBox.dims(), targetLocDom.dims(),
@@ -1368,6 +1368,29 @@ proc Block.dsiGetPrivatizeData() {
 proc Block.dsiPrivatize(privatizeData) {
   return new unmanaged Block(_to_unmanaged(this), privatizeData);
 }
+
+proc Block.chpl__serialize() {
+  return (boundingBox.dims(),
+          targetLocDom.dims(),
+          targetLocales,
+          locDist,
+          dataParTasksPerLocale,
+          dataParIgnoreRunningTasks,
+          dataParMinGranularity);
+}
+
+proc type Block.chpl__deserialize(data) {
+  var ret = new unmanaged Block(boundingBox = {(...data[0])},
+                                targetLocales = data[2],
+                                dataParTasksPerLocale = data[4],
+                                dataParIgnoreRunningTasks = data[5],
+                                dataParMinGranularity = data[6]);
+
+  ret.locDist = data[3];
+
+  return ret;
+}
+
 
 proc Block.dsiGetReprivatizeData() return boundingBox.dims();
 
@@ -1382,7 +1405,7 @@ proc Block.dsiReprivatize(other, reprivatizeData) {
 }
 
 proc BlockDom.chpl__serialize() {
-  return pid;
+  return dsiGetPrivatizeData();
 }
 
 // TODO: What happens when we try to deserialize on a locale that doesn't
@@ -1390,15 +1413,16 @@ proc BlockDom.chpl__serialize() {
 // be a way to lazily privatize by also making the originating locale part
 // of the 'data'?
 proc type BlockDom.chpl__deserialize(data) {
-  return chpl_getPrivatizedCopy(
-           unmanaged BlockDom(rank=this.rank,
-                              idxType=this.idxType,
-                              stridable=this.stridable,
-                              sparseLayoutType=this.sparseLayoutType),
-           data);
+  var ret = unmanaged BlockDom(rank=this.rank,
+                               idxType=this.idxType,
+                               stridable=this.stridable,
+                               sparseLayoutType=this.sparseLayoutType);
+
+  ret.dims = data.dims;
+  ret.locdoms = data.locdoms;
 }
 
-override proc BlockDom.dsiSupportsPrivatization() param return true;
+override proc BlockDom.dsiSupportsPrivatization() param return false;
 
 record BlockDomPrvData {
   var distpid;
@@ -1432,20 +1456,19 @@ proc BlockDom.dsiReprivatize(other, reprivatizeData) {
 }
 
 proc BlockArr.chpl__serialize() {
-  return pid;
+  return new BlockArrPrvData(dom.pid, locArr);
 }
 
 proc type BlockArr.chpl__deserialize(data) {
-  return chpl_getPrivatizedCopy(
-           unmanaged BlockArr(rank=this.rank,
-                              idxType=this.idxType,
-                              stridable=this.stridable,
-                              eltType=this.eltType,
-                              sparseLayoutType=this.sparseLayoutType),
-           data);
+  var ret = unmanaged BlockArr(rank=this.rank,
+                               idxType=this.idxType,
+                               stridable=this.stridable,
+                               eltType=this.eltType,
+                               sparseLayoutType=this.sparseLayoutType);
+  ret.locArr = data.locarr;
 }
 
-override proc BlockArr.dsiSupportsPrivatization() param return true;
+override proc BlockArr.dsiSupportsPrivatization() param return false;
 
 record BlockArrPrvData {
   var dompid;

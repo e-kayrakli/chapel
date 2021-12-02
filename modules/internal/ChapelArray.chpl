@@ -1088,7 +1088,16 @@ module ChapelArray {
       }
     }
 
-    forwarding _value except targetLocales;
+    proc chpl__serialize() where Reflection.canResolveMethod(this._instance, "chpl__serialize"){
+      return this._instance.chpl__serialize();
+    }
+
+    proc type chpl__deserialize(data) {
+      type valueType = __primitive("static field type", this, "_instance");
+      return new _distribution(_to_borrowed(valueType).chpl__deserialize(data));
+    }
+
+    forwarding _value except targetLocales, chpl__serialize, chpl__deserialize;
 
     inline proc _do_destroy() {
       if ! _unowned && ! _instance.singleton() {
