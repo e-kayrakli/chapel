@@ -74,10 +74,10 @@ module LocaleModel {
     extern proc chpl_gpu_mem_alloc(size:size_t, md:chpl_mem_descInt_t) : c_void_ptr;
 
 
-    if runningOnGPUSublocale() then
+    //if runningOnGPUSublocale() then
       return chpl_gpu_mem_alloc(size.safeCast(size_t), md + chpl_memhook_md_num());
-    else 
-      return chpl_mem_alloc(size.safeCast(size_t), md + chpl_memhook_md_num());
+    //else 
+      //return chpl_mem_alloc(size.safeCast(size_t), md + chpl_memhook_md_num());
   }
 
   pragma "allocator"
