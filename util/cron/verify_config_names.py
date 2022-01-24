@@ -14,6 +14,10 @@ import sys
 for line in sys.stdin.readlines():
     filename, content = line.split(':', 1)
 
+    if not os.access(filename, os.X_OK):
+        print('[ERROR] test script {0} does not have execute permission',
+              filename)
+
     filename_parts = os.path.splitext(filename)
     filename_base = filename_parts[0]
 
