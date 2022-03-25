@@ -216,9 +216,7 @@ static void chpl_gpu_launch_kernel_help(const char* fatbinData,
 
       // TODO pass the location info to this function and use a proper mem
       // desc
-      printf("1000\n");
       *kernel_params[i] = chpl_gpu_mem_alloc(cur_arg_size, 0, 0, 0);
-      printf("2000\n");
 
       chpl_gpu_copy_host_to_device(*kernel_params[i], cur_arg, cur_arg_size);
 
@@ -251,11 +249,9 @@ static void chpl_gpu_launch_kernel_help(const char* fatbinData,
 
   for (i=0 ; i<nargs ; i++) {
     if (gpu_alloc_map[i] == 1) {
-      printf("%d gpu_free\n", i);
       chpl_gpu_mem_free(*kernel_params[i], 0, 0);
     }
     else {
-      printf("%d non gpu_free\n", i);
     }
   }
 }
