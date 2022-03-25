@@ -28,6 +28,8 @@
 
 #ifdef HAS_GPU_LOCALE
 
+#define CHPL_GPU_MEM uva
+
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -128,11 +130,19 @@ bool chpl_gpu_is_device_ptr(void* ptr) {
 
   // We call CUDA_CALL later, because we want to treat some error codes
   // separately
+#if CHPL_GPU_MEM == uva
+  CUresult ret_val = cuPointerGetAttribute(&res, CU_POINTER_ATTRIBUTE_MAPPED,
+                                           (CUdeviceptr)ptr);
+
+  if (ret_val == CUDA_SUCCESS) {
+    return res;
+#else
   CUresult ret_val = cuPointerGetAttribute(&res, CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
                                            (CUdeviceptr)ptr);
 
   if (ret_val == CUDA_SUCCESS) {
     return res == CU_MEMORYTYPE_DEVICE || res == CU_MEMORYTYPE_UNIFIED;
+#endif
   }
   else if (ret_val == CUDA_ERROR_INVALID_VALUE ||
            ret_val == CUDA_ERROR_NOT_INITIALIZED ||
@@ -193,17 +203,22 @@ static void chpl_gpu_launch_kernel_help(const char* fatbinData,
 
   CHPL_GPU_LOG("Creating kernel parameters\n");
 
+  int* gpu_alloc_map = chpl_malloc(nargs*sizeof(int));
+
   for (i=0 ; i<nargs ; i++) {
     void* cur_arg = va_arg(args, void*);
     size_t cur_arg_size = va_arg(args, size_t);
 
     if (cur_arg_size > 0) {
+      gpu_alloc_map[i] = 1;
       // TODO this allocation needs to use `chpl_mem_alloc` with a proper desc
       kernel_params[i] = chpl_malloc(1*sizeof(CUdeviceptr));
 
       // TODO pass the location info to this function and use a proper mem
       // desc
+      printf("1000\n");
       *kernel_params[i] = chpl_gpu_mem_alloc(cur_arg_size, 0, 0, 0);
+      printf("2000\n");
 
       chpl_gpu_copy_host_to_device(*kernel_params[i], cur_arg, cur_arg_size);
 
@@ -211,6 +226,7 @@ static void chpl_gpu_launch_kernel_help(const char* fatbinData,
                    i, *kernel_params[i]);
     }
     else {
+      gpu_alloc_map[i] = 0;
       kernel_params[i] = cur_arg;
       CHPL_GPU_LOG("\tKernel parameter %d: %p\n",
                    i, kernel_params[i]);
@@ -233,8 +249,15 @@ static void chpl_gpu_launch_kernel_help(const char* fatbinData,
 
   CHPL_GPU_LOG("Synchronization complete %s\n", name);
 
-  // TODO: this should use chpl_mem_free
-  chpl_free(kernel_params);
+  for (i=0 ; i<nargs ; i++) {
+    if (gpu_alloc_map[i] == 1) {
+      printf("%d gpu_free\n", i);
+      chpl_gpu_mem_free(*kernel_params[i], 0, 0);
+    }
+    else {
+      printf("%d non gpu_free\n", i);
+    }
+  }
 }
 
 void chpl_gpu_copy_device_to_host(void* dst, void* src, size_t n) {
@@ -305,7 +328,15 @@ void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
 
   CUdeviceptr ptr = 0;
   if (size > 0) {
+#if CHPL_GPU_MEM == uva
+    void* mem = chpl_mem_alloc(size, description, lineno, filename);
+    CHPL_GPU_LOG("\tregistering %p\n", mem);
+    CUDA_CALL(cuMemHostRegister(mem, size, CU_MEMHOSTREGISTER_DEVICEMAP));
+    CUDA_CALL(cuMemHostGetDevicePointer(&ptr, mem, 0));
+#else
     CUDA_CALL(cuMemAllocManaged(&ptr, size, CU_MEM_ATTACH_GLOBAL));
+#endif
+
     CHPL_GPU_LOG("chpl_gpu_mem_alloc returning %p\n", (void*)ptr);
   }
   else {
@@ -322,6 +353,8 @@ void* chpl_gpu_mem_calloc(size_t number, size_t size,
                           int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
 
+  chpl_internal_error("Not ready for calloc on gpu");
+
   CHPL_GPU_LOG("chpl_gpu_mem_calloc called. Size:%d\n", size);
 
   CUdeviceptr ptr;
@@ -334,6 +367,7 @@ void* chpl_gpu_mem_realloc(void* memAlloc, size_t size,
                            chpl_mem_descInt_t description,
                            int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
+  chpl_internal_error("Not ready for realloc on gpu");
 
   CHPL_GPU_LOG("chpl_gpu_mem_realloc called. Size:%d\n", size);
 
@@ -382,7 +416,12 @@ void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {
   if (memAlloc != NULL) {
     assert(chpl_gpu_is_device_ptr(memAlloc));
 
+#if CHPL_GPU_MEM == uva
+    CUDA_CALL(cuMemHostUnregister(memAlloc));
+    chpl_mem_free(memAlloc, lineno, filename);
+#else
     CUDA_CALL(cuMemFree((CUdeviceptr)memAlloc));
+#endif
   }
 }
 
