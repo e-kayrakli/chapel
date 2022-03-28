@@ -28,8 +28,17 @@
 
 #ifdef HAS_GPU_LOCALE
 
-#define CHPL_GPU_MEM uva
+/*
+ * Enable this 'define' to use Unified Virtual Addressing for all GPU
+ * allocations. As UVA uses page-locked memory on the host-side, accesses to
+ * "GPU" memory from inside kernels will result in fine-grained access over the
+ * PCI. So, this will cause a significant performance issue. We might want to
+ * enable this when we're working on GPU-driven communication. Although, in the
+ * long term we'll probably want UVA memory to be limited to things like
+ * communication signal buffers etc. 
 
+#define CHPL_GPU_MEM_UVA
+*/
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -128,15 +137,17 @@ bool chpl_gpu_is_device_ptr(void* ptr) {
 
   unsigned int res;
 
+#ifdef CHPL_GPU_MEM_UVA
   // We call CUDA_CALL later, because we want to treat some error codes
   // separately
-#if CHPL_GPU_MEM == uva
   CUresult ret_val = cuPointerGetAttribute(&res, CU_POINTER_ATTRIBUTE_MAPPED,
                                            (CUdeviceptr)ptr);
 
   if (ret_val == CUDA_SUCCESS) {
     return res;
 #else
+  // We call CUDA_CALL later, because we want to treat some error codes
+  // separately
   CUresult ret_val = cuPointerGetAttribute(&res, CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
                                            (CUdeviceptr)ptr);
 
@@ -315,6 +326,7 @@ bool chpl_gpu_has_context() {
   }
 }
 
+
 void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
                          int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
@@ -324,10 +336,10 @@ void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
 
   CUdeviceptr ptr = 0;
   if (size > 0) {
-#if CHPL_GPU_MEM == uva
+#ifdef CHPL_GPU_MEM_UVA
     void* mem = chpl_mem_alloc(size, description, lineno, filename);
     CHPL_GPU_LOG("\tregistering %p\n", mem);
-    CUDA_CALL(cuMemHostRegister(mem, size, CU_MEMHOSTREGISTER_DEVICEMAP));
+    CUDA_CALL(cuMemHostRegister(mem, size, CU_MEMHOSTREGISTER_PORTABLE));
     CUDA_CALL(cuMemHostGetDevicePointer(&ptr, mem, 0));
 #else
     CUDA_CALL(cuMemAllocManaged(&ptr, size, CU_MEM_ATTACH_GLOBAL));
@@ -349,7 +361,9 @@ void* chpl_gpu_mem_calloc(size_t number, size_t size,
                           int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
 
-  chpl_internal_error("Not ready for calloc on gpu");
+#ifdef CHPL_GPU_MEM_UVA
+  chpl_internal_error("Not ready for calloc on gpu with UVA");
+#endif
 
   CHPL_GPU_LOG("chpl_gpu_mem_calloc called. Size:%d\n", size);
 
@@ -363,7 +377,10 @@ void* chpl_gpu_mem_realloc(void* memAlloc, size_t size,
                            chpl_mem_descInt_t description,
                            int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
+
+#ifdef CHPL_GPU_MEM_UVA
   chpl_internal_error("Not ready for realloc on gpu");
+#endif
 
   CHPL_GPU_LOG("chpl_gpu_mem_realloc called. Size:%d\n", size);
 
@@ -412,7 +429,7 @@ void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {
   if (memAlloc != NULL) {
     assert(chpl_gpu_is_device_ptr(memAlloc));
 
-#if CHPL_GPU_MEM == uva
+#ifdef CHPL_GPU_MEM_UVA
     CUDA_CALL(cuMemHostUnregister(memAlloc));
     chpl_mem_free(memAlloc, lineno, filename);
 #else
