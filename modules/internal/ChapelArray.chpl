@@ -2280,24 +2280,24 @@ module ChapelArray {
     if useCachedBulkTransfer {
       if (a._value.isDefaultRectangular() && b._value.isDefaultRectangular()) {
         if (a.locale == here) {
-          if (a.domain.definedConst) {
+          /*if (a.domain.definedConst) {*/
             if debugCachedBulkTransfer {
               chpl_debug_writeln("lhs is local and based on a constant domain");
             }
 
 
             success = a._value.doiBulkTransferFromRemotePair(b._value);
-          }
+          /*}*/
         }
         if (b.locale == here) {
-          if (b.domain.definedConst) {
+          /*if (b.domain.definedConst) {*/
             if debugCachedBulkTransfer {
               chpl_debug_writeln("rhs is local and based on a constant domain");
             }
 
 
             success = b._value.doiBulkTransferToRemotePair(a._value);
-          }
+          /*}*/
         }
       }
 
