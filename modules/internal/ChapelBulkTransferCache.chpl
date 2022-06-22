@@ -4,7 +4,7 @@ module ChapelBulkTransferCache {
   config param debugCachedBulkTransfer = false;
 
   use ChapelBase;
-  use CPtr;
+  use CTypes;
   use Map;
 
   record chpl__btdCacheKey {
