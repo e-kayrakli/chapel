@@ -322,22 +322,22 @@ static unsigned get_num_small_and_large_classes(void) {
 
 // helper routine to get an array of size classes for small and large sizes
 static void get_small_and_large_class_sizes(size_t* classes) {
-  unsigned class;
+  unsigned m_class;
   unsigned small_classes;
   unsigned large_classes;
 
   small_classes = get_num_small_classes();
-  for (class=0; class<small_classes; class++) {
+  for (m_class=0; m_class<small_classes; m_class++) {
     char ssize[128];
-    snprintf(ssize, sizeof(ssize), "arenas.bin.%u.size", class);
-    classes[class] = get_size_t_mallctl_value(ssize);
+    snprintf(ssize, sizeof(ssize), "arenas.bin.%u.size", m_class);
+    classes[m_class] = get_size_t_mallctl_value(ssize);
   }
 
   large_classes = get_num_large_classes();
-  for (class=0; class<large_classes; class++) {
+  for (m_class=0; m_class<large_classes; m_class++) {
     char lsize[128];
-    snprintf(lsize, sizeof(lsize), "arenas.lrun.%u.size", class);
-    classes[small_classes + class] = get_size_t_mallctl_value(lsize);
+    snprintf(lsize, sizeof(lsize), "arenas.lrun.%u.size", m_class);
+    classes[small_classes + m_class] = get_size_t_mallctl_value(lsize);
   }
 }
 
@@ -360,7 +360,7 @@ static chpl_bool addressNotInHeap(void* ptr) {
 // shared heap, so we need to waste whatever memory is left in them so that
 // future allocations come from chunks that were provided by our shared heap
 static void useUpMemNotInHeap(void) {
-  unsigned class;
+  unsigned m_class;
   unsigned num_classes = get_num_small_and_large_classes();
   size_t classes[num_classes];
   get_small_and_large_class_sizes(classes);
@@ -373,10 +373,10 @@ static void useUpMemNotInHeap(void) {
   // allocation, regardless of size, must have come from a chunk provided by
   // our shared heap. Once we know a specific class size came from our shared
   // heap, we can free the memory instead of leaking it.
-  for (class=num_classes-1; class!=UINT_MAX; class--) {
+  for (m_class=num_classes-1; m_class!=UINT_MAX; m_class--) {
     void* p = NULL;
     size_t alloc_size;
-    alloc_size = classes[class];
+    alloc_size = classes[m_class];
     do {
       if ((p = CHPL_JE_MALLOCX(alloc_size, MALLOCX_NO_FLAGS)) == NULL) {
         chpl_internal_error("could not use up memory outside of shared heap");

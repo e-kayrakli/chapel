@@ -126,23 +126,18 @@ typedef enum {
   chpl_comm_cb_num_event_kinds
 } chpl_comm_cb_event_kind_t;
 
-typedef struct {
-  chpl_comm_cb_event_kind_t
-             event_kind;          // kind of event this describes
-  c_nodeid_t localNodeID;         // The node doing the communication
-  c_nodeid_t remoteNodeID;        // The node to which the communication is going
-  union {
 
-    struct chpl_comm_info_comm { // put, put_nb, get, get_nb
+
+struct chpl_comm_info_comm { // put, put_nb, get, get_nb
       void *addr;                // Source address
       void *raddr;               // Destination address
       size_t size;               // Size of communication
       int32_t commID;            // unique identifier for this get/put
       int lineno;                // source line of communication
       int32_t filename;          // source file of communication
-    } comm;
+};
 
-    struct chpl_comm_info_comm_strd { // put_strd, get_strd
+struct chpl_comm_info_comm_strd { // put_strd, get_strd
       void* srcaddr;            // Source Address
       void* srcstrides;         // Source strides
 
@@ -154,16 +149,27 @@ typedef struct {
       int32_t commID;           // unique identifier for this get/put
       int lineno;               // source line of communication
       int32_t filename;         // source file of communication
-    } comm_strd;
+};
+struct chpl_comm_info_comm_executeOn {
+  c_sublocid_t subloc;      //  Sub-location
+  chpl_fn_int_t fid;        //  Function ID
+  void *arg;                //  Function arg pointer
+  size_t arg_size;          //  Function arg size
+  int lineno;               // source line of communication
+  int32_t filename;         // source file of communication
+};
+typedef struct {
+  chpl_comm_cb_event_kind_t
+             event_kind;          // kind of event this describes
+  c_nodeid_t localNodeID;         // The node doing the communication
+  c_nodeid_t remoteNodeID;        // The node to which the communication is going
+  union {
 
-    struct chpl_comm_info_comm_executeOn {
-      c_sublocid_t subloc;      //  Sub-location
-      chpl_fn_int_t fid;        //  Function ID
-      void *arg;                //  Function arg pointer
-      size_t arg_size;          //  Function arg size
-      int lineno;               // source line of communication
-      int32_t filename;         // source file of communication
-    } executeOn;
+    struct chpl_comm_info_comm comm;
+
+    struct chpl_comm_info_comm_strd comm_strd;
+
+    struct chpl_comm_info_comm_executeOn executeOn;
 
   } iu;
 } chpl_comm_cb_info_t;

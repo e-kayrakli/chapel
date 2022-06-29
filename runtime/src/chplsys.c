@@ -773,17 +773,17 @@ int chpl_sys_getNumCPUsLogical(chpl_bool accessible_only) {
 // to initialize the static, but since two or more should end up writing the
 // same bytes, it probably just works out.
 c_string chpl_nodeName(void) {
-  static char* namespace = NULL;
-  if (namespace == NULL)
+  static char* chpl_namespace = NULL;
+  if (chpl_namespace == NULL)
   {
     struct utsname utsinfo;
     int namelen;
 
     uname(&utsinfo);
     namelen = strlen(utsinfo.nodename)+1;
-    namespace = chpl_mem_realloc(namespace, namelen * sizeof(char),
+    chpl_namespace = (char *)chpl_mem_realloc(chpl_namespace, namelen * sizeof(char),
                                  CHPL_RT_MD_LOCALE_NAME_BUF, 0, 0);
-    strcpy(namespace, utsinfo.nodename);
+    strcpy(chpl_namespace, utsinfo.nodename);
   }
-  return namespace;
+  return chpl_namespace;
 }

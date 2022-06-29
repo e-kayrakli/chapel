@@ -144,7 +144,7 @@ string_select(c_string x, int low, int high, int stride, int32_t lineno, int32_t
   if (high < low) return NULL;
 
   size = high - low + 1;
-  result = chpl_mem_allocMany(1, size + 1, CHPL_RT_MD_STR_SELECT_DATA,
+  result = (char*)chpl_mem_allocMany(1, size + 1, CHPL_RT_MD_STR_SELECT_DATA,
                               lineno, filename);
   src = stride > 0 ? x + low - 1 : x + high - 1;
   dst = result;
@@ -176,7 +176,7 @@ string_index(c_string x, int i, int32_t lineno, int32_t filename) {
   {
     return NULL;
   }
-  buffer = chpl_mem_allocMany(1, 2, CHPL_RT_MD_STR_COPY_DATA,
+  buffer = (char*)chpl_mem_allocMany(1, 2, CHPL_RT_MD_STR_COPY_DATA,
                               lineno, filename);
   sprintf(buffer, "%c", x[i-1]);
   return buffer;

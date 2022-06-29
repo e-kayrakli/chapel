@@ -82,7 +82,7 @@ int _runInLLDB(void) {
 }
 
 
-static void defineEnvVar(const char* currentArg,
+static void defineEnvVar(char* currentArg,
                          int32_t lineno, int32_t filename) {
   char* eqp;
 
@@ -108,7 +108,7 @@ static void defineEnvVar(const char* currentArg,
   }
 
   *eqp = '\0';
-  chpl_env_set(currentArg, eqp + 1, 0);
+  chpl_env_set((const char*)currentArg, eqp + 1, 0);
   *eqp = '=';
 }
 
@@ -118,7 +118,7 @@ static void parseDashEArgs(int* argc, char* argv[]) {
 
   for (int i = 1; i < *argc; i++) {
     int lineno = i;
-    const char* currentArg = argv[i];
+    char* currentArg = argv[i];
 
     if (currentArg[0] == '-' && currentArg[1] == 'E') {
       //
@@ -244,7 +244,8 @@ static int32_t _argNumLocales = 0;
 
 void parseNumLocales(const char* numPtr, int32_t lineno, int32_t filename) {
   int invalid;
-  char invalidChars[2] = "\0\0";
+  char invalidChars[2];
+  memset(invalidChars, 0, 2);
   _argNumLocales = c_string_to_int32_t_precise(numPtr, &invalid, invalidChars);
   if (invalid) {
     char* message = chpl_glom_strings(3, "\"", numPtr,

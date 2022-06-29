@@ -35,7 +35,7 @@ chpl_external_array chpl_make_external_array(uint64_t elt_size,
   chpl_external_array ret;
   ret.elts = my_mem;
   ret.num_elts = num_elts;
-  ret.freer = chpl_wrap_chapel_free_call;
+  ret.freer = (void*)chpl_wrap_chapel_free_call;
   return ret;
 }
 
@@ -53,7 +53,7 @@ chpl_external_array chpl_make_external_array_ptr_free(void* elts,
   chpl_external_array ret;
   ret.elts = elts;
   ret.num_elts = num_elts;
-  ret.freer = chpl_wrap_chapel_free_call;
+  ret.freer = (void*)chpl_wrap_chapel_free_call;
   return ret;
 }
 

@@ -44,21 +44,21 @@ static void CHPL_GPU_DEBUG(const char *str, ...) {
   }
 }
 
-static void chpl_gpu_cuda_check(int err, const char* file, int line) {
-  if(err != CUDA_SUCCESS) {
+static void chpl_gpu_cuda_check(cudaError_t err, const char* file, int line) {
+  if(err != cudaSuccess) {
     const int msg_len = 256;
     char msg[msg_len];
 
     snprintf(msg, msg_len,
              "%s:%d: Error calling CUDA function: %s (Code: %d)",
-             file, line, cudaGetErrorString(err), err);
+             file, line, cudaGetErrorString(err), (int)err);
 
     chpl_internal_error(msg);
   }
 }
 
 #define CUDA_CALL(call) do {\
-  chpl_gpu_cuda_check((int)call, __FILE__, __LINE__);\
+  chpl_gpu_cuda_check((cudaError_t)call, __FILE__, __LINE__);\
 } while(0);
 
 CUcontext *chpl_gpu_primary_ctx;
@@ -71,7 +71,7 @@ void chpl_gpu_init() {
 
   CUDA_CALL(cuDeviceGetCount(&num_devices));
 
-  chpl_gpu_primary_ctx = chpl_malloc(sizeof(CUcontext)*num_devices);
+  chpl_gpu_primary_ctx = (CUcontext*)chpl_malloc(sizeof(CUcontext)*num_devices);
 
   int i;
   for (i=0 ; i<num_devices ; i++) {
@@ -189,7 +189,7 @@ static void chpl_gpu_launch_kernel_help(int ln,
   int i;
   void* function = chpl_gpu_getKernel(fatbinData, name);
   // TODO: this should use chpl_mem_alloc
-  void*** kernel_params = chpl_malloc(nargs*sizeof(void**));
+  void*** kernel_params = (void***)chpl_malloc(nargs*sizeof(void**));
 
   assert(function);
   assert(kernel_params);
@@ -202,7 +202,7 @@ static void chpl_gpu_launch_kernel_help(int ln,
 
     if (cur_arg_size > 0) {
       // TODO this allocation needs to use `chpl_mem_alloc` with a proper desc
-      kernel_params[i] = chpl_malloc(1*sizeof(CUdeviceptr));
+      kernel_params[i] = (void**)chpl_malloc(1*sizeof(CUdeviceptr));
 
       *kernel_params[i] = chpl_gpu_mem_alloc(cur_arg_size,
                                              CHPL_RT_MD_GPU_KERNEL_ARG,
@@ -214,7 +214,7 @@ static void chpl_gpu_launch_kernel_help(int ln,
                    i, *kernel_params[i]);
     }
     else {
-      kernel_params[i] = cur_arg;
+      kernel_params[i] = (void**)cur_arg;
       CHPL_GPU_DEBUG("\tKernel parameter %d: %p\n",
                    i, kernel_params[i]);
     }

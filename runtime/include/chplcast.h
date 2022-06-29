@@ -28,6 +28,10 @@
 #include "chpl-string.h"
 
 #ifdef __cplusplus
+_complex64 c_string_to_complex64_precise(c_string str, int* invalid, char* invalidCh);
+_complex128 c_string_to_complex128_precise(c_string str, int* invalid, char* invalidCh);
+_complex64 c_string_to_complex64(c_string str, chpl_bool* err, int lineno, int32_t filename);
+_complex128 c_string_to_complex128(c_string str, chpl_bool* err, int lineno, int32_t filename);
 extern "C" {
 #endif
 

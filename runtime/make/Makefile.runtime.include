@@ -123,6 +123,7 @@ RUNTIME_INCLS += -I$(CHPL_MAKE_CUDA_PATH)/include
 RUNTIME_DEFS += -DHAS_GPU_LOCALE
 endif
 
-RUNTIME_CFLAGS += $(RUNTIME_DEFS)
-RUNTIME_CXXFLAGS += $(RUNTIME_DEFS) $(CXXFLAGS)
+RUNTIME_CFLAGS += $(RUNTIME_DEFS) -x cuda --cuda-gpu-arch=sm_60 -std=c++11 -Wno-c99-designator -Wno-unknown-cuda-version
+RUNTIME_CXXFLAGS += $(RUNTIME_DEFS) $(CXXFLAGS) -x cuda --cuda-gpu-arch=sm_60 -std=c++11 -Wno-c99-designator -Wno-unknown-cuda-version
+
 

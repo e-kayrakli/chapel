@@ -44,6 +44,10 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+#ifdef __cplusplus
+#define _Bool bool
+#endif
+
 int chpl_verbose_mem = 0;
 int chpl_memTrack = 0;
 
@@ -183,7 +187,7 @@ void chpl_setMemFlags(void) {
   if (local_memTrack) {
     hashSizeIndex = 0;
     hashSize = hashSizes[hashSizeIndex];
-    memTable = sys_calloc(hashSize, sizeof(memTableEntry*));
+    memTable = (memTableEntry**)sys_calloc(hashSize, sizeof(memTableEntry*));
     chpl_atomic_thread_fence(memory_order_release);
     chpl_memTrack = local_memTrack;
     chpl_atomic_thread_fence(memory_order_release);
@@ -230,7 +234,7 @@ resizeTable(int direction) {
 
   newHashSizeIndex = hashSizeIndex + direction;
   newHashSize = hashSizes[newHashSizeIndex];
-  newMemTable = sys_calloc(newHashSize, sizeof(memTableEntry*));
+  newMemTable = (memTableEntry**)sys_calloc(newHashSize, sizeof(memTableEntry*));
 
   for (i = 0; i < hashSize; i++) {
     for (me = memTable[i]; me != NULL; me = next) {

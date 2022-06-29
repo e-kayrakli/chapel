@@ -65,7 +65,7 @@ static int is_system_allocated(void* ptr_in, size_t *len_out)
   for( cur = system_allocated_head;
        cur;
        cur = cur->next ) {
-    unsigned char* start = cur->ptr;
+    unsigned char* start = (unsigned char*)cur->ptr;
     unsigned char* end = start + cur->len;
     if( start <= ptr && ptr < end ) {
       if( len_out ) *len_out = cur->len;
@@ -74,6 +74,12 @@ static int is_system_allocated(void* ptr_in, size_t *len_out)
   }
   return 0;
 }
+
+#ifdef __cplusplus
+#define THROW throw()
+#else
+#define THROW
+#endif
 
 
 // Replace malloc (assuming it is weak symbols
@@ -94,10 +100,10 @@ void* realloc(void* ptr, size_t size);
 void __libc_free(void* ptr);
 void free(void* ptr);
 
-int posix_memalign(void **memptr, size_t alignment, size_t size);
+int posix_memalign(void **memptr, size_t alignment, size_t size) THROW;
 
 void* __libc_valloc(size_t size);
-void* valloc(size_t size);
+void* valloc(size_t size) THROW;
 
 void* __libc_pvalloc(size_t size);
 void* pvalloc(size_t size);
@@ -222,7 +228,7 @@ void free(void* ptr)
   chpl_free(ptr);
 }
 
-int posix_memalign(void **memptr, size_t alignment, size_t size)
+int posix_memalign(void **memptr, size_t alignment, size_t size) THROW
 {
   int ret;
   if( !chpl_mem_inited() ) {
@@ -250,7 +256,7 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
   return ret;
 }
 
-void* valloc(size_t size)
+void* valloc(size_t size) THROW
 {
   void* ret;
   if( !chpl_mem_inited() ) {

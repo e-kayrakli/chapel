@@ -23,6 +23,7 @@ module ExportWrappers {
   use ChapelStandard;
   use CTypes;
 
+  pragma "codegen for GPU"
   private proc _initDynamicEndCount() {
     var endCount = _endCountAlloc(forceLocalTypes=false);
     chpl_task_setDynamicEndCount(endCount);
@@ -35,11 +36,13 @@ module ExportWrappers {
   }
 
   // TODO: Consider moving this to a separate "LibrarySupport" module.
+  pragma "codegen for GPU"
   export proc chpl_libraryModuleLevelSetup(): void {
     _initDynamicEndCount();
   }
 
   // TODO: Consider moving this to a separate "LibrarySupport" module.
+  pragma "codegen for GPU"
   export proc chpl_libraryModuleLevelCleanup(): void {
     _destroyDynamicEndCount();
   }

@@ -406,7 +406,7 @@ int handlePossibleConfigVar(int* argc, char* argv[], int argnum,
                             int32_t lineno, int32_t filename) {
   int retval = 0;
   int arglen = strlen(argv[argnum]+2)+1;
-  char* argCopy = chpl_mem_allocMany(arglen, sizeof(char),
+  char* argCopy = (char*)chpl_mem_allocMany(arglen, sizeof(char),
                                      CHPL_RT_MD_CFG_ARG_COPY_DATA, argnum,
                                      CHPL_FILE_IDX_COMMAND_LINE);
   char* equalsSign;

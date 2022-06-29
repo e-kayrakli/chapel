@@ -113,7 +113,7 @@ void chpl_comm_init_prv_bcast_tab(void) {
   chpl_rt_priv_bcast_tab_len = chpl_private_broadcast_table_len
                                + chpl_rt_prv_tab_num_idxs;
   chpl_rt_priv_bcast_tab =
-    chpl_mem_allocMany(chpl_rt_priv_bcast_tab_len,
+    (void**)chpl_mem_allocMany(chpl_rt_priv_bcast_tab_len,
                        sizeof(chpl_rt_priv_bcast_tab[0]),
                        CHPL_RT_MD_COMM_UTIL, 0, 0);
 
@@ -209,7 +209,7 @@ void chpl_comm_regMemHeapTouch(void* start, uintptr_t size) {
   memory_region mem_regions[nthreads];
 
   for (int tid=0; tid<nthreads; tid++) {
-    mem_regions[tid].start = start;
+    mem_regions[tid].start = (unsigned char*)start;
     mem_regions[tid].size = size;
     mem_regions[tid].tid = tid;
     mem_regions[tid].nthreads = nthreads;

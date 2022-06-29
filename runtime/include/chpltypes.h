@@ -243,7 +243,15 @@ typedef struct chpl_main_argument_s {
   int32_t return_value;
 } chpl_main_argument;
 
-static inline _complex128 _chpl_complex128(_real64 re, _real64 im) {
+#ifdef HAS_GPU_LOCALE
+#ifdef __cplusplus
+#define EXEC_SPEC __host__ __device__
+#endif
+#else
+#define EXEC_SPEC
+#endif
+
+EXEC_SPEC static inline _complex128 _chpl_complex128(_real64 re, _real64 im) {
 #ifndef __cplusplus
   return re + im*_Complex_I;
 #else

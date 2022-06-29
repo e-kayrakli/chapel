@@ -58,7 +58,7 @@ const char* allocate_string_literals_buf(int64_t s) {
   chpl_string_literals_buffer = chpl_mem_alloc(s,
                                                CHPL_RT_MD_STRING_LITERALS_BUF,
                                                0, 0);
-  return chpl_string_literals_buffer;
+  return (const char*)chpl_string_literals_buffer;
 }
 
 void deallocate_string_literals_buf(void) {
@@ -234,7 +234,7 @@ void chpl_rt_init(int argc, char* argv[]) {
   chpl_comm_barrier("about to leave comm init code");
 
   CreateConfigVarTable();      // get ready to start tracking config vars
-  chpl_gen_main_arg.argv = chpl_malloc(argc * sizeof(char*));
+  chpl_gen_main_arg.argv = (const char**)chpl_malloc(argc * sizeof(char*));
   chpl_gen_main_arg.argv[0] = argv[0];
   chpl_gen_main_arg.argc = 1;
   chpl_gen_main_arg.return_value = 0;
@@ -367,13 +367,13 @@ void chpl_executable_init(void) {
 
 void chpl_execute_module_deinit(c_fn_ptr deinitFun) {
   void (*deinitFn)(void);
-  deinitFn = deinitFun;
+  deinitFn = (void (*)())deinitFun;
   deinitFn();
 }
 
 // These are currently defined in 'modules/internal/ExportWrappers.chpl'.
-void chpl_libraryModuleLevelSetup(void);
-void chpl_libraryModuleLevelCleanup(void);
+EXEC_SPEC void chpl_libraryModuleLevelSetup(void);
+EXEC_SPEC void chpl_libraryModuleLevelCleanup(void);
 
 //
 // A program using Chapel as a library might look like:

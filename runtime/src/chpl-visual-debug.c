@@ -312,7 +312,7 @@ void chpl_vdebug_pause (int tagno) {
 void cb_comm_put_nb (const chpl_comm_cb_info_t *info) {
   if (chpl_vdebug) {
     struct timeval tv;
-    const struct chpl_comm_info_comm *cm = &info->iu.comm;
+    const struct chpl_comm_info_comm *cm = (const struct chpl_comm_info_comm *)&info->iu.comm;
     chpl_taskID_t commTask = chpl_task_getId();
     char buff[CHPL_TASK_ID_STRING_MAX_LEN];
     (void) gettimeofday (&tv, NULL);

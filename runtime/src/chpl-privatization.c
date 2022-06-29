@@ -47,7 +47,7 @@ void chpl_newPrivatizedClass(void* v, int64_t pid) {
   if (chpl_privateObjects == NULL) {
     chpl_capPrivateObjects = 2*max(pid, 4);
     chpl_privateObjects =
-        chpl_mem_allocManyZero(chpl_capPrivateObjects,
+        (chpl_privateObject_t *)chpl_mem_allocManyZero(chpl_capPrivateObjects,
                                sizeof(chpl_privateObject_t),
                                CHPL_RT_MD_COMM_PRV_OBJ_ARRAY, 0, 0);
   } else {
@@ -59,7 +59,7 @@ void chpl_newPrivatizedClass(void* v, int64_t pid) {
       oldCap = chpl_capPrivateObjects;
       chpl_capPrivateObjects = 2*max(pid, oldCap);
 
-      tmp = chpl_mem_allocManyZero(chpl_capPrivateObjects,
+      tmp = (chpl_privateObject_t *)chpl_mem_allocManyZero(chpl_capPrivateObjects,
                                    sizeof(chpl_privateObject_t),
                                    CHPL_RT_MD_COMM_PRV_OBJ_ARRAY, 0, 0);
       chpl_memcpy((void*)tmp, (void*)chpl_privateObjects,

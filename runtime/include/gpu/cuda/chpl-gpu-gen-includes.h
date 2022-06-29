@@ -70,6 +70,22 @@ __device__ static inline c_nodeid_t get_chpl_nodeID(void) {
   return 0;
 }
 
+//__host__ __device__ static inline  _complex128 _chpl_complex128(_real64 re, _real64 im) {
+//#ifndef __cplusplus
+  //return re + im*_Complex_I;
+//#else
+  //return std::complex<double>(re, im);
+//#endif
+//}
+
+//__host__ static inline  _complex128 _chpl_complex128(_real64 re, _real64 im) {
+//#ifndef __cplusplus
+  //return re + im*_Complex_I;
+//#else
+  //return std::complex<double>(re, im);
+//#endif
+//}
+
 #endif // HAS_GPU_LOCALE
 
 #endif // _CHPL_GPU_GEN_INCLUDES_H
