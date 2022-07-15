@@ -567,6 +567,9 @@ void GpuKernel::populateBody(CForLoop *loop, FnSymbol *outlinedFunction) {
                   if (strcmp(function->name, calledFn->name) == 0 &&
                       calledFn != function) {
 
+                    // this doesn't work with ZMQ
+                    std::cout << "Replacing " << node->stringLoc() << std::endl;
+
                     // replace node with its copy so that we can modify it and
                     // put it in the outlined function
                     node->replace(node->copy());

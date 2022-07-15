@@ -58,10 +58,14 @@ extern "C++" {
   #endif
 }
 #elif __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
+#ifdef __cplusplus
 extern "C++" {
+#endif
   #include <stdatomic.h>
   #define Atomic(T) _Atomic T
+#ifdef __cplusplus
 }
+#endif
 #else
   #error "The cstdlib atomics need at least C11.  Use intrinsics or locks."
 #endif

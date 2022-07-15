@@ -269,7 +269,13 @@ module BytesCasts {
   }
 
 
-  operator :(x: bytes, type t:chpl_anycomplex) throws {
+  pragma "codegen for GPU"
+  pragma "last resort"
+  pragma "always resolve function"
+  proc helpFoo(x: bytes, type t:chpl_anycomplex) throws {
+  }
+
+  proc helpFoo(x: bytes, type t:chpl_anycomplex) throws {
     pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_complex64(x:c_string, ref err: bool) : complex(64);
@@ -299,5 +305,9 @@ module BytesCasts {
                                            "' to complex(" + numBits(t):string + ")");
 
     return retVal;
+  }
+
+  operator :(x: bytes, type t:chpl_anycomplex) throws {
+              return helpFoo(x, t);
   }
 } // end of module BytesCasts

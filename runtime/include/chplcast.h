@@ -70,6 +70,9 @@ _imag64 c_string_to_imag64(c_string str, chpl_bool* err, int lineno, int32_t fil
 #ifndef __cplusplus
 _complex64 c_string_to_complex64(c_string str, chpl_bool* err, int lineno, int32_t filename);
 _complex128 c_string_to_complex128(c_string str, chpl_bool* err, int lineno, int32_t filename);
+#else
+extern "C++" _complex64 c_string_to_complex64(c_string str, chpl_bool* err, int lineno, int32_t filename);
+extern "C++" _complex128 c_string_to_complex128(c_string str, chpl_bool* err, int lineno, int32_t filename);
 #endif
 
 

@@ -70,6 +70,10 @@ __device__ static inline c_nodeid_t get_chpl_nodeID(void) {
   return 0;
 }
 
+__device__ static inline _complex128 c_string_to_complex128(const char *str, int* err) {
+  return 0;
+}
+
 #endif // HAS_GPU_LOCALE
 
 #endif // _CHPL_GPU_GEN_INCLUDES_H

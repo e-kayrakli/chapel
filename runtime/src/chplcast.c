@@ -219,7 +219,7 @@ _define_string_to_imag_precise(imag, 64, "%lf")
 
 
 #define _define_string_to_complex_precise(base, width, format, halfwidth) \
-  _##base##width c_string_to_##base##width##_precise(c_string str,      \
+  extern "C++" _##base##width c_string_to_##base##width##_precise(c_string str,      \
                                                      int* invalid,      \
                                                      char* invalidCh) { \
     _##base##width val = 0.0;                                           \
@@ -332,6 +332,9 @@ _define_string_to_int_type(uint, 32)
 _define_string_to_int_type(uint, 64)
 
 #define _define_string_to_real_type(base, width)                        \
+  #ifdef __cplusplus \
+  extern "C++" \
+  #endif\
   _##base##width c_string_to_##base##width(c_string str, chpl_bool* err, \
                                            int lineno, int32_t filename) { \
     int invalid;                                                        \
