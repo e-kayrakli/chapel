@@ -34,6 +34,7 @@
 #include "bb.h"
 #include "astutil.h"
 #include "optimizations.h"
+#include "view.h"
 
 #include "global-ast-vecs.h"
 
@@ -371,6 +372,7 @@ void GpuKernel::buildStubOutlinedFunction(DefExpr* insertionPoint) {
   fn_->addFlag(FLAG_RESOLVED);
   fn_->addFlag(FLAG_ALWAYS_RESOLVE);
   fn_->addFlag(FLAG_GPU_CODEGEN);
+  fn_->addFlag(FLAG_COMPILER_GENERATED);
 
   generateIndexComputation();
   generateEarlyReturn();
@@ -555,9 +557,45 @@ void GpuKernel::populateBody(CForLoop *loop, FnSymbol *outlinedFunction) {
                 addKernelArgument(sym);
               }
 
-              if (!calledFn->hasFlag(FLAG_GPU_AND_CPU_CODEGEN)) {
+
+
+
+
+              bool hasGPUFunction = false;
+              forv_Vec(FnSymbol, function, gFnSymbols) {
+                if (function->hasFlag(FLAG_GPU_CODEGEN)) {
+                  if (strcmp(function->name, calledFn->name) == 0 &&
+                      calledFn != function) {
+
+                    // replace node with its copy so that we can modify it and
+                    // put it in the outlined function
+                    node->replace(node->copy());
+
+                    // remove the function if we are removing its sole call site
+                    if (calledFn->singleInvocation() == parent) {
+                      calledFn->defPoint->remove();
+                    }
+
+                    parent->setResolvedFunction(function);
+
+                    // TODO I don't know why we need this flag, but we don't
+                    // generate the right ptx without it
+                    function->addFlag(FLAG_GPU_AND_CPU_CODEGEN);
+
+                    outlinedFunction->insertAtTail(node);
+                    copyNode = false;  // because we already did
+
+                    hasGPUFunction = true;
+                    break;
+                  }
+                }
+              }
+
+              if (!hasGPUFunction &&
+                  !calledFn->hasFlag(FLAG_GPU_AND_CPU_CODEGEN)) {
                  markGPUSubCalls(calledFn);
               }
+
             }
             else {
               INT_FATAL("Unexpected call expression");
@@ -660,6 +698,24 @@ static CallExpr* generateGPUCall(GpuKernel& info, VarSymbol* numThreads) {
   CallExpr *call = new CallExpr(PRIM_GPU_KERNEL_LAUNCH_FLAT);
 
   call->insertAtTail(info.fn());
+
+  for_alist(expr, info.fn()->body->body) {
+    if (CallExpr *call = toCallExpr(expr)) {
+      if (call->isNamed("foo")) {
+        std::cout << "Heyo\n\n";
+
+        forv_Vec(FnSymbol, function, gFnSymbols) {
+          if (function->hasFlag(FLAG_GPU_CODEGEN)) {
+            //if (strcmp("foo", function->name) == 0) {
+            //if (function->getModule()->modTag == MOD_USER) {
+              nprint_view(call);
+            //}
+          }
+        }
+
+      }
+    }
+  }
 
   call->insertAtTail(numThreads);  // total number of GPU threads
 
