@@ -36,6 +36,8 @@ typedef int32_t (run_target_team_region_fn)(int32_t, void*, void**, ptrdiff_t*,
 typedef int32_t (data_submit_fn)(int32_t, void *, void *, int64_t);
 typedef int32_t (data_retrieve_fn)(int32_t, void *, void *, int64_t);
 
+extern __tgt_offload_entry *__start_omp_offloading_entries;
+extern __tgt_offload_entry *__stop_omp_offloading_entries;
 
 typedef struct chpl_gpu_plugin_rtl_s {
   void *handle = NULL;
@@ -48,9 +50,19 @@ static chpl_gpu_plugin_rtl_t *rtl = NULL;
 
 extern "C" {
 
+// This is defined as a weak function, so we can steal it, but is it the right
+// thing to do? Otherise we segfault at function call. Maybe something we need
+// to load dynamically?
+int __kmpc_get_target_offload() { return 1; }
+
 void chpl_gpu_impl_init() {
   if (rtl == NULL) {
     rtl = (chpl_gpu_plugin_rtl_t*)chpl_malloc(sizeof(chpl_gpu_plugin_rtl_t));
+
+    printf("initing\n");
+    printf("start %p stop %p\n", __start_omp_offloading_entries,
+                                 __stop_omp_offloading_entries);
+    fflush(stdout);
 
     rtl->handle = dlopen("libomptarget.rtl.cuda.so", RTLD_NOW);
     assert(rtl->handle);
@@ -72,6 +84,8 @@ void chpl_gpu_impl_init() {
     // TODO can we stick device_id into something task-private? We keep asking
     // for that in every function
   }
+
+  printf("init complete\n");
 }
 
 void* chpl_gpu_impl_mem_alloc(size_t size) {
@@ -133,8 +147,13 @@ void chpl_gpu_impl_launch_kernel_flat(int ln, int32_t fn,
                                       int num_threads, int blk_dim,
                                       int nargs, va_list args) {
 
+    printf("launching\n");
+    printf("start %p stop %p\n", __start_omp_offloading_entries,
+                                 __stop_omp_offloading_entries);
+    fflush(stdout);
+
   kernel_t kernel;
-  kernel.function = chpl_gpu_getKernel(fatbinData, name);
+  //kernel.function = chpl_gpu_getKernel(fatbinData, name);
   kernel.execution_mode = 1 << 1;
   kernel.max_threads_per_block = blk_dim;
 
