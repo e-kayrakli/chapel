@@ -556,11 +556,9 @@ void GpuKernel::populateBody(CForLoop *loop, FnSymbol *outlinedFunction) {
                 addKernelArgument(sym);
               }
 
-
-
-
-
               bool hasGPUFunction = false;
+              // TODO before merging this we should cache all functions that has
+              // GPU codegen flag instead of iterating them per symexpr here.
               forv_Vec(FnSymbol, function, gFnSymbols) {
                 if (function->hasFlag(FLAG_GPU_CODEGEN)) {
                   if (strcmp(function->name, calledFn->name) == 0 &&
