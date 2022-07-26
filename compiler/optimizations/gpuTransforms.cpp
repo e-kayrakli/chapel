@@ -34,7 +34,6 @@
 #include "bb.h"
 #include "astutil.h"
 #include "optimizations.h"
-#include "view.h"
 
 #include "global-ast-vecs.h"
 
@@ -567,9 +566,6 @@ void GpuKernel::populateBody(CForLoop *loop, FnSymbol *outlinedFunction) {
                   if (strcmp(function->name, calledFn->name) == 0 &&
                       calledFn != function) {
 
-                    // this doesn't work with ZMQ
-                    std::cout << "Replacing " << node->stringLoc() << std::endl;
-
                     // replace node with its copy so that we can modify it and
                     // put it in the outlined function
                     node->replace(node->copy());
@@ -598,7 +594,6 @@ void GpuKernel::populateBody(CForLoop *loop, FnSymbol *outlinedFunction) {
                   !calledFn->hasFlag(FLAG_GPU_AND_CPU_CODEGEN)) {
                  markGPUSubCalls(calledFn);
               }
-
             }
             else {
               INT_FATAL("Unexpected call expression");
@@ -701,24 +696,6 @@ static CallExpr* generateGPUCall(GpuKernel& info, VarSymbol* numThreads) {
   CallExpr *call = new CallExpr(PRIM_GPU_KERNEL_LAUNCH_FLAT);
 
   call->insertAtTail(info.fn());
-
-  for_alist(expr, info.fn()->body->body) {
-    if (CallExpr *call = toCallExpr(expr)) {
-      if (call->isNamed("foo")) {
-        std::cout << "Heyo\n\n";
-
-        forv_Vec(FnSymbol, function, gFnSymbols) {
-          if (function->hasFlag(FLAG_GPU_CODEGEN)) {
-            //if (strcmp("foo", function->name) == 0) {
-            //if (function->getModule()->modTag == MOD_USER) {
-              nprint_view(call);
-            //}
-          }
-        }
-
-      }
-    }
-  }
 
   call->insertAtTail(numThreads);  // total number of GPU threads
 
