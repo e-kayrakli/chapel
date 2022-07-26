@@ -8,8 +8,8 @@
 #include "chpl-gpu.h"
 #include "chpl-gpu-impl.h"
 
-//#include "omptargetplugin.h"
-//#include "omptarget.h"
+#include "omptargetplugin.h"
+#include "omptarget.h"
 
 // I stole this macro trick from chpl-comm-diags.h
 // For any `__tgt_rtl_X` add one `MACRO` call here.
@@ -90,12 +90,10 @@ void chpl_gpu_impl_init() {
 }
 
 void* chpl_gpu_impl_mem_alloc(size_t size) {
-  //int32_t device_id = chpl_task_getRequestedSubloc();
-  //void* res = (*(rtl->data_alloc))(device_id, size, NULL, TARGET_ALLOC_SHARED);
-  //assert(res);
-  return NULL;
-
-  //return res;
+  int32_t device_id = chpl_task_getRequestedSubloc();
+  void* res = (*(rtl->data_alloc))(device_id, size, NULL, TARGET_ALLOC_SHARED);
+  assert(res);
+  return res;
 }
 
 void chpl_gpu_impl_mem_free(void* memAlloc) {
@@ -168,14 +166,14 @@ void chpl_gpu_impl_launch_kernel_flat(int ln, int32_t fn,
 
   CHPL_GPU_DEBUG("Creating kernel parameters\n");
 
-  //int32_t device_id = chpl_task_getRequestedSubloc();
+  int32_t device_id = chpl_task_getRequestedSubloc();
 
   void** kernel_params = (void**)chpl_malloc(nargs*sizeof(void**));
-  //int64_t *arg_types = (int64_t*)chpl_calloc(nargs, sizeof(tgt_map_type));
+  int64_t *arg_types = (int64_t*)chpl_calloc(nargs, sizeof(tgt_map_type));
 
   int i;
   for (i=0 ; i<nargs ; i++) {
-    //arg_types[i] = (int64_t)OMP_TGT_MAPTYPE_LITERAL;
+    arg_types[i] = (int64_t)OMP_TGT_MAPTYPE_LITERAL;
     void* cur_arg = va_arg(args, void*);
     size_t cur_arg_size = va_arg(args, size_t);
 
@@ -203,9 +201,9 @@ void chpl_gpu_impl_launch_kernel_flat(int ln, int32_t fn,
 
   ptrdiff_t *offsets = (ptrdiff_t*)chpl_calloc(nargs, sizeof(ptrdiff_t));
 
-  //__tgt_target_teams(device_id, __start_omp_offloading_entries, nargs,
-                     //kernel_params, kernel_params, NULL, arg_types, num_threads,
-                     //blk_dim);
+  __tgt_target_teams(device_id, (void*)10, nargs,
+                     kernel_params, kernel_params, NULL, arg_types, num_threads,
+                     blk_dim);
 
   //int32_t ret = rtl->run_target_team_region(device_id, &kernel,
                                             //kernel_params, offsets, nargs,

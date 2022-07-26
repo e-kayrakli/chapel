@@ -3850,6 +3850,28 @@ static void linkLibDevice() {
   iPass.internalizeModule(*info->module);
 }
 
+static void linkLibOmpTarget() {
+
+  GenInfo* info = gGenInfo;
+
+  // load libdevice as a new module
+  llvm::SMDiagnostic err;
+  auto libdevice = llvm::parseIRFile("/hdd/engin/local/lib/libomptarget-new-nvptx-sm_60.bc", err,
+                                     info->llvmContext);
+  //
+  // adjust it
+  const llvm::Triple &Triple = info->clangInfo->Clang->getTarget().getTriple();
+  libdevice->setTargetTriple(Triple.getTriple());
+  libdevice->setDataLayout(info->clangInfo->asmTargetLayoutStr);
+
+  // save external functions
+
+  // link
+  llvm::Linker::linkModules(*info->module, std::move(libdevice),
+                            llvm::Linker::Flags::LinkOnlyNeeded);
+
+}
+
 //static void emitOffloadingEntry(clang::RecordType entryType,
                                 //llvm::Constant *Addr, llvm::StringRef Name,
                                 //uint64_t Size, int32_t Flags,
@@ -3883,7 +3905,7 @@ static void linkLibDevice() {
 
   //auto *Entry = new GlobalVariable(
       //*M, entryType,
-      //[> isConstant = <] true, GlobalValue::WeakAnyLinkage, EntryInitializer,
+      //[>[> isConstant = <]<] true, GlobalValue::WeakAnyLinkage, EntryInitializer,
       //".omp_offloading.entry." + Name, nullptr, GlobalValue::NotThreadLocal,
       //M->getDataLayout().getDefaultGlobalsAddressSpace());
 
@@ -3946,11 +3968,13 @@ static void emitOffloadEntries() {
   GenInfo *info = gGenInfo;
 
   llvm::Type *int32Ty = llvm::Type::getInt32Ty(info->llvmContext);
+  llvm::Type *CharPtrTy = llvm::Type::getInt8Ty(info->llvmContext)->getPointerTo();
+  llvm::Type *CVoidPtrTy = llvm::Type::getVoidTy(info->llvmContext)->getPointerTo();
   //AggregateType *entryType = new AggregateType(AGGREGATE_RECORD);
   //
   llvm::StructType *offloadEntryType = llvm::StructType::create(
-                           {llvm::Type::getInt32Ty(info->llvmContext),
-                            llvm::Type::getInt32Ty(info->llvmContext),
+                           {CVoidPtrTy,
+                            CharPtrTy,
                             llvm::Type::getInt32Ty(info->llvmContext),
                             llvm::Type::getInt32Ty(info->llvmContext),
                             llvm::Type::getInt32Ty(info->llvmContext)});
@@ -3959,14 +3983,21 @@ static void emitOffloadEntries() {
 
   //clang::RecordType entryType = generateOffloadEntryType();
 
-  for (auto it = info->module->begin() ; it!= info->module->end() ; ++it) {
-    if (it->getGlobalIdentifier().substr(0,15) == "chpl_gpu_kernel") {
-      auto val = llvm::APInt(32, 10);
+  for (int i = 0 ; i < 10 ;i++) {
 
-      std::cout << it->getGlobalIdentifier() << std::endl;
+  //}
+  //for (auto it = info->module->begin() ; it!= info->module->end() ; ++it) {
+    //if (it->getGlobalIdentifier().substr(0,15) == "chpl_gpu_kernel") {
+      auto val = llvm::APInt(32, 10);
+      auto val8 = llvm::APInt(8, 10);
+
+
+      llvm::Constant *ID = llvm::Constant::getIntegerValue(CVoidPtrTy, val);
+
+      //std::cout << it->getGlobalIdentifier() << std::endl;
       llvm::Constant *EntryData [] = {
-        llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(llvm::Constant::getIntegerValue(int32Ty, val), llvm::Type::getInt8PtrTy(info->llvmContext)),
-        llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(llvm::Constant::getIntegerValue(int32Ty, val), llvm::Type::getInt8PtrTy(info->llvmContext)),
+        llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(ID, CVoidPtrTy),
+        llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(ID, CharPtrTy),
         llvm::ConstantInt::get(int32Ty, 0ul),
         llvm::ConstantInt::get(int32Ty, 0ul),
         llvm::ConstantInt::get(int32Ty, 0ul),
@@ -3976,9 +4007,9 @@ static void emitOffloadEntries() {
 
         auto *Entry = new GlobalVariable(
             *info->module, offloadEntryType,
-            /* isConstant = */ true, llvm::GlobalValue::WeakAnyLinkage,
+            /*[> isConstant = <]*/ true, llvm::GlobalValue::WeakAnyLinkage,
             EntryInitializer,
-            ".omp_offloading.entry." + it->getGlobalIdentifier(), nullptr,
+            "chpl_gpu_kernel"+i, nullptr,
             llvm::GlobalValue::NotThreadLocal,
             info->module->getDataLayout().getDefaultGlobalsAddressSpace());
 
@@ -3989,7 +4020,7 @@ static void emitOffloadEntries() {
       ////emitOffloadingEntry(entryType, it, it->getGlobalIdentifier()2, 0, 1,
                           ////"omp_offloading_entries");
       //emitOffloadingEntry(entryType, it, it, 0, 1);
-    }
+    //}
   }
 }
 
@@ -4191,7 +4222,7 @@ void makeBinaryLLVM(void) {
     opt1Filename = genIntermediateFilename("chpl__gpu_module-opt1.bc");
     opt2Filename = genIntermediateFilename("chpl__gpu_module-opt2.bc");
     asmFilename = genIntermediateFilename("chpl__gpu_ptx.s");
-    ptxObjectFilename = genIntermediateFilename("chpl__gpu_ptx.o");
+    ptxObjectFilename = genIntermediateFilename("chpl__gpu_ptx.cubin");
     fatbinFilename = genIntermediateFilename("chpl__gpu.fatbin");
   }
 
@@ -4405,6 +4436,7 @@ void makeBinaryLLVM(void) {
     bool disableVerify = !developer;
 
     if (gCodegenGPU == false) {
+      emitOffloadEntries();
       llvm::raw_fd_ostream outputOfile(moduleFilename, error, flags);
       if (error || outputOfile.has_error())
         USR_FATAL("Could not open output file %s", moduleFilename.c_str());
@@ -4444,8 +4476,9 @@ void makeBinaryLLVM(void) {
         llvm::CodeGenFileType::CGFT_AssemblyFile;
 
       linkLibDevice();
+      linkLibOmpTarget();
 
-      emitOffloadEntries();
+      //emitOffloadEntries();
 
       llvm::raw_fd_ostream outputASMfile(asmFilename, error, flags);
 
@@ -4480,14 +4513,20 @@ void makeBinaryLLVM(void) {
                            asmFilename.c_str();
       //mysystem(sedCmd.c_str(), "PTX adjustments");
       myshell(sedCmd.c_str(), "PTX adjustments", true);
-      std::string ptxCmd = std::string("ptxas -m64 --gpu-name ") + fCUDAArch +
+      std::string ptxCmd = std::string("ptxas -c -O0 -m64 --gpu-name ") + fCUDAArch +
                            std::string(" --output-file ") +
                            ptxObjectFilename.c_str() +
                            " " + asmFilename.c_str();
 
       mysystem(ptxCmd.c_str(), "PTX to  object file");
 
-      std::string clangOffloadWrapper = "/home/engin/code/chapel/versions/1/chapel/third-party/llvm/install/linux64-x86_64/bin/clang-offload-wrapper";
+      std::string clangNvlinkWrapper = "/hdd/engin/local/bin/clang-nvlink-wrapper";
+
+      //std::string cnwCmd = clangNvlinkWrapper + std::string(" -o nvlinked -arch sm_60 -L/hdd/engin/local/lib --nvlink-path=/usr/local/cuda-11.6/bin/nvlink ") +
+        //ptxObjectFilename.c_str();
+      //mysystem(cnwCmd.c_str(), "nvlink");
+
+      std::string clangOffloadWrapper = "/hdd/engin/local/bin/clang-offload-wrapper";
 
       std::string cowCmd = clangOffloadWrapper + std::string(" -o ") +
                            omptargetImageFilename +

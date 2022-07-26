@@ -22,7 +22,7 @@ SRCS = gpu-omp.cc
 
 GPU_SRCS = gpu-omp.cc
 
-RUNTIME_INCLS += -I$(LLVM_INSTALL_DIR)/../../llvm-src/projects/openmp/libomptarget/include/
+RUNTIME_INCLS += -I/hdd/engin/code/llvm/llvm-project/openmp/libomptarget/include
 
 GPU_OBJS = $(GPU_SRCS:%.cc=$(GPU_OBJDIR)/%.o)
 
