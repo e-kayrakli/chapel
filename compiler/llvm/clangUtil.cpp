@@ -39,6 +39,7 @@
 #include "clang/Basic/Version.h"
 #include "clang/CodeGen/BackendUtil.h"
 #include "clang/CodeGen/CodeGenABITypes.h"
+//#include "clang/CodeGen/CGOpenMPRuntime.h"
 #include "clang/CodeGen/ModuleBuilder.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
@@ -52,6 +53,7 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
+//#include "llvm/Frontend/OpenMP/OMPIRBuilder.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
@@ -3848,6 +3850,149 @@ static void linkLibDevice() {
   iPass.internalizeModule(*info->module);
 }
 
+//static void emitOffloadingEntry(clang::RecordType entryType,
+                                //llvm::Constant *Addr, llvm::StringRef Name,
+                                //uint64_t Size, int32_t Flags,
+                                //llvm::StringRef SectionName) {
+  //GenInfo* info = gGenInfo;
+  //llvm::Module* M = info->module;
+
+  //llvm::Type *Int8PtrTy = llvm::Type::getInt8PtrTy(M->getContext());
+  //llvm::Type *Int32Ty = llvm::Type::getInt32Ty(M->getContext());
+  //llvm::Type *SizeTy = M->getDataLayout().getIntPtrType(M->getContext());
+
+  //llvm::Constant *AddrName = llvm::ConstantDataArray::getString(M->getContext(), Name);
+
+  //// Create the constant string used to look up the symbol in the device.
+  //auto *Str =
+      //new llvm::GlobalVariable(*M, AddrName->getType(), [>isllvm::Constant=<]true,
+                               //llvm::GlobalValue::InternalLinkage, AddrName,
+                               //".omp_offloading.entry_name");
+  //Str->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+
+  //// Construct the offloading entry.
+  //llvm::Constant *EntryData[] = {
+      //llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(Addr, Int8PtrTy),
+      //llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(Str, Int8PtrTy),
+      //llvm::ConstantInt::get(SizeTy, Size),
+      //llvm::ConstantInt::get(Int32Ty, Flags),
+      //llvm::ConstantInt::get(Int32Ty, 0),
+  //};
+  //llvm::Constant *EntryInitializer =
+      //llvm::ConstantStruct::get(entryType, EntryData);
+
+  //auto *Entry = new GlobalVariable(
+      //*M, entryType,
+      //[> isConstant = <] true, GlobalValue::WeakAnyLinkage, EntryInitializer,
+      //".omp_offloading.entry." + Name, nullptr, GlobalValue::NotThreadLocal,
+      //M->getDataLayout().getDefaultGlobalsAddressSpace());
+
+  //// The entry has to be created in the section the linker expects it to be.
+  //Entry->setSection(SectionName);
+  //Entry->setAlignment(Align(1));
+//}
+
+//static void emitOffloadingEntry(
+    //llvm::Constant *ID, llvm::Constant *Addr, uint64_t Size, int32_t Flags) {
+  //GenInfo *info = gGenInfo;
+  //ClangInfo* clangInfo = info->clangInfo;
+  //clang::ASTContext *Ctx = clangInfo->Ctx;
+
+  //StringRef Name = Addr->getName();
+  //llvm::Module *M = info->module;
+  //llvm::LLVMContext &C = M->getContext();
+
+  //// Create constant string with the name.
+  //llvm::Constant *StrPtrInit = llvm::ConstantDataArray::getString(C, Name);
+
+  //std::string StringName = getName({"omp_offloading", "entry_name"});
+  //auto *Str = new llvm::GlobalVariable(
+      //M, StrPtrInit->getType(), [>isConstant=<]true,
+      //llvm::GlobalValue::InternalLinkage, StrPtrInit, StringName);
+  //Str->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+
+  //llvm::Constant *Data[] = {
+      //llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(ID, Ctx.VoidPtrTy),
+      //llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(Str, Ctx.Int8PtrTy),
+      //llvm::ConstantInt::get(Ctx.SizeTy, Size),
+      //llvm::ConstantInt::get(Ctx.Int32Ty, Flags),
+      //llvm::ConstantInt::get(Ctx.Int32Ty, 0)};
+  //std::string EntryName = getName({"omp_offloading", "entry", ""});
+  //llvm::GlobalVariable *Entry = createGlobalStruct(
+      //Ctx, getTgtOffloadEntryQTy(), [>IsConstant=<]true, Data,
+      //Twine(EntryName).concat(Name), llvm::GlobalValue::WeakAnyLinkage);
+
+  //// The entry has to be created in the section the linker expects it to be.
+  //Entry->setSection("omp_offloading_entries");
+//}
+
+//static QualType generateOffloadEntryType() {
+  //clang::ASTContext &C = info->clangInfo->Ctx;
+  //clang::RecordDecl *RD = C.buildImplicitRecord("__tgt_offload_entry");
+  //RD->startDefinition();
+  //addFieldToRecordDecl(C, RD, C.VoidPtrTy);
+  //addFieldToRecordDecl(C, RD, C.getPointerType(C.CharTy));
+  //addFieldToRecordDecl(C, RD, C.getSizeType());
+  //addFieldToRecordDecl(
+      //C, RD, C.getIntTypeForBitwidth([>DestWidth=*/32, /*Signed=<]true));
+  //addFieldToRecordDecl(
+      //C, RD, C.getIntTypeForBitwidth([>DestWidth=*/32, /*Signed=<]true));
+  //RD->completeDefinition();
+  //RD->addAttr(PackedAttr::CreateImplicit(C));
+  //return C.getRecordType(RD);
+//}
+
+static void emitOffloadEntries() {
+  GenInfo *info = gGenInfo;
+
+  llvm::Type *int32Ty = llvm::Type::getInt32Ty(info->llvmContext);
+  //AggregateType *entryType = new AggregateType(AGGREGATE_RECORD);
+  //
+  llvm::StructType *offloadEntryType = llvm::StructType::create(
+                           {llvm::Type::getInt32Ty(info->llvmContext),
+                            llvm::Type::getInt32Ty(info->llvmContext),
+                            llvm::Type::getInt32Ty(info->llvmContext),
+                            llvm::Type::getInt32Ty(info->llvmContext),
+                            llvm::Type::getInt32Ty(info->llvmContext)});
+
+  //GenInfo* info = gGenInfo;
+
+  //clang::RecordType entryType = generateOffloadEntryType();
+
+  for (auto it = info->module->begin() ; it!= info->module->end() ; ++it) {
+    if (it->getGlobalIdentifier().substr(0,15) == "chpl_gpu_kernel") {
+      auto val = llvm::APInt(32, 10);
+
+      std::cout << it->getGlobalIdentifier() << std::endl;
+      llvm::Constant *EntryData [] = {
+        llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(llvm::Constant::getIntegerValue(int32Ty, val), llvm::Type::getInt8PtrTy(info->llvmContext)),
+        llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(llvm::Constant::getIntegerValue(int32Ty, val), llvm::Type::getInt8PtrTy(info->llvmContext)),
+        llvm::ConstantInt::get(int32Ty, 0ul),
+        llvm::ConstantInt::get(int32Ty, 0ul),
+        llvm::ConstantInt::get(int32Ty, 0ul),
+      };
+        Constant *EntryInitializer =
+                ConstantStruct::get(offloadEntryType, EntryData);
+
+        auto *Entry = new GlobalVariable(
+            *info->module, offloadEntryType,
+            /* isConstant = */ true, llvm::GlobalValue::WeakAnyLinkage,
+            EntryInitializer,
+            ".omp_offloading.entry." + it->getGlobalIdentifier(), nullptr,
+            llvm::GlobalValue::NotThreadLocal,
+            info->module->getDataLayout().getDefaultGlobalsAddressSpace());
+
+        // The entry has to be created in the section the linker expects it
+        //to be.
+        Entry->setSection("omp_offloading_entries");
+                 Entry->setAlignment(Align(1));
+      ////emitOffloadingEntry(entryType, it, it->getGlobalIdentifier()2, 0, 1,
+                          ////"omp_offloading_entries");
+      //emitOffloadingEntry(entryType, it, it, 0, 1);
+    }
+  }
+}
+
 
 // If we're using the LLVM wide optimizations, we have to add
 // some functions to call put/get into the Chapel runtime layers
@@ -4300,6 +4445,8 @@ void makeBinaryLLVM(void) {
 
       linkLibDevice();
 
+      emitOffloadEntries();
+
       llvm::raw_fd_ostream outputASMfile(asmFilename, error, flags);
 
       {
@@ -4329,6 +4476,10 @@ void makeBinaryLLVM(void) {
       }
 
 
+      std::string sedCmd = std::string("sed -i \'s/entry chpl_gpu/func chpl_gpu/\' ") +
+                           asmFilename.c_str();
+      //mysystem(sedCmd.c_str(), "PTX adjustments");
+      myshell(sedCmd.c_str(), "PTX adjustments", true);
       std::string ptxCmd = std::string("ptxas -m64 --gpu-name ") + fCUDAArch +
                            std::string(" --output-file ") +
                            ptxObjectFilename.c_str() +
@@ -4490,6 +4641,7 @@ void makeBinaryLLVM(void) {
   // If they were, these lines would need to be removed.
   options += " ";
   options += ldflags;
+  options += omptargetImageFilename + " -lomptarget";
 
   // We may need to add the -pthread flag here for the link step
   // if we start doing link-time optimization.  For now, leave it

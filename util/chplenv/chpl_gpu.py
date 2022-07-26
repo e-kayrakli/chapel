@@ -45,14 +45,17 @@ def get_libomptarget_rtl():
     if chpl_gpu_runtime == "omp":
         # TODO this needs to be able to find system libomptarget rtl as needed
         llvm_config = chpl_llvm.get_llvm_config()
-        llvm_lib_dir = run_command([llvm_config, '--libdir']).strip()
+        if chpl_llvm.check_llvm_config(llvm_config)[0] != 0:
+            llvm_lib_dir = run_command([llvm_config, '--libdir']).strip()
 
-        rtl_path = os.path.join(llvm_lib_dir, "libomptarget.rtl.cuda.so")
+            rtl_path = os.path.join(llvm_lib_dir, "libomptarget.rtl.cuda.so")
 
-        if not os.path.exists(rtl_path):
-            error("Couldn't find libomptarget plugin library for cuda")
+            if not os.path.exists(rtl_path):
+                error("Couldn't find libomptarget plugin library for cuda")
 
-        return llvm_lib_dir
+            return llvm_lib_dir
+        else:
+            return ""
     else:
         return ""
 

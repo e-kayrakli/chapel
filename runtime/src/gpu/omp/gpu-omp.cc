@@ -8,7 +8,8 @@
 #include "chpl-gpu.h"
 #include "chpl-gpu-impl.h"
 
-#include "omptargetplugin.h"
+//#include "omptargetplugin.h"
+//#include "omptarget.h"
 
 // I stole this macro trick from chpl-comm-diags.h
 // For any `__tgt_rtl_X` add one `MACRO` call here.
@@ -18,11 +19,11 @@
   MACRO(data_alloc) \
   MACRO(data_exchange) \
   MACRO(data_delete) \
-  MACRO(is_valid_binary)\
   MACRO(run_target_team_region) \
   MACRO(data_submit) \
   MACRO(data_retrieve)
 
+//extern struct __tgt_device_image;
 
 // For any `__tgt_rtl_X` add one function typedef here
 typedef int32_t(init_device_fn)(int32_t);
@@ -30,14 +31,14 @@ typedef int32_t(number_of_devices_fn)(void);
 typedef void *(data_alloc_fn)(int32_t, int64_t, void*, int32_t);
 typedef void  (data_exchange_fn)(int32_t, void*, int32_t, void*, int64_t);
 typedef int32_t (data_delete_fn)(int32_t, void*);
-typedef int32_t (is_valid_binary_fn)(__tgt_device_image*);
+//typedef int32_t (is_valid_binary_fn)(__tgt_device_image*);
 typedef int32_t (run_target_team_region_fn)(int32_t, void*, void**, ptrdiff_t*,
                                             int32_t, int32_t, int32_t, uint64_t);
 typedef int32_t (data_submit_fn)(int32_t, void *, void *, int64_t);
 typedef int32_t (data_retrieve_fn)(int32_t, void *, void *, int64_t);
 
-extern __tgt_offload_entry *__start_omp_offloading_entries;
-extern __tgt_offload_entry *__stop_omp_offloading_entries;
+//extern __tgt_offload_entry *__start_omp_offloading_entries;
+//extern __tgt_offload_entry *__stop_omp_offloading_entries;
 
 typedef struct chpl_gpu_plugin_rtl_s {
   void *handle = NULL;
@@ -60,8 +61,8 @@ void chpl_gpu_impl_init() {
     rtl = (chpl_gpu_plugin_rtl_t*)chpl_malloc(sizeof(chpl_gpu_plugin_rtl_t));
 
     printf("initing\n");
-    printf("start %p stop %p\n", __start_omp_offloading_entries,
-                                 __stop_omp_offloading_entries);
+    //printf("start %p stop %p\n", __start_omp_offloading_entries,
+                                 //__stop_omp_offloading_entries);
     fflush(stdout);
 
     rtl->handle = dlopen("libomptarget.rtl.cuda.so", RTLD_NOW);
@@ -89,11 +90,12 @@ void chpl_gpu_impl_init() {
 }
 
 void* chpl_gpu_impl_mem_alloc(size_t size) {
-  int32_t device_id = chpl_task_getRequestedSubloc();
-  void* res = (*(rtl->data_alloc))(device_id, size, NULL, TARGET_ALLOC_SHARED);
-  assert(res);
+  //int32_t device_id = chpl_task_getRequestedSubloc();
+  //void* res = (*(rtl->data_alloc))(device_id, size, NULL, TARGET_ALLOC_SHARED);
+  //assert(res);
+  return NULL;
 
-  return res;
+  //return res;
 }
 
 void chpl_gpu_impl_mem_free(void* memAlloc) {
@@ -148,23 +150,32 @@ void chpl_gpu_impl_launch_kernel_flat(int ln, int32_t fn,
                                       int nargs, va_list args) {
 
     printf("launching\n");
-    printf("start %p stop %p\n", __start_omp_offloading_entries,
-                                 __stop_omp_offloading_entries);
+    //printf("\tstart addr: %p, start name: %s\n",
+           ////__start_omp_offloading_entries->addr,
+           //__start_omp_offloading_entries->addr,
+           ////__start_omp_offloading_entries->name);
+           //"let's not");
+    //printf("start %p stop %p\n", __start_omp_offloading_entries,
+                                 //__stop_omp_offloading_entries);
     fflush(stdout);
+
 
   kernel_t kernel;
   //kernel.function = chpl_gpu_getKernel(fatbinData, name);
   kernel.execution_mode = 1 << 1;
   kernel.max_threads_per_block = blk_dim;
 
-  int32_t device_id = chpl_task_getRequestedSubloc();
 
   CHPL_GPU_DEBUG("Creating kernel parameters\n");
 
+  //int32_t device_id = chpl_task_getRequestedSubloc();
+
   void** kernel_params = (void**)chpl_malloc(nargs*sizeof(void**));
+  //int64_t *arg_types = (int64_t*)chpl_calloc(nargs, sizeof(tgt_map_type));
 
   int i;
   for (i=0 ; i<nargs ; i++) {
+    //arg_types[i] = (int64_t)OMP_TGT_MAPTYPE_LITERAL;
     void* cur_arg = va_arg(args, void*);
     size_t cur_arg_size = va_arg(args, size_t);
 
@@ -192,14 +203,17 @@ void chpl_gpu_impl_launch_kernel_flat(int ln, int32_t fn,
 
   ptrdiff_t *offsets = (ptrdiff_t*)chpl_calloc(nargs, sizeof(ptrdiff_t));
 
+  //__tgt_target_teams(device_id, __start_omp_offloading_entries, nargs,
+                     //kernel_params, kernel_params, NULL, arg_types, num_threads,
+                     //blk_dim);
 
-  int32_t ret = rtl->run_target_team_region(device_id, &kernel,
-                                            kernel_params, offsets, nargs,
-                                            /*blocks_per_grid*/ -1,
-                                            blk_dim, num_threads);
+  //int32_t ret = rtl->run_target_team_region(device_id, &kernel,
+                                            //kernel_params, offsets, nargs,
+                                            //[>blocks_per_grid<] -1,
+                                            //blk_dim, num_threads);
 
-  CHPL_GPU_DEBUG("run_target_team_region returned %s\n", name);
-  assert(ret == OFFLOAD_SUCCESS);
+  //CHPL_GPU_DEBUG("run_target_team_region returned %s\n", name);
+  //assert(ret == OFFLOAD_SUCCESS);
 
   chpl_free(offsets);
   chpl_free(kernel_params);
