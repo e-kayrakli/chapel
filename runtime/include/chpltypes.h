@@ -36,11 +36,9 @@
 typedef float complex        _complex64;
 typedef double complex       _complex128;
 #else
-extern "C++" {
 #include <complex>
 typedef std::complex<float>  _complex64;
 typedef std::complex<double> _complex128;
-}
 #endif
 
 #ifdef __cplusplus

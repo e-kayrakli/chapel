@@ -32,7 +32,6 @@
 #endif
 
 #if defined(__cplusplus)
-extern "C++" {
   #if __cplusplus >= 201103L
     #include <atomic>
     #define Atomic(T) std::atomic<T>
@@ -56,16 +55,9 @@ extern "C++" {
   #else
     #error "The cstdlib atomics need at least C++11.  Use intrinsics or locks."
   #endif
-}
 #elif __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
-#ifdef __cplusplus
-extern "C++" {
-#endif
   #include <stdatomic.h>
   #define Atomic(T) _Atomic T
-#ifdef __cplusplus
-}
-#endif
 #else
   #error "The cstdlib atomics need at least C11.  Use intrinsics or locks."
 #endif
