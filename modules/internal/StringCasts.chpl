@@ -266,45 +266,32 @@ module StringCasts {
   }
 
 
-
-pragma "codegen for GPU"
-pragma "last resort"
-pragma "always resolve function"
-proc helpFoo(x: string, type t:chpl_anycomplex) throws {
-
-}
-
-proc helpFoo(x: string, type t:chpl_anycomplex) throws {
-  pragma "fn synchronization free"
+operator :(x: string, type t:chpl_anycomplex) throws {
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_complex64(x:c_string, ref err: bool) : complex(64);
-  pragma "fn synchronization free"
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_complex128(x:c_string, ref err: bool) : complex(128);
 
-  var retVal: t;
-  var isErr: bool;
-  const localX = x.localize();
+    var retVal: t;
+    var isErr: bool;
+    const localX = x.localize();
 
-  if localX.isEmpty() then
-    throw new owned IllegalArgumentError("bad cast from empty string to complex(" + numBits(t):string + ")");
+    if localX.isEmpty() then
+      throw new owned IllegalArgumentError("bad cast from empty string to complex(" + numBits(t):string + ")");
 
-  select numBits(t) {
-    when 64 do retVal = c_string_to_complex64(localX.c_str(), isErr);
-    when 128 do retVal = c_string_to_complex128(localX.c_str(), isErr);
-    otherwise compilerError("Unsupported bit width ", numBits(t), " in cast to string");
+    select numBits(t) {
+      when 64 do retVal = c_string_to_complex64(localX.c_str(), isErr);
+      when 128 do retVal = c_string_to_complex128(localX.c_str(), isErr);
+      otherwise compilerError("Unsupported bit width ", numBits(t), " in cast to string");
+    }
+
+    if isErr then
+      throw new owned IllegalArgumentError("bad cast from string '" + x + "' to complex(" + numBits(t):string + ")");
+
+    return retVal;
   }
-
-  if isErr then
-    throw new owned IllegalArgumentError("bad cast from string '" + x + "' to complex(" + numBits(t):string + ")");
-
-  return retVal;
-
-}
-
-operator :(x: string, type t:chpl_anycomplex) throws {
-  return helpFoo(x, t);
-}
 
   // Catch all cast anything -> string is in ChapelIO
 
