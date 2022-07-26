@@ -3983,6 +3983,7 @@ static void emitOffloadEntries() {
 
   //clang::RecordType entryType = generateOffloadEntryType();
 
+  // create entries for the first 10 kernels
   for (int i = 0 ; i < 10 ;i++) {
 
   //}
@@ -3992,6 +3993,7 @@ static void emitOffloadEntries() {
       auto val8 = llvm::APInt(8, 10);
 
 
+      // this'll need to be something smarter
       llvm::Constant *ID = llvm::Constant::getIntegerValue(CVoidPtrTy, val);
 
       //std::cout << it->getGlobalIdentifier() << std::endl;
