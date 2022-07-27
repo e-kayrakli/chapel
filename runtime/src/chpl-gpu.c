@@ -40,6 +40,7 @@
 
 #define CHPL_GPU_MEM_UVA
 */
+#define CHPL_GPU_MEM_UVA
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -75,6 +76,7 @@ static void chpl_gpu_cuda_check(int err, const char* file, int line) {
 CUcontext *chpl_gpu_primary_ctx;
 
 void chpl_gpu_init() {
+  printf("10000\n");
   int         num_devices;
 
   // CUDA initialization
@@ -206,6 +208,7 @@ static void chpl_gpu_launch_kernel_help(int ln,
                grd_dim_x, grd_dim_y, grd_dim_z,
                blk_dim_x, blk_dim_y, blk_dim_z,
                nargs);
+  chpl_internal_error("heyo\n");
 
   int i;
   void* function = chpl_gpu_getKernel(fatbinData, name);
@@ -337,6 +340,33 @@ bool chpl_gpu_has_context() {
   }
 }
 
+void* chpl_gpu_mem_array_alloc(size_t size, chpl_mem_descInt_t description,
+                               int32_t lineno, int32_t filename) {
+  chpl_gpu_ensure_context();
+
+  CHPL_GPU_DEBUG("chpl_gpu_mem_array_alloc called. Size:%d file:%s line:%d\n", size,
+               chpl_lookupFilename(filename), lineno);
+
+  CUdeviceptr ptr = 0;
+  if (size > 0) {
+    chpl_memhook_malloc_pre(1, size, description, lineno, filename);
+#ifdef CHPL_GPU_MEM_UVA
+    CUDA_CALL(cuMemAlloc(&ptr, size));
+#else
+    CUDA_CALL(cuMemAllocManaged(&ptr, size, CU_MEM_ATTACH_GLOBAL));
+#endif
+    chpl_memhook_malloc_post((void*)ptr, 1, size, description, lineno, filename);
+
+    CHPL_GPU_DEBUG("chpl_gpu_mem_array_alloc returning %p\n", (void*)ptr);
+  }
+  else {
+    CHPL_GPU_DEBUG("chpl_gpu_mem_array_alloc returning NULL (size was 0)\n");
+  }
+
+
+  return (void*)ptr;
+
+}
 
 void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
                          int32_t lineno, int32_t filename) {
@@ -350,7 +380,7 @@ void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
     chpl_memhook_malloc_pre(1, size, description, lineno, filename);
 #ifdef CHPL_GPU_MEM_UVA
     void* mem = chpl_mem_alloc(size, description, lineno, filename);
-    CHPL_GPU_LOG("\tregistering %p\n", mem);
+    CHPL_GPU_DEBUG("\tregistering %p\n", mem);
     CUDA_CALL(cuMemHostRegister(mem, size, CU_MEMHOSTREGISTER_PORTABLE));
     CUDA_CALL(cuMemHostGetDevicePointer(&ptr, mem, 0));
 #else
@@ -358,7 +388,7 @@ void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
 #endif
     chpl_memhook_malloc_post((void*)ptr, 1, size, description, lineno, filename);
 
-    CHPL_GPU_LOG("chpl_gpu_mem_alloc returning %p\n", (void*)ptr);
+    CHPL_GPU_DEBUG("chpl_gpu_mem_alloc returning %p\n", (void*)ptr);
   }
   else {
     CHPL_GPU_DEBUG("chpl_gpu_mem_alloc returning NULL (size was 0)\n");

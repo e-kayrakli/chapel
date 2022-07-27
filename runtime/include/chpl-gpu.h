@@ -41,6 +41,8 @@ void chpl_gpu_launch_kernel_flat(int ln, int32_t fn,
                                  int num_threads, int blk_dim,
                                  int nargs, ...);
 
+void* chpl_gpu_mem_array_alloc(size_t size, chpl_mem_descInt_t description,
+                               int32_t lineno, int32_t filename);
 void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
                          int32_t lineno, int32_t filename);
 void* chpl_gpu_mem_calloc(size_t number, size_t size,

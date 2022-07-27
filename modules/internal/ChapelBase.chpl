@@ -29,6 +29,7 @@ module ChapelBase {
 
   public use ChapelStandard;
   use CTypes;
+  use ChplConfig;
 
   config param enablePostfixBangChecks = false;
 
@@ -817,8 +818,11 @@ module ChapelBase {
   //
   // More primitive funs
   //
-  enum ArrayInit {heuristicInit, noInit, serialInit, parallelInit};
-  config param chpl_defaultArrayInitMethod = ArrayInit.heuristicInit;
+  enum ArrayInit {heuristicInit, noInit, serialInit, parallelInit, foreachInit};
+  config param chpl_defaultArrayInitMethod = if CHPL_LOCALE_MODEL=="gpu" then
+                                               ArrayInit.foreachInit
+                                             else
+                                               ArrayInit.heuristicInit;
 
   config param chpl_arrayInitMethodRuntimeSelectable = false;
   private var chpl_arrayInitMethod = chpl_defaultArrayInitMethod;
@@ -853,7 +857,10 @@ module ChapelBase {
       // The parallel range iter uses 'here`/rootLocale, so fallback to serial
       // initialization if the root locale hasn't been setup. Only used early
       // in module initialization
-      initMethod = ArrayInit.serialInit;
+      if CHPL_LOCALE_MODEL == "gpu" then
+        initMethod = ArrayInit.foreachInit;
+      else
+        initMethod = ArrayInit.serialInit;
     } else if initMethod == ArrayInit.heuristicInit {
       // Heuristically determine if we should do parallel initialization. The
       // current heuristic really just checks that we have an array that's at
@@ -880,6 +887,7 @@ module ChapelBase {
   proc init_elts(x, s, type t, lo=0:s.type) : void {
 
     var initMethod = init_elts_method(s, t);
+    extern proc printf(s...);
 
     // Q: why is the declaration of 'y' in the following loops?
     //
@@ -890,15 +898,26 @@ module ChapelBase {
     // element.  Is this good, bad, necessary?  Unclear.
     select initMethod {
       when ArrayInit.noInit {
+        printf("100\n");
         return;
       }
       when ArrayInit.serialInit {
+        printf("200\n");
         for i in lo..s-1 {
           pragma "no auto destroy" pragma "unsafe" var y: t;
           __primitive("array_set_first", x, i, y);
         }
       }
+      when ArrayInit.foreachInit {
+        printf("250 %d\n", s);
+        printf("250 subloc %d\n", chpl_task_getRequestedSubloc());
+        /*foreach i in lo..s-1 {*/
+          /*pragma "no auto destroy" pragma "unsafe" var y: t;*/
+          /*__primitive("array_set_first", x, i, y);*/
+        /*}*/
+      }
       when ArrayInit.parallelInit {
+        printf("300\n");
         forall i in lo..s-1 {
           pragma "no auto destroy" pragma "unsafe" var y: t;
           __primitive("array_set_first", x, i, y);
@@ -908,6 +927,7 @@ module ChapelBase {
         halt("ArrayInit.heuristicInit should have been made concrete");
       }
     }
+    printf("500 %d\n", chpl_task_getRequestedSubloc());
   }
 
   // TODO (EJR: 02/25/16): see if we can remove this explicit type declaration.
@@ -983,6 +1003,9 @@ module ChapelBase {
                                      subloc: chpl_sublocID_t,
                                      ref callPostAlloc: bool): c_void_ptr;
     var ret: _ddata(eltType);
+    extern proc printf(s...);
+    printf("Allocating on %d\n", subloc);
+    printf("Allocating on %d\n", chpl_task_getRequestedSubloc());
     ret = chpl_mem_array_alloc(size:c_size_t, _ddata_sizeof_element(ret),
                                subloc, callPostAlloc):ret.type;
     return ret;

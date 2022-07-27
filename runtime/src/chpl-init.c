@@ -395,8 +395,11 @@ void chpl_libraryModuleLevelCleanup(void);
 //
 void chpl_library_init(int argc, char* argv[]) {
   chpl_rt_init(argc, argv);                     // Initialize the runtime
+  printf("1000\n");
   chpl_task_callMain(chpl_std_module_init);     // Initialize std modules
+  printf("2000\n");
   chpl_libraryModuleLevelSetup();
+  printf("3000\n");
 
   // @dlongnecke-cray, 11/16/2020
   // TODO: Call chpl_rt_preUserCodeHook() here for Locale[0]?
