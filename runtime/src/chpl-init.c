@@ -329,6 +329,11 @@ void chpl_std_module_init(void) {
     // Note that in general, module code can contain "on" clauses
     // and should therefore not be called before the call to
     // chpl_comm_startPollingTask().
+    //
+#ifdef HAS_GPU_LOCALE
+    chpl_gpu_enable_device_alloc();
+    printf("device alloc enabled\n");
+#endif
 
     //
     // Permit the tasking layer to do anything it would like to now that
@@ -343,6 +348,14 @@ void chpl_std_module_init(void) {
     chpl_rt_preUserCodeHook();
     chpl_rt_postUserCodeHook();
   }
+
+}
+
+void chpl_std_module_finalize(void) {
+#ifdef HAS_GPU_LOCALE
+    printf("disabling device alloc\n");
+    chpl_gpu_disable_device_alloc();
+#endif
 
 }
 
@@ -395,11 +408,8 @@ void chpl_libraryModuleLevelCleanup(void);
 //
 void chpl_library_init(int argc, char* argv[]) {
   chpl_rt_init(argc, argv);                     // Initialize the runtime
-  printf("1000\n");
   chpl_task_callMain(chpl_std_module_init);     // Initialize std modules
-  printf("2000\n");
   chpl_libraryModuleLevelSetup();
-  printf("3000\n");
 
   // @dlongnecke-cray, 11/16/2020
   // TODO: Call chpl_rt_preUserCodeHook() here for Locale[0]?

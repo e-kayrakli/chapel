@@ -898,26 +898,26 @@ module ChapelBase {
     // element.  Is this good, bad, necessary?  Unclear.
     select initMethod {
       when ArrayInit.noInit {
-        printf("100\n");
+        /*printf("100\n");*/
         return;
       }
       when ArrayInit.serialInit {
-        printf("200\n");
+        /*printf("200\n");*/
         for i in lo..s-1 {
           pragma "no auto destroy" pragma "unsafe" var y: t;
           __primitive("array_set_first", x, i, y);
         }
       }
       when ArrayInit.foreachInit {
-        printf("250 %d\n", s);
-        printf("250 subloc %d\n", chpl_task_getRequestedSubloc());
-        /*foreach i in lo..s-1 {*/
-          /*pragma "no auto destroy" pragma "unsafe" var y: t;*/
-          /*__primitive("array_set_first", x, i, y);*/
-        /*}*/
+        /*printf("250 %d\n", s);*/
+        /*printf("250 subloc %d\n", chpl_task_getRequestedSubloc());*/
+        foreach i in lo..s-1 {
+          pragma "no auto destroy" pragma "unsafe" var y: t;
+          __primitive("array_set_first", x, i, y);
+        }
       }
       when ArrayInit.parallelInit {
-        printf("300\n");
+        /*printf("300\n");*/
         forall i in lo..s-1 {
           pragma "no auto destroy" pragma "unsafe" var y: t;
           __primitive("array_set_first", x, i, y);
@@ -927,7 +927,7 @@ module ChapelBase {
         halt("ArrayInit.heuristicInit should have been made concrete");
       }
     }
-    printf("500 %d\n", chpl_task_getRequestedSubloc());
+    /*printf("500 %d\n", chpl_task_getRequestedSubloc());*/
   }
 
   // TODO (EJR: 02/25/16): see if we can remove this explicit type declaration.
@@ -1004,8 +1004,8 @@ module ChapelBase {
                                      ref callPostAlloc: bool): c_void_ptr;
     var ret: _ddata(eltType);
     extern proc printf(s...);
-    printf("Allocating on %d\n", subloc);
-    printf("Allocating on %d\n", chpl_task_getRequestedSubloc());
+    /*printf("Allocating on %d\n", subloc);*/
+    /*printf("Allocating on %d\n", chpl_task_getRequestedSubloc());*/
     ret = chpl_mem_array_alloc(size:c_size_t, _ddata_sizeof_element(ret),
                                subloc, callPostAlloc):ret.type;
     return ret;
@@ -1019,6 +1019,7 @@ module ChapelBase {
     chpl_mem_array_postAlloc(data:c_void_ptr, size:c_size_t,
                              _ddata_sizeof_element(data));
   }
+  extern proc printf(s...);
 
   inline proc _ddata_allocate(type eltType, size: integral,
                               subloc = c_sublocid_none) {
@@ -1028,10 +1029,12 @@ module ChapelBase {
     ret = _ddata_allocate_noinit(eltType, size, callPostAlloc, subloc);
 
     init_elts(ret, size, eltType);
+    printf("Returned from init_elts\n");
 
     if callPostAlloc {
       _ddata_allocate_postalloc(ret, size);
     }
+    printf("Returning from ddata alloc\n");
 
     return ret;
   }
@@ -1113,6 +1116,7 @@ module ChapelBase {
           halt('internal error: Attempt to resize dynamic block ' +
                'containing non-default-initializable elements');
         } else {
+          printf("Have I been here the whole time?\n");
           init_elts(newDdata, newSize, eltType, lo=oldSize);
         }
       when chpl_ddataResizePolicy.skipInit do;

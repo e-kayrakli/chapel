@@ -208,7 +208,6 @@ static void chpl_gpu_launch_kernel_help(int ln,
                grd_dim_x, grd_dim_y, grd_dim_z,
                blk_dim_x, blk_dim_y, blk_dim_z,
                nargs);
-  chpl_internal_error("heyo\n");
 
   int i;
   void* function = chpl_gpu_getKernel(fatbinData, name);
@@ -275,6 +274,9 @@ static void chpl_gpu_launch_kernel_help(int ln,
     else {
     }
   }
+
+
+  CHPL_GPU_DEBUG("Args freed and returning %s\n", name);
 }
 
 void chpl_gpu_copy_device_to_host(void* dst, void* src, size_t n) {
@@ -340,6 +342,16 @@ bool chpl_gpu_has_context() {
   }
 }
 
+static bool chpl_gpu_device_alloc = false;
+
+void chpl_gpu_enable_device_alloc() {
+  chpl_gpu_device_alloc = true;
+}
+
+void chpl_gpu_disable_device_alloc() {
+  chpl_gpu_device_alloc = false;
+}
+
 void* chpl_gpu_mem_array_alloc(size_t size, chpl_mem_descInt_t description,
                                int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
@@ -351,7 +363,15 @@ void* chpl_gpu_mem_array_alloc(size_t size, chpl_mem_descInt_t description,
   if (size > 0) {
     chpl_memhook_malloc_pre(1, size, description, lineno, filename);
 #ifdef CHPL_GPU_MEM_UVA
-    CUDA_CALL(cuMemAlloc(&ptr, size));
+    if (chpl_gpu_device_alloc) {
+      CUDA_CALL(cuMemAlloc(&ptr, size));
+    }
+    else {
+      void* mem = chpl_mem_alloc(size, description, lineno, filename);
+      CHPL_GPU_DEBUG("\tregistering %p\n", mem);
+      CUDA_CALL(cuMemHostRegister(mem, size, CU_MEMHOSTREGISTER_PORTABLE));
+      CUDA_CALL(cuMemHostGetDevicePointer(&ptr, mem, 0));
+    }
 #else
     CUDA_CALL(cuMemAllocManaged(&ptr, size, CU_MEM_ATTACH_GLOBAL));
 #endif
@@ -463,6 +483,28 @@ void* chpl_gpu_mem_memalign(size_t boundary, size_t size,
   return NULL;
 }
 
+static bool chpl_gpu_allocated_on_host(void* memAlloc) {
+  unsigned int res;
+  CUresult ret_val = cuPointerGetAttribute(&res, CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
+      (CUdeviceptr)memAlloc);
+
+  if (ret_val != CUDA_SUCCESS) {
+    if (ret_val == CUDA_ERROR_INVALID_VALUE ||
+        ret_val == CUDA_ERROR_NOT_INITIALIZED ||
+        ret_val == CUDA_ERROR_DEINITIALIZED) {
+      return true;
+    }
+    else {
+      CUDA_CALL(ret_val);
+    }
+  }
+  else {
+    return res == CU_MEMORYTYPE_HOST;
+  }
+
+  return true;
+}
+
 void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
 
@@ -474,8 +516,13 @@ void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {
   if (memAlloc != NULL) {
     assert(chpl_gpu_is_device_ptr(memAlloc));
 #ifdef CHPL_GPU_MEM_UVA
-    CUDA_CALL(cuMemHostUnregister(memAlloc));
-    chpl_mem_free(memAlloc, lineno, filename);
+    if (!chpl_gpu_allocated_on_host(memAlloc)) {
+      CUDA_CALL(cuMemFree((CUdeviceptr)memAlloc));
+    }
+    else {
+      CUDA_CALL(cuMemHostUnregister(memAlloc));
+      chpl_mem_free(memAlloc, lineno, filename);
+    }
 #else
     CUDA_CALL(cuMemFree((CUdeviceptr)memAlloc));
 #endif
