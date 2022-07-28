@@ -29,6 +29,8 @@ extern "C" {
 
 #ifdef HAS_GPU_LOCALE
 
+extern bool chpl_gpu_debug;
+
 void chpl_gpu_init(void);
 bool chpl_gpu_has_context(void);
 bool chpl_gpu_running_on_gpu_locale(void);

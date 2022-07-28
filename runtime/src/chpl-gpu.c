@@ -27,6 +27,9 @@
 #include "error.h"
 #include "chplcgfns.h"
 
+// probably need this here for correct compilation without the GPU locale
+bool chpl_gpu_debug = false;
+
 #ifdef HAS_GPU_LOCALE
 
 
@@ -36,7 +39,7 @@
 #include <stdbool.h>
 
 static void CHPL_GPU_DEBUG(const char *str, ...) {
-  if (verbosity >= 2) {
+  if (chpl_gpu_debug) {
     va_list args;
     va_start(args, str);
     vfprintf(stdout, str, args);

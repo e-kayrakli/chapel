@@ -72,6 +72,7 @@ module ChapelStandard {
   public use ChapelSerializedBroadcast;
   public use ExportWrappers;
   public use ChapelAutoAggregation;
+  public use ChapelGPUSupport;
 
   // Standard modules.
   public use Types as Types;
