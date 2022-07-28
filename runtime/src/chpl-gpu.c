@@ -465,14 +465,10 @@ void* chpl_gpu_mem_calloc(size_t number, size_t size,
                           int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
 
-#ifdef CHPL_GPU_MEM_UVA
-  chpl_internal_error("Not ready for calloc on gpu with UVA");
-#endif
-
   CHPL_GPU_DEBUG("chpl_gpu_mem_calloc called. Size:%d\n", size);
 
-  CUdeviceptr ptr;
-  CUDA_CALL(cuMemAllocManaged(&ptr, size, CU_MEM_ATTACH_GLOBAL));
+  CUdeviceptr ptr = (CUdeviceptr)chpl_gpu_mem_alloc(number*size, description,
+                                                    lineno, filename);
   CUDA_CALL(cuMemsetD8(ptr, 0, size));
   return (void*)ptr;
 }
@@ -481,10 +477,6 @@ void* chpl_gpu_mem_realloc(void* memAlloc, size_t size,
                            chpl_mem_descInt_t description,
                            int32_t lineno, int32_t filename) {
   chpl_gpu_ensure_context();
-
-#ifdef CHPL_GPU_MEM_UVA
-  chpl_internal_error("Not ready for realloc on gpu");
-#endif
 
   CHPL_GPU_DEBUG("chpl_gpu_mem_realloc called. Size:%d\n", size);
 
@@ -498,9 +490,8 @@ void* chpl_gpu_mem_realloc(void* memAlloc, size_t size,
 
   // TODO we could probably do something smarter, especially for the case where
   // the new allocation size is smaller than the original allocation size.
-
-  CUdeviceptr ptr;
-  CUDA_CALL(cuMemAllocManaged(&ptr, size, CU_MEM_ATTACH_GLOBAL));
+  CUdeviceptr ptr = (CUdeviceptr)chpl_gpu_mem_alloc(size, description, lineno,
+                                                    filename);
   CUDA_CALL(cuMemcpyDtoD(ptr, (CUdeviceptr)memAlloc, cur_size));
   CUDA_CALL(cuMemFree((CUdeviceptr)memAlloc));
 
@@ -520,6 +511,8 @@ void* chpl_gpu_mem_memalign(size_t boundary, size_t size,
   // (512?) that cannot be changed. I don't think we'd need more than that
   // today, and if we want, we can play some pointer games to return something
   // with a larger alignment here.
+  // In any case, if 512 is the default alignment, we can just malloc and return
+  // the result as long as the boundary is <=512 and power of 2?
 
   return NULL;
 }
