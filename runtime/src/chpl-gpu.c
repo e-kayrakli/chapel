@@ -43,6 +43,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <assert.h>
+#include <stdbool.h>
 
 static void CHPL_GPU_DEBUG(const char *str, ...) {
   if (verbosity >= 2) {
@@ -72,6 +73,7 @@ static void chpl_gpu_cuda_check(int err, const char* file, int line) {
 } while(0);
 
 CUcontext *chpl_gpu_primary_ctx;
+CUcontext *chpl_gpu_parent_ctx;
 
 void chpl_gpu_init() {
   int         num_devices;
@@ -276,8 +278,50 @@ static void chpl_gpu_launch_kernel_help(int ln,
   CHPL_GPU_DEBUG("Args freed and returning %s\n", name);
 }
 
+static bool chpl_gpu_allocated_on_host(void* memAlloc) {
+  unsigned int res;
+  CUresult ret_val = cuPointerGetAttribute(&res, CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
+      (CUdeviceptr)memAlloc);
+
+  if (ret_val != CUDA_SUCCESS) {
+    if (ret_val == CUDA_ERROR_INVALID_VALUE ||
+        ret_val == CUDA_ERROR_NOT_INITIALIZED ||
+        ret_val == CUDA_ERROR_DEINITIALIZED) {
+      return true;
+    }
+    else {
+      CUDA_CALL(ret_val);
+    }
+  }
+  else {
+    return res == CU_MEMORYTYPE_HOST;
+  }
+
+  return true;
+}
+
+
+void chpl_gpu_memmove(void* dst, void* src, size_t n) {
+  if (!chpl_gpu_allocated_on_host(dst)) {
+    assert(chpl_gpu_allocated_on_host(src) && "D to D not supported");
+    chpl_gpu_copy_host_to_device(dst, src, n);
+  }
+  else if (!chpl_gpu_allocated_on_host(src)) {
+    assert(chpl_gpu_allocated_on_host(dst) && "D to D not supported");
+    chpl_gpu_copy_device_to_host(dst, src, n);
+  }
+  else {
+    assert(chpl_gpu_allocated_on_host(src) &&
+           chpl_gpu_allocated_on_host(dst));
+    memmove(dst, src, n);
+  }
+}
+
 void chpl_gpu_copy_device_to_host(void* dst, void* src, size_t n) {
-  chpl_gpu_ensure_context();
+  // This'll get confused as these functions can be called from a non-gpu
+  // sublocale. Should we worry about multi-gpu nodes? Should we grab the
+  // device/context info from the device pointer?
+  /*chpl_gpu_ensure_context();*/
 
   assert(chpl_gpu_is_device_ptr(src));
 
@@ -287,7 +331,7 @@ void chpl_gpu_copy_device_to_host(void* dst, void* src, size_t n) {
 }
 
 void chpl_gpu_copy_host_to_device(void* dst, void* src, size_t n) {
-  chpl_gpu_ensure_context();
+  /*chpl_gpu_ensure_context();*/
 
   assert(chpl_gpu_is_device_ptr(dst));
 
@@ -478,28 +522,6 @@ void* chpl_gpu_mem_memalign(size_t boundary, size_t size,
   // with a larger alignment here.
 
   return NULL;
-}
-
-static bool chpl_gpu_allocated_on_host(void* memAlloc) {
-  unsigned int res;
-  CUresult ret_val = cuPointerGetAttribute(&res, CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
-      (CUdeviceptr)memAlloc);
-
-  if (ret_val != CUDA_SUCCESS) {
-    if (ret_val == CUDA_ERROR_INVALID_VALUE ||
-        ret_val == CUDA_ERROR_NOT_INITIALIZED ||
-        ret_val == CUDA_ERROR_DEINITIALIZED) {
-      return true;
-    }
-    else {
-      CUDA_CALL(ret_val);
-    }
-  }
-  else {
-    return res == CU_MEMORYTYPE_HOST;
-  }
-
-  return true;
 }
 
 void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {

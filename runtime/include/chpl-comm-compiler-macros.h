@@ -24,6 +24,7 @@
 #ifndef LAUNCHER
 
 #include "chpl-comm.h"
+#include "chpl-gpu.h"
 #include "chpl-mem.h"
 #include "error.h"
 #include "chpl-wide-ptr-fns.h"
@@ -52,7 +53,11 @@ void chpl_gen_comm_get(void *addr, c_nodeid_t node, void* raddr,
                        size_t size, int32_t commID, int ln, int32_t fn)
 {
   if (chpl_nodeID == node) {
+#ifdef HAS_GPU_LOCALE
+    chpl_gpu_memmove(addr, raddr, size);
+#else
     chpl_memmove(addr, raddr, size);
+#endif
 #ifdef HAS_CHPL_CACHE_FNS
   } else if( chpl_cache_enabled() ) {
     chpl_cache_comm_get(addr, node, raddr, size, commID, ln, fn);

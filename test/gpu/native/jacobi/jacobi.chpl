@@ -25,7 +25,7 @@ proc jacobi(loc) {
     // Can't do this anymore with UVA
     // A[0] = 1; A[n+1] = 1;
 
-    forall i in 1..n {
+    forall i in 0..n+1 {
       if i == 0 || i == n+1 then
         A[i] = 1;
       else
@@ -38,5 +38,14 @@ proc jacobi(loc) {
     }
     // Can't do this either
     //writeln(A);
+
+    printHelp(A);
+  }
+}
+
+proc printHelp(A) {
+  on Locales[0] {
+    var ALocal = A;
+    writeln(ALocal);
   }
 }

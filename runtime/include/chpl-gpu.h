@@ -21,6 +21,8 @@
 #ifndef _CHPL_GPU_H_
 #define _CHPL_GPU_H_
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -57,6 +59,7 @@ void* chpl_gpu_mem_memalign(size_t boundary, size_t size,
 void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename);
 size_t chpl_gpu_get_alloc_size(void* ptr);
 
+void chpl_gpu_memmove(void* dst, void* src, size_t n);
 void chpl_gpu_copy_device_to_host(void* dst, void* src, size_t n);
 void chpl_gpu_copy_host_to_device(void* dst, void* src, size_t n);
 
