@@ -37,8 +37,6 @@
  * enable this when we're working on GPU-driven communication. Although, in the
  * long term we'll probably want UVA memory to be limited to things like
  * communication signal buffers etc. 
-
-#define CHPL_GPU_MEM_UVA
 */
 #define CHPL_GPU_MEM_UVA
 
@@ -76,7 +74,6 @@ static void chpl_gpu_cuda_check(int err, const char* file, int line) {
 CUcontext *chpl_gpu_primary_ctx;
 
 void chpl_gpu_init() {
-  printf("10000\n");
   int         num_devices;
 
   // CUDA initialization

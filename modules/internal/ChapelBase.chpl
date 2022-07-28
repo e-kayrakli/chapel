@@ -887,7 +887,6 @@ module ChapelBase {
   proc init_elts(x, s, type t, lo=0:s.type) : void {
 
     var initMethod = init_elts_method(s, t);
-    extern proc printf(s...);
 
     // Q: why is the declaration of 'y' in the following loops?
     //
@@ -898,26 +897,21 @@ module ChapelBase {
     // element.  Is this good, bad, necessary?  Unclear.
     select initMethod {
       when ArrayInit.noInit {
-        /*printf("100\n");*/
         return;
       }
       when ArrayInit.serialInit {
-        /*printf("200\n");*/
         for i in lo..s-1 {
           pragma "no auto destroy" pragma "unsafe" var y: t;
           __primitive("array_set_first", x, i, y);
         }
       }
       when ArrayInit.foreachInit {
-        /*printf("250 %d\n", s);*/
-        /*printf("250 subloc %d\n", chpl_task_getRequestedSubloc());*/
         foreach i in lo..s-1 {
           pragma "no auto destroy" pragma "unsafe" var y: t;
           __primitive("array_set_first", x, i, y);
         }
       }
       when ArrayInit.parallelInit {
-        /*printf("300\n");*/
         forall i in lo..s-1 {
           pragma "no auto destroy" pragma "unsafe" var y: t;
           __primitive("array_set_first", x, i, y);
@@ -927,7 +921,6 @@ module ChapelBase {
         halt("ArrayInit.heuristicInit should have been made concrete");
       }
     }
-    /*printf("500 %d\n", chpl_task_getRequestedSubloc());*/
   }
 
   // TODO (EJR: 02/25/16): see if we can remove this explicit type declaration.
@@ -1116,7 +1109,6 @@ module ChapelBase {
           halt('internal error: Attempt to resize dynamic block ' +
                'containing non-default-initializable elements');
         } else {
-          printf("Have I been here the whole time?\n");
           init_elts(newDdata, newSize, eltType, lo=oldSize);
         }
       when chpl_ddataResizePolicy.skipInit do;

@@ -332,7 +332,6 @@ void chpl_std_module_init(void) {
     //
 #ifdef HAS_GPU_LOCALE
     chpl_gpu_enable_device_alloc();
-    printf("device alloc enabled\n");
 #endif
 
     //
@@ -352,8 +351,8 @@ void chpl_std_module_init(void) {
 }
 
 void chpl_std_module_finalize(void) {
+  // TODO do we need this?
 #ifdef HAS_GPU_LOCALE
-    printf("disabling device alloc\n");
     chpl_gpu_disable_device_alloc();
 #endif
 

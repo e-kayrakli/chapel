@@ -29,10 +29,8 @@ int main(int argc, char* argv[]) {
   // Initialize the runtime
   chpl_rt_init(argc, argv);
 
-  printf("Calling main\n");
   // Run the main function for this node.
   chpl_task_callMain(chpl_executable_init);
-  printf("Main returned\n");
 
   // have everyone exit, returning the value returned by the user written main
   // or 0 if it didn't return anything
