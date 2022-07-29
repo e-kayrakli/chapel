@@ -993,9 +993,6 @@ module ChapelBase {
                                      subloc: chpl_sublocID_t,
                                      ref callPostAlloc: bool): c_void_ptr;
     var ret: _ddata(eltType);
-    extern proc printf(s...);
-    /*printf("Allocating on %d\n", subloc);*/
-    /*printf("Allocating on %d\n", chpl_task_getRequestedSubloc());*/
     ret = chpl_mem_array_alloc(size:c_size_t, _ddata_sizeof_element(ret),
                                subloc, callPostAlloc):ret.type;
     return ret;
@@ -1009,7 +1006,6 @@ module ChapelBase {
     chpl_mem_array_postAlloc(data:c_void_ptr, size:c_size_t,
                              _ddata_sizeof_element(data));
   }
-  extern proc printf(s...);
 
   inline proc _ddata_allocate(type eltType, size: integral,
                               subloc = c_sublocid_none) {
@@ -1019,12 +1015,10 @@ module ChapelBase {
     ret = _ddata_allocate_noinit(eltType, size, callPostAlloc, subloc);
 
     init_elts(ret, size, eltType);
-    printf("Returned from init_elts\n");
 
     if callPostAlloc {
       _ddata_allocate_postalloc(ret, size);
     }
-    printf("Returning from ddata alloc\n");
 
     return ret;
   }
