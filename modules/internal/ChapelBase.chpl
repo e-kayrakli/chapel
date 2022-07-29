@@ -818,11 +818,8 @@ module ChapelBase {
   //
   // More primitive funs
   //
-  enum ArrayInit {heuristicInit, noInit, serialInit, parallelInit, foreachInit};
-  config param chpl_defaultArrayInitMethod = if CHPL_LOCALE_MODEL=="gpu" then
-                                               ArrayInit.foreachInit
-                                             else
-                                               ArrayInit.heuristicInit;
+  enum ArrayInit {heuristicInit, noInit, serialInit, parallelInit, gpuInit};
+  config param chpl_defaultArrayInitMethod = ArrayInit.heuristicInit;
 
   config param chpl_arrayInitMethodRuntimeSelectable = false;
   private var chpl_arrayInitMethod = chpl_defaultArrayInitMethod;
@@ -853,14 +850,14 @@ module ChapelBase {
       // Skip init for empty arrays. Needed for uints so that `s-1` in init_elts
       // code doesn't overflow.
       initMethod = ArrayInit.noInit;
+    } else if CHPL_LOCALE_MODEL == "gpu" &&
+              chpl_task_getRequestedSubloc() >= 0 {
+        initMethod = ArrayInit.gpuInit;
     } else if  !rootLocaleInitialized {
       // The parallel range iter uses 'here`/rootLocale, so fallback to serial
       // initialization if the root locale hasn't been setup. Only used early
       // in module initialization
-      if CHPL_LOCALE_MODEL == "gpu" then
-        initMethod = ArrayInit.foreachInit;
-      else
-        initMethod = ArrayInit.serialInit;
+      initMethod = ArrayInit.serialInit;
     } else if initMethod == ArrayInit.heuristicInit {
       // Heuristically determine if we should do parallel initialization. The
       // current heuristic really just checks that we have an array that's at
@@ -905,7 +902,7 @@ module ChapelBase {
           __primitive("array_set_first", x, i, y);
         }
       }
-      when ArrayInit.foreachInit {
+      when ArrayInit.gpuInit {
         foreach i in lo..s-1 {
           pragma "no auto destroy" pragma "unsafe" var y: t;
           __primitive("array_set_first", x, i, y);
