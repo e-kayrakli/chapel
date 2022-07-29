@@ -25,6 +25,15 @@ def get_cuda_path():
     else:
         return ""
 
+def get_cuda_memtype():
+    memtype = os.environ.get("CHPL_CUDA_MEMTYPE")
+    if memtype:
+        # TODO check if meaningful
+        return memtype
+
+    return "uvm"
+
+
 def get_cuda_libdevice_path():
     chpl_cuda_path = get_cuda_path()
 

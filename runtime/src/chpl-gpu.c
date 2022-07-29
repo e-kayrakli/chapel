@@ -29,17 +29,6 @@
 
 #ifdef HAS_GPU_LOCALE
 
-/*
- * Enable this 'define' to use Unified Virtual Addressing for all GPU
- * allocations. As UVA uses page-locked memory on the host-side, accesses to
- * "GPU" memory from inside kernels will result in fine-grained access over the
- * PCI. So, this will cause a significant performance issue. We might want to
- * enable this when we're working on GPU-driven communication. Although, in the
- * long term we'll probably want UVA memory to be limited to things like
- * communication signal buffers etc. 
-*/
-#define CHPL_GPU_MEM_UVA
-
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <assert.h>
@@ -77,6 +66,14 @@ CUcontext *chpl_gpu_parent_ctx;
 
 void chpl_gpu_init() {
   int         num_devices;
+
+  CHPL_GPU_DEBUG("Initing GPU layer. (Memtype: %s)\n",
+#ifdef CHPL_GPU_MEM_UVA
+      "uva"
+#else
+      "uvm"
+#endif
+      );
 
   // CUDA initialization
   CUDA_CALL(cuInit(0));
