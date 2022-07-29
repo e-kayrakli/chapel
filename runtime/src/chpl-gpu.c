@@ -197,12 +197,13 @@ static void chpl_gpu_launch_kernel_help(int ln,
                                         va_list args) {
   chpl_gpu_ensure_context();
 
-  CHPL_GPU_DEBUG("Kernel launcher called. (subloc %d)\n"
+  CHPL_GPU_DEBUG("Kernel launcher called on subloc %d. (%s:%d)\n"
                "\tKernel: %s\n"
                "\tGrid: %d,%d,%d\n"
                "\tBlock: %d,%d,%d\n"
                "\tNumArgs: %d\n",
                chpl_task_getRequestedSubloc(),
+               chpl_lookupFilename(fn), ln,
                name,
                grd_dim_x, grd_dim_y, grd_dim_z,
                blk_dim_x, blk_dim_y, blk_dim_z,
