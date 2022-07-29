@@ -29,6 +29,7 @@
 
 #ifdef HAS_GPU_LOCALE
 
+
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <assert.h>
@@ -62,7 +63,6 @@ static void chpl_gpu_cuda_check(int err, const char* file, int line) {
 } while(0);
 
 CUcontext *chpl_gpu_primary_ctx;
-CUcontext *chpl_gpu_parent_ctx;
 
 void chpl_gpu_init() {
   int         num_devices;
@@ -132,8 +132,6 @@ static void* chpl_gpu_getKernel(const char* fatbinData, const char* kernelName) 
 }
 
 bool chpl_gpu_is_device_ptr(const void* ptr) {
-  //chpl_gpu_ensure_context();
-
   unsigned int res;
 
 #ifdef CHPL_GPU_MEM_UVA
@@ -268,10 +266,7 @@ static void chpl_gpu_launch_kernel_help(int ln,
     if (gpu_alloc_map[i] == 1) {
       chpl_gpu_mem_free(*kernel_params[i], 0, 0);
     }
-    else {
-    }
   }
-
 
   CHPL_GPU_DEBUG("Args freed and returning %s\n", name);
 }
@@ -318,11 +313,6 @@ void* chpl_gpu_memmove(void* dst, const void* src, size_t n) {
 }
 
 void chpl_gpu_copy_device_to_host(void* dst, const void* src, size_t n) {
-  // This'll get confused as these functions can be called from a non-gpu
-  // sublocale. Should we worry about multi-gpu nodes? Should we grab the
-  // device/context info from the device pointer?
-  /*chpl_gpu_ensure_context();*/
-
   assert(chpl_gpu_is_device_ptr(src));
 
   CHPL_GPU_DEBUG("Copying %zu bytes from device to host\n", n);
@@ -331,8 +321,6 @@ void chpl_gpu_copy_device_to_host(void* dst, const void* src, size_t n) {
 }
 
 void chpl_gpu_copy_host_to_device(void* dst, const void* src, size_t n) {
-  /*chpl_gpu_ensure_context();*/
-
   assert(chpl_gpu_is_device_ptr(dst));
 
   CHPL_GPU_DEBUG("Copying %zu bytes from host to device\n", n);
@@ -528,15 +516,15 @@ void chpl_gpu_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {
   if (memAlloc != NULL) {
     assert(chpl_gpu_is_device_ptr(memAlloc));
 #ifdef CHPL_GPU_MEM_UVA
-    if (!chpl_gpu_allocated_on_host(memAlloc)) {
-      CUDA_CALL(cuMemFree((CUdeviceptr)memAlloc));
-    }
-    else {
+    if (chpl_gpu_allocated_on_host(memAlloc)) {
       CUDA_CALL(cuMemHostUnregister(memAlloc));
       chpl_mem_free(memAlloc, lineno, filename);
     }
-#else
+    else {
+#endif
     CUDA_CALL(cuMemFree((CUdeviceptr)memAlloc));
+#ifdef CHPL_GPU_MEM_UVA
+    }
 #endif
   }
 }
