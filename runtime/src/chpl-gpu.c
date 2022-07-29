@@ -131,7 +131,7 @@ static void* chpl_gpu_getKernel(const char* fatbinData, const char* kernelName) 
   return (void*)function;
 }
 
-bool chpl_gpu_is_device_ptr(void* ptr) {
+bool chpl_gpu_is_device_ptr(const void* ptr) {
   //chpl_gpu_ensure_context();
 
   unsigned int res;
@@ -276,7 +276,7 @@ static void chpl_gpu_launch_kernel_help(int ln,
   CHPL_GPU_DEBUG("Args freed and returning %s\n", name);
 }
 
-static bool chpl_gpu_allocated_on_host(void* memAlloc) {
+static bool chpl_gpu_allocated_on_host(const void* memAlloc) {
   unsigned int res;
   CUresult ret_val = cuPointerGetAttribute(&res, CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
       (CUdeviceptr)memAlloc);
@@ -299,23 +299,25 @@ static bool chpl_gpu_allocated_on_host(void* memAlloc) {
 }
 
 
-void chpl_gpu_memmove(void* dst, void* src, size_t n) {
+void* chpl_gpu_memmove(void* dst, const void* src, size_t n) {
   if (!chpl_gpu_allocated_on_host(dst)) {
     assert(chpl_gpu_allocated_on_host(src) && "D to D not supported");
     chpl_gpu_copy_host_to_device(dst, src, n);
+    return dst;
   }
   else if (!chpl_gpu_allocated_on_host(src)) {
     assert(chpl_gpu_allocated_on_host(dst) && "D to D not supported");
     chpl_gpu_copy_device_to_host(dst, src, n);
+    return dst;
   }
   else {
     assert(chpl_gpu_allocated_on_host(src) &&
            chpl_gpu_allocated_on_host(dst));
-    memmove(dst, src, n);
+    return memmove(dst, src, n);
   }
 }
 
-void chpl_gpu_copy_device_to_host(void* dst, void* src, size_t n) {
+void chpl_gpu_copy_device_to_host(void* dst, const void* src, size_t n) {
   // This'll get confused as these functions can be called from a non-gpu
   // sublocale. Should we worry about multi-gpu nodes? Should we grab the
   // device/context info from the device pointer?
@@ -328,7 +330,7 @@ void chpl_gpu_copy_device_to_host(void* dst, void* src, size_t n) {
   CUDA_CALL(cuMemcpyDtoH(dst, (CUdeviceptr)src, n));
 }
 
-void chpl_gpu_copy_host_to_device(void* dst, void* src, size_t n) {
+void chpl_gpu_copy_host_to_device(void* dst, const void* src, size_t n) {
   /*chpl_gpu_ensure_context();*/
 
   assert(chpl_gpu_is_device_ptr(dst));
