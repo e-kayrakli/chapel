@@ -8,7 +8,15 @@
 #include "chpl-gpu.h"
 #include "chpl-gpu-impl.h"
 
+#ifdef I
+#define CHPL_TMP_I I
+#undef I
+#endif
 #include "omptargetplugin.h"
+#ifdef CHPL_TMP_I
+#define I CHPL_TMP_I
+#undef CHPL_TMP_I
+#endif
 
 // I stole this macro trick from chpl-comm-diags.h
 // For any `__tgt_rtl_X` add one `MACRO` call here.
