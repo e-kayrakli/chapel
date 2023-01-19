@@ -42,8 +42,8 @@ module ChapelArray {
   pragma "no doc"
   param nullPid = -1;
 
-  pragma "no doc"
-  config param enableCompoundArrayOperators = false;
+  /*pragma "no doc"*/
+  /*config param enableCompoundArrayOperators = false;*/
 
   pragma "no doc"
   config param alwaysSerializeArrayAssignment = false;
@@ -2151,48 +2151,48 @@ module ChapelArray {
     }
   }
 
-  pragma "no doc"
-  pragma "find user line"
-  inline operator +=(ref a: [], b:[]) where enableCompoundArrayOperators {
-    /*compilerWarning("Resolving the new operator");*/
+  /*pragma "no doc"*/
+  /*pragma "find user line"*/
+  /*inline operator +=(ref a: [], b:[]) where enableCompoundArrayOperators {*/
+    /*[>compilerWarning("Resolving the new operator");<]*/
 
-    doCompoundOp(a, b, "+=");
-  }
+    /*doCompoundOp(a, b, "+=");*/
+  /*}*/
 
-  pragma "no doc"
-  pragma "find user line"
-  inline operator -=(ref a: [], b:[]) where enableCompoundArrayOperators {
-    /*compilerWarning("Resolving the new operator");*/
+  /*pragma "no doc"*/
+  /*pragma "find user line"*/
+  /*inline operator -=(ref a: [], b:[]) where enableCompoundArrayOperators {*/
+    /*[>compilerWarning("Resolving the new operator");<]*/
 
-    doCompoundOp(a, b, "-=");
-  }
+    /*doCompoundOp(a, b, "-=");*/
+  /*}*/
 
-  pragma "no doc"
-  pragma "find user line"
-  inline operator *=(ref a: [], b:[]) where enableCompoundArrayOperators {
-    /*compilerWarning("Resolving the new operator");*/
+  /*pragma "no doc"*/
+  /*pragma "find user line"*/
+  /*inline operator *=(ref a: [], b:[]) where enableCompoundArrayOperators {*/
+    /*[>compilerWarning("Resolving the new operator");<]*/
 
-    doCompoundOp(a, b, "*=");
-  }
+    /*doCompoundOp(a, b, "*=");*/
+  /*}*/
 
-  pragma "no doc"
-  pragma "find user line"
-  inline operator **=(ref a: [], b:[]) where enableCompoundArrayOperators {
-    /*compilerWarning("Resolving the new operator");*/
+  /*pragma "no doc"*/
+  /*pragma "find user line"*/
+  /*inline operator **=(ref a: [], b:[]) where enableCompoundArrayOperators {*/
+    /*[>compilerWarning("Resolving the new operator");<]*/
 
-    doCompoundOp(a, b, "*=");
-  }
+    /*doCompoundOp(a, b, "*=");*/
+  /*}*/
 
-  proc doCompoundOp(ref a: [], b:[], op: string) where enableCompoundArrayOperators {
-    forall (aa,bb) in zip(a,b) {
-      select op {
-        when "+="  {  aa+=bb; }
-        when "-="  {  aa-=bb; }
-        when "*="  {  aa*=bb; }
-        when "**=" { aa**=bb; }
-      }
-    }
-  }
+  /*proc doCompoundOp(ref a: [], b:[], op: string) where enableCompoundArrayOperators {*/
+    /*forall (aa,bb) in zip(a,b) {*/
+      /*select op {*/
+        /*when "+="  {  aa+=bb; }*/
+        /*when "-="  {  aa-=bb; }*/
+        /*when "*="  {  aa*=bb; }*/
+        /*when "**=" { aa**=bb; }*/
+      /*}*/
+    /*}*/
+  /*}*/
 
   pragma "no doc"
   pragma "find user line"

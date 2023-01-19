@@ -1562,28 +1562,35 @@ CommentsAndStmt ParserContext::buildForallLoopStmt(YYLTYPE locForall,
                                                    AstNode* iterandExpr,
                                                    WithClause* withClause,
                                                    BlockOrDo blockOrDo) {
-  auto index = indexExpr ? buildLoopIndexDecl(locIndex, toOwned(indexExpr))
-                         : nullptr;
+  if (withClause == nullptr) {
+    //std::cout << "Here!\n";
+    return buildForLoopStmt(locForall, locIndex, locBodyAnchor, indexExpr,
+                            iterandExpr, blockOrDo);
+  }
+    else {
+    auto index = indexExpr ? buildLoopIndexDecl(locIndex, toOwned(indexExpr))
+                           : nullptr;
 
-  std::vector<ParserComment>* comments;
-  ParserExprList* exprLst;
-  BlockStyle blockStyle;
+    std::vector<ParserComment>* comments;
+    ParserExprList* exprLst;
+    BlockStyle blockStyle;
 
-  prepareStmtPieces(comments, exprLst, blockStyle, locForall,
-                    locBodyAnchor,
-                    blockOrDo);
+    prepareStmtPieces(comments, exprLst, blockStyle, locForall,
+                      locBodyAnchor,
+                      blockOrDo);
 
-  auto body = consumeToBlock(locBodyAnchor, exprLst);
+    auto body = consumeToBlock(locBodyAnchor, exprLst);
 
-  auto node = Forall::build(builder, convertLocation(locForall),
-                            std::move(index),
-                            toOwned(iterandExpr),
-                            toOwned(withClause),
-                            blockStyle,
-                            std::move(body),
-                            /*isExpressionLevel*/ false);
+    auto node = Forall::build(builder, convertLocation(locForall),
+                              std::move(index),
+                              toOwned(iterandExpr),
+                              toOwned(withClause),
+                              blockStyle,
+                              std::move(body),
+                              /*isExpressionLevel*/ false);
 
-  return { .comments=comments, .stmt=node.release() };
+    return { .comments=comments, .stmt=node.release() };
+  }
 }
 
 CommentsAndStmt ParserContext::buildForeachLoopStmt(YYLTYPE locForeach,
