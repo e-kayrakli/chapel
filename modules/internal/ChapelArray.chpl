@@ -43,6 +43,12 @@ module ChapelArray {
   param nullPid = -1;
 
   pragma "no doc"
+  config param enableCompoundArrayOperators = false;
+
+  pragma "no doc"
+  config param alwaysSerializeArrayAssignment = false;
+
+  pragma "no doc"
   config param debugBulkTransfer = false;
   pragma "no doc"
   config param useBulkTransfer = true;
@@ -2147,6 +2153,49 @@ module ChapelArray {
 
   pragma "no doc"
   pragma "find user line"
+  inline operator +=(ref a: [], b:[]) where enableCompoundArrayOperators {
+    /*compilerWarning("Resolving the new operator");*/
+
+    doCompoundOp(a, b, "+=");
+  }
+
+  pragma "no doc"
+  pragma "find user line"
+  inline operator -=(ref a: [], b:[]) where enableCompoundArrayOperators {
+    /*compilerWarning("Resolving the new operator");*/
+
+    doCompoundOp(a, b, "-=");
+  }
+
+  pragma "no doc"
+  pragma "find user line"
+  inline operator *=(ref a: [], b:[]) where enableCompoundArrayOperators {
+    /*compilerWarning("Resolving the new operator");*/
+
+    doCompoundOp(a, b, "*=");
+  }
+
+  pragma "no doc"
+  pragma "find user line"
+  inline operator **=(ref a: [], b:[]) where enableCompoundArrayOperators {
+    /*compilerWarning("Resolving the new operator");*/
+
+    doCompoundOp(a, b, "*=");
+  }
+
+  proc doCompoundOp(ref a: [], b:[], op: string) where enableCompoundArrayOperators {
+    forall (aa,bb) in zip(a,b) {
+      select op {
+        when "+="  {  aa+=bb; }
+        when "-="  {  aa-=bb; }
+        when "*="  {  aa*=bb; }
+        when "**=" { aa**=bb; }
+      }
+    }
+  }
+
+  pragma "no doc"
+  pragma "find user line"
   inline operator =(ref a: [], b:[]) {
     if a.rank != b.rank then
       compilerError("rank mismatch in array assignment");
@@ -2508,8 +2557,15 @@ module ChapelArray {
           }
         }
       } else if kind==_tElt.assign {
-        [ (aa,bb) in zip(a,b) ] {
-          aa = bb;
+        if alwaysSerializeArrayAssignment {
+          for (aa,bb) in zip(a,b) {
+            aa = bb;
+          }
+        }
+        else {
+          [ (aa,bb) in zip(a,b) ] {
+            aa = bb;
+          }
         }
       }
     }
