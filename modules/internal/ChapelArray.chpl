@@ -45,8 +45,8 @@ module ChapelArray {
   /*pragma "no doc"*/
   /*config param enableCompoundArrayOperators = false;*/
 
-  pragma "no doc"
-  config param alwaysSerializeArrayAssignment = false;
+  /*pragma "no doc"*/
+  /*config param alwaysSerializeArrayAssignment = false;*/
 
   pragma "no doc"
   config param debugBulkTransfer = false;
@@ -2557,15 +2557,8 @@ module ChapelArray {
           }
         }
       } else if kind==_tElt.assign {
-        if alwaysSerializeArrayAssignment {
-          for (aa,bb) in zip(a,b) {
-            aa = bb;
-          }
-        }
-        else {
-          [ (aa,bb) in zip(a,b) ] {
-            aa = bb;
-          }
+        for (aa,bb) in zip(a,b) {
+          aa = bb;
         }
       }
     }
