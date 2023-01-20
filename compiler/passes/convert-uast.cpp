@@ -1483,9 +1483,16 @@ struct Converter {
 
     INT_ASSERT(expr != nullptr);
 
-    return buildForallLoopExpr(indices, iteratorExpr, expr, cond,
-                               maybeArrayType,
-                               zippered);
+    if (maybeArrayType) {
+      return buildForallLoopExpr(indices, iteratorExpr, expr, cond,
+                                 maybeArrayType,
+                                 zippered);
+    }
+    else {
+      return buildForLoopExpr(indices, iteratorExpr, expr, cond,
+                                 maybeArrayType,
+                                 zippered);
+    }
   }
 
   // Note that block statements in type expressions for variables need to
@@ -1509,8 +1516,13 @@ struct Converter {
         INT_ASSERT(intents);
       }
 
-      return ForallStmt::build(indices, iterator, intents, body, zippered,
-                               serialOK);
+      if (intents != nullptr) {
+        return ForallStmt::build(indices, iterator, intents, body, zippered,
+                                 serialOK);
+      }
+      else {
+        return ForLoop::buildForLoop(indices, iterator, body, zippered, false);
+      }
     }
   }
 
