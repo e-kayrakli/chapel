@@ -1563,7 +1563,6 @@ CommentsAndStmt ParserContext::buildForallLoopStmt(YYLTYPE locForall,
                                                    WithClause* withClause,
                                                    BlockOrDo blockOrDo) {
   if (withClause == nullptr) {
-    //std::cout << "Here!\n";
     return buildForLoopStmt(locForall, locIndex, locBodyAnchor, indexExpr,
                             iterandExpr, blockOrDo);
   }

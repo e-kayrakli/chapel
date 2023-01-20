@@ -2433,16 +2433,6 @@ static void buildLeaderIterator(PromotionInfo& promotion,
 
   BlockStmt* loopBody = new BlockStmt(new CallExpr(PRIM_YIELD, liIndex));
 
-  //ForallStmt* fs = ForallStmt::buildHelper(new SymExpr(liIndex),
-                                           //new SymExpr(liIterator),
-                                           //NULL, // intents
-                                           //loopBody,
-                                           //false, //only leader - not zippered
-                                           //true); // do not mess with iterator
-                                                  //// and no shadow vars please
-
-  //BlockStmt* loop = buildChapelStmt(fs);
-
   BlockStmt* loop = ForLoop::buildForLoop(new DefExpr(liIndex),
                                           new SymExpr(liIterator),
                                           loopBody,
