@@ -254,6 +254,7 @@ module ChapelIO {
         }
       }
     }
+
     proc fileWriter.writeObject(x: ?t) throws {
       fullWriteThis(this, x);
     }
