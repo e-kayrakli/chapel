@@ -141,9 +141,6 @@ module ChapelIO {
   pragma "no doc"
   config param useSimpleWriteThis = false;
 
-  param simpleWriteThisFormat =
-    "<Instance of type %s on locale %i at address %@xu>";
-
   // TODO -- this should probably be private
   pragma "no doc"
   proc _isNilObject(val) {
@@ -261,10 +258,11 @@ module ChapelIO {
 
     pragma "no doc"
     proc writeThisDefaultImpl(writer, x:?t) throws where useSimpleWriteThis {
-      var msg = simpleWriteThisFormat.format(t:string, x.locale.id:string,
-                                             __primitive("_wide_get_addr",
-                                                         x):uint);
-      writer.writeString(msg);
+      param fmt = "<Instance of type %s on locale %i at address %@xu>";
+      const addr = __primitive("_wide_get_addr", x);
+      const addrAsUint = __primitive("cast", uint, addr);
+
+      writer.writeString(fmt.format(t:string, x.locale.id, addrAsUint));
     }
 
     pragma "no doc"
