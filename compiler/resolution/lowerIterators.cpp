@@ -3071,6 +3071,18 @@ static void CONTEXT_DEBUG(int indent, std::string msg, BaseAST* node) {
 
   //return ret;
 //}
+//
+class ContextHandler {
+  CForLoop* loop;
+  std::vector<Context*> contextStack;
+  std::map<Symbol*, Symbol*> handleMap;
+}
+
+class Context {
+  FnSymbol* fn;
+  CallExpr* callToInner;
+  Symbol* localHandle;
+}
 
 static Symbol* findLoopContextHandle(CForLoop* loop, int debugDepth) {
   std::vector<DefExpr*> defExprs;
