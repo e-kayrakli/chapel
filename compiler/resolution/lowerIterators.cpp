@@ -3046,6 +3046,85 @@ static void CONTEXT_DEBUG(int indent, std::string msg, BaseAST* node) {
   }
 }
 
+//static DefExpr* findSingleContextInBlock(BlockStmt* block, int debugDepth) {
+  //DefExpr* ret = NULL;
+
+  //std::vector<DefExpr*> defExprs;
+  //collectDefExprs(block, defExprs);
+
+  //for_vector (DefExpr, def, defExprs) {
+    //CONTEXT_DEBUG(debugDepth+1, "looking at DefExpr", def);
+
+    //if (def->sym->type &&
+        //def->sym->type->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
+      //CONTEXT_DEBUG(debugDepth+2, "symbol defined has a context type", def->sym);
+
+      //if (ret == NULL) {
+        //ret = def;
+      //}
+      //else { // probably need this only with --verify?
+        //CONTEXT_DEBUG(debugDepth+3, "found another def?", def);
+        //INT_FATAL("Multiple context defs in one block");
+      //}
+    //}
+  //}
+
+  //return ret;
+//}
+
+static Symbol* findLoopContextHandle(CForLoop* loop, int debugDepth) {
+  std::vector<DefExpr*> defExprs;
+  collectDefExprs(loop, defExprs);
+
+  Symbol* ret = NULL;
+
+  for_vector (DefExpr, def, defExprs) {
+    CONTEXT_DEBUG(debugDepth+1, "looking at DefExpr", def);
+
+    if (def->sym->hasFlag(FLAG_INDEX_VAR) &&
+        def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
+      if (ret == NULL) {
+        CONTEXT_DEBUG(debugDepth+2, "found loop's context handle", def->sym);
+        ret = def->sym;
+      }
+      else {
+        CONTEXT_DEBUG(debugDepth+2, "found another context handle?", def->sym);
+        INT_FATAL("found another context handle?");
+      }
+    }
+  }
+
+  return ret;
+}
+
+static void adjustContextUses(CForLoop* loop, Symbol* handle, int& debugDepth) {
+  std::vector<SymExpr*> handleUses;
+  collectSymExprsFor(loop, handle, handleUses);
+
+  for_vector (SymExpr, use, handleUses) {
+    if (CallExpr* call = toCallExpr(use->parentExpr)) {
+      CONTEXT_DEBUG(debugDepth+1, "found a call that uses handle", call);
+
+      if (call->isPrimitive(PRIM_OUTER_CONTEXT)) {
+        CONTEXT_DEBUG(debugDepth+2, "special call", call);
+
+      }
+      else if (call->isPrimitive(PRIM_MOVE)) {
+        CONTEXT_DEBUG(debugDepth+2, "ignoring call", call);
+
+      }
+      else {
+        CONTEXT_DEBUG(debugDepth+2, "call is illegal", call);
+        INT_FATAL("call is illegal");
+      }
+    }
+    else {
+      CONTEXT_DEBUG(debugDepth, "illegal use of context handle", use);
+      INT_FATAL("illegal use of context handle");
+    }
+  }
+}
+
 
 static void handleContexts() {
   forv_Vec(FnSymbol*, fn, gFnSymbols) {
@@ -3056,28 +3135,68 @@ static void handleContexts() {
     std::vector<BaseAST*> asts;
     collect_asts(fn, asts);
 
+
     for_vector(BaseAST, ast, asts) {
       if (CForLoop* loop = toCForLoop(ast)) {
-        CONTEXT_DEBUG(0, "encountered a C loop", loop);
+        int debugDepth = 0;
+        CONTEXT_DEBUG(debugDepth, "encountered a C loop", loop);
 
-        std::vector<DefExpr*> defExprs;
-        collectDefExprs(loop, defExprs);
+        CONTEXT_DEBUG(debugDepth, "looking for the handle", loop);
 
-        for_vector (DefExpr, def, defExprs) {
-          CONTEXT_DEBUG(1, "looking at DefExpr", def);
-          // looks like this can be null because of some iterator
-          // implementation detail ?
-          if (Type* symType = def->sym->type) {
-            CONTEXT_DEBUG(2, "symbol defined has a type", def->sym);
-            if (symType->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
-              CONTEXT_DEBUG(3, "symbol defined has a context type", def->sym);
-              nprint_view(def);
-            }
-            else {
-              CONTEXT_DEBUG(3, "symbol defined doesn't have a context type", def->sym);
-            }
-          }
+        Symbol* loopContextHandle = findLoopContextHandle(loop, debugDepth);
+
+        if (loopContextHandle != NULL) {
+          CONTEXT_DEBUG(debugDepth, "found loop context handle", loopContextHandle);
         }
+        else {
+          CONTEXT_DEBUG(debugDepth, "couldn't find context handle", loop);
+        }
+
+        adjustContextUses(loop, loopContextHandle, debugDepth);
+
+        //DefExpr* contextDef = findSingleContextInBlock(loop, debugDepth);
+
+
+        //if (FnSymbol* parentFn = toFnSymbol(contextDef->parentSymbol)) {
+          //if (parentFn->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
+            //// TODO make sure it is not cobegin
+            //CONTEXT_DEBUG(4, "parent coforall found", parentFn);
+
+            //if (CallExpr* singleCall = parentFn->singleInvocation()) {
+              //CONTEXT_DEBUG(5, "call to parent coforall found", singleCall);
+
+              //if (FnSymbol* grandParentFn = toFnSymbol(singleCall->parentSymbol)) {
+                //if (grandParentFn->hasFlag(FLAG_ON)) {
+                  //CONTEXT_DEBUG(6, "grandparent is an on function", singleCall);
+
+                //}
+                //else if (grandParentFn->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
+                  //CONTEXT_DEBUG(6, "grandparent is a cobegin/coforall", grandParentFn);
+                  //CONTEXT_DEBUG(6, "not ready for nested parallelism, yet", grandParentFn);
+                  //INT_FATAL("not ready for nested parallelism, yet");
+                //}
+                //else {
+                  //CONTEXT_DEBUG(6, "what's this?", grandParentFn);
+                  //INT_FATAL("what's this?");
+                //}
+              //}
+              //else {
+                //CONTEXT_DEBUG(6, "grandparent is not a function", singleCall);
+                //INT_FATAL("grandparent is not a function");
+              //}
+
+            //}
+            //else {
+              //CONTEXT_DEBUG(5, "parent has multiple calls", parentFn);
+              //INT_FATAL("parent has multiple calls");
+            //}
+
+          //}
+          //else {
+            //CONTEXT_DEBUG(4, "parent is not a coforall?", parentFn);
+            //INT_FATAL("parent is not a coforall");
+          //}
+        //}
 
         //// we need to check whether there is any magic Context variables here
         //for_alist(node, loop->body) {
