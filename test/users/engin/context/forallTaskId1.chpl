@@ -73,6 +73,8 @@ forall (i, context) in foo() {  // context should be coming from a new syntax
   // can we get this with some compiler magic?
   const localeContext = __primitive("outer context", context);
 
+  /*var a = __primitive("array on context", localeContext, {1..10});*/
+
   /*
    var sharedDom = {1..10} dmapped Context(localeContext);
   */
