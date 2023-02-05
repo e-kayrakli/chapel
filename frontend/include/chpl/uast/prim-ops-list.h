@@ -39,6 +39,8 @@
 
 PRIMITIVE_G(UNKNOWN, "")
 
+PRIMITIVE_R(OUTER_CONTEXT, "outer context")
+
 PRIMITIVE_R(ACTUALS_LIST, "actuals list")
 PRIMITIVE_G(NOOP, "noop")
 PRIMITIVE_G(MOVE, "move")
