@@ -3030,6 +3030,86 @@ static void removeUncalledIterators()
   }
 }
 
+static bool isInUserCode(BaseAST* node) {
+  if (ModuleSymbol* mod = node->getModule()) {
+    return mod->modTag == MOD_USER;
+  }
+  return false;
+}
+
+static void CONTEXT_DEBUG(int indent, std::string msg, BaseAST* node) {
+  if (true) {
+    for(int i=0 ; i<indent ; i++) {
+      std::cout << " ";
+    }
+    std::cout << "[" << node->id << "] " << msg << std::endl;
+  }
+}
+
+
+static void handleContexts() {
+  forv_Vec(FnSymbol*, fn, gFnSymbols) {
+    if (!isInUserCode(fn)) continue;
+
+    std::cout << fn->stringLoc() << std::endl;
+
+    std::vector<BaseAST*> asts;
+    collect_asts(fn, asts);
+
+    for_vector(BaseAST, ast, asts) {
+      if (CForLoop* loop = toCForLoop(ast)) {
+        CONTEXT_DEBUG(0, "encountered a C loop", loop);
+
+        std::vector<DefExpr*> defExprs;
+        collectDefExprs(loop, defExprs);
+
+        for_vector (DefExpr, def, defExprs) {
+          CONTEXT_DEBUG(1, "looking at DefExpr", def);
+          // looks like this can be null because of some iterator
+          // implementation detail ?
+          if (Type* symType = def->sym->type) {
+            CONTEXT_DEBUG(2, "symbol defined has a type", def->sym);
+            if (symType->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
+              CONTEXT_DEBUG(3, "symbol defined has a context type", def->sym);
+              nprint_view(def);
+            }
+            else {
+              CONTEXT_DEBUG(3, "symbol defined doesn't have a context type", def->sym);
+            }
+          }
+        }
+
+        //// we need to check whether there is any magic Context variables here
+        //for_alist(node, loop->body) {
+          //CONTEXT_DEBUG(1, "encountered a node", node);
+          //if (SymExpr* nodeSymExpr = toSymExpr(node)) {
+            //std::cout << "here is a symexpr\n";
+            //CONTEXT_DEBUG(2, "node is a SymExpr", node);
+            //if (nodeSymExpr->symbol()->type->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
+              //nprint_view(node);
+            //}
+          //}
+          //else if (DefExpr* def = toDefExpr(node)) {
+            //CONTEXT_DEBUG(2, "node is a DefExpr", node);
+            //// looks like this can be null because of some iterator
+            //// implementation detail ?
+            //if (Type* symType = def->sym->type) {
+              //CONTEXT_DEBUG(3, "symbol defined has a type", def->sym);
+              //if (symType->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
+                //CONTEXT_DEBUG(4, "symbol defined has a context type", def->sym);
+                //nprint_view(node);
+              //}
+              //else {
+                //CONTEXT_DEBUG(4, "symbol defined doesn't have a context type", def->sym);
+              //}
+            //}
+          //}
+        //}
+      }
+    }
+  }
+}
+
 void lowerIterators() {
   nonLeaderParCheck();
 
@@ -3127,6 +3207,8 @@ void lowerIterators() {
   handlePolymorphicIterators();
 
   reconstructIRautoCopyAutoDestroy();
+
+  handleContexts();
 
   cleanupTemporaryVectors();
   cleanupIteratorBreakToken();
