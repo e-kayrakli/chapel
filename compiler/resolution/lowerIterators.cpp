@@ -3149,6 +3149,28 @@ static void adjustContextUses(CForLoop* loop, Symbol* handle, int& debugDepth) {
   }
 }
 
+static bool fnCanHaveContext(FnSymbol* fn) {
+  // TODO make sure it is not cobegin ?
+  return (fn->hasFlag(FLAG_COBEGIN_OR_COFORALL) ||
+          fn->hasFlag(FLAG_ON)) &&
+         fn->singleInvocation() != NULL;
+
+}
+
+static void collectOuterContexts(CForLoop* loop,
+                                 std::vector<FnSymbol*>& contexts) {
+  Expr* cur = loop;
+  while (FnSymbol* parentFn = toFnSymbol(cur->parentSymbol)) {
+    if (fnCanHaveContext(parentFn)) {
+      contexts.push_back(parentFn);
+      cur = parentFn->singleInvocation();
+    }
+    else {
+      break;
+    }
+  }
+}
+
 
 static void handleContexts() {
   forv_Vec(FnSymbol*, fn, gFnSymbols) {
@@ -3168,53 +3190,67 @@ static void handleContexts() {
         CONTEXT_DEBUG(debugDepth, "looking for the handle", loop);
 
         Symbol* loopContextHandle = findLoopContextHandle(loop, debugDepth);
+        if (loopContextHandle == NULL) {
+          CONTEXT_DEBUG(debugDepth, "couldn't find context handle", loop);
+          continue;
+        }
+        CONTEXT_DEBUG(debugDepth, "found loop context handle", loopContextHandle);
 
-        if (loopContextHandle != NULL) {
-          CONTEXT_DEBUG(debugDepth, "found loop context handle", loopContextHandle);
+        CONTEXT_DEBUG(debugDepth, "collecting context chain", loop);
 
-          if (FnSymbol* parentFn = toFnSymbol(loop->parentSymbol)) {
-            if (parentFn->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
-              // TODO make sure it is not cobegin
-              CONTEXT_DEBUG(4, "parent coforall found", parentFn);
+        std::vector<FnSymbol*> outerContexts;
+        collectOuterContexts(loop, outerContexts);
+        if (outerContexts.size() == 0) {
+          CONTEXT_DEBUG(debugDepth, "couldn't find any context chain", loop);
+          continue;
+        }
 
-              if (CallExpr* singleCall = parentFn->singleInvocation()) {
-                CONTEXT_DEBUG(5, "call to parent coforall found", singleCall);
 
-                if (FnSymbol* grandParentFn = toFnSymbol(singleCall->parentSymbol)) {
-                  if (grandParentFn->hasFlag(FLAG_ON)) {
-                    CONTEXT_DEBUG(6, "grandparent is an on function", singleCall);
+        CONTEXT_DEBUG(debugDepth, "found the following context chain:", loop);
+        int innerDebugDepth = debugDepth;
+        for_vector(FnSymbol, fn, outerContexts) {
+          CONTEXT_DEBUG(++innerDebugDepth, "", fn);
+        }
 
-                  }
-                  else if (grandParentFn->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
-                    CONTEXT_DEBUG(6, "grandparent is a cobegin/coforall", grandParentFn);
-                    CONTEXT_DEBUG(6, "not ready for nested parallelism, yet", grandParentFn);
-                    INT_FATAL("not ready for nested parallelism, yet");
-                  }
-                  else {
-                    CONTEXT_DEBUG(6, "what's this?", grandParentFn);
-                    INT_FATAL("what's this?");
-                  }
+        if (FnSymbol* parentFn = toFnSymbol(loop->parentSymbol)) {
+          if (parentFn->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
+            // TODO make sure it is not cobegin
+            CONTEXT_DEBUG(4, "parent coforall found", parentFn);
+
+            if (CallExpr* singleCall = parentFn->singleInvocation()) {
+              CONTEXT_DEBUG(5, "call to parent coforall found", singleCall);
+
+              if (FnSymbol* grandParentFn = toFnSymbol(singleCall->parentSymbol)) {
+                if (grandParentFn->hasFlag(FLAG_ON)) {
+                  CONTEXT_DEBUG(6, "grandparent is an on function", singleCall);
+
+                }
+                else if (grandParentFn->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
+                  CONTEXT_DEBUG(6, "grandparent is a cobegin/coforall", grandParentFn);
+                  CONTEXT_DEBUG(6, "not ready for nested parallelism, yet", grandParentFn);
+                  INT_FATAL("not ready for nested parallelism, yet");
                 }
                 else {
-                  CONTEXT_DEBUG(6, "grandparent is not a function", singleCall);
-                  INT_FATAL("grandparent is not a function");
+                  CONTEXT_DEBUG(6, "what's this?", grandParentFn);
+                  INT_FATAL("what's this?");
                 }
-
               }
               else {
-                CONTEXT_DEBUG(5, "parent has multiple calls", parentFn);
-                INT_FATAL("parent has multiple calls");
+                CONTEXT_DEBUG(6, "grandparent is not a function", singleCall);
+                INT_FATAL("grandparent is not a function");
               }
 
             }
             else {
-              CONTEXT_DEBUG(4, "parent is not a coforall?", parentFn);
-              INT_FATAL("parent is not a coforall");
+              CONTEXT_DEBUG(5, "parent has multiple calls", parentFn);
+              INT_FATAL("parent has multiple calls");
             }
+
           }
-        }
-        else {
-          CONTEXT_DEBUG(debugDepth, "couldn't find context handle", loop);
+          else {
+            CONTEXT_DEBUG(4, "parent is not a coforall?", parentFn);
+            INT_FATAL("parent is not a coforall");
+          }
         }
 
         adjustContextUses(loop, loopContextHandle, debugDepth);
