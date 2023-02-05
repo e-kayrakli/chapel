@@ -70,7 +70,6 @@ iter foo(param tag: iterKind, followThis) where tag==iterKind.follower {
 }
 
 forall (i, context) in foo() {  // context should be coming from a new syntax
-  const taskContext = context;
   // can we get this with some compiler magic?
   const localeContext = __primitive("outer context", context);
 
