@@ -3199,6 +3199,49 @@ class ContextHandler {
   }
 
   CForLoop* loop() { return toCForLoop(this->loopCtx_.loop_); }
+  Symbol* loopHandle() { return this->loopCtx_.localHandle_; }
+
+  void handleOuterContextCall(CallExpr* call) {
+    const int debugDepth = 3;
+
+    CONTEXT_DEBUG(debugDepth, "special call", call);
+
+    Symbol* outerCtxHandle = NULL;
+    if (CallExpr* parentCall = toCallExpr(call->parentExpr)) {
+      // TODO better pattern matching?
+      INT_ASSERT(parentCall->isPrimitive(PRIM_MOVE));
+      SymExpr* lhsSe = toSymExpr(parentCall->get(1));
+      Symbol* lhs = lhsSe->symbol();
+
+      if (DefExpr* nextDef = toDefExpr(parentCall->next)) {
+        outerCtxHandle = nextDef->sym;
+        INT_ASSERT(outerCtxHandle->getValType() == this->loopCtx_.localHandle_->getValType());
+
+        if (CallExpr* callAfterDef = toCallExpr(nextDef->next)) {
+          INT_ASSERT(callAfterDef->isNamed(astrInitEquals));
+          INT_ASSERT(toSymExpr(callAfterDef->get(1))->symbol() == outerCtxHandle);
+          INT_ASSERT(toSymExpr(callAfterDef->get(2))->symbol() == lhs);
+        }
+
+        CONTEXT_DEBUG(debugDepth, "found an outer context handle",
+            outerCtxHandle);
+
+        if (toSymExpr(call->get(1))->symbol() == this->loopHandle()) {
+          INT_ASSERT(handleMap_.count(outerCtxHandle) == 0);
+
+          // immediate outer context
+          handleMap_[outerCtxHandle] = contextStack_[0].localHandle_;
+        }
+        else {
+          // farther away context
+        }
+      }
+      else {
+        INT_FATAL("unknown pattern");
+      }
+    }
+
+  }
 
   void handleContextUsesWithinLoopBody() {
     const int debugDepth = 1;
@@ -3210,36 +3253,10 @@ class ContextHandler {
         CONTEXT_DEBUG(debugDepth+1, "found a call that uses handle", call);
 
         if (call->isPrimitive(PRIM_OUTER_CONTEXT)) {
-          CONTEXT_DEBUG(debugDepth+2, "special call", call);
-          Symbol* outerCtxHandle = NULL;
-          if (CallExpr* parentCall = toCallExpr(call->parentExpr)) {
-            // TODO better pattern matching?
-            INT_ASSERT(parentCall->isPrimitive(PRIM_MOVE));
-            SymExpr* lhsSe = toSymExpr(parentCall->get(1));
-            Symbol* lhs = lhsSe->symbol();
-
-            if (DefExpr* nextDef = toDefExpr(parentCall->next)) {
-              outerCtxHandle = nextDef->sym;
-              INT_ASSERT(outerCtxHandle->getValType() == this->loopCtx_.localHandle_->getValType());
-
-              if (CallExpr* callAfterDef = toCallExpr(nextDef->next)) {
-                INT_ASSERT(callAfterDef->isNamed(astrInitEquals));
-                INT_ASSERT(toSymExpr(callAfterDef->get(1))->symbol() == outerCtxHandle);
-                INT_ASSERT(toSymExpr(callAfterDef->get(2))->symbol() == lhs);
-              }
-
-              CONTEXT_DEBUG(debugDepth+3, "found an outer context handle",
-                  outerCtxHandle);
-            }
-            else {
-              INT_FATAL("unknown pattern");
-            }
-          }
-
+          handleOuterContextCall(call);
         }
         else if (call->isPrimitive(PRIM_MOVE)) {
           CONTEXT_DEBUG(debugDepth+2, "ignoring call", call);
-
         }
         else {
           CONTEXT_DEBUG(debugDepth+2, "call is illegal", call);
@@ -3256,85 +3273,6 @@ class ContextHandler {
 
 };
 
-
-//static Symbol* findLoopContextHandle(CForLoop* loop, int debugDepth) {
-  ////const debugDepth = 2;
-
-  //std::vector<DefExpr*> defExprs;
-  //collectDefExprs(loop, defExprs);
-
-  //Symbol* ret = NULL;
-
-  //for_vector (DefExpr, def, defExprs) {
-    //CONTEXT_DEBUG(debugDepth+1, "looking at DefExpr", def);
-
-    //if (def->sym->hasFlag(FLAG_INDEX_VAR) &&
-        //def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
-      //if (ret == NULL) {
-        //CONTEXT_DEBUG(debugDepth+2, "found loop's context handle", def->sym);
-        //ret = def->sym;
-      //}
-      //else {
-        //CONTEXT_DEBUG(debugDepth+2, "found another context handle?", def->sym);
-        //INT_FATAL("found another context handle?");
-      //}
-    //}
-  //}
-
-  //return ret;
-//}
-
-//static void adjustContextUses(CForLoop* loop, Symbol* handle, int& debugDepth) {
-  //std::vector<SymExpr*> handleUses;
-  //collectSymExprsFor(loop, handle, handleUses);
-
-  //for_vector (SymExpr, use, handleUses) {
-    //if (CallExpr* call = toCallExpr(use->parentExpr)) {
-      //CONTEXT_DEBUG(debugDepth+1, "found a call that uses handle", call);
-
-      //if (call->isPrimitive(PRIM_OUTER_CONTEXT)) {
-        //CONTEXT_DEBUG(debugDepth+2, "special call", call);
-        //Symbol* outerCtxHandle = NULL;
-        //if (CallExpr* parentCall = toCallExpr(call->parentExpr)) {
-          //// TODO better pattern matching?
-          //INT_ASSERT(parentCall->isPrimitive(PRIM_MOVE));
-          //SymExpr* lhsSe = toSymExpr(parentCall->get(1));
-          //Symbol* lhs = lhsSe->symbol();
-
-          //if (DefExpr* nextDef = toDefExpr(parentCall->next)) {
-            //outerCtxHandle = nextDef->sym;
-            //INT_ASSERT(outerCtxHandle->getValType() == handle->getValType());
-
-            //if (CallExpr* callAfterDef = toCallExpr(nextDef->next)) {
-              //INT_ASSERT(callAfterDef->isNamed(astrInitEquals));
-              //INT_ASSERT(toSymExpr(callAfterDef->get(1))->symbol() == outerCtxHandle);
-              //INT_ASSERT(toSymExpr(callAfterDef->get(2))->symbol() == lhs);
-            //}
-
-            //CONTEXT_DEBUG(debugDepth+3, "found an outer context handle",
-                          //outerCtxHandle);
-          //}
-          //else {
-            //INT_FATAL("unknown pattern");
-          //}
-        //}
-
-      //}
-      //else if (call->isPrimitive(PRIM_MOVE)) {
-        //CONTEXT_DEBUG(debugDepth+2, "ignoring call", call);
-
-      //}
-      //else {
-        //CONTEXT_DEBUG(debugDepth+2, "call is illegal", call);
-        //INT_FATAL("call is illegal");
-      //}
-    //}
-    //else {
-      //CONTEXT_DEBUG(debugDepth, "illegal use of context handle", use);
-      //INT_FATAL("illegal use of context handle");
-    //}
-  //}
-//}
 
 static void handleContexts() {
   forv_Vec(FnSymbol*, fn, gFnSymbols) {
