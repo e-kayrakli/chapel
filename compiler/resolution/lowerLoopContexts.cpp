@@ -484,11 +484,9 @@ void lowerContexts() {
   forv_Vec(FnSymbol*, fn, gFnSymbols) {
     if (!isInUserCode(fn)) continue;
 
-    std::cout << fn->stringLoc() << std::endl;
-
+    // TODO do something lighter
     std::vector<BaseAST*> asts;
     collect_asts(fn, asts);
-
 
     for_vector(BaseAST, ast, asts) {
       if (CForLoop* loop = toCForLoop(ast)) {
