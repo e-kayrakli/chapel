@@ -3323,6 +3323,15 @@ class ContextHandler {
     CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(target->localHandle_->id)+"]",
                   call);
 
+    // flatten the call block if it only contains this call -- this helps with
+    // controlling the behavior with config param. Nothing deep, probably won't
+    // need after we have the proper syntax
+    if (BlockStmt* parentBlock = toBlockStmt(call->parentExpr)) {
+      if (parentBlock->length() == 1) {
+        parentBlock->flattenAndRemove();
+      }
+    }
+
     // TODO cache this stuff somewhere, but we remove some below. Is that a problem?
     std::vector<CallExpr*> callsInLoop;
     collectCallExprs(this->loop(), callsInLoop);
