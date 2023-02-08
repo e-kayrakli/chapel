@@ -3046,33 +3046,6 @@ static void CONTEXT_DEBUG(int indent, std::string msg, BaseAST* node) {
   }
 }
 
-//static DefExpr* findSingleContextInBlock(BlockStmt* block, int debugDepth) {
-  //DefExpr* ret = NULL;
-
-  //std::vector<DefExpr*> defExprs;
-  //collectDefExprs(block, defExprs);
-
-  //for_vector (DefExpr, def, defExprs) {
-    //CONTEXT_DEBUG(debugDepth+1, "looking at DefExpr", def);
-
-    //if (def->sym->type &&
-        //def->sym->type->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
-      //CONTEXT_DEBUG(debugDepth+2, "symbol defined has a context type", def->sym);
-
-      //if (ret == NULL) {
-        //ret = def;
-      //}
-      //else { // probably need this only with --verify?
-        //CONTEXT_DEBUG(debugDepth+3, "found another def?", def);
-        //INT_FATAL("Multiple context defs in one block");
-      //}
-    //}
-  //}
-
-  //return ret;
-//}
-//
-
 class Context {
   public:
   Symbol* localHandle_ = NULL;
@@ -3086,17 +3059,21 @@ class Context {
     collectDefExprs(this->node(), defExprs);
 
     for_vector (DefExpr, def, defExprs) {
-      CONTEXT_DEBUG(debugDepth+1, "looking at DefExpr", def);
+      //CONTEXT_DEBUG(debugDepth+1, "looking at DefExpr", def);
 
-      if (def->sym->hasFlag(FLAG_INDEX_VAR) &&
-          def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE)) {
+      if (defExprIsLocalHandle(def)) {
         if (localHandle_ == NULL) {
           CONTEXT_DEBUG(debugDepth+2, "found a context handle", def->sym);
           localHandle_ = def->sym;
         }
         else {
-          CONTEXT_DEBUG(debugDepth+2, "found another context handle?", def->sym);
-          INT_FATAL("found another context handle?");
+          // For now, ignore other contexts. Slight challange: the innermost
+          // coforall_fn also contains the loop in question. So when trying to
+          // find the coforall_fn's context handles, we should avoid looking at
+          // loop's.
+
+          //CONTEXT_DEBUG(debugDepth+2, "found another context handle?", def->sym);
+          //INT_FATAL("found another context handle?");
         }
       }
     }
@@ -3105,6 +3082,7 @@ class Context {
   }
 
   virtual BaseAST* node() = 0;
+  virtual bool defExprIsLocalHandle(DefExpr* def) = 0;
 
 };
 
@@ -3112,11 +3090,16 @@ class LoopContext: public Context {
   public:
   CForLoop* loop_;
   LoopContext(CForLoop* loop): loop_(loop) {}
-  
-
-  //LoopContext(CForLoop* loop): loop_(loop) {}
 
   BaseAST* node() override { return loop_; };
+
+  bool defExprIsLocalHandle(DefExpr* def) override {
+    return !def->sym->hasFlag(FLAG_TEMP) &&
+           def->sym->hasFlag(FLAG_INDEX_VAR) &&
+           def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE);
+  }
+
+
 };
 
 class IteratorContext: public Context {
@@ -3127,6 +3110,14 @@ class IteratorContext: public Context {
   IteratorContext(FnSymbol* fn): fn_(fn) {}
 
   BaseAST* node() override { return fn_; };
+
+  bool defExprIsLocalHandle(DefExpr* def) override {
+    return !def->sym->hasFlag(FLAG_TEMP) &&
+           !isLabelSymbol(def->sym) &&
+           !def->sym->hasFlag(FLAG_INDEX_VAR) && // avoid re-finding loop's
+           !def->sym->hasFlag(FLAG_EPILOGUE_LABEL) && // same as !isLabelSymbol?
+           def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE);
+  }
 };
 
 static bool fnCanHaveContext(FnSymbol* fn) {
@@ -3175,10 +3166,12 @@ class ContextHandler {
     while (FnSymbol* parentFn = toFnSymbol(cur->parentSymbol)) {
       if (fnCanHaveContext(parentFn)) {
         CONTEXT_DEBUG(debugDepth, "found a candidate parent", parentFn);
+
         IteratorContext outerCtx(parentFn);
         outerCtx.callToInner_ = callToCurCtx;
-        contextStack_.push_back(outerCtx);
+        if (!outerCtx.findLoopContextHandle()) break;
 
+        contextStack_.push_back(outerCtx);
         cur = callToCurCtx = parentFn->singleInvocation();
 
       }
@@ -3194,7 +3187,16 @@ class ContextHandler {
     int debugDepth = 3;
     CONTEXT_DEBUG(debugDepth, "found the following context chain:", this->loop());
     for (auto i = contextStack_.begin() ; i != contextStack_.end() ; i++) {
-      CONTEXT_DEBUG(++debugDepth, "", i->fn_);
+      std::string msg = "";
+      if (i->fn_->hasFlag(FLAG_ON)) {
+        msg += "on function with handle ";
+      }
+      else if (i->fn_->hasFlag(FLAG_COBEGIN_OR_COFORALL)) {
+        msg += "coforall function with handle ";
+      }
+      msg += "[" + std::to_string(i->localHandle_->id) + "]";
+
+      CONTEXT_DEBUG(++debugDepth, msg, i->fn_);
     }
   }
 
@@ -3228,9 +3230,15 @@ class ContextHandler {
 
         if (toSymExpr(call->get(1))->symbol() == this->loopHandle()) {
           INT_ASSERT(handleMap_.count(outerCtxHandle) == 0);
+          Symbol* actualOuterCtxHandle = contextStack_[0].localHandle_;
+          
 
           // immediate outer context
-          handleMap_[outerCtxHandle] = contextStack_[0].localHandle_;
+          handleMap_[outerCtxHandle] = actualOuterCtxHandle;
+
+          CONTEXT_DEBUG(debugDepth+1,
+                        "mapped to ["+std::to_string(actualOuterCtxHandle->id)+"]",
+                        outerCtxHandle);
         }
         else {
           // farther away context
