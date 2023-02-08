@@ -1,1 +1,1 @@
---memLeaks
+--memLeaks --doVerboseMem=false;
