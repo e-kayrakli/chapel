@@ -3347,22 +3347,35 @@ class ContextHandler {
 
     std::string hoistedName = "hoisted_" + std::string(arrSym->name);
 
-    VarSymbol* refToArr = new VarSymbol(hoistedName.c_str(), arrSym->getRefType());
+    Symbol* refToArr = new VarSymbol(hoistedName.c_str(), arrSym->getRefType());
     DefExpr* refToArrDef = new DefExpr(refToArr);
     CallExpr* setRef = new CallExpr(PRIM_MOVE, refToArr, new CallExpr(PRIM_ADDR_OF, arrSym));
 
     target->callToInner_->insertBefore(refToArrDef);
     target->callToInner_->insertBefore(setRef);
-    target->callToInner_->insertAtTail(refToArr);
+
+    int curAdjustmentIdx = targetCtxIdx;
+    //CallExpr* toAdjust = target->callToInner_;
+
+    // we want to use the last added formal after the loop to adjust the loop
+    // body
+    ArgSymbol* formal = NULL;
+    while (CallExpr* toAdjust = contextStack_[curAdjustmentIdx].callToInner_) {
+      toAdjust->insertAtTail(new SymExpr(refToArr));
+
+      formal = new ArgSymbol(INTENT_REF, hoistedName.c_str(), arrSym->getRefType());
+      toAdjust->resolvedFunction()->insertFormalAtTail(formal);
 
 
 
-    // now pass arguments to the functions in the chain
-    //for (auto i = targetCtxIdx ; i>=0 ; i--) {
-      //IteratorContext
-    //}
+      curAdjustmentIdx--;
+      refToArr = formal;
+    }
 
+    SymbolMap updateMap;
+    updateMap.put(arrSym, formal);
 
+    update_symbols(loop(), &updateMap);
   }
 
   void handleContextUsesWithinLoopBody() {
