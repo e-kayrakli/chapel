@@ -3261,6 +3261,22 @@ class ContextHandler {
     return NULL;
   }
 
+  void collectLocalHandleAutoDestroys(Symbol* handle,
+                                      std::vector<CallExpr*>& autoDestroys) {
+
+  }
+
+  void handleHoistArrayToContextCall(CallExpr* call) {
+    const int debugDepth = 3;
+
+    Symbol* handle = toSymExpr(call->get(1))->symbol();
+    Symbol* target = this->handleMap_[handle];
+
+    CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(target->id)+"]",
+                  call);
+
+  }
+
   void handleContextUsesWithinLoopBody() {
     std::vector<Symbol*> handles;
     handles.push_back(this->loopHandle());
@@ -3284,6 +3300,8 @@ class ContextHandler {
           }
           else if (call->isPrimitive(PRIM_HOIST_ARRAY_TO_CONTEXT)) {
             CONTEXT_DEBUG(debugDepth+2, "PRIM_HOIST_ARRAY_TO_CONTEXT", call);
+
+            handleHoistArrayToContextCall(call);
           }
           else if (call->isPrimitive(PRIM_MOVE) ||
                    call->isNamed(astrInitEquals) ||
