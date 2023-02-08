@@ -3219,6 +3219,28 @@ class ContextHandler {
   CForLoop* loop() { return toCForLoop(this->loopCtx_.loop_); }
   Symbol* loopHandle() { return this->loopCtx_.localHandle_; }
 
+  void removeHoistArrayToContextCall(CallExpr* call) {
+    call->remove();
+  }
+
+  void removeOuterContextCall(CallExpr* call) {
+    if (CallExpr* parent = toCallExpr(call->parentExpr)) {
+      // TODO this may be a little too reckless. At least do some INT_ASSERTS
+      Symbol* lhs = toSymExpr(parent->get(1))->symbol();
+
+      parent->remove();
+      std::vector<SymExpr*> symExprs;
+      collectSymExprsFor(loop(), lhs, symExprs);
+
+      for_vector (SymExpr, symExpr, symExprs) {
+        symExpr->parentExpr->remove();
+      }
+
+      lhs->defPoint->remove();
+    }
+    call->remove();
+  }
+
   Symbol* handleOuterContextCall(CallExpr* call) {
     const int debugDepth = 4;
 
@@ -3270,6 +3292,7 @@ class ContextHandler {
                       "mapped to ["+std::to_string(contextStack_[outerCtxIdx].localHandle_->id)+"]",
                       outerCtxHandle);
 
+        removeOuterContextCall(call);
         return outerCtxHandle;
       }
       else {
@@ -3364,6 +3387,8 @@ class ContextHandler {
       curAdjustmentIdx--;
       refToArr = formal;
     }
+
+    removeHoistArrayToContextCall(call);
 
     SymbolMap updateMap;
     updateMap.put(arrSym, formal);
