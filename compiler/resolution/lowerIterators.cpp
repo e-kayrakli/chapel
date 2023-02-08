@@ -3301,10 +3301,6 @@ class ContextHandler {
 
       curIdx++;
     }
-
-
-
-
   }
 
   void handleContextUsesWithinLoopBody(Symbol* handle) {
