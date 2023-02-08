@@ -185,6 +185,12 @@ module Barriers {
     inline proc reset(nTasks: int) {
       bar.reset(nTasks);
     }
+
+    pragma "no doc"
+    proc multiply(n: int) {
+      try! reset((bar:(unmanaged aBarrier)).n*n);
+    }
+
   }
 
   /* The BarrierBaseType class provides an abstract base type for barriers
