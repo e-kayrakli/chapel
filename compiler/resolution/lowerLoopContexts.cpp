@@ -223,7 +223,8 @@ class ContextHandler {
     call->remove();
   }
 
-  void removeOuterContextCall(CallExpr* call) {
+  void removeOuterContextCallAndInitShadowHandle(CallExpr* call,
+                                                 ArgSymbol* formal) {
     if (CallExpr* parent = toCallExpr(call->parentExpr)) {
       // TODO this may be a little too reckless. At least do some INT_ASSERTS
       Symbol* lhs = toSymExpr(parent->get(1))->symbol();
@@ -233,6 +234,15 @@ class ContextHandler {
       collectSymExprsFor(loop(), lhs, symExprs);
 
       for_vector (SymExpr, symExpr, symExprs) {
+        if (formal != NULL) {
+          if (CallExpr* call = toCallExpr(symExpr->parentExpr)) {
+            if (call->isNamed(astrInitEquals) || // do we need init=?
+                call->isPrimitive(PRIM_MOVE)) {
+              symExpr->replace(new SymExpr(formal));
+              continue;
+            }
+          }
+        }
         symExpr->parentExpr->remove();
       }
 
@@ -245,62 +255,78 @@ class ContextHandler {
     const int debugDepth = 4;
 
     Symbol* outerCtxHandle = NULL;
-    if (CallExpr* parentCall = toCallExpr(call->parentExpr)) {
-      // TODO better pattern matching?
-      INT_ASSERT(parentCall->isPrimitive(PRIM_MOVE));
-      SymExpr* lhsSe = toSymExpr(parentCall->get(1));
-      Symbol* lhs = lhsSe->symbol();
+    //
+    // TODO better/less fragile pattern matching?
+    CallExpr* parentCall = toCallExpr(call->parentExpr);
+    INT_ASSERT(parentCall);
+    INT_ASSERT(parentCall->isPrimitive(PRIM_MOVE));
 
-      if (DefExpr* nextDef = toDefExpr(parentCall->next)) {
-        outerCtxHandle = nextDef->sym;
-        INT_ASSERT(outerCtxHandle->getValType() == this->loopCtx_.localHandle_->getValType());
+    SymExpr* lhsSe = toSymExpr(parentCall->get(1));
+    Symbol* lhs = lhsSe->symbol();
 
-        if (CallExpr* callAfterDef = toCallExpr(nextDef->next)) {
-          INT_ASSERT(callAfterDef->isNamed(astrInitEquals) ||
-                     callAfterDef->isPrimitive(PRIM_MOVE));
-          INT_ASSERT(toSymExpr(callAfterDef->get(1))->symbol() == outerCtxHandle);
-          INT_ASSERT(toSymExpr(callAfterDef->get(2))->symbol() == lhs);
+    DefExpr* nextDef = toDefExpr(parentCall->next);
+    INT_ASSERT(nextDef);
+
+    outerCtxHandle = nextDef->sym;
+    INT_ASSERT(outerCtxHandle->getValType() ==
+               this->loopCtx_.localHandle_->getValType());
+
+    CallExpr* callAfterDef = toCallExpr(nextDef->next);
+    INT_ASSERT(callAfterDef);
+    INT_ASSERT(callAfterDef->isNamed(astrInitEquals) ||
+               callAfterDef->isPrimitive(PRIM_MOVE));
+    INT_ASSERT(toSymExpr(callAfterDef->get(1))->symbol() == outerCtxHandle);
+    INT_ASSERT(toSymExpr(callAfterDef->get(2))->symbol() == lhs);
+
+    CONTEXT_DEBUG(debugDepth, "found an outer context handle",
+                  outerCtxHandle);
+    INT_ASSERT(handleMap_.count(outerCtxHandle) == 0);
+
+    int outerCtxIdx = -1;
+    Symbol* argToCall = toSymExpr(call->get(1))->symbol();
+
+    if (argToCall == this->loopHandle()) {
+      // immediate outer context
+      outerCtxIdx = 0;
+    }
+    else {
+      // farther away context
+      int j=0;
+      for (auto i=contextStack_.begin() ; i!=contextStack_.end() ;
+           i++, j++) {
+        if (this->handleMap_[argToCall] == j) {
+          outerCtxIdx = j+1;
+          break;
         }
-
-        CONTEXT_DEBUG(debugDepth, "found an outer context handle",
-                      outerCtxHandle);
-        INT_ASSERT(handleMap_.count(outerCtxHandle) == 0);
-
-        int outerCtxIdx = -1;
-        Symbol* argToCall = toSymExpr(call->get(1))->symbol();
-
-        if (argToCall == this->loopHandle()) {
-          // immediate outer context
-          outerCtxIdx = 0;
-        }
-        else {
-          // farther away context
-          int j=0;
-          for (auto i=contextStack_.begin() ; i!=contextStack_.end() ;
-               i++, j++) {
-            if (this->handleMap_[argToCall] == j) {
-              outerCtxIdx = j+1;
-              break;
-            }
-          }
-        }
-
-        handleMap_[outerCtxHandle] = outerCtxIdx;
-
-
-        CONTEXT_DEBUG(debugDepth+1,
-                      "mapped to ["+std::to_string(contextStack_[outerCtxIdx].localHandle_->id)+"]",
-                      outerCtxHandle);
-
-        removeOuterContextCall(call);
-        return outerCtxHandle;
-      }
-      else {
-        INT_FATAL("unknown pattern");
       }
     }
 
-    return NULL;
+    handleMap_[outerCtxHandle] = outerCtxIdx;
+
+    CONTEXT_DEBUG(debugDepth+1,
+                  "mapped to ["+std::to_string(contextStack_[outerCtxIdx].localHandle_->id)+"]",
+                  outerCtxHandle);
+
+    // TODO refactor this into a common helper
+    SET_LINENO(nextDef);
+    int curAdjustmentIdx = outerCtxIdx;
+    Symbol* handle = contextStack_[curAdjustmentIdx].localHandle_;
+
+    ArgSymbol* formal = NULL;
+    while (CallExpr* toAdjust = contextStack_[curAdjustmentIdx].callToInner_) {
+      toAdjust->insertAtTail(new SymExpr(handle));
+      // TODO this is probably the right intent for now. But maybe we want
+      // `const ref`?
+      formal = new ArgSymbol(INTENT_CONST_IN, handle->name, handle->getValType());
+      toAdjust->resolvedFunction()->insertFormalAtTail(formal);
+
+      curAdjustmentIdx--;
+      handle = formal;
+    }
+
+    removeOuterContextCallAndInitShadowHandle(call, formal);
+
+    return outerCtxHandle;
   }
 
   void handleHoistArrayToContextCall(CallExpr* call) {
