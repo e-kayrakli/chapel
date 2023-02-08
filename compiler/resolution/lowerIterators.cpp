@@ -3134,9 +3134,9 @@ class ContextHandler {
   LoopContext loopCtx_;
   std::vector<IteratorContext> contextStack_;
 
-  // map between any handle used within user's loop body and the handles they
-  // correspond to in outer contexts
-  std::map<Symbol*, Symbol*> handleMap_;
+  // map between any handle used within user's loop body and the indices to
+  // contexts within contextStack 
+  std::map<Symbol*, int> handleMap_;
 
   ContextHandler(CForLoop* loop): loopCtx_(loop) {
     const int debugDepth = 1;
@@ -3228,27 +3228,30 @@ class ContextHandler {
                       outerCtxHandle);
         INT_ASSERT(handleMap_.count(outerCtxHandle) == 0);
 
-        Symbol* actualOuterCtxHandle = NULL;
+        int outerCtxIdx = -1;
         Symbol* argToCall = toSymExpr(call->get(1))->symbol();
 
         if (argToCall == this->loopHandle()) {
           // immediate outer context
-          actualOuterCtxHandle = contextStack_[0].localHandle_;
+          outerCtxIdx = 0;
         }
         else {
           // farther away context
-          for (auto i = contextStack_.begin() ; i != contextStack_.end() ; i++) {
-            if (this->handleMap_[argToCall] == i->localHandle_) {
-              actualOuterCtxHandle = (i+1)->localHandle_;
+          int j=0;
+          for (auto i=contextStack_.begin() ; i!=contextStack_.end() ;
+               i++, j++) {
+            if (this->handleMap_[argToCall] == j) {
+              outerCtxIdx = j+1;
               break;
             }
           }
         }
 
-        handleMap_[outerCtxHandle] = actualOuterCtxHandle;
+        handleMap_[outerCtxHandle] = outerCtxIdx;
+
 
         CONTEXT_DEBUG(debugDepth+1,
-                      "mapped to ["+std::to_string(actualOuterCtxHandle->id)+"]",
+                      "mapped to ["+std::to_string(contextStack_[outerCtxIdx].localHandle_->id)+"]",
                       outerCtxHandle);
 
         return outerCtxHandle;
@@ -3270,9 +3273,9 @@ class ContextHandler {
     const int debugDepth = 3;
 
     Symbol* handle = toSymExpr(call->get(1))->symbol();
-    Symbol* target = this->handleMap_[handle];
+    IteratorContext* target = &(contextStack_[handleMap_[handle]]);
 
-    CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(target->id)+"]",
+    CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(target->localHandle_->id)+"]",
                   call);
 
   }
