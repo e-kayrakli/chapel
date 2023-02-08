@@ -71,7 +71,8 @@ iter foo(param tag: iterKind, followThis) where tag==iterKind.follower {
 
 forall (i, context) in foo() {  // context should be coming from a new syntax
   // can we get this with some compiler magic?
-  const localeContext = __primitive("outer context", context);
+  const localTaskContext = __primitive("outer context", context);
+  const localeContext = __primitive("outer context", localTaskContext);
 
   /*var a = __primitive("array on context", localeContext, {1..10});*/
 

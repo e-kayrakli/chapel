@@ -3220,31 +3220,40 @@ class ContextHandler {
         INT_ASSERT(outerCtxHandle->getValType() == this->loopCtx_.localHandle_->getValType());
 
         if (CallExpr* callAfterDef = toCallExpr(nextDef->next)) {
-          INT_ASSERT(callAfterDef->isNamed(astrInitEquals));
+          INT_ASSERT(callAfterDef->isNamed(astrInitEquals) ||
+                     callAfterDef->isPrimitive(PRIM_MOVE));
           INT_ASSERT(toSymExpr(callAfterDef->get(1))->symbol() == outerCtxHandle);
           INT_ASSERT(toSymExpr(callAfterDef->get(2))->symbol() == lhs);
         }
 
         CONTEXT_DEBUG(debugDepth, "found an outer context handle",
-            outerCtxHandle);
+                      outerCtxHandle);
+        INT_ASSERT(handleMap_.count(outerCtxHandle) == 0);
 
-        if (toSymExpr(call->get(1))->symbol() == this->loopHandle()) {
-          INT_ASSERT(handleMap_.count(outerCtxHandle) == 0);
-          Symbol* actualOuterCtxHandle = contextStack_[0].localHandle_;
-          
+        Symbol* actualOuterCtxHandle = NULL;
+        Symbol* argToCall = toSymExpr(call->get(1))->symbol();
 
+        if (argToCall == this->loopHandle()) {
           // immediate outer context
-          handleMap_[outerCtxHandle] = actualOuterCtxHandle;
-
-          CONTEXT_DEBUG(debugDepth+1,
-                        "mapped to ["+std::to_string(actualOuterCtxHandle->id)+"]",
-                        outerCtxHandle);
-
-          return outerCtxHandle;
+          actualOuterCtxHandle = contextStack_[0].localHandle_;
         }
         else {
           // farther away context
+          for (auto i = contextStack_.begin() ; i != contextStack_.end() ; i++) {
+            if (this->handleMap_[argToCall] == i->localHandle_) {
+              actualOuterCtxHandle = (i+1)->localHandle_;
+              break;
+            }
+          }
         }
+
+        handleMap_[outerCtxHandle] = actualOuterCtxHandle;
+
+        CONTEXT_DEBUG(debugDepth+1,
+                      "mapped to ["+std::to_string(actualOuterCtxHandle->id)+"]",
+                      outerCtxHandle);
+
+        return outerCtxHandle;
       }
       else {
         INT_FATAL("unknown pattern");
