@@ -224,7 +224,9 @@ class ContextHandler {
   }
 
   void removeOuterContextCallAndInitShadowHandle(CallExpr* call,
-                                                 ArgSymbol* formal) {
+                                                 Symbol* symToSet) {
+    INT_ASSERT(symToSet);
+
     if (CallExpr* parent = toCallExpr(call->parentExpr)) {
       // TODO this may be a little too reckless. At least do some INT_ASSERTS
       Symbol* lhs = toSymExpr(parent->get(1))->symbol();
@@ -234,13 +236,11 @@ class ContextHandler {
       collectSymExprsFor(loop(), lhs, symExprs);
 
       for_vector (SymExpr, symExpr, symExprs) {
-        if (formal != NULL) {
-          if (CallExpr* call = toCallExpr(symExpr->parentExpr)) {
-            if (call->isNamed(astrInitEquals) || // do we need init=?
-                call->isPrimitive(PRIM_MOVE)) {
-              symExpr->replace(new SymExpr(formal));
-              continue;
-            }
+        if (CallExpr* call = toCallExpr(symExpr->parentExpr)) {
+          if (call->isNamed(astrInitEquals) || // do we need init=?
+              call->isPrimitive(PRIM_MOVE)) {
+            symExpr->replace(new SymExpr(symToSet));
+            continue;
           }
         }
         symExpr->parentExpr->remove();
@@ -324,7 +324,8 @@ class ContextHandler {
       handle = formal;
     }
 
-    removeOuterContextCallAndInitShadowHandle(call, formal);
+    Symbol* symToSet = formal!=NULL ? formal : handle;
+    removeOuterContextCallAndInitShadowHandle(call, symToSet);
 
     return outerCtxHandle;
   }
@@ -410,7 +411,7 @@ class ContextHandler {
 
     // we want to use the last added formal after the loop to adjust the loop
     // body
-    ArgSymbol* formal = NULL;
+    ArgSymbol* formal = NULL; // should probably be refToArr
     while (CallExpr* toAdjust = contextStack_[curAdjustmentIdx].callToInner_) {
       toAdjust->insertAtTail(new SymExpr(refToArr));
 
