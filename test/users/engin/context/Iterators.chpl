@@ -23,6 +23,7 @@ module Iterators {
 
         on l {
           var onCtx = new Context(taskId=0, numTasks=1);
+
           const perLocSize = n/numLocales;
           const localeLow = l.id * perLocSize;
           const localeHigh = localeLow+perLocSize-1;

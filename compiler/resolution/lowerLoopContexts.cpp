@@ -118,6 +118,8 @@ class LoopContext: public Context {
   BaseAST* node() override { return loop_; };
 
   bool defExprIsLocalHandle(DefExpr* def) override {
+    if (isArgSymbol(def->sym)) return false;
+
     return !def->sym->hasFlag(FLAG_TEMP) &&
            def->sym->hasFlag(FLAG_INDEX_VAR) &&
            def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE);
@@ -136,6 +138,8 @@ class IteratorContext: public Context {
   BaseAST* node() override { return fn_; };
 
   bool defExprIsLocalHandle(DefExpr* def) override {
+    if (isArgSymbol(def->sym)) return false;
+
     return !def->sym->hasFlag(FLAG_TEMP) &&
            !isLabelSymbol(def->sym) &&
            !def->sym->hasFlag(FLAG_INDEX_VAR) && // avoid re-finding loop's
@@ -343,14 +347,6 @@ class ContextHandler {
     CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(target->localHandle_->id)+"]",
                   call);
 
-    // flatten the call block if it only contains this call -- this helps with
-    // controlling the behavior with config param. Nothing deep, probably won't
-    // need after we have the proper syntax
-    if (BlockStmt* parentBlock = toBlockStmt(call->parentExpr)) {
-      if (parentBlock->length() == 1) {
-        parentBlock->flattenAndRemove();
-      }
-    }
 
     // TODO cache this stuff somewhere, but we remove some below. Is that a problem?
     std::vector<CallExpr*> callsInLoop;
@@ -374,7 +370,22 @@ class ContextHandler {
     DefExpr* arrDef = arrSym->defPoint;
     Expr* arrDefPrev = arrDef->prev;
 
+    if (BlockStmt* parentBlock = toBlockStmt(call->parentExpr)) {
+      if (parentBlock->length() == 1) {
+        parentBlock->flattenAndRemove();
+      }
+      else if (parentBlock->prev == arrDef) {
+        parentBlock->flattenAndRemove();
+      }
+    }
+
     SET_LINENO(arrDef);
+
+
+    // if we are using local shadows of target contexts' handle, we'll need to
+    // update the symbol to use what's local in the target
+    SymbolMap handleUpdateMap;
+    handleUpdateMap.put(handle, targetHandle);
 
     Expr* cur = call->prev;
     while (cur != arrDefPrev) {
@@ -391,6 +402,8 @@ class ContextHandler {
           }
         }
       }
+
+      update_symbols(cur, &handleUpdateMap);
 
       targetHandle->defPoint->insertAfter(cur->remove());
 
