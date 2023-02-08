@@ -458,15 +458,6 @@ class ContextHandler {
 
             handleHoistArrayToContextCall(call);
           }
-          else if (call->isPrimitive(PRIM_MOVE) ||
-                   call->isNamed(astrInitEquals) ||
-                   call->resolvedFunction()->hasFlag(FLAG_AUTO_DESTROY_FN)) {
-            CONTEXT_DEBUG(debugDepth+2, "ignoring call", call);
-          }
-          else {
-            CONTEXT_DEBUG(debugDepth+2, "call is illegal", call);
-            INT_FATAL("call is illegal");
-          }
         }
         else {
           CONTEXT_DEBUG(debugDepth, "illegal use of context handle", use);
