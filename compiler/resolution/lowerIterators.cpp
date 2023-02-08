@@ -3038,7 +3038,7 @@ static bool isInUserCode(BaseAST* node) {
 }
 
 static void CONTEXT_DEBUG(int indent, std::string msg, BaseAST* node) {
-  if (true) {
+  if (fReportContextAdj) {
     for(int i=0 ; i<indent ; i++) {
       std::cout << " ";
     }
