@@ -3203,7 +3203,7 @@ class ContextHandler {
   CForLoop* loop() { return toCForLoop(this->loopCtx_.loop_); }
   Symbol* loopHandle() { return this->loopCtx_.localHandle_; }
 
-  void handleOuterContextCall(CallExpr* call) {
+  Symbol* handleOuterContextCall(CallExpr* call) {
     const int debugDepth = 3;
 
     CONTEXT_DEBUG(debugDepth, "special call", call);
@@ -3239,6 +3239,8 @@ class ContextHandler {
           CONTEXT_DEBUG(debugDepth+1,
                         "mapped to ["+std::to_string(actualOuterCtxHandle->id)+"]",
                         outerCtxHandle);
+
+          return outerCtxHandle;
         }
         else {
           // farther away context
@@ -3249,12 +3251,57 @@ class ContextHandler {
       }
     }
 
+    return NULL;
   }
 
   void handleContextUsesWithinLoopBody() {
+    std::vector<Symbol*> handles;
+    handles.push_back(this->loopHandle());
+
+    std::vector<Symbol*>::size_type curIdx = 0;
+    while (curIdx < handles.size()) {
+      const int debugDepth = 1;
+      std::vector<SymExpr*> handleUses;
+
+      collectSymExprsFor(this->loop(), handles[curIdx], handleUses);
+
+      for_vector (SymExpr, use, handleUses) {
+        if (CallExpr* call = toCallExpr(use->parentExpr)) {
+          CONTEXT_DEBUG(debugDepth+1, "found a call that uses handle", call);
+
+          if (call->isPrimitive(PRIM_OUTER_CONTEXT)) {
+            if (Symbol* newCtx = handleOuterContextCall(call)) {
+              handles.push_back(newCtx);
+            }
+          }
+          else if (call->isPrimitive(PRIM_MOVE) ||
+                   call->isNamed(astrInitEquals) ||
+                   call->resolvedFunction()->hasFlag(FLAG_AUTO_DESTROY_FN)) {
+            CONTEXT_DEBUG(debugDepth+2, "ignoring call", call);
+          }
+          else {
+            CONTEXT_DEBUG(debugDepth+2, "call is illegal", call);
+            INT_FATAL("call is illegal");
+          }
+        }
+        else {
+          CONTEXT_DEBUG(debugDepth, "illegal use of context handle", use);
+          INT_FATAL("illegal use of context handle");
+        }
+      }
+
+      curIdx++;
+    }
+
+
+
+
+  }
+
+  void handleContextUsesWithinLoopBody(Symbol* handle) {
     const int debugDepth = 1;
     std::vector<SymExpr*> handleUses;
-    collectSymExprsFor(this->loop(), this->loopCtx_.localHandle_, handleUses);
+    collectSymExprsFor(this->loop(), handle, handleUses);
 
     for_vector (SymExpr, use, handleUses) {
       if (CallExpr* call = toCallExpr(use->parentExpr)) {
