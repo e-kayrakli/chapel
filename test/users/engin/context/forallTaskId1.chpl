@@ -73,6 +73,7 @@ forall (i, context) in foo() {  // context should be coming from a new syntax
   // can we get this with some compiler magic?
   const localTaskContext = __primitive("outer context", context);
   const localeContext = __primitive("outer context", localTaskContext);
+  const preLocaleTaskContext = __primitive("outer context", localeContext);
 
   /*var a = __primitive("array on context", localeContext, {1..10});*/
 
