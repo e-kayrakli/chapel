@@ -3049,6 +3049,7 @@ static void CONTEXT_DEBUG(int indent, std::string msg, BaseAST* node) {
 class Context {
   public:
   Symbol* localHandle_ = NULL;
+  std::vector<CallExpr*> localHandleAutoDestroys_;
 
   // this'll need to be differentiated between LoopContext and IteratorContext
   // when we have a proper syntax. The current implementation is more suitable
@@ -3067,7 +3068,7 @@ class Context {
           localHandle_ = def->sym;
         }
         else {
-          // For now, ignore other contexts. Slight challange: the innermost
+          // For now, ignore other context handles. Slight challenge: the innermost
           // coforall_fn also contains the loop in question. So when trying to
           // find the coforall_fn's context handles, we should avoid looking at
           // loop's.
@@ -3079,6 +3080,28 @@ class Context {
     }
 
     return localHandle_ != NULL;
+  }
+
+  void collectLocalHandleAutoDestroys() {
+    std::vector<CallExpr*> calls;
+    collectCallExprs(this->node(), calls);
+
+    for_vector(CallExpr, call, calls) {
+      if (FnSymbol* fn = call->resolvedFunction()) {
+        if (fn->hasFlag(FLAG_AUTO_DESTROY_FN)) {
+          if (toSymExpr(call->get(1))->symbol() == localHandle_) {
+            this->localHandleAutoDestroys_.push_back(call);
+          }
+        }
+      }
+    }
+  }
+
+  std::vector<CallExpr*>& getLocalHandleAutoDestroys() {
+    if (localHandleAutoDestroys_.size() == 0) {
+      collectLocalHandleAutoDestroys();
+    }
+    return localHandleAutoDestroys_;
   }
 
   virtual BaseAST* node() = 0;
@@ -3264,20 +3287,64 @@ class ContextHandler {
     return NULL;
   }
 
-  void collectLocalHandleAutoDestroys(Symbol* handle,
-                                      std::vector<CallExpr*>& autoDestroys) {
-
-  }
-
   void handleHoistArrayToContextCall(CallExpr* call) {
     const int debugDepth = 3;
 
     Symbol* handle = toSymExpr(call->get(1))->symbol();
     IteratorContext* target = &(contextStack_[handleMap_[handle]]);
+    Symbol* targetHandle = target->localHandle_;
+    std::vector<CallExpr*>& autoDestroyAnchors =
+        target->getLocalHandleAutoDestroys();
 
     CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(target->localHandle_->id)+"]",
                   call);
 
+    // TODO cache this stuff somewhere, but we remove some below. Is that a problem?
+    std::vector<CallExpr*> callsInLoop;
+    collectCallExprs(this->loop(), callsInLoop);
+    std::map<Symbol*, std::vector<CallExpr*>> autoDestroysInLoop;
+    for_vector (CallExpr, call, callsInLoop) {
+      if (FnSymbol* fn = call->resolvedFunction()) {
+        if (fn->hasFlag(FLAG_AUTO_DESTROY_FN)) {
+          Symbol* sym = toSymExpr(call->get(1))->symbol();
+          autoDestroysInLoop[sym].push_back(call);
+        }
+      }
+    }
+
+    // in the prototype we assume that the primitive comes right after the array
+    // defPoint in source and everything in between in the AST needs to be
+    // hoisted. With better syntax, things will surely change here. It might be
+    // more complicated, though.
+
+    Symbol* arrSym = toSymExpr(call->get(2))->symbol();
+    DefExpr* arrDef = arrSym->defPoint;
+    Expr* arrDefPrev = arrDef->prev;
+
+    SET_LINENO(arrDef);
+
+    Expr* cur = call->prev;
+    while (cur != arrDefPrev) {
+      if (DefExpr* defExpr = toDefExpr(cur)) {
+        Symbol* sym = defExpr->sym;
+        std::vector<CallExpr*>& symsAutoDestroys = autoDestroysInLoop[sym];
+
+        if (symsAutoDestroys.size() > 0) {
+
+          for_vector (CallExpr, anchor, autoDestroyAnchors) {
+            anchor->insertBefore(symsAutoDestroys[0]->copy());
+          }
+
+          for_vector (CallExpr, autoDestroy, symsAutoDestroys) {
+            autoDestroy->remove();
+          }
+        }
+      }
+
+      targetHandle->defPoint->insertAfter(cur->remove());
+
+      cur = call->prev;
+    }
   }
 
   void handleContextUsesWithinLoopBody() {
