@@ -3291,7 +3291,8 @@ class ContextHandler {
     const int debugDepth = 3;
 
     Symbol* handle = toSymExpr(call->get(1))->symbol();
-    IteratorContext* target = &(contextStack_[handleMap_[handle]]);
+    int targetCtxIdx = handleMap_[handle];
+    IteratorContext* target = &(contextStack_[targetCtxIdx]);
     Symbol* targetHandle = target->localHandle_;
     std::vector<CallExpr*>& autoDestroyAnchors =
         target->getLocalHandleAutoDestroys();
@@ -3330,11 +3331,9 @@ class ContextHandler {
         std::vector<CallExpr*>& symsAutoDestroys = autoDestroysInLoop[sym];
 
         if (symsAutoDestroys.size() > 0) {
-
           for_vector (CallExpr, anchor, autoDestroyAnchors) {
             anchor->insertBefore(symsAutoDestroys[0]->copy());
           }
-
           for_vector (CallExpr, autoDestroy, symsAutoDestroys) {
             autoDestroy->remove();
           }
@@ -3345,6 +3344,25 @@ class ContextHandler {
 
       cur = call->prev;
     }
+
+    std::string hoistedName = "hoisted_" + std::string(arrSym->name);
+
+    VarSymbol* refToArr = new VarSymbol(hoistedName.c_str(), arrSym->getRefType());
+    DefExpr* refToArrDef = new DefExpr(refToArr);
+    CallExpr* setRef = new CallExpr(PRIM_MOVE, refToArr, new CallExpr(PRIM_ADDR_OF, arrSym));
+
+    target->callToInner_->insertBefore(refToArrDef);
+    target->callToInner_->insertBefore(setRef);
+    target->callToInner_->insertAtTail(refToArr);
+
+
+
+    // now pass arguments to the functions in the chain
+    //for (auto i = targetCtxIdx ; i>=0 ; i--) {
+      //IteratorContext
+    //}
+
+
   }
 
   void handleContextUsesWithinLoopBody() {
