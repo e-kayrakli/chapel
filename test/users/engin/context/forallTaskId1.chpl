@@ -1,7 +1,11 @@
+use Memory.Diagnostics;
+
+config param hoistArray = true;
+
 config const n = 20;
 config const taskPerLoc = 2;
 config const doDebug = false;
-
+config const doVerboseMem = true;
 
 proc debug(args...) {
   if doDebug then writeln((...args));
@@ -12,34 +16,13 @@ iter foo() {
   for i in iterRange do yield i;
 }
 
-/*class Context {*/
-  /*var parent: unmanaged Context?;*/
-  /*var name: string;*/
-
-  /*proc init(parent: Context = nil, name:string) {*/
-    /*this.parent = parent;*/
-    /*this.name = name;*/
-  /*}*/
-/*}*/
-
-/*class ForallContext: Context {*/
-  /*proc init(parent: Context = nil, name:string) { super.init(parent, name); }*/
-/*}*/
-/*class CoforallContext: Context {*/
-  /*proc init(parent: Context = nil, name:string) { super.init(parent, name); }*/
-/*}*/
-/*class OnContext: Context {*/
-  /*proc init(parent: Context = nil, name:string) { super.init(parent, name); }*/
-/*}*/
-
 pragma "context type"
-record Context { 
+record Context {
 
 }
 
 iter foo(param tag: iterKind) where tag==iterKind.leader {
   coforall l in Locales {
-    /*var outerCtx = new unmanaged CoforallContext(nil:unmanaged Context?, "outer");*/
     var outerCtx = new Context();
 
     on l {
@@ -69,20 +52,16 @@ iter foo(param tag: iterKind, followThis) where tag==iterKind.follower {
   for i in followThis[0] do yield (i, followThis[1]);
 }
 
+if doVerboseMem then startVerboseMem();
 forall (i, context) in foo() {  // context should be coming from a new syntax
-  // can we get this with some compiler magic?
   const localTaskContext = __primitive("outer context", context);
   const localeContext = __primitive("outer context", localTaskContext);
   const preLocaleTaskContext = __primitive("outer context", localeContext);
 
-  /*var a = __primitive("array on context", localeContext, {1..10});*/
-
-  /*
-   var sharedDom = {1..10} dmapped Context(localeContext);
-  */
-
   var a: [0..<n] int;
-  __primitive("hoist array to context", localeContext, a);
+  if hoistArray then // needs to be param-folded
+    __primitive("hoist array to context", localeContext, a);
+
   writeln(a[i]);
- 
 }
+if doVerboseMem then stopVerboseMem();
