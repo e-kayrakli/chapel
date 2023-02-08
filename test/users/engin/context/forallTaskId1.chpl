@@ -80,6 +80,9 @@ forall (i, context) in foo() {  // context should be coming from a new syntax
   /*
    var sharedDom = {1..10} dmapped Context(localeContext);
   */
-  writeln(i);
+
+  var a: [0..<n] int;
+  __primitive("hoist array to context", localeContext, a);
+  writeln(a[i]);
  
 }
