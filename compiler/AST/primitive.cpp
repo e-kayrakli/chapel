@@ -681,6 +681,8 @@ initPrimitive() {
   primitives[PRIM_UNKNOWN] = NULL;
 
   prim_def(PRIM_OUTER_CONTEXT, "outer context", returnInfoFirst);
+  prim_def(PRIM_HOIST_ARRAY_TO_CONTEXT, "hoist array to context",
+           returnInfoVoid);
 
   prim_def(PRIM_ACTUALS_LIST, "actuals list", returnInfoVoid);
   prim_def(PRIM_NOOP, "noop", returnInfoVoid);

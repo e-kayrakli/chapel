@@ -373,6 +373,7 @@ CallResolutionResult resolvePrimCall(Context* context,
     case PRIM_REF_DESERIALIZE:
     case PRIM_UNKNOWN:
     case PRIM_OUTER_CONTEXT:
+    case PRIM_HOIST_ARRAY_TO_CONTEXT:
     case NUM_KNOWN_PRIMS:
       CHPL_ASSERT(false && "not implemented yet");
 

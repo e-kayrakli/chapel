@@ -3204,9 +3204,7 @@ class ContextHandler {
   Symbol* loopHandle() { return this->loopCtx_.localHandle_; }
 
   Symbol* handleOuterContextCall(CallExpr* call) {
-    const int debugDepth = 3;
-
-    CONTEXT_DEBUG(debugDepth, "special call", call);
+    const int debugDepth = 4;
 
     Symbol* outerCtxHandle = NULL;
     if (CallExpr* parentCall = toCallExpr(call->parentExpr)) {
@@ -3279,9 +3277,13 @@ class ContextHandler {
           CONTEXT_DEBUG(debugDepth+1, "found a call that uses handle", call);
 
           if (call->isPrimitive(PRIM_OUTER_CONTEXT)) {
+            CONTEXT_DEBUG(debugDepth+2, "PRIM_OUTER_CONTEXT", call);
             if (Symbol* newCtx = handleOuterContextCall(call)) {
               handles.push_back(newCtx);
             }
+          }
+          else if (call->isPrimitive(PRIM_HOIST_ARRAY_TO_CONTEXT)) {
+            CONTEXT_DEBUG(debugDepth+2, "PRIM_HOIST_ARRAY_TO_CONTEXT", call);
           }
           else if (call->isPrimitive(PRIM_MOVE) ||
                    call->isNamed(astrInitEquals) ||
