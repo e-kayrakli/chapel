@@ -3031,7 +3031,6 @@ static void removeUncalledIterators()
   }
 }
 
-
 void lowerIterators() {
   nonLeaderParCheck();
 
