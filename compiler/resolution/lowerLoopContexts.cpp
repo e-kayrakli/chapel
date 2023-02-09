@@ -54,6 +54,7 @@ class Context {
   // TODO we can probably populate the bottom two together
   std::vector<CallExpr*> localHandleAutoDestroys_;
   Expr* endOfLocalHandleSetup_ = NULL;
+  Expr* upEndCount_ = NULL;
 
   // this'll need to be differentiated between LoopContext and IteratorContext
   // when we have a proper syntax. The current implementation is more suitable
@@ -127,6 +128,21 @@ class Context {
     }
 
     return endOfLocalHandleSetup_;
+  }
+
+  Expr* getUpEndCount() {
+    if (upEndCount_ == NULL) {
+      std::vector<CallExpr*> calls;
+      collectCallExprs(this->node(), calls);
+
+      for_vector (CallExpr, call, calls) {
+        if (call->isNamed("_upEndCount")) {
+          upEndCount_ = call;
+          break;
+        }
+      }
+    }
+    return upEndCount_;
   }
 
   virtual BaseAST* node() = 0;
@@ -469,8 +485,10 @@ class ContextHandler {
       }
 
       if (isBarrier) {
-        Expr* mulAnchor = ctx.getEndOfLocalHandleSetup();
-        CONTEXT_DEBUG(debugDepth+1, "multiply block will be inserted after here", mulAnchor);
+        Expr* mulAnchor = ctx.getUpEndCount();
+        if (mulAnchor) {
+          CONTEXT_DEBUG(debugDepth+1, "multiply block will be inserted after here", mulAnchor);
+        }
       }
     }
 
