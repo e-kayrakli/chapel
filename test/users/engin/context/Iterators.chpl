@@ -53,6 +53,7 @@ module Iterators {
   module TertiaryDRDomIterators {
     use BlockDist;
     use DSIUtil;
+    use ChapelContextSupport;
 
     iter BlockDom.customThese(param tag: iterKind) where tag == iterKind.leader {
       const maxTasks = dist.dataParTasksPerLocale;
@@ -74,26 +75,28 @@ module Iterators {
       const hereId = here.id;
       const hereIgnoreRunning = if here.runningTasks() == 1 then true
         else ignoreRunning;
-        coforall locDom in locDoms do on locDom {
-          const myIgnoreRunning = if here.id == hereId then hereIgnoreRunning
-            else ignoreRunning;
-            // Use the internal function for untranslate to avoid having to do
-            // extra work to negate the offset
-            type strType = chpl__signedType(idxType);
-            const tmpBlock = locDom.myBlock.chpl__unTranslate(wholeLow);
-            var locOffset: rank*idxType;
-            for param i in 0..tmpBlock.rank-1 {
-              const stride = tmpBlock.dim(i).stride;
-              if stride < 0 && strType != idxType then
-                halt("negative stride not supported with unsigned idxType");
-              // (since locOffset is unsigned in that case)
-              locOffset(i) = tmpBlock.dim(i).first / stride:idxType;
-            }
-            // Forward to defaultRectangular
-            for followThis in tmpBlock.customThese(iterKind.leader, maxTasks,
-                myIgnoreRunning, minSize, locOffset) do
-              yield followThis;
+      coforall (locDom, locDomIdx) in zip(locDoms, locDoms.domain) do on locDom {
+        var onCtx = new Context(rank=rank, taskId=locDomIdx, numTasks=locDoms.domain.shape);
+
+        const myIgnoreRunning = if here.id == hereId then hereIgnoreRunning
+                                                     else ignoreRunning;
+        // Use the internal function for untranslate to avoid having to do
+        // extra work to negate the offset
+        type strType = chpl__signedType(idxType);
+        const tmpBlock = locDom.myBlock.chpl__unTranslate(wholeLow);
+        var locOffset: rank*idxType;
+        for param i in 0..tmpBlock.rank-1 {
+          const stride = tmpBlock.dim(i).stride;
+          if stride < 0 && strType != idxType then
+            halt("negative stride not supported with unsigned idxType");
+          // (since locOffset is unsigned in that case)
+          locOffset(i) = tmpBlock.dim(i).first / stride:idxType;
         }
+        // Forward to defaultRectangular
+        for followThis in tmpBlock.customThese(iterKind.leader, maxTasks,
+            myIgnoreRunning, minSize, locOffset) do
+          yield followThis;
+      }
     }
 
     //
@@ -118,17 +121,17 @@ module Iterators {
         if chpl__testParFlag then
           chpl__testParWriteln("Block domain follower invoked on ", followThis);
 
-        var t: rank*range(idxType, stridable=stridable||anyStridable(followThis));
+        var t: rank*range(idxType, stridable=stridable||anyStridable(followThis(0)));
         type strType = chpl__signedType(idxType);
         for param i in 0..rank-1 {
           var stride = whole.dim(i).stride: strType;
           // not checking here whether the new low and high fit into idxType
-          var low = (stride * followThis(i).lowBound:strType):idxType;
-          var high = (stride * followThis(i).highBound:strType):idxType;
-          t(i) = ((low..high by stride:strType) + whole.dim(i).low by followThis(i).stride:strType).safeCast(t(i).type);
+          var low = (stride * followThis(0)(i).lowBound:strType):idxType;
+          var high = (stride * followThis(0)(i).highBound:strType):idxType;
+          t(i) = ((low..high by stride:strType) + whole.dim(i).low by followThis(0)(i).stride:strType).safeCast(t(i).type);
         }
         for i in {(...t)} {
-          yield i;
+          yield (i, followThis(1));
         }
     }
 
@@ -248,6 +251,8 @@ module Iterators {
         if debugDefaultDist then
           chpl_debug_writeln("*** DI: locBlock = ", locBlock);
         coforall chunk in 0..#numChunks {
+          var innerCtx = new Context(rank=1, taskId=chunk, numTasks=numChunks);
+
           var followMe: rank*range(intIdxType) = locBlock;
           const (lo,hi) = _computeBlock(locBlock(parDim).sizeAs(intIdxType),
                                         numChunks, chunk,
@@ -257,7 +262,7 @@ module Iterators {
           followMe(parDim) = lo..hi;
           if debugDefaultDist then
             chpl_debug_writeln("*** DI[", chunk, "]: followMe = ", followMe);
-          yield followMe;
+          yield (followMe, innerCtx);
         }
       }
     }
