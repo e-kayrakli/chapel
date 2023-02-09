@@ -333,8 +333,14 @@ class ContextHandler {
     INT_ASSERT(nextDef);
 
     outerCtxHandle = nextDef->sym;
-    INT_ASSERT(outerCtxHandle->getValType() ==
-               this->loopCtx_.localHandle_->getValType());
+    if (call->numActuals() == 1) {
+      INT_ASSERT(outerCtxHandle->getValType() ==
+                 this->loopCtx_.localHandle_->getValType());
+    }
+    else {
+      INT_ASSERT(call->numActuals() == 2);
+      INT_ASSERT(outerCtxHandle->getValType() == call->get(1)->getValType());
+    }
 
     CallExpr* callAfterDef = toCallExpr(nextDef->next);
     INT_ASSERT(callAfterDef);
@@ -348,7 +354,7 @@ class ContextHandler {
     INT_ASSERT(handleMap_.count(outerCtxHandle) == 0);
 
     int outerCtxIdx = -1;
-    Symbol* argToCall = toSymExpr(call->get(1))->symbol();
+    Symbol* argToCall = toSymExpr(call->argList.last())->symbol();
 
     if (argToCall == this->loopHandle()) {
       // immediate outer context
