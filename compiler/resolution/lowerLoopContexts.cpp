@@ -50,7 +50,10 @@ static void CONTEXT_DEBUG(int indent, std::string msg, BaseAST* node) {
 class Context {
   public:
   Symbol* localHandle_ = NULL;
+
+  // TODO we can probably populate the bottom two together
   std::vector<CallExpr*> localHandleAutoDestroys_;
+  Expr* endOfLocalHandleSetup_ = NULL;
 
   // this'll need to be differentiated between LoopContext and IteratorContext
   // when we have a proper syntax. The current implementation is more suitable
@@ -103,6 +106,27 @@ class Context {
       collectLocalHandleAutoDestroys();
     }
     return localHandleAutoDestroys_;
+  }
+
+  Expr* getEndOfLocalHandleSetup() {
+    if (endOfLocalHandleSetup_ == NULL) {
+      // probably can iterate over the body
+      std::vector<CallExpr*> calls;
+      collectCallExprs(this->node(), calls);
+
+      for_vector (CallExpr, call, calls) {
+        if (call->isPrimitive(PRIM_MOVE)) {
+          if (Symbol* lhs = toSymExpr(call->get(1))->symbol()) {
+            if (lhs == localHandle_) {
+              endOfLocalHandleSetup_ = call;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    return endOfLocalHandleSetup_;
   }
 
   virtual BaseAST* node() = 0;
@@ -223,7 +247,7 @@ class ContextHandler {
   CForLoop* loop() { return toCForLoop(this->loopCtx_.loop_); }
   Symbol* loopHandle() { return this->loopCtx_.localHandle_; }
 
-  void removeHoistArrayToContextCall(CallExpr* call) {
+  void removeHoistToContextCall(CallExpr* call) {
     call->remove();
   }
 
@@ -334,7 +358,7 @@ class ContextHandler {
     return outerCtxHandle;
   }
 
-  void handleHoistArrayToContextCall(CallExpr* call) {
+  void handleHoistToContextCall(CallExpr* call) {
     const int debugDepth = 3;
 
     Symbol* handle = toSymExpr(call->get(1))->symbol();
@@ -366,20 +390,29 @@ class ContextHandler {
     // hoisted. With better syntax, things will surely change here. It might be
     // more complicated, though.
 
-    Symbol* arrSym = toSymExpr(call->get(2))->symbol();
-    DefExpr* arrDef = arrSym->defPoint;
-    Expr* arrDefPrev = arrDef->prev;
+    Symbol* sym = toSymExpr(call->get(2))->symbol();
+    bool isBarrier = astr(sym->type->symbol->name) == astr("Barrier");
+
+    if (isBarrier) {
+      CONTEXT_DEBUG(debugDepth, "this is a barrier", sym);
+    }
+    else {
+      CONTEXT_DEBUG(debugDepth, "this is an array", sym);
+    }
+
+    DefExpr* def = sym->defPoint;
+    Expr* defPrev = def->prev;
 
     if (BlockStmt* parentBlock = toBlockStmt(call->parentExpr)) {
       if (parentBlock->length() == 1) {
         parentBlock->flattenAndRemove();
       }
-      else if (parentBlock->prev == arrDef) {
+      else if (parentBlock->prev == def) {
         parentBlock->flattenAndRemove();
       }
     }
 
-    SET_LINENO(arrDef);
+    SET_LINENO(def);
 
 
     // if we are using local shadows of target contexts' handle, we'll need to
@@ -388,7 +421,7 @@ class ContextHandler {
     handleUpdateMap.put(handle, targetHandle);
 
     Expr* cur = call->prev;
-    while (cur != arrDefPrev) {
+    while (cur != defPrev) {
       if (DefExpr* defExpr = toDefExpr(cur)) {
         Symbol* sym = defExpr->sym;
         std::vector<CallExpr*>& symsAutoDestroys = autoDestroysInLoop[sym];
@@ -410,37 +443,41 @@ class ContextHandler {
       cur = call->prev;
     }
 
-    std::string hoistedName = "hoisted_" + std::string(arrSym->name);
+    std::string hoistedName = "hoisted_" + std::string(sym->name);
 
-    Symbol* refToArr = new VarSymbol(hoistedName.c_str(), arrSym->getRefType());
+    Symbol* refToArr = new VarSymbol(hoistedName.c_str(), sym->getRefType());
     DefExpr* refToArrDef = new DefExpr(refToArr);
-    CallExpr* setRef = new CallExpr(PRIM_MOVE, refToArr, new CallExpr(PRIM_ADDR_OF, arrSym));
+    CallExpr* setRef = new CallExpr(PRIM_MOVE, refToArr, new CallExpr(PRIM_ADDR_OF, sym));
 
     target->callToInner_->insertBefore(refToArrDef);
     target->callToInner_->insertBefore(setRef);
 
-    int curAdjustmentIdx = targetCtxIdx;
-    //CallExpr* toAdjust = target->callToInner_;
-
     // we want to use the last added formal after the loop to adjust the loop
     // body
     ArgSymbol* formal = NULL; // should probably be refToArr
-    while (CallExpr* toAdjust = contextStack_[curAdjustmentIdx].callToInner_) {
-      toAdjust->insertAtTail(new SymExpr(refToArr));
 
-      formal = new ArgSymbol(INTENT_REF, hoistedName.c_str(), arrSym->getRefType());
-      toAdjust->resolvedFunction()->insertFormalAtTail(formal);
+    for (int curCtx = targetCtxIdx ; curCtx >= 0 ; curCtx--) {
+      IteratorContext& ctx = contextStack_[curCtx];
 
+      if (CallExpr* toAdjust = ctx.callToInner_) {
+        toAdjust->insertAtTail(new SymExpr(refToArr));
 
+        formal = new ArgSymbol(INTENT_REF, hoistedName.c_str(), sym->getRefType());
+        toAdjust->resolvedFunction()->insertFormalAtTail(formal);
 
-      curAdjustmentIdx--;
-      refToArr = formal;
+        refToArr = formal;
+      }
+
+      if (isBarrier) {
+        Expr* mulAnchor = ctx.getEndOfLocalHandleSetup();
+        CONTEXT_DEBUG(debugDepth+1, "multiply block will be inserted after here", mulAnchor);
+      }
     }
 
-    removeHoistArrayToContextCall(call);
+    removeHoistToContextCall(call);
 
     SymbolMap updateMap;
-    updateMap.put(arrSym, formal);
+    updateMap.put(sym, formal);
 
     update_symbols(loop(), &updateMap);
   }
@@ -469,7 +506,7 @@ class ContextHandler {
           else if (call->isPrimitive(PRIM_HOIST_ARRAY_TO_CONTEXT)) {
             CONTEXT_DEBUG(debugDepth+2, "PRIM_HOIST_ARRAY_TO_CONTEXT", call);
 
-            handleHoistArrayToContextCall(call);
+            handleHoistToContextCall(call);
           }
         }
         else {
