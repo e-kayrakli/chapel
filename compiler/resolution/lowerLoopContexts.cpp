@@ -172,6 +172,7 @@ class IteratorContext: public Context {
   public:
   FnSymbol* fn_;
   CallExpr* callToInner_ = NULL;
+  CForLoop* callToInnerLoop_ = NULL;
 
   IteratorContext(FnSymbol* fn): fn_(fn) {}
 
@@ -185,6 +186,15 @@ class IteratorContext: public Context {
            !def->sym->hasFlag(FLAG_INDEX_VAR) && // avoid re-finding loop's
            !def->sym->hasFlag(FLAG_EPILOGUE_LABEL) && // same as !isLabelSymbol?
            def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE);
+  }
+
+  Expr* getInsertBeforeCallToInnerAnchor() {
+    if (callToInnerLoop_) {
+      return callToInnerLoop_;
+    }
+    else {
+      return callToInner_;
+    }
   }
 };
 
@@ -229,6 +239,17 @@ class ContextHandler {
 
         IteratorContext outerCtx(parentFn);
         outerCtx.callToInner_ = callToCurCtx;
+
+        Expr* curParent = callToCurCtx;
+        while (curParent) {
+          if (CForLoop* loop = toCForLoop(curParent)) {
+            outerCtx.callToInnerLoop_ = loop;
+            break;
+          }
+          curParent = curParent->parentExpr;
+        }
+
+
         if (!outerCtx.findLoopContextHandle()) break;
 
         contextStack_.push_back(outerCtx);
@@ -436,6 +457,7 @@ class ContextHandler {
     SymbolMap handleUpdateMap;
     handleUpdateMap.put(handle, targetHandle);
 
+    BlockStmt* mulBlock = NULL; // only meaningful if isBarrier
     Expr* cur = call->prev;
     while (cur != defPrev) {
       if (DefExpr* defExpr = toDefExpr(cur)) {
@@ -454,6 +476,13 @@ class ContextHandler {
 
       update_symbols(cur, &handleUpdateMap);
 
+      if (isBarrier) {
+        if (BlockStmt* curBlock = toBlockStmt(cur)) {
+          mulBlock = curBlock;
+          CONTEXT_DEBUG(debugDepth+1, "found multiply block", mulBlock);
+        }
+      }
+
       targetHandle->defPoint->insertAfter(cur->remove());
 
       cur = call->prev;
@@ -461,35 +490,47 @@ class ContextHandler {
 
     std::string hoistedName = "hoisted_" + std::string(sym->name);
 
-    Symbol* refToArr = new VarSymbol(hoistedName.c_str(), sym->getRefType());
-    DefExpr* refToArrDef = new DefExpr(refToArr);
-    CallExpr* setRef = new CallExpr(PRIM_MOVE, refToArr, new CallExpr(PRIM_ADDR_OF, sym));
+    Symbol* refToSym = new VarSymbol(hoistedName.c_str(), sym->getRefType());
+    DefExpr* refToSymDef = new DefExpr(refToSym);
+    CallExpr* setRef = new CallExpr(PRIM_MOVE, refToSym, new CallExpr(PRIM_ADDR_OF, sym));
 
-    target->callToInner_->insertBefore(refToArrDef);
-    target->callToInner_->insertBefore(setRef);
+    target->getInsertBeforeCallToInnerAnchor()->insertBefore(refToSymDef);
+    target->getInsertBeforeCallToInnerAnchor()->insertBefore(setRef);
 
     // we want to use the last added formal after the loop to adjust the loop
     // body
-    ArgSymbol* formal = NULL; // should probably be refToArr
+    ArgSymbol* formal = NULL; // should probably be refToSym
 
     for (int curCtx = targetCtxIdx ; curCtx >= 0 ; curCtx--) {
       IteratorContext& ctx = contextStack_[curCtx];
 
       if (CallExpr* toAdjust = ctx.callToInner_) {
-        toAdjust->insertAtTail(new SymExpr(refToArr));
+        toAdjust->insertAtTail(new SymExpr(refToSym));
 
         formal = new ArgSymbol(INTENT_REF, hoistedName.c_str(), sym->getRefType());
         toAdjust->resolvedFunction()->insertFormalAtTail(formal);
-
-        refToArr = formal;
       }
 
       if (isBarrier) {
-        Expr* mulAnchor = ctx.getUpEndCount();
-        if (mulAnchor) {
-          CONTEXT_DEBUG(debugDepth+1, "multiply block will be inserted after here", mulAnchor);
+        INT_ASSERT(mulBlock);
+
+        Expr* upEndCount = ctx.getUpEndCount();
+        if (upEndCount) {
+          CONTEXT_DEBUG(debugDepth+1, "multiply block will be inserted after here", upEndCount);
+          Symbol* numTasks = toSymExpr(toCallExpr(upEndCount)->get(2))->symbol();
+
+          CallExpr* mulCall = toCallExpr(mulBlock->body.last()->copy());
+          INT_ASSERT(mulCall);
+          INT_ASSERT(mulCall->isNamed("multiply"));
+
+          mulCall->get(1)->replace(new SymExpr(refToSym));
+          mulCall->get(2)->replace(new SymExpr(numTasks));
+
+          ctx.getInsertBeforeCallToInnerAnchor()->insertBefore(mulCall);
         }
       }
+
+      refToSym = formal;
     }
 
     removeHoistToContextCall(call);
