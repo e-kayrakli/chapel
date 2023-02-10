@@ -19,10 +19,10 @@ module Iterators {
 
     iter simpleOneDim(param tag: iterKind, n) where tag==iterKind.leader {
       coforall l in Locales {
-        var outerCtx = new Context(taskId=l.id, numTasks=numLocales);
+        var outerCtx = new Context(rank=1, taskId=l.id, numTasks=numLocales);
 
         on l {
-          var onCtx = new Context(taskId=0, numTasks=1);
+          var onCtx = new Context(rank=1, taskId=0, numTasks=1);
 
           const perLocSize = n/numLocales;
           const localeLow = l.id * perLocSize;
@@ -31,7 +31,7 @@ module Iterators {
           debug(here, " ", localeLow, " " , localeHigh);
 
           coforall taskId in 0..<taskPerLoc {
-            var innerCtx = new Context(taskId=taskId, numTasks=taskPerLoc);
+            var innerCtx = new Context(rank=1, taskId=taskId, numTasks=taskPerLoc);
 
             const perTaskSize = perLocSize/taskPerLoc;
             const taskLow = localeLow+(taskId*perTaskSize);
