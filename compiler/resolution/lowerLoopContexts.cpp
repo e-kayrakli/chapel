@@ -467,6 +467,8 @@ class ContextHandler {
     std::map<Symbol*, int> outerActuals;
 
     while (cur != defPrev) {
+      CONTEXT_DEBUG(debugDepth+1, "hoisting", cur);
+
       // if we cross any defExpr, hoist/remove its autoDestroys
       if (DefExpr* defExpr = toDefExpr(cur)) {
         Symbol* sym = defExpr->sym;
@@ -475,10 +477,15 @@ class ContextHandler {
         if (symsAutoDestroys.size() > 0) {
           // put auto destroys in all the right places
           for_vector (CallExpr, anchor, autoDestroyAnchors) {
+            CONTEXT_DEBUG(debugDepth+2, "inserting new autoDestroy before",
+                          anchor);
+
             anchor->insertBefore(symsAutoDestroys[0]->copy());
           }
           // remove all the existing ones
           for_vector (CallExpr, autoDestroy, symsAutoDestroys) {
+            CONTEXT_DEBUG(debugDepth+2, "removing autoDestroy", autoDestroy);
+
             autoDestroy->remove();
           }
         }
