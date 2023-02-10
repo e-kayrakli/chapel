@@ -410,6 +410,15 @@ class ContextHandler {
     Symbol* targetHandle = target->localHandle_;
     std::vector<CallExpr*>& autoDestroyAnchors =
         target->getLocalHandleAutoDestroys();
+    Symbol* sym = toSymExpr(call->get(2))->symbol();
+
+    bool isBarrier = astr(sym->type->symbol->name) == astr("Barrier");
+    if (isBarrier) {
+      CONTEXT_DEBUG(debugDepth, "this is a barrier", sym);
+    }
+    else {
+      CONTEXT_DEBUG(debugDepth, "this is an array", sym);
+    }
 
     CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(target->localHandle_->id)+"]",
                   call);
@@ -432,17 +441,6 @@ class ContextHandler {
     // defPoint in source and everything in between in the AST needs to be
     // hoisted. With better syntax, things will surely change here. It might be
     // more complicated, though.
-
-    Symbol* sym = toSymExpr(call->get(2))->symbol();
-    bool isBarrier = astr(sym->type->symbol->name) == astr("Barrier");
-
-    if (isBarrier) {
-      CONTEXT_DEBUG(debugDepth, "this is a barrier", sym);
-    }
-    else {
-      CONTEXT_DEBUG(debugDepth, "this is an array", sym);
-    }
-
     DefExpr* def = sym->defPoint;
     Expr* defPrev = def->prev;
 
@@ -465,15 +463,22 @@ class ContextHandler {
 
     BlockStmt* mulBlock = NULL; // only meaningful if isBarrier
     Expr* cur = call->prev;
+    FnSymbol* parentFn = toFnSymbol(call->parentSymbol);
+    INT_ASSERT(parentFn);
+
+    std::map<Symbol*, int> outerActuals;
+
     while (cur != defPrev) {
       if (DefExpr* defExpr = toDefExpr(cur)) {
         Symbol* sym = defExpr->sym;
         std::vector<CallExpr*>& symsAutoDestroys = autoDestroysInLoop[sym];
 
         if (symsAutoDestroys.size() > 0) {
+          // put auto destroys in all the right places
           for_vector (CallExpr, anchor, autoDestroyAnchors) {
             anchor->insertBefore(symsAutoDestroys[0]->copy());
           }
+          // remove all the existing ones
           for_vector (CallExpr, autoDestroy, symsAutoDestroys) {
             autoDestroy->remove();
           }
@@ -481,6 +486,32 @@ class ContextHandler {
       }
 
       update_symbols(cur, &handleUpdateMap);
+
+      // keep track of indices of ArgSymbols here that we are hoisting. They'll
+      // need to be updated in that given context. Or we need to error if the
+      // user hoisted things way too far.
+
+      std::vector<SymExpr*> symExprsInCur; // why can't I just collect symbols?
+      collectSymExprs(cur, symExprsInCur);
+      for_vector (SymExpr, symExpr, symExprsInCur) {
+        Symbol* sym = symExpr->symbol();
+
+        if (outerActuals.count(sym) == 1) continue;
+
+        if (ArgSymbol* argSym = toArgSymbol(sym)) {
+          int formalIdx = findFormalIndex(parentFn, argSym);
+          if (formalIdx >= 0) {
+            CONTEXT_DEBUG(debugDepth+1,
+                          "found a formal at idx " + std::to_string(formalIdx),
+                          argSym);
+
+            outerActuals[argSym] = formalIdx;
+          }
+          else {
+            INT_FATAL("how come?");
+          }
+        }
+      }
 
       if (isBarrier) {
         if (BlockStmt* curBlock = toBlockStmt(cur)) {
@@ -492,6 +523,54 @@ class ContextHandler {
       targetHandle->defPoint->insertAfter(cur->remove());
 
       cur = call->prev;
+    }
+
+    // we have some symbols declared elsewhere in the block that we are hoisting 
+    // walk up the context stack to the target to find where they are
+    SymbolMap newContextUpdateMap;
+    for (auto outerActualToIdx = outerActuals.begin() ;
+         outerActualToIdx != outerActuals.end() ; outerActualToIdx++) {
+
+      int actualIdx = outerActualToIdx->second;
+      Symbol* curActual = NULL;
+
+      for (int i = 1 ; i <= targetCtxIdx ; i++) {
+
+        if (actualIdx == -1) {
+          // we are currently looking for a symbol that was defined in an inner
+          // context. IOW, the user wants to hoist a block that has a symbol,
+          // to a block where the symbol wasn't defined yet. This is a user
+          // error.
+          USR_FATAL("Attempt to hoist symbols from an inner context to an outer context");
+        }
+
+        // what is the symbol used in this scope?
+        curActual = toSymExpr(contextStack_[i].callToInner_->get(actualIdx))->symbol();
+
+        // is it also an argument here?
+        if (ArgSymbol* curFormal = toArgSymbol(curActual)) {
+          int formalIdx = findFormalIndex(contextStack_[i].fn_, curFormal);
+          if (formalIdx >= 0) {
+            CONTEXT_DEBUG(debugDepth+2,
+                          "which is actually the formal at idx " + std::to_string(formalIdx),
+                          curFormal);
+
+            actualIdx = formalIdx; // update to this function's formal idx
+          }
+          else {
+            INT_FATAL("how come?");
+          }
+        }
+        else {
+          CONTEXT_DEBUG(debugDepth+2,
+                        "which is this symbol",
+                        curActual);
+
+          actualIdx = -1; // signal that this variable is local here
+        }
+      }
+
+      newContextUpdateMap.put(outerActualToIdx->first, curActual);
     }
 
     std::string hoistedName = "hoisted_" + std::string(sym->name);
@@ -545,6 +624,7 @@ class ContextHandler {
     updateMap.put(sym, formal);
 
     update_symbols(loop(), &updateMap);
+    update_symbols(target->node(), &newContextUpdateMap);
   }
 
   void handleContextUsesWithinLoopBody() {
@@ -582,6 +662,20 @@ class ContextHandler {
 
       curIdx++;
     }
+  }
+
+  int findFormalIndex(FnSymbol* fn, ArgSymbol* arg) {
+    int ret = -1;
+
+    int i = 1;
+    for_formals (formal, fn) {
+      if (formal == arg) {
+        ret = i;
+      }
+      i++;
+    }
+
+    return ret;
   }
 
   void handleContextUsesWithinLoopBody(Symbol* handle) {
