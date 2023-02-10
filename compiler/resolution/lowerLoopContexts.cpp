@@ -675,8 +675,8 @@ class ContextHandler {
               handles.push_back(newCtx);
             }
           }
-          else if (call->isPrimitive(PRIM_HOIST_ARRAY_TO_CONTEXT)) {
-            CONTEXT_DEBUG(debugDepth+2, "PRIM_HOIST_ARRAY_TO_CONTEXT", call);
+          else if (call->isPrimitive(PRIM_HOIST_TO_CONTEXT)) {
+            CONTEXT_DEBUG(debugDepth+2, "PRIM_HOIST_TO_CONTEXT", call);
 
             handleHoistToContextCall(call);
           }
