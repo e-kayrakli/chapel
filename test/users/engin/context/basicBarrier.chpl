@@ -21,12 +21,9 @@ forall (i, context) in simpleOneDim(n) {  // context should be coming from a new
   var b;
   { // AST is too complicated without this block
     b = new Barrier(1);
-    {
-      ref bRef = b;
-      bRef.multiply(1);
-    }
-    __primitive("hoist array to context", localeContext, b);
+    b.multiply(1);
   }
+  __primitive("hoist array to context", localeContext, b);
 
   b.barrier();
 

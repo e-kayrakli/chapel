@@ -437,13 +437,12 @@ class ContextHandler {
       }
     }
 
-    // in the prototype we assume that the primitive comes right after the array
-    // defPoint in source and everything in between in the AST needs to be
-    // hoisted. With better syntax, things will surely change here. It might be
-    // more complicated, though.
     DefExpr* def = sym->defPoint;
     Expr* defPrev = def->prev;
 
+    // this is only needed for `if hoist then __primitive("hoist"....)`
+    // when that if param-folds, we leave the block in the AST. This is probably
+    // irrelevant when this feature is production-ready
     if (BlockStmt* parentBlock = toBlockStmt(call->parentExpr)) {
       if (parentBlock->length() == 1) {
         parentBlock->flattenAndRemove();
@@ -455,13 +454,12 @@ class ContextHandler {
 
     SET_LINENO(def);
 
-
     // if we are using local shadows of target contexts' handle, we'll need to
     // update the symbol to use what's local in the target
     SymbolMap handleUpdateMap;
     handleUpdateMap.put(handle, targetHandle);
 
-    BlockStmt* mulBlock = NULL; // only meaningful if isBarrier
+    CallExpr* mulCall = NULL; // only meaningful if isBarrier
     Expr* cur = call->prev;
     FnSymbol* parentFn = toFnSymbol(call->parentSymbol);
     INT_ASSERT(parentFn);
@@ -469,6 +467,7 @@ class ContextHandler {
     std::map<Symbol*, int> outerActuals;
 
     while (cur != defPrev) {
+      // if we cross any defExpr, hoist/remove its autoDestroys
       if (DefExpr* defExpr = toDefExpr(cur)) {
         Symbol* sym = defExpr->sym;
         std::vector<CallExpr*>& symsAutoDestroys = autoDestroysInLoop[sym];
@@ -485,12 +484,12 @@ class ContextHandler {
         }
       }
 
+      // replace shadow handles with actual local handles
       update_symbols(cur, &handleUpdateMap);
 
       // keep track of indices of ArgSymbols here that we are hoisting. They'll
       // need to be updated in that given context. Or we need to error if the
       // user hoisted things way too far.
-
       std::vector<SymExpr*> symExprsInCur; // why can't I just collect symbols?
       collectSymExprs(cur, symExprsInCur);
       for_vector (SymExpr, symExpr, symExprsInCur) {
@@ -513,10 +512,14 @@ class ContextHandler {
         }
       }
 
+      // if we are hoisting a barrier, try to find its multiply call
       if (isBarrier) {
-        if (BlockStmt* curBlock = toBlockStmt(cur)) {
-          mulBlock = curBlock;
-          CONTEXT_DEBUG(debugDepth+1, "found multiply block", mulBlock);
+        if (CallExpr* call = findMultiplyCallForBarrier(cur, sym)) {
+          CONTEXT_DEBUG(debugDepth+1, "found multiply call", call);
+          if (mulCall != NULL) {
+            CONTEXT_DEBUG(debugDepth+2, "WARNING: there was another one", mulCall);
+          }
+          mulCall = call;
         }
       }
 
@@ -597,21 +600,16 @@ class ContextHandler {
       }
 
       if (isBarrier) {
-        INT_ASSERT(mulBlock);
-
-        Expr* upEndCount = ctx.getUpEndCount();
-        if (upEndCount) {
+        if (Expr* upEndCount = ctx.getUpEndCount()) {
           CONTEXT_DEBUG(debugDepth+1, "multiply block will be inserted after here", upEndCount);
           Symbol* numTasks = toSymExpr(toCallExpr(upEndCount)->get(2))->symbol();
 
-          CallExpr* mulCall = toCallExpr(mulBlock->body.last()->copy());
           INT_ASSERT(mulCall);
-          INT_ASSERT(mulCall->isNamed("multiply"));
+          CallExpr* newMulCall = mulCall->copy();
+          newMulCall->get(1)->replace(new SymExpr(refToSym));
+          newMulCall->get(2)->replace(new SymExpr(numTasks));
 
-          mulCall->get(1)->replace(new SymExpr(refToSym));
-          mulCall->get(2)->replace(new SymExpr(numTasks));
-
-          ctx.getInsertBeforeCallToInnerAnchor()->insertBefore(mulCall);
+          ctx.getInsertBeforeCallToInnerAnchor()->insertBefore(newMulCall);
         }
       }
 
@@ -619,12 +617,34 @@ class ContextHandler {
     }
 
     removeHoistToContextCall(call);
+    if (mulCall) {
+      mulCall->remove();
+    }
 
     SymbolMap updateMap;
     updateMap.put(sym, formal);
 
     update_symbols(loop(), &updateMap);
     update_symbols(target->node(), &newContextUpdateMap);
+  }
+
+  CallExpr* findMultiplyCallForBarrier(Expr* e, Symbol* barrierSym) {
+    if (BlockStmt* block = toBlockStmt(e)) {
+      for_alist(expr, block->body) {
+        if (CallExpr* found = findMultiplyCallForBarrier(expr, barrierSym)) {
+          return found;
+        }
+      }
+    }
+    else if (CallExpr* call = toCallExpr(e)) {
+      if (call->isNamed("multiply")) {
+        Symbol* callReceiver = toSymExpr(call->get(1))->symbol();
+        if (callReceiver == barrierSym) {
+          return call;
+        }
+      }
+    }
+    return NULL;
   }
 
   void handleContextUsesWithinLoopBody() {
