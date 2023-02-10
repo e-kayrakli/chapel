@@ -3,8 +3,6 @@ use Memory.Diagnostics;
 
 use Iterators.SimpleOneDim;
 
-config param hoistArray = true;
-
 config const n = 20;
 config const doVerboseMem = true;
 

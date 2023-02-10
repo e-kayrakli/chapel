@@ -41,19 +41,16 @@ forall ((i, j), context) in Dom.customThese() {
   var localBarrier;
   { // AST is too complicated without this block
     localBarrier = new Barrier(1);
-    {
-      ref bRef = localBarrier;
-      localBarrier.multiply(1);
-    }
-    __primitive("hoist array to context", localeContext, localBarrier);
+    localBarrier.multiply(1);
   }
+  __primitive("hoist to context", localeContext, localBarrier);
 
   var localTile;
   {
     const ref locSubDom = Dom.localSubdomain();
     localTile = Input[{locSubDom.dim(1), locSubDom.dim(0)}];
   }
-  __primitive("hoist array to context", localeContext, localTile);
+  __primitive("hoist to context", localeContext, localTile);
 
   local assertLocal {
     Output[i,j] = localTile[j,i];

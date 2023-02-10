@@ -15,7 +15,7 @@ forall (i, context) in simpleOneDim(n) {  // context should be coming from a new
 
   var a: [0..<n] int;
   if hoistArray then // needs to be param-folded
-    __primitive("hoist array to context", localeContext, a);
+    __primitive("hoist to context", localeContext, a);
 
   writeln(a[i]);
 }

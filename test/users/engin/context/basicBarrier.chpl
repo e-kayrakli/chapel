@@ -16,14 +16,14 @@ forall (i, context) in simpleOneDim(n) {  // context should be coming from a new
   const preLocaleTaskContext = __primitive("outer context", localeContext);
 
   var a: [0..<n] int;
-  __primitive("hoist array to context", localeContext, a);
+  __primitive("hoist to context", localeContext, a);
 
   var b;
   { // AST is too complicated without this block
     b = new Barrier(1);
     b.multiply(1);
   }
-  __primitive("hoist array to context", localeContext, b);
+  __primitive("hoist to context", localeContext, b);
 
   b.barrier();
 
