@@ -320,7 +320,7 @@ proc radixSortBlocks(radixGlobalWorkSize, const nbits : uint(32), const startbit
                 ref keysOut : [] uint(32), ref valuesOut : [] uint(32),
                 ref keysIn : [] uint(32), ref valuesIn : [] uint(32)){
 
-    forall i in 0..<radixGlobalWorkSize:uint(32) {
+    foreach i in 0..<radixGlobalWorkSize:uint(32) {
 
         __primitive("gpu set blockSize", SORT_BLOCK_SIZE);
 
@@ -425,7 +425,7 @@ proc radixSortBlocks(radixGlobalWorkSize, const nbits : uint(32), const startbit
 proc findRadixOffsets(findGlobalWorkSize, ref keys : [] uint(32), ref counters : [] uint(32),
         ref blockOffsets : [] uint(32), startbit :uint(32), numElements :uint(32), totalBlocks :uint(32) ){
 
-    forall i in 0..<findGlobalWorkSize:uint(32){
+    foreach i in 0..<findGlobalWorkSize:uint(32){
 
         __primitive("gpu set blockSize", SCAN_BLOCK_SIZE);
 
@@ -494,7 +494,7 @@ proc reorderData (reorderGlobalWorkSize, startbit: uint(32),
         ref blockOffsets : [] uint(32), ref offsets : [] uint(32),
         ref sizes : [] uint(32), totalBlocks : uint(32)) {
 
-    forall i in 0..<reorderGlobalWorkSize: uint(32){
+    foreach i in 0..<reorderGlobalWorkSize: uint(32){
         __primitive("gpu set blockSize", SCAN_BLOCK_SIZE);
 
         const GROUP_SIZE = SCAN_BLOCK_SIZE : uint(32);
@@ -585,7 +585,7 @@ proc scanKernel(numBlocks : uint(32), ref g_odata: [] uint(32), ref g_idata: [] 
         const fullBlock: bool, const storeSum : bool){
 
     var globalSize : uint(32) = numBlocks * SCAN_BLOCK_SIZE;
-    forall gid in 0..<globalSize : uint(32) {
+    foreach gid in 0..<globalSize : uint(32) {
 
         __primitive("gpu set blockSize", SCAN_BLOCK_SIZE);
 
@@ -660,7 +660,7 @@ proc vectorAddUniform4(ref d_vector: [] uint(32), const ref d_uniforms : [] uint
     // = numBlocks * SCAN_BLOCK_SIZE
     // = numElements / (4 * SCAN_BLOCK_SIZE) * SCAN_BLOCK_SIZE
     // = numElements / (4) = n/4
-    forall i in 0..<n/4 : uint(32) {
+    foreach i in 0..<n/4 : uint(32) {
 
         __primitive("gpu set blockSize", SCAN_BLOCK_SIZE);
 
