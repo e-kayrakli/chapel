@@ -41,46 +41,15 @@
 // this is compiler-generated
 extern const char* chpl_gpuBinary;
 
-static CUcontext *chpl_gpu_primary_ctx;
+static CUcontext *chpl_gpu_ctx;
 
 // array indexed by device ID (we load the same module once for each GPU).
 static CUmodule *chpl_gpu_cuda_modules;
 
 static int *deviceClockRates;
 
-
-static bool chpl_gpu_has_context() {
-  CUcontext cuda_context = NULL;
-
-  CUresult ret = cuCtxGetCurrent(&cuda_context);
-
-  if (ret == CUDA_ERROR_NOT_INITIALIZED || ret == CUDA_ERROR_DEINITIALIZED) {
-    return false;
-  }
-  else {
-    return cuda_context != NULL;
-  }
-}
-
-static void chpl_gpu_ensure_context() {
-  CUcontext next_context = chpl_gpu_primary_ctx[chpl_task_getRequestedSubloc()];
-
-  if (!chpl_gpu_has_context()) {
-    CUDA_CALL(cuCtxPushCurrent(next_context));
-  }
-  else {
-    CUcontext cur_context = NULL;
-    cuCtxGetCurrent(&cur_context);
-    if (cur_context == NULL) {
-      chpl_internal_error("Unexpected GPU context error");
-    }
-
-    if (cur_context != next_context) {
-      CUcontext popped;
-      CUDA_CALL(cuCtxPopCurrent(&popped));
-      CUDA_CALL(cuCtxPushCurrent(next_context));
-    }
-  }
+static inline void chpl_gpu_ensure_context() {
+  CUDA_CALL(cuCtxSetCurrent(chpl_gpu_ctx[chpl_task_getRequestedSubloc()]));
 }
 
 
@@ -102,26 +71,22 @@ void chpl_gpu_impl_init() {
 
   CUDA_CALL(cuDeviceGetCount(&num_devices));
 
-  chpl_gpu_primary_ctx = chpl_malloc(sizeof(CUcontext)*num_devices);
+  chpl_gpu_ctx = chpl_malloc(sizeof(CUcontext)*num_devices);
   chpl_gpu_cuda_modules = chpl_malloc(sizeof(CUmodule)*num_devices);
   deviceClockRates = chpl_malloc(sizeof(int)*num_devices);
 
   int i;
   for (i=0 ; i<num_devices ; i++) {
     CUdevice device;
-    CUcontext context;
-
     CUDA_CALL(cuDeviceGet(&device, i));
-    CUDA_CALL(cuDevicePrimaryCtxSetFlags(device, CU_CTX_SCHED_BLOCKING_SYNC));
-    CUDA_CALL(cuDevicePrimaryCtxRetain(&context, device));
-
-    CUDA_CALL(cuCtxPushCurrent(context));
-    chpl_gpu_cuda_modules[i] = chpl_gpu_load_module(chpl_gpuBinary);
-    CUDA_CALL(cuCtxPopCurrent(&context));
-
     cuDeviceGetAttribute(&deviceClockRates[i], CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device);
 
-    chpl_gpu_primary_ctx[i] = context;
+    CUcontext context;
+    CUDA_CALL(cuCtxCreate(&context, CU_CTX_SCHED_BLOCKING_SYNC, device));
+    chpl_gpu_ctx[i] = context;
+
+    CUDA_CALL(cuCtxSetCurrent(context));
+    chpl_gpu_cuda_modules[i] = chpl_gpu_load_module(chpl_gpuBinary);
   }
 }
 
@@ -256,7 +221,7 @@ static void chpl_gpu_launch_kernel_help(int ln,
 
   CHPL_GPU_DEBUG("cuLaunchKernel returned %s\n", name);
 
-  CUDA_CALL(cudaDeviceSynchronize());
+  CUDA_CALL(cuCtxSynchronize());
 
   CHPL_GPU_DEBUG("Synchronization complete %s\n", name);
   CHPL_GPU_STOP_TIMER(kernel_time);
