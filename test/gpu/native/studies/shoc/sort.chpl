@@ -12,6 +12,7 @@ use ResultDB;
 use GPUDiagnostics;
 
 config const noisy = false;
+config const gpuDiags = false;
 config const output = true;
 config const perftest = false;
 config const sz = 4;
@@ -164,10 +165,12 @@ proc runSort(){
     }
 }
 
-startGPUDiagnostics();
+if gpuDiags then startGPUDiagnostics();
 runSort();
-stopGPUDiagnostics();
-writeln(getGPUDiagnostics());
+if gpuDiags {
+  stopGPUDiagnostics();
+  writeln(getGPUDiagnostics());
+}
 
 
 proc radixSortStep(nbits: uint(32), startbit: uint(32),
