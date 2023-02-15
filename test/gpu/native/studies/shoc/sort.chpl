@@ -340,13 +340,18 @@ proc radixSortBlocks(radixGlobalWorkSize, const nbits : uint(32), const startbit
         // Load keys and vals from Global memory
         var key, value : 4*uint(32);
         const base = 4*i;
-        for param j in 0..3:uint(32) {
-            key[j] = keysIn[base + j];
-        }
+        const keyInPtr = __primitive("cast", c_ptr(4*uint(32)), c_ptrTo(keysIn[base]));
+        key = keyInPtr.deref();
 
-        for param j in 0..3:uint(32) {
-            value[j] = valuesIn[base + j];
-        }
+        /*for param j in 0..3:uint(32) {*/
+            /*key[j] = keysIn[base + j];*/
+        /*}*/
+
+        const valueInPtr = __primitive("cast", c_ptr(4*uint(32)), c_ptrTo(valuesIn[base]));
+        value = valueInPtr.deref();
+        /*for param j in 0..3:uint(32) {*/
+            /*value[j] = valuesIn[base + j];*/
+        /*}*/
 
         // For each of the 4 bits
         for shift in startbit:uint(32)..#nbits:uint(32) {
@@ -419,12 +424,16 @@ proc radixSortBlocks(radixGlobalWorkSize, const nbits : uint(32), const startbit
             __primitive("gpu syncThreads");
 
         }
-        for param j in 0..3:uint(32) {
-            keysOut[base + j] = key[j];
-        }
-        for param j in 0..3:uint(32) {
-            valuesOut[base + j] = value[j];
-        }
+        const keyOutPtr = __primitive("cast", c_ptr(4*uint(32)), c_ptrTo(keysOut[base]));
+        keyOutPtr.deref() = key;
+        /*for param j in 0..3:uint(32) {*/
+            /*keysOut[base + j] = key[j];*/
+        /*}*/
+        const valueOutPtr = __primitive("cast", c_ptr(4*uint(32)), c_ptrTo(valuesOut[base]));
+        valueOutPtr.deref() = value;
+        /*for param j in 0..3:uint(32) {*/
+            /*valuesOut[base + j] = value[j];*/
+        /*}*/
     }
 }
 
