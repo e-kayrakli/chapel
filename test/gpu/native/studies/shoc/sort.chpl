@@ -339,9 +339,13 @@ proc radixSortBlocks(radixGlobalWorkSize, const nbits : uint(32), const startbit
 
         // Load keys and vals from Global memory
         var key, value : 4*uint(32);
-        for j in 0..3:uint(32) {
-            key[j] = keysIn[4 * i + j];
-            value[j] = valuesIn[4 * i + j];
+        const base = 4*i;
+        for param j in 0..3:uint(32) {
+            key[j] = keysIn[base + j];
+        }
+
+        for param j in 0..3:uint(32) {
+            value[j] = valuesIn[base + j];
         }
 
         // For each of the 4 bits
@@ -415,9 +419,11 @@ proc radixSortBlocks(radixGlobalWorkSize, const nbits : uint(32), const startbit
             __primitive("gpu syncThreads");
 
         }
-        for j in 0..3:uint(32) {
-            keysOut[4 * i + j] = key[j];
-            valuesOut[4 * i + j] = value[j];
+        for param j in 0..3:uint(32) {
+            keysOut[base + j] = key[j];
+        }
+        for param j in 0..3:uint(32) {
+            valuesOut[base + j] = value[j];
         }
     }
 }
