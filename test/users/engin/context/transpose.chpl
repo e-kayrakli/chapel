@@ -34,7 +34,8 @@ if reportPerf then t.start();
 type ctx1 = Context(1, int(64));
 type ctx2 = Context(2, (int(64), int(64)));
 
-forall ((i, j), context) in Dom.customThese() {
+forall (i, j) in Dom.customThese() {
+  const context = new Context();
   const localTaskContext = __primitive("outer context", ctx1, context);
   const localeContext = __primitive("outer context", ctx2, localTaskContext);
 
