@@ -39,14 +39,14 @@ module Iterators {
 
             debug(here, ":", taskId, " ", taskLow, " " , taskHigh);
 
-            yield (taskLow..taskHigh, innerCtx);
+            yield taskLow..taskHigh;
           }
         }
       }
     }
 
     iter simpleOneDim(param tag: iterKind, n, followThis) where tag==iterKind.follower {
-      for i in followThis[0] do yield (i, followThis[1]);
+      for i in followThis do yield i;
     }
   }
 
@@ -121,17 +121,17 @@ module Iterators {
         if chpl__testParFlag then
           chpl__testParWriteln("Block domain follower invoked on ", followThis);
 
-        var t: rank*range(idxType, stridable=stridable||anyStridable(followThis(0)));
+        var t: rank*range(idxType, stridable=stridable||anyStridable(followThis));
         type strType = chpl__signedType(idxType);
         for param i in 0..rank-1 {
           var stride = whole.dim(i).stride: strType;
           // not checking here whether the new low and high fit into idxType
-          var low = (stride * followThis(0)(i).lowBound:strType):idxType;
-          var high = (stride * followThis(0)(i).highBound:strType):idxType;
-          t(i) = ((low..high by stride:strType) + whole.dim(i).low by followThis(0)(i).stride:strType).safeCast(t(i).type);
+          var low = (stride * followThis(i).lowBound:strType):idxType;
+          var high = (stride * followThis(i).highBound:strType):idxType;
+          t(i) = ((low..high by stride:strType) + whole.dim(i).low by followThis(i).stride:strType).safeCast(t(i).type);
         }
         for i in {(...t)} {
-          yield (i, followThis(1));
+          yield i;
         }
     }
 
@@ -262,7 +262,7 @@ module Iterators {
           followMe(parDim) = lo..hi;
           if debugDefaultDist then
             chpl_debug_writeln("*** DI[", chunk, "]: followMe = ", followMe);
-          yield (followMe, innerCtx);
+          yield followMe;
         }
       }
     }

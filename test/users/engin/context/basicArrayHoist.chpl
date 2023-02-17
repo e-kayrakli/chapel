@@ -1,5 +1,6 @@
 use Memory.Diagnostics;
 
+use ChapelContextSupport;
 use Iterators.SimpleOneDim;
 
 config param hoistArray = true;
@@ -8,7 +9,8 @@ config const n = 20;
 config const doVerboseMem = true;
 
 if doVerboseMem then startVerboseMem();
-forall (i, context) in simpleOneDim(n) {  // context should be coming from a new syntax
+forall i in simpleOneDim(n) {  // context should be coming from a new syntax
+  const context = new Context();
   const localTaskContext = __primitive("outer context", context);
   const localeContext = __primitive("outer context", localTaskContext);
   const preLocaleTaskContext = __primitive("outer context", localeContext);

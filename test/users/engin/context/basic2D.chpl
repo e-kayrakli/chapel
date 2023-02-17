@@ -12,7 +12,8 @@ var arr: [dom] int;
 type ctx1 = Context(1, int(64));
 type ctx2 = Context(2, (int(64), int(64)));
 
-forall (idx, context) in dom.customThese() {
+forall idx in dom.customThese() {
+  const context = new Context();
   const localTaskContext = __primitive("outer context", ctx1, context);
   const localeContext = __primitive("outer context", ctx2, localTaskContext);
 

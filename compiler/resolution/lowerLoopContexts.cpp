@@ -146,7 +146,16 @@ class Context {
   }
 
   virtual BaseAST* node() = 0;
-  virtual bool defExprIsLocalHandle(DefExpr* def) = 0;
+
+  bool defExprIsLocalHandle(DefExpr* def) {
+    if (isArgSymbol(def->sym)) return false;
+
+    return !def->sym->hasFlag(FLAG_TEMP) &&
+           !isLabelSymbol(def->sym) &&
+           !def->sym->hasFlag(FLAG_INDEX_VAR) && // avoid re-finding loop's
+           !def->sym->hasFlag(FLAG_EPILOGUE_LABEL) && // same as !isLabelSymbol?
+           def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE);
+  }
 
 };
 
@@ -157,13 +166,6 @@ class LoopContext: public Context {
 
   BaseAST* node() override { return loop_; };
 
-  bool defExprIsLocalHandle(DefExpr* def) override {
-    if (isArgSymbol(def->sym)) return false;
-
-    return !def->sym->hasFlag(FLAG_TEMP) &&
-           def->sym->hasFlag(FLAG_INDEX_VAR) &&
-           def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE);
-  }
 
 
 };
@@ -178,15 +180,6 @@ class IteratorContext: public Context {
 
   BaseAST* node() override { return fn_; };
 
-  bool defExprIsLocalHandle(DefExpr* def) override {
-    if (isArgSymbol(def->sym)) return false;
-
-    return !def->sym->hasFlag(FLAG_TEMP) &&
-           !isLabelSymbol(def->sym) &&
-           !def->sym->hasFlag(FLAG_INDEX_VAR) && // avoid re-finding loop's
-           !def->sym->hasFlag(FLAG_EPILOGUE_LABEL) && // same as !isLabelSymbol?
-           def->sym->getValType()->symbol->hasFlag(FLAG_CONTEXT_TYPE);
-  }
 
   Expr* getInsertBeforeCallToInnerAnchor() {
     if (callToInnerLoop_) {
