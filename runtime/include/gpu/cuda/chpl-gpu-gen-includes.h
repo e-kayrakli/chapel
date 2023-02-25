@@ -113,9 +113,36 @@ __device__ static inline void chpl_gpu_force_sync() {
   asm volatile("bar.sync 0;" : : : "memory");
 }
 
+__device__ static inline
+void chpl_error(const char* message, int32_t lineno, int32_t filenameIdx) {
+  chpl_gpu_write("halted");
+}
+
 __host__ static inline void chpl_gpu_force_sync() {
   chpl_internal_error("chpl_gpu_force_sync called from host");
 }
+
+__device__ static inline
+chpl_mem_descInt_t chpl_memhook_md_num(void)
+{
+  return CHPL_RT_MD_NUM;
+}
+
+__device__ static inline
+void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
+                         int32_t lineno, int32_t filename);
+{
+  return malloc(size);
+}
+
+__device__ static inline
+int64_t string_length_bytes(const char* x) {
+  if (x == NULL)
+    return 0;
+  return strlen(x);
+}
+
+__device__ static const c_sublocid_t c_sublocid_any  = c_sublocid_any_val;
 
 #endif // HAS_GPU_LOCALE
 

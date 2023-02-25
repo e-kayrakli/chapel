@@ -1888,6 +1888,8 @@ module ChapelBase {
     }
   }
 
+  proc chpl__delete(arg: int) {}
+
   proc chpl__delete(arr: []) {
     forall a in arr do
       chpl__delete(a);

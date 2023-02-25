@@ -701,6 +701,7 @@ module CTypes {
   pragma "fn synchronization free"
   inline proc c_memcpy(dest:c_void_ptr, const src:c_void_ptr, n: integral) {
     pragma "fn synchronization free"
+    pragma "codegen for CPU and GPU"
     extern proc memcpy (dest: c_void_ptr, const src: c_void_ptr, n: c_size_t);
     memcpy(dest, src, n.safeCast(c_size_t));
   }

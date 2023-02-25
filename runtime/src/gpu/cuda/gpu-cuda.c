@@ -48,6 +48,8 @@ static CUmodule *chpl_gpu_cuda_modules;
 
 static int *deviceClockRates;
 
+/*int* halt_flag;*/
+
 
 static bool chpl_gpu_has_context() {
   CUcontext cuda_context = NULL;
@@ -105,6 +107,7 @@ void chpl_gpu_impl_init() {
   chpl_gpu_primary_ctx = chpl_malloc(sizeof(CUcontext)*num_devices);
   chpl_gpu_cuda_modules = chpl_malloc(sizeof(CUmodule)*num_devices);
   deviceClockRates = chpl_malloc(sizeof(int)*num_devices);
+  /*halt_flag = (int*)chpl_gpu_impl_mem_alloc(sizeof(int));*/
 
   int i;
   for (i=0 ; i<num_devices ; i++) {

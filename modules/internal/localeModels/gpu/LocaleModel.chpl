@@ -46,6 +46,7 @@ module LocaleModel {
   }
 
   pragma "fn synchronization free"
+  pragma "codegen for CPU and GPU"
   private extern proc chpl_memhook_md_num(): chpl_mem_descInt_t;
 
   // Note that there are 2 nearly identical chpl_here_alloc() functions. This
@@ -61,10 +62,12 @@ module LocaleModel {
   proc chpl_here_alloc(size:int(64), md:chpl_mem_descInt_t): c_void_ptr {
     pragma "fn synchronization free"
     pragma "insert line file info"
+    pragma "codegen for CPU and GPU"
     extern proc chpl_mem_alloc(size:c_size_t, md:chpl_mem_descInt_t) : c_void_ptr;
 
     pragma "fn synchronization free"
     pragma "insert line file info"
+    pragma "codegen for CPU and GPU"
     extern proc chpl_gpu_mem_alloc(size:c_size_t, md:chpl_mem_descInt_t) : c_void_ptr;
 
 
@@ -159,14 +162,15 @@ module LocaleModel {
   pragma "fn synchronization free"
   pragma "always propagate line file info"
   proc chpl_here_good_alloc_size(min_size:integral): min_size.type {
-    pragma "fn synchronization free"
-    pragma "insert line file info"
-    extern proc chpl_mem_good_alloc_size(min_size:c_size_t) : c_size_t;
+    return min_size;
+    /*pragma "fn synchronization free"*/
+    /*pragma "insert line file info"*/
+    /*extern proc chpl_mem_good_alloc_size(min_size:c_size_t) : c_size_t;*/
 
     // This is currently here only for completeness: I am not sure if need
     // something like this for the GPU, and it doesn't call anything specific
     // for it.
-    return chpl_mem_good_alloc_size(min_size.safeCast(c_size_t)).safeCast(min_size.type);
+    /*return chpl_mem_good_alloc_size(min_size.safeCast(c_size_t)).safeCast(min_size.type);*/
   }
 
   pragma "locale model free"

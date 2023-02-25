@@ -68,8 +68,11 @@ static SymExpr* hasOuterVarAccesses(FnSymbol* fn) {
   collectSymExprs(fn, ses);
   for_vector(SymExpr, se, ses) {
     if (VarSymbol* var = toVarSymbol(se->symbol())) {
+      if (var->hasFlag(FLAG_EXTERN)) {
+        continue;
+      }
       if (var->defPoint->parentSymbol != fn) {
-        if (!var->isParameter() && var != gVoid) {
+        if (!var->isParameter() && var != gVoid && var != gNil) {
           if (CallExpr* parent = toCallExpr(se->parentExpr)) {
             if (isFieldAccessPrimitive(parent)) {
               continue;
@@ -318,6 +321,15 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
 
   for_vector(CallExpr, call, calls) {
     if (call->primitive) {
+      if (call->isPrimitive(PRIM_RT_ERROR)) {
+        continue;
+      }
+      if (call->isPrimitive(PRIM_CHPL_COMM_GET)) {
+        continue;
+      }
+      if (call->isPrimitive(PRIM_STRING_LENGTH_BYTES)) {
+        continue;
+      }
       // only primitives that are fast and local are allowed for now
       bool inLocal = inLocalBlock(call);
       int is = classifyPrimitive(call, inLocal);
@@ -340,11 +352,11 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
         !fn->hasFlag(FLAG_GPU_CODEGEN) &&
         !fn->hasFlag(FLAG_GPU_AND_CPU_CODEGEN))
       {
-        std::string msg = "function calls out to extern function (";
-        msg += fn->name;
-        msg += "), which is not marked as GPU eligible";
-        reportNotGpuizable(fn, msg.c_str());
-        return false;
+        //std::string msg = "function calls out to extern function (";
+        //msg += fn->name;
+        //msg += "), which is not marked as GPU eligible";
+        //reportNotGpuizable(fn, msg.c_str());
+        //return false;
       }
 
       if (hasOuterVarAccesses(fn)) {

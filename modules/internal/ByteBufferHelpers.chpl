@@ -36,6 +36,7 @@ module ByteBufferHelpers {
   // Externs and constants used to implement strings
   //
   pragma "fn synchronization free"
+  pragma "codegen for CPU and GPU"
   private extern proc chpl_memhook_md_num(): chpl_mem_descInt_t;
 
   // Calls to chpl_here_alloc increment the memory descriptor by
@@ -47,10 +48,6 @@ module ByteBufferHelpers {
   private proc offset_STR_COPY_DATA {
     extern const CHPL_RT_MD_STR_COPY_DATA: chpl_mem_descInt_t;
     return CHPL_RT_MD_STR_COPY_DATA - chpl_memhook_md_num();
-  }
-  private proc offset_STR_COPY_REMOTE {
-    extern const CHPL_RT_MD_STR_COPY_REMOTE: chpl_mem_descInt_t;
-    return CHPL_RT_MD_STR_COPY_REMOTE - chpl_memhook_md_num();
   }
 
   inline proc chpl_string_comm_get(dest: bufferType, src_loc_id: int(64),
