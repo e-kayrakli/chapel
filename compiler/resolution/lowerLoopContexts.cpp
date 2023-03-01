@@ -187,62 +187,39 @@ class LoopContext: public Context {
 };
 
 class IteratorContext: public Context {
+ protected:
+  /** Entry-point information for the context inside this one. */
+  struct {
+    /**
+     If the inner context is a coforall loop, it's represented as a call to
+     a coforall_fn inside of a plain for-loop. This represents the for-loop.
+     */
+    CForLoop* innerLoop_ = NULL;
+
+    /**
+     If the inner context is a coforall loop or an on statement, it is represented
+     using a call to some function, either coforall_fn or on_fn. This represents
+     the call to that function.
+     */
+    CallExpr* callToInner_ = NULL;
+
+    /**
+      If inner context is the initial serial for-loop that triggered the context
+      lowering, this represents that loop.
+     */
+    CForLoop* innermostLoop_ = NULL;
+  };
+
  public:
-  virtual ~IteratorContext() = default;
-  virtual Expr* getInsertBeforeCallToInnerAnchor() const = 0;
-  virtual void dump(int depth) const = 0;
-  /*
-    Handle the case in which a symbol in an inner context depends on a variable
-    made available somewhere in this context. Returns a symbol available
-    in the body of the inner context.
-   */
-  virtual Symbol* handleCapturedSymbol(Symbol*) = 0;
-  /*
-    If this context passes a variable to an inner context using an actual,
-    this method determines where it came from. The variable might be
-    an actual passed to this context, in which case actualIdx is set to
-    the index of that actual. Otherwise, the variable might be decalred
-    in this context, in which case actualIdx is set to -1.
-
-    Also sets actual to the symbol that was fed to the inner context.
-  */
-  virtual void handleHoistedActual(int& actualIdx, Symbol*& actual) const = 0;
-  /*
-    Modify this context to accept a reference to a symbol from outside of it.
-    Returns a Symbol available in the body of the context.
-   */
-  virtual Symbol* insertOuterSymbol(Symbol*, const char* name, Type* type) = 0;
-};
-
-class CoforallOnContext : public IteratorContext {
- private:
-  FnSymbol* fn_;
-
-  // === Possible hoisting anchor points for this context ===
-
-  // If the thing inside this context is a coforall, that coforall is implemented
-  // using a loop, and hoisting should move code right about this loop.
-  CForLoop* innerLoop_ = NULL;
-
-  // If the thing inside this context is an on function, that function is
-  // implemented using an call to a generated on_fn. hoisting
-  // should move code right above this call.
-  CallExpr* callToInner_ = NULL;
-
-  // If the thing inside of this context is the initial serial loop that
-  // triggered context lowering, hoisting should move move code right above
-  // this loop.
-  CForLoop* innermostLoop_ = NULL;
- public:
-  CoforallOnContext(FnSymbol* fn): fn_(fn) {}
-
   void setInnerLoop(CForLoop* loop) { innerLoop_ = loop; }
   void setCallToInner(CallExpr* expr) { callToInner_ = expr; }
   void setInnermostLooop(CForLoop* loop) { innermostLoop_ = loop; }
 
-  BaseAST* node() override { return fn_; };
-
-  Expr* getInsertBeforeCallToInnerAnchor() const override {
+  /**
+    Determine the point right before the inner context, which hoisting should
+    use as an anchor.
+   */
+  Expr* getInsertBeforeCallToInnerAnchor() const {
     if (innerLoop_) {
       return innerLoop_;
     } else if (callToInner_) {
@@ -251,6 +228,59 @@ class CoforallOnContext : public IteratorContext {
       return innermostLoop_;
     }
   }
+
+  /**
+    If a new symbol has been introduced outside, and if the inner context
+    is accessed via a call, add a new actual to the call to make that symbol
+    available there. This also modifies the function being called to
+    introduce the formal.
+
+    Returns the symbol made available within the inner context.
+   */
+  Symbol* insertActualForOuterSymbol(Symbol* sym) {
+    if (callToInner_) {
+      callToInner_->insertAtTail(new SymExpr(sym));
+      // TODO this is probably the right intent for now. But maybe we want
+      // `const ref`?
+      auto formal = new ArgSymbol(INTENT_CONST_IN, sym->name, sym->getValType());
+      callToInner_->resolvedFunction()->insertFormalAtTail(formal);
+      return formal;
+    }
+    // TODO: what do here
+    return nullptr;
+  }
+
+  /**
+    If a symbol is being hoisted past the inner context, and the context is
+    accessed via a call, adds a new actual to the call to make the symbol available
+    inside. This also modifies the function being called to introduce the formal.
+
+    Returns the symbol made available within the inner context.
+   */
+  Symbol* insertActualForHoistedSymbol(Symbol* outerSym, const char* name, Type* type) {
+    if (CallExpr* toAdjust = callToInner_) {
+      toAdjust->insertAtTail(new SymExpr(outerSym));
+
+      auto formal = new ArgSymbol(INTENT_REF, name, type);
+      toAdjust->resolvedFunction()->insertFormalAtTail(formal);
+      return formal;
+    }
+    return outerSym;
+  }
+ public:
+  virtual ~IteratorContext() = default;
+
+  virtual void dump(int depth) const = 0;
+  virtual void recomputeActualSymbol(int& actualIdx, Symbol*& actual) const = 0;
+};
+
+class CoforallOnContext : public IteratorContext {
+ private:
+  FnSymbol* fn_;
+ public:
+  CoforallOnContext(FnSymbol* fn): fn_(fn) {}
+
+  BaseAST* node() override { return fn_; };
 
   void dump(int depth) const override {
     std::string msg = "";
@@ -264,27 +294,16 @@ class CoforallOnContext : public IteratorContext {
     CONTEXT_DEBUG(depth, msg, fn_);
   }
 
-  Symbol* handleCapturedSymbol(Symbol* handle) override {
-    if (callToInner_) {
-      callToInner_->insertAtTail(new SymExpr(handle));
-      // TODO this is probably the right intent for now. But maybe we want
-      // `const ref`?
-      auto formal = new ArgSymbol(INTENT_CONST_IN, handle->name, handle->getValType());
-      callToInner_->resolvedFunction()->insertFormalAtTail(formal);
-      return formal;
-    }
-
-    // TODO: is this only hit when we discover the innermost serial loop?
-    return nullptr;
-  }
-
-  void handleHoistedActual(int& actualIdx, Symbol*& actual) const override {
-    // what is the symbol used in this scope?
-    actual = toSymExpr(callToInner_->get(actualIdx))->symbol();
+  void recomputeActualSymbol(int& actualIdx, Symbol*& actual) const override {
+    auto callToFn = fn_->singleInvocation();
+    // what is the symbol that was passed to this function?
+    actual = toSymExpr(callToFn->get(actualIdx))->symbol();
 
     // is it also an argument here?
     if (ArgSymbol* curFormal = toArgSymbol(actual)) {
-      int formalIdx = findFormalIndex(fn_, curFormal);
+      auto parentFn = toFnSymbol(callToFn->parentSymbol);
+      INT_ASSERT(parentFn);
+      int formalIdx = findFormalIndex(parentFn, curFormal);
       if (formalIdx >= 0) {
         // CONTEXT_DEBUG(debugDepth+2,
         //               "which is actually the formal at idx " + std::to_string(formalIdx),
@@ -301,17 +320,6 @@ class CoforallOnContext : public IteratorContext {
 
       actualIdx = -1; // signal that this variable is local here
     }
-  }
-
-  Symbol* insertOuterSymbol(Symbol* outerSym, const char* name, Type* type) override {
-    if (CallExpr* toAdjust = callToInner_) {
-      toAdjust->insertAtTail(new SymExpr(outerSym));
-
-      auto formal = new ArgSymbol(INTENT_REF, name, type);
-      toAdjust->resolvedFunction()->insertFormalAtTail(formal);
-      return formal;
-    }
-    return outerSym;
   }
 };
 
@@ -499,7 +507,7 @@ class ContextHandler {
     int curAdjustmentIdx = outerCtxIdx;
     Symbol* handle = contextStack_[curAdjustmentIdx]->localHandle_;
 
-    while (auto newHandle = contextStack_[curAdjustmentIdx]->handleCapturedSymbol(handle)) {
+    while (auto newHandle = contextStack_[curAdjustmentIdx]->insertActualForOuterSymbol(handle)) {
       curAdjustmentIdx--;
       handle = newHandle;
     }
@@ -572,7 +580,7 @@ class ContextHandler {
     FnSymbol* parentFn = toFnSymbol(call->parentSymbol);
     INT_ASSERT(parentFn);
 
-    std::map<Symbol*, int> outerActuals;
+    std::map<ArgSymbol*, int> outerActuals;
 
     while (cur != defPrev) {
       CONTEXT_DEBUG(debugDepth+1, "hoisting", cur);
@@ -610,9 +618,9 @@ class ContextHandler {
       for_vector (SymExpr, symExpr, symExprsInCur) {
         Symbol* sym = symExpr->symbol();
 
-        if (outerActuals.count(sym) == 1) continue;
-
         if (ArgSymbol* argSym = toArgSymbol(sym)) {
+          if (outerActuals.count(argSym) == 1) continue;
+
           int formalIdx = findFormalIndex(parentFn, argSym);
           if (formalIdx >= 0) {
             CONTEXT_DEBUG(debugDepth+1,
@@ -647,12 +655,12 @@ class ContextHandler {
     // walk up the context stack to the target to find where they are
     SymbolMap newContextUpdateMap;
     for (auto& outerActualToIdx : outerActuals) {
+      printf("Fixing hoisted actual!");
 
       int actualIdx = outerActualToIdx.second;
       Symbol* curActual = NULL;
 
-      for (int i = 1 ; i <= targetCtxIdx ; i++) {
-
+      for (int i = 0; i < targetCtxIdx ; i++) {
         if (actualIdx == -1) {
           // we are currently looking for a symbol that was defined in an inner
           // context. IOW, the user wants to hoist a block that has a symbol,
@@ -660,7 +668,8 @@ class ContextHandler {
           // error.
           USR_FATAL("Attempt to hoist symbols from an inner context to an outer context");
         }
-        contextStack_[i]->handleHoistedActual(actualIdx, curActual);
+
+        contextStack_[i]->recomputeActualSymbol(actualIdx, curActual);
       }
 
       newContextUpdateMap.put(outerActualToIdx.first, curActual);
@@ -679,7 +688,7 @@ class ContextHandler {
     for (int curCtx = targetCtxIdx ; curCtx >= 0 ; curCtx--) {
       auto& ctx = contextStack_[curCtx];
 
-      auto innerSym = ctx->insertOuterSymbol(refToSym, hoistedName.c_str(), sym->getRefType());
+      auto innerSym = ctx->insertActualForHoistedSymbol(refToSym, hoistedName.c_str(), sym->getRefType());
 
       if (isBarrier) {
         if (Expr* upEndCount = ctx->getUpEndCount()) {
