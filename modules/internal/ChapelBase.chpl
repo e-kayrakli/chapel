@@ -1053,6 +1053,15 @@ module ChapelBase {
     return ret;
   }
 
+  pragma "llvm return noalias"
+  proc _ddata_allocate_noinit_gpu_shared(type eltType, size: integral,
+                                         out callPostAlloc: bool,
+                                         subloc = c_sublocid_none) {
+    halt("I don't know how to allocate data for GPU shared arrays yet!");
+    var ret: _ddata(eltType);
+    return ret;
+  }
+
   inline proc _ddata_allocate_postalloc(data:_ddata, size: integral) {
     pragma "fn synchronization free"
     pragma "insert line file info"
