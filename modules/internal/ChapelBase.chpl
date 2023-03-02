@@ -1057,8 +1057,8 @@ module ChapelBase {
   proc _ddata_allocate_noinit_gpu_shared(type eltType, size: integral,
                                          out callPostAlloc: bool,
                                          subloc = c_sublocid_none) {
-    halt("I don't know how to allocate data for GPU shared arrays yet!");
     var ret: _ddata(eltType);
+    ret = __primitive("gpu allocShared", 4096*8):ret.type;
     return ret;
   }
 
