@@ -155,6 +155,7 @@ module DefaultRectangular {
   class DefaultRectangularDom: BaseRectangularDom {
     var dist: unmanaged DefaultDist;
     var ranges : rank*range(idxType,boundKind.both,strides);
+    var useGpuSharedMemory : bool = false;
 
     override proc linksDistribution() param do return false;
     override proc dsiLinksDistribution() do     return false;
@@ -697,7 +698,8 @@ module DefaultRectangular {
                                                  idxType=idxType,
                                                  strides=strides,
                                                  dom=_to_unmanaged(this),
-                                                 initElts=initElts);
+                                                 initElts=initElts,
+                                                 useGpuSharedMemory=useGpuSharedMemory);
     }
 
     proc dsiBuildArrayWith(type eltType, data:_ddata(eltType), allocSize:int) {
@@ -1042,6 +1044,9 @@ module DefaultRectangular {
     pragma "local field"
     var shiftedData : _ddata(eltType);
 
+    // For allocating arrays using GPU block shared memory
+    var useGpuSharedMemory: bool = false;
+
     // note: used for external array support
     var externFreeFunc: c_ptr(void);
     var externArr: bool = false;
@@ -1061,6 +1066,7 @@ module DefaultRectangular {
               param initElts = true,
               param deinitElts = initElts,
               data:_ddata(eltType) = nil,
+              useGpuSharedMemory = false,
               externArr = false,
               _borrowed = false,
               externFreeFunc: c_ptr(void) = nil) {
@@ -1068,6 +1074,7 @@ module DefaultRectangular {
                  idxType=idxType, strides=strides);
       this.dom = dom;
       this.data = data;
+      this.useGpuSharedMemory = useGpuSharedMemory;
       this.externFreeFunc = externFreeFunc;
       this.externArr = externArr;
       this._borrowed = _borrowed;
@@ -1290,7 +1297,9 @@ module DefaultRectangular {
           chpl_debug_writeln("*** DR alloc ", eltType:string, " ", size);
         }
 
-        if !localeModelPartitionsIterationOnSublocales {
+        if useGpuSharedMemory {
+          data = _ddata_allocate_noinit_gpu_shared(eltType, size, callPostAlloc);
+        } else if !localeModelPartitionsIterationOnSublocales {
           data = _ddata_allocate_noinit(eltType, size, callPostAlloc);
         } else {
           data = _ddata_allocate_noinit(eltType, size,
@@ -1486,6 +1495,10 @@ module DefaultRectangular {
 
           // Should have been checked above.
           param initElts = isDefaultInitializable(eltType);
+
+          if this.useGpuSharedMemory {
+            halt("Arrays based on GPU shared memory cannot be reallocated");
+          }
 
           var copy = new unmanaged
               DefaultRectangularArr(eltType=eltType,
