@@ -186,8 +186,16 @@ class LoopContext: public Context {
 
 };
 
+class CoforallOnContext;
+class VectorizedLoopContext;
+
 class IteratorContext: public Context {
  protected:
+  enum class Kind {
+    CoforallOn,
+    VectorizedLoop,
+  };
+
   /** Entry-point information for the context inside this one. */
   struct {
     /**
@@ -210,10 +218,25 @@ class IteratorContext: public Context {
     CForLoop* innermostLoop_ = NULL;
   };
 
+  /** What kind of context this is, for casting. */
+  Kind kind_;
+
+  IteratorContext(Kind kind) : kind_(kind) {}
+
  public:
   void setInnerLoop(CForLoop* loop) { innerLoop_ = loop; }
   void setCallToInner(CallExpr* expr) { callToInner_ = expr; }
   void setInnermostLooop(CForLoop* loop) { innermostLoop_ = loop; }
+
+  CoforallOnContext* toCoforallOnContext() {
+    if (kind_ == Kind::CoforallOn) return (CoforallOnContext*) this;
+    return nullptr;
+  }
+
+  VectorizedLoopContext* toVectorizedLoopContext() {
+    if (kind_ == Kind::VectorizedLoop) return (VectorizedLoopContext*) this;
+    return nullptr;
+  }
 
   /**
     Determine the point right before the inner context, which hoisting should
@@ -278,7 +301,8 @@ class CoforallOnContext : public IteratorContext {
  private:
   FnSymbol* fn_;
  public:
-  CoforallOnContext(FnSymbol* fn): fn_(fn) {}
+  CoforallOnContext(FnSymbol* fn) :
+    IteratorContext(Kind::CoforallOn), fn_(fn) {}
 
   BaseAST* node() override { return fn_; };
 
@@ -328,7 +352,8 @@ class VectorizedLoopContext : public IteratorContext {
   CForLoop* loop_;
 
  public:
-  VectorizedLoopContext(CForLoop* loop) : loop_(loop) {}
+  VectorizedLoopContext(CForLoop* loop) :
+    IteratorContext(Kind::VectorizedLoop), loop_(loop) {}
 
   BaseAST* node() override { return loop_; }
 
@@ -568,26 +593,22 @@ class ContextHandler {
     return outerCtxHandle;
   }
 
-  void handleHoistToContextCall(CallExpr* call) {
+  enum class HoistingKind {
+    Array, Barrier, Other
+  };
+
+  void handleHoistToCoforallOnContextCall(CallExpr* call,
+                                          Symbol* toHoist,
+                                          CoforallOnContext* context,
+                                          Symbol* usedHandle,
+                                          Symbol* targetHandle,
+                                          int targetCtxIdx,
+                                          HoistingKind kind) {
     const int debugDepth = 3;
-
-    Symbol* handle = toSymExpr(call->get(1))->symbol();
-    int targetCtxIdx = handleMap_[handle];
-    auto& target = contextStack_[targetCtxIdx];
-    Symbol* targetHandle = target->localHandle_;
     std::vector<CallExpr*>& autoDestroyAnchors =
-        target->getLocalHandleAutoDestroys();
-    Symbol* sym = toSymExpr(call->get(2))->symbol();
+        context->getLocalHandleAutoDestroys();
 
-    bool isBarrier = astr(sym->type->symbol->name) == astr("Barrier");
-    if (isBarrier) {
-      CONTEXT_DEBUG(debugDepth, "this is a barrier", sym);
-    }
-    else {
-      CONTEXT_DEBUG(debugDepth, "this is an array", sym);
-    }
-
-    CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(target->localHandle_->id)+"]",
+    CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(context->localHandle_->id)+"]",
                   call);
 
 
@@ -604,7 +625,7 @@ class ContextHandler {
       }
     }
 
-    DefExpr* def = sym->defPoint;
+    DefExpr* def = toHoist->defPoint;
     Expr* defPrev = def->prev;
 
     // this is only needed for `if hoist then __primitive("hoist"....)`
@@ -624,7 +645,7 @@ class ContextHandler {
     // if we are using local shadows of target contexts' handle, we'll need to
     // update the symbol to use what's local in the target
     SymbolMap handleUpdateMap;
-    handleUpdateMap.put(handle, targetHandle);
+    handleUpdateMap.put(usedHandle, targetHandle);
 
     CallExpr* mulCall = NULL; // only meaningful if isBarrier
     Expr* cur = call->prev;
@@ -687,8 +708,8 @@ class ContextHandler {
       }
 
       // if we are hoisting a barrier, try to find its multiply call
-      if (isBarrier) {
-        if (CallExpr* call = findMultiplyCallForBarrier(cur, sym)) {
+      if (kind == HoistingKind::Barrier) {
+        if (CallExpr* call = findMultiplyCallForBarrier(cur, toHoist)) {
           CONTEXT_DEBUG(debugDepth+1, "found multiply call", call);
           if (mulCall != NULL) {
             CONTEXT_DEBUG(debugDepth+2, "WARNING: there was another one", mulCall);
@@ -724,22 +745,22 @@ class ContextHandler {
       newContextUpdateMap.put(outerActualToIdx.first, curActual);
     }
 
-    std::string hoistedName = "hoisted_" + std::string(sym->name);
+    std::string hoistedName = "hoisted_" + std::string(toHoist->name);
 
-    Symbol* refToSym = new VarSymbol(hoistedName.c_str(), sym->getRefType());
+    Symbol* refToSym = new VarSymbol(hoistedName.c_str(), toHoist->getRefType());
     DefExpr* refToSymDef = new DefExpr(refToSym);
-    CallExpr* setRef = new CallExpr(PRIM_MOVE, refToSym, new CallExpr(PRIM_ADDR_OF, sym));
+    CallExpr* setRef = new CallExpr(PRIM_MOVE, refToSym, new CallExpr(PRIM_ADDR_OF, toHoist));
 
-    target->getInsertBeforeCallToInnerAnchor()->insertBefore(refToSymDef);
-    target->getInsertBeforeCallToInnerAnchor()->insertBefore(setRef);
+    context->getInsertBeforeCallToInnerAnchor()->insertBefore(refToSymDef);
+    context->getInsertBeforeCallToInnerAnchor()->insertBefore(setRef);
 
 
     for (int curCtx = targetCtxIdx ; curCtx >= 0 ; curCtx--) {
       auto& ctx = contextStack_[curCtx];
 
-      auto innerSym = ctx->insertActualForHoistedSymbol(refToSym, hoistedName.c_str(), sym->getRefType());
+      auto innerSym = ctx->insertActualForHoistedSymbol(refToSym, hoistedName.c_str(), toHoist->getRefType());
 
-      if (isBarrier) {
+      if (kind == HoistingKind::Barrier) {
         if (Expr* upEndCount = ctx->getUpEndCount()) {
           CONTEXT_DEBUG(debugDepth+1, "multiply block will be inserted after here", upEndCount);
           Symbol* numTasks = toSymExpr(toCallExpr(upEndCount)->get(2))->symbol();
@@ -763,10 +784,114 @@ class ContextHandler {
 
     // we want to use the last added symbol after the loop to adjust the loop body
     SymbolMap updateMap;
-    updateMap.put(sym, refToSym);
+    updateMap.put(toHoist, refToSym);
 
     update_symbols(loop(), &updateMap);
-    update_symbols(target->node(), &newContextUpdateMap);
+    update_symbols(context->node(), &newContextUpdateMap);
+  }
+
+  void handleHoistToVectorContextCall(CallExpr* call,
+                                      Symbol* toHoist,
+                                      VectorizedLoopContext* context,
+                                      HoistingKind kind) {
+    if (kind == HoistingKind::Array) {
+      // Array definitions like this:
+      //
+      //     var A: [R1, ..., Rn] int;
+      //
+      // Are translated into something like this:
+      //
+      //     var D = chpl_ensureDomainExpr(R1, ..., Rn);
+      //     var rtt = chpl__buildArrayRuntimeType(D);
+      //     var A = chpl__convertRuntimeTypeToValue(rtt.domain);
+      //
+      // We have a wrapper function chpl_ensureDomainExprGpuShared that
+      // does the same thing as the original chpl_ensureDomainExpr, but
+      // also sets a flag to make arrays from the domain use shared memory.
+      // Find the call to ensureDomainExpr and replace it with the GpuShared
+      // version.
+
+      CallExpr* callToEnsureDomainExpr = nullptr;
+      const char* nameToFind = astr("chpl__ensureDomainExpr");
+      (void) callToEnsureDomainExpr;
+      Expr* cur = call->prev;
+      while (cur != toHoist->defPoint) {
+        if (auto call = toCallExpr(cur)) {
+          if (auto fn = call->resolvedFunction()) {
+            if (fn->name == nameToFind) {
+              callToEnsureDomainExpr = call;
+              break;
+            }
+          }
+        }
+        cur = cur->prev;
+      }
+
+      if (!callToEnsureDomainExpr) {
+        INT_FATAL("AST is not in the shape expected for GPU array hoisting");
+      }
+
+      // The next definition is a move into a "call return" temporary; use that.
+      INT_ASSERT(callToEnsureDomainExpr->next);
+      auto domainAssign = toCallExpr(callToEnsureDomainExpr->next);
+      INT_ASSERT(domainAssign && domainAssign->primitive && domainAssign->primitive->tag == PRIM_MOVE);
+      auto callResult = toSymExpr(domainAssign->argList.first());
+
+      auto domainType = toAggregateType(callResult->typeInfo());
+      auto valueFieldIdx = domainType->getFieldPosition("_instance");
+      auto valueField = domainType->getField(valueFieldIdx);
+      auto valueFieldType = toAggregateType(valueField->typeInfo());
+      auto gpuFlagIdx = valueFieldType->getFieldPosition("useGpuSharedMemory");
+      auto gpuFlag = valueFieldType->getField(gpuFlagIdx);
+
+      SET_LINENO(callToEnsureDomainExpr);
+      // domain._instance.useGpuSharedMemory = true;
+      auto newBlock = new BlockStmt();
+      auto getValueResult = newTemp("domain_value", valueFieldType->getRefType());
+      newBlock->insertAtTail(new DefExpr(getValueResult));
+      auto getValueCall = new CallExpr(PRIM_GET_MEMBER, new SymExpr(callResult->symbol()), new SymExpr(valueField));
+      auto getValueMove = new CallExpr(PRIM_MOVE, new SymExpr(getValueResult), getValueCall);
+      newBlock->insertAtTail(getValueMove);
+      auto setFieldPrim = new CallExpr(PRIM_SET_MEMBER, new SymExpr(getValueResult), gpuFlag, new SymExpr(gTrue));
+      newBlock->insertAtTail(setFieldPrim);
+
+      domainAssign->insertAfter(newBlock);
+      newBlock->flattenAndRemove();
+      call->remove();
+    } else {
+      INT_FATAL("currently only array hoisting to vector contexts is supported");
+    }
+  }
+
+  void handleHoistToContextCall(CallExpr* call) {
+    const int debugDepth = 3;
+
+    Symbol* handle = toSymExpr(call->get(1))->symbol();
+    Symbol* sym = toSymExpr(call->get(2))->symbol();
+    int targetCtxIdx = handleMap_[handle];
+    auto& target = contextStack_[targetCtxIdx];
+    Symbol* targetHandle = target->localHandle_;
+
+    bool isBarrier = astr(sym->type->symbol->name) == astr("Barrier");
+    bool isArray = strncmp(sym->type->symbol->name, "_array(", sizeof("_array(") - 1) == 0;
+    HoistingKind kind;
+    if (isBarrier) {
+      kind = HoistingKind::Barrier;
+      CONTEXT_DEBUG(debugDepth, "this is a barrier", sym);
+    } else if (isArray) {
+      kind = HoistingKind::Array;
+      CONTEXT_DEBUG(debugDepth, "this is an array", sym);
+    } else {
+      kind = HoistingKind::Other;
+      CONTEXT_DEBUG(debugDepth, "this is something else", sym);
+    }
+
+    if (auto coforallOnCtx = target->toCoforallOnContext()) {
+      handleHoistToCoforallOnContextCall(call, sym, coforallOnCtx, handle,
+                                         targetHandle, targetCtxIdx, kind);
+    } else if (auto vectorizedLoopCtx = target->toVectorizedLoopContext()) {
+      handleHoistToVectorContextCall(call, sym, vectorizedLoopCtx, kind);
+    }
   }
 
   CallExpr* findMultiplyCallForBarrier(Expr* e, Symbol* barrierSym) {
