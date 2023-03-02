@@ -323,6 +323,26 @@ class CoforallOnContext : public IteratorContext {
   }
 };
 
+class VectorizedLoopContext : public IteratorContext {
+ private:
+  CForLoop* loop_;
+
+ public:
+  VectorizedLoopContext(CForLoop* loop) : loop_(loop) {}
+
+  BaseAST* node() override { return loop_; }
+
+  void dump(int depth) const override {
+    std::string msg = "vectorized loop with handle ";
+    msg += "[" + std::to_string(localHandle_->id) + "]";
+    CONTEXT_DEBUG(depth, msg, loop_);
+  }
+
+  void recomputeActualSymbol(int& actualIdx, Symbol*& actual) const override {
+    // Do nothing, because vectorized loops aren't implemented as functions.
+  }
+};
+
 using IterContextPtr = std::unique_ptr<IteratorContext>;
 
 class ContextHandler {
@@ -355,6 +375,9 @@ class ContextHandler {
   }
 
   CForLoop* findInnermostLoop(Expr* curParent) {
+    // TODO: this will find loops that aren't coforall lowering.
+    //       how to fix?
+
     while (curParent) {
       if (CForLoop* loop = toCForLoop(curParent)) {
         return loop;
@@ -367,28 +390,56 @@ class ContextHandler {
   bool collectOuterContexts() {
     const int debugDepth = 2;
 
-    CForLoop* innermostLoop = this->loop();
-    Expr* cur = innermostLoop;
+    // If the current context was implemented using a plain loop, that loop.
+    CForLoop* plainLoop = this->loop();
+    // If the current context was implemented using an fn, the call to that fn.
     CallExpr* callToCurCtx = NULL;
+
+    Expr* cur = plainLoop;
     do {
-      if (auto parentFn = toFnSymbol(cur->parentSymbol)) {
+      if (cur->parentExpr) {
+        if (auto surroundingLoop = toCForLoop(cur->parentExpr)) {
+          if (surroundingLoop->isOrderIndependent()) {
+            // Found a vectorization context.
+            CONTEXT_DEBUG(debugDepth, "found a candidate vectorized loop", surroundingLoop);
+
+            auto outerCtx = std::make_unique<VectorizedLoopContext>(surroundingLoop);
+            outerCtx->setInnermostLooop(plainLoop);
+            outerCtx->setCallToInner(callToCurCtx);
+            outerCtx->setInnerLoop(findInnermostLoop(callToCurCtx));
+
+            if (!outerCtx->findLoopContextHandle()) break;
+
+            contextStack_.push_back(std::move(outerCtx));
+            cur = cur->parentExpr;
+            callToCurCtx = NULL; // vectorized loops aren't impl'ed as fns.
+            plainLoop = surroundingLoop;
+
+            continue;
+          }
+        }
+
+        // Not any expression we currently care about; keep looking upwards.
+        cur = cur->parentExpr;
+        continue;
+      } else if (auto parentFn = toFnSymbol(cur->parentSymbol)) {
         // Functions that aren't coforall or on functions don't fit the
         // pattern. Stop building chain.
         if (!fnCanHaveContext(parentFn)) break;
 
+        // Found a coforall/on context.
         CONTEXT_DEBUG(debugDepth, "found a candidate parent fn", parentFn);
 
         auto outerCtx = std::make_unique<CoforallOnContext>(parentFn);
-        outerCtx->setInnermostLooop(innermostLoop);
+        outerCtx->setInnermostLooop(plainLoop);
         outerCtx->setCallToInner(callToCurCtx);
         outerCtx->setInnerLoop(findInnermostLoop(callToCurCtx));
-        // We only have the innermost loop in the most initial iteration.
-        innermostLoop = NULL;
 
         if (!outerCtx->findLoopContextHandle()) break;
 
         contextStack_.push_back(std::move(outerCtx));
         cur = callToCurCtx = parentFn->singleInvocation();
+        plainLoop = NULL;
       } else {
         // Nothing fits the pattern, done searching.
         break;
@@ -655,8 +706,6 @@ class ContextHandler {
     // walk up the context stack to the target to find where they are
     SymbolMap newContextUpdateMap;
     for (auto& outerActualToIdx : outerActuals) {
-      printf("Fixing hoisted actual!");
-
       int actualIdx = outerActualToIdx.second;
       Symbol* curActual = NULL;
 
