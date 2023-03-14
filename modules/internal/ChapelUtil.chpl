@@ -137,15 +137,13 @@ module ChapelUtil {
       compilerError("config variables of atomic type are not supported");
 
     try! {
-      var str = createStringWithNewBuffer(x);
-      if t == string {
-        return str;
-      } else {
-        use Regex;
-        if t==regex(string) || t==regex(bytes) then
-          return new regex(str);
-        else
-          return str:t;
+      use Regex;
+      select t {
+        when string do return createStringWithNewBuffer(x);
+        when bytes do return createBytesWithNewBuffer(x);
+        when regex(string) do return new regex(createStringWithNewBuffer(x));
+        when regex(bytes) do return new regex(createBytesWithNewBuffer(x));
+        otherwise do return createStringWithNewBuffer(x):t;
       }
     }
   }
