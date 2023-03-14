@@ -143,7 +143,7 @@ module ChapelUtil {
         when bytes do return createBytesWithNewBuffer(x);
         when regex(string) do return new regex(createStringWithNewBuffer(x));
         when regex(bytes) do return new regex(createBytesWithNewBuffer(x));
-        otherwise do return createStringWithNewBuffer(x):t;
+        otherwise do return createStringWithNewBuffer(x):t; // maybe use bytes?
       }
     }
   }
