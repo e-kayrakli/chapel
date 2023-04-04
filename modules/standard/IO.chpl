@@ -1667,7 +1667,7 @@ private proc initHelper(ref f: file, fp: c_FILE, hints=ioHintSet.empty,
     var path_cs:c_string;
     var path_err = qio_file_path_for_fp(fp, path_cs);
     var path = if path_err then "unknown"
-                           else createStringWithNewBuffer(path_cs,
+                           else string.createWithNewBuffer(path_cs,
                                                           policy=decodePolicy.replace);
     chpl_free_c_string(path_cs);
     try ioerror(err, "in init", path);
@@ -1738,7 +1738,7 @@ private proc initHelper2(ref f: file, fd: c_int, hints = ioHintSet.empty,
     var path_cs:c_string;
     var path_err = qio_file_path_for_fd(fd, path_cs);
     var path = if path_err then "unknown"
-                           else createStringWithNewBuffer(path_cs,
+                           else string.createWithNewBuffer(path_cs,
                                                           policy=decodePolicy.replace);
     try ioerror(err, "in file.init", path);
   }
@@ -1965,7 +1965,7 @@ proc file._abspath: string throws {
     var tmp:c_string;
     err = qio_file_path(_file_internal, tmp);
     if !err {
-      ret = createStringWithNewBuffer(tmp,
+      ret = string.createWithNewBuffer(tmp,
                                       policy=decodePolicy.escape);
     }
     chpl_free_c_string(tmp);
@@ -1998,7 +1998,7 @@ private proc fileRelPathHelper(f: file): string throws {
     }
     chpl_free_c_string(tmp);
     if !err {
-      ret = createStringWithNewBuffer(tmp2,
+      ret = string.createWithNewBuffer(tmp2,
                                       policy=decodePolicy.escape);
     }
     chpl_free_c_string(tmp2);
@@ -2169,7 +2169,7 @@ proc openplugin(pluginFile: QioPluginFile, mode:ioMode,
         path = "unknown";
       } else {
         // doesn't throw with decodePolicy.replace
-        path = createStringWithNewBuffer(str, len,
+        path = string.createWithNewBuffer(str, len,
                                          policy=decodePolicy.replace);
       }
     }
@@ -2231,7 +2231,7 @@ private proc openfdHelper(fd: c_int, hints = ioHintSet.empty,
     var path_cs:c_string;
     var path_err = qio_file_path_for_fd(fd, path_cs);
     var path = if path_err then "unknown"
-                           else createStringWithNewBuffer(path_cs,
+                           else string.createWithNewBuffer(path_cs,
                                                           policy=decodePolicy.replace);
     try ioerror(err, "in openfd", path);
   }
@@ -2292,7 +2292,7 @@ private proc openfpHelper(fp: c_FILE, hints=ioHintSet.empty,
     var path_cs:c_string;
     var path_err = qio_file_path_for_fp(fp, path_cs);
     var path = if path_err then "unknown"
-                           else createStringWithNewBuffer(path_cs,
+                           else string.createWithNewBuffer(path_cs,
                                                           policy=decodePolicy.replace);
     chpl_free_c_string(path_cs);
     try ioerror(err, "in openfp", path);
@@ -3017,7 +3017,7 @@ inline operator :(x: _internalIoChar, type t:string) {
   var csc: c_string =  qio_encode_to_string(x.ch);
   // The caller has responsibility for freeing the returned string.
   try! {
-    return createStringWithOwnedBuffer(csc);
+    return string.createWithOwnedBuffer(csc);
   }
 }
 
@@ -3147,7 +3147,7 @@ proc fileReader._ch_ioerror(error:errorCode, msg:string) throws {
     err = qio_channel_path_offset(locking, _channel_internal, tmp_path, tmp_offset);
     if !err {
       // shouldn't throw
-      path = createStringWithNewBuffer(tmp_path,
+      path = string.createWithNewBuffer(tmp_path,
                                        policy=decodePolicy.replace);
       chpl_free_c_string(tmp_path);
     } else {
@@ -3169,7 +3169,7 @@ proc fileReader._ch_ioerror(errstr:string, msg:string) throws {
     err = qio_channel_path_offset(locking, _channel_internal, tmp_path, tmp_offset);
     if !err {
       // shouldn't throw
-      path = createStringWithNewBuffer(tmp_path,
+      path = string.createWithNewBuffer(tmp_path,
                                        policy=decodePolicy.replace);
       chpl_free_c_string(tmp_path);
     } else {
@@ -3191,7 +3191,7 @@ proc fileWriter._ch_ioerror(error:errorCode, msg:string) throws {
     err = qio_channel_path_offset(locking, _channel_internal, tmp_path, tmp_offset);
     if !err {
       // shouldn't throw
-      path = createStringWithNewBuffer(tmp_path,
+      path = string.createWithNewBuffer(tmp_path,
                                        policy=decodePolicy.replace);
       chpl_free_c_string(tmp_path);
     } else {
@@ -3213,7 +3213,7 @@ proc fileWriter._ch_ioerror(errstr:string, msg:string) throws {
     err = qio_channel_path_offset(locking, _channel_internal, tmp_path, tmp_offset);
     if !err {
       // shouldn't throw
-      path = createStringWithNewBuffer(tmp_path,
+      path = string.createWithNewBuffer(tmp_path,
                                        policy=decodePolicy.replace);
       chpl_free_c_string(tmp_path);
     } else {
@@ -4764,7 +4764,7 @@ private proc _read_text_internal(_channel_internal:qio_channel_ptr_t,
     var len:int(64);
     var tx: c_string;
     var ret = qio_channel_scan_string(false, _channel_internal, tx, len, -1);
-    x = try! createStringWithOwnedBuffer(tx, length=len);
+    x = try! string.createWithOwnedBuffer(tx, length=len);
     return ret;
   } else if t == bytes {
     // handle _bytes
@@ -4928,7 +4928,7 @@ private proc _read_binary_internal(_channel_internal:qio_channel_ptr_t, param by
     var ret = qio_channel_read_string(false, byteorder:c_int,
                                       qio_channel_str_style(_channel_internal),
                                       _channel_internal, tx, len, -1);
-    x = try! createStringWithOwnedBuffer(tx, length=len);
+    x = try! string.createWithOwnedBuffer(tx, length=len);
     return ret;
   } else if t == bytes {
     // handle _bytes (nothing special for bytes vs string in this case)
@@ -5875,7 +5875,7 @@ proc stringify(const args ...?k):string {
       // Add the terminating NULL byte to make C string conversion easy.
       buf[offset] = 0;
 
-      const ret = createStringWithNewBuffer(buf, offset, offset+1,
+      const ret = string.createWithNewBuffer(buf, offset, offset+1,
                                             decodePolicy.replace);
       c_free(buf);
       return ret;
@@ -7091,7 +7091,7 @@ private proc readBytesOrString(ch: fileReader, ref out_var: ?t, len: int(64)) : 
     }
 
     if t == string {
-      var tmp = createStringWithOwnedBuffer(tx, length=lenread);
+      var tmp = string.createWithOwnedBuffer(tx, length=lenread);
       out_var <=> tmp;
     }
     else {
@@ -7741,7 +7741,7 @@ proc fileReader.readBinary(ref s: string, maxSize: int): bool throws {
                                 this._channel_internal, tx, len, maxSize:c_ssize_t);
 
     if len > 0 then didRead = true;
-    s = try! createStringWithOwnedBuffer(tx, length=len);
+    s = try! string.createWithOwnedBuffer(tx, length=len);
   }
 
   if e == EEOF {
@@ -11053,7 +11053,7 @@ private proc chpl_do_format(fmt:?t, args ...?k): t throws
   buf[offset] = 0;
 
   if isStringType(t) then
-    return createStringWithOwnedBuffer(buf, offset, offset+1);
+    return string.createWithOwnedBuffer(buf, offset, offset+1);
   else
     return createBytesWithOwnedBuffer(buf, offset, offset+1);
 }
