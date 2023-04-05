@@ -13,6 +13,7 @@ gpu/native/studies/shoc/sort.graph
 gpu/native/streamPrototype/gpuStream.graph
 
 gpu/native/studies/kernelLaunch/emptyKernelLaunch.graph
+gpu/native/studies/gpuArrayOps/gpuArrayOps.graph
 
 gpu/native/studies/transpose/transpose-throughput.graph
 gpu/native/studies/transpose/transpose-time.graph
@@ -21,3 +22,4 @@ gpu/native/studies/chop/chplGPU.graph
 
 gpu/native/studies/compiler-performance/transform.graph
 gpu/native/studies/compiler-performance/end-to-end.graph
+
