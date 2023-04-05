@@ -408,6 +408,21 @@ module String {
     return createStringWithBorrowedBuffer(x);
   }
 
+  proc string.init(x: string, bufferOwnershipPolicy: bufferOwnershipPolicy) {
+    select bufferOwnershipPolicy {
+      when bufferOwnershipPolicy.create {
+        return createStringWithNewBuffer(x);
+      }
+      when bufferOwnershipPolicy.own {
+        halt("Can't touch this");
+        return x;
+      }
+      when bufferOwnershipPolicy.borrow {
+        return createStringWithBorrowedBuffer(x);
+      }
+    }
+  }
+
   /*
     Creates a new string which borrows the internal buffer of a `c_string`. If
     the buffer is freed before the string returned from this function, accessing
@@ -433,6 +448,21 @@ module String {
   inline proc type string.createWithBorrowedBuffer(x: c_string,
                                              length=x.size) : string throws {
     return createStringWithBorrowedBuffer(x, length);
+  }
+
+  proc string.init(x: c_string, length=x.size,
+                   bufferOwnershipPolicy: bufferOwnershipPolicy) throws {
+    select bufferOwnershipPolicy {
+      when bufferOwnershipPolicy.create {
+        return createStringWithNewBuffer(x, length);
+      }
+      when bufferOwnershipPolicy.own {
+        return createStringWithOwnedBuffer(x, length);
+      }
+      when bufferOwnershipPolicy.borrow {
+        return createStringWithBorrowedBuffer(x, length);
+      }
+    }
   }
 
   pragma "no doc"
@@ -492,6 +522,21 @@ module String {
                                              length: int,
                                              size: int) : string throws {
     return createStringWithBorrowedBuffer(x, length, size);
+  }
+
+  proc string.init(x: c_ptr(?t), length: int, size: int,
+                   bufferOwnershipPolicy: bufferOwnershipPolicy) throws {
+    select bufferOwnershipPolicy {
+      when bufferOwnershipPolicy.create {
+        return createStringWithNewBuffer(x, length, size);
+      }
+      when bufferOwnershipPolicy.own {
+        return createStringWithOwnedBuffer(x, length, size);
+      }
+      when bufferOwnershipPolicy.borrow {
+        return createStringWithBorrowedBuffer(x, length, size);
+      }
+    }
   }
 
   pragma "no doc"

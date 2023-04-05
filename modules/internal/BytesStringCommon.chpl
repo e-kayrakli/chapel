@@ -66,6 +66,8 @@ module BytesStringCommon {
   */
   enum encodePolicy { unescape, pass };
 
+  enum bufferOwnershipPolicy { create, own, borrow };
+
 
   pragma "no doc"
   config param showStringBytesInitDeprWarnings = true;
