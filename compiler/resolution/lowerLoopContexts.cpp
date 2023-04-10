@@ -594,7 +594,7 @@ class ContextHandler {
   }
 
   enum class HoistingKind {
-    Array, Barrier, Other
+    Array, CArray, Barrier, Other
   };
 
   void handleHoistToCoforallOnContextCall(CallExpr* call,
@@ -858,6 +858,16 @@ class ContextHandler {
       domainAssign->insertAfter(newBlock);
       newBlock->flattenAndRemove();
       call->remove();
+    } else if (kind == HoistingKind::CArray) {
+      call->prev->remove();
+      auto replacementBlock = toBlockStmt(call->prev);
+      auto replacementDefExpr = toDefExpr(replacementBlock->getFirstExpr());
+      replacementBlock->flattenAndRemove();
+      SymbolMap newArrayUpdateMap;
+      newArrayUpdateMap.put(toHoist, replacementDefExpr->sym);
+      toHoist->defPoint->remove();
+      update_symbols(loop(), &newArrayUpdateMap);
+      call->remove();
     } else {
       INT_FATAL("currently only array hoisting to vector contexts is supported");
     }
@@ -874,6 +884,7 @@ class ContextHandler {
 
     bool isBarrier = astr(sym->type->symbol->name) == astr("Barrier");
     bool isArray = strncmp(sym->type->symbol->name, "_array(", sizeof("_array(") - 1) == 0;
+    bool isCArray = strncmp(sym->type->symbol->name, "c_array(", sizeof("c_array(") - 1) == 0;
     HoistingKind kind;
     if (isBarrier) {
       kind = HoistingKind::Barrier;
@@ -881,6 +892,9 @@ class ContextHandler {
     } else if (isArray) {
       kind = HoistingKind::Array;
       CONTEXT_DEBUG(debugDepth, "this is an array", sym);
+    } else if (isCArray) {
+      kind = HoistingKind::CArray;
+      CONTEXT_DEBUG(debugDepth, "this is a C array", sym);
     } else {
       kind = HoistingKind::Other;
       CONTEXT_DEBUG(debugDepth, "this is something else", sym);

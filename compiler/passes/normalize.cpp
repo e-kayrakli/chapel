@@ -123,6 +123,72 @@ static TypeSymbol* expandTypeAlias(SymExpr* se);
 *                                                                             *
 ************************************** | *************************************/
 
+static void earlyGpuTransforms() {
+  forv_expanding_Vec(CallExpr, call, gCallExprs) {
+    if (!call->isPrimitive(PRIM_HOIST_TO_CONTEXT)) continue;
+
+    // var A: c_array(int, 10)
+    //
+    //
+    // var A_ptr = allocate(numBytes(int)*10);
+    // var A_array_ptr = A_ptr : c_ptr(c_array(int, 10))
+    // ref A  = A_array_ptr.deref()
+
+    // The particular definition we expect is a default-init c_array, which is:
+    //
+    //    unknown myArray;
+    //    unknown call_tmp;
+    //    call_tmp = c_array(t, k);
+    //    myArray = getSharedCArray(call_tmp)
+    //
+    // inline proc getSharedCArray(type theType : c_array(?t, ?k)) ref {
+    //   var voidPtr = __primitive("gpu allocShared", numBytes(t) * k);
+    //   var arrayPtr = voidPtr : c_ptr(theType);
+    //   return arrayPtr.deref();
+    // }
+    //
+    // Replace with
+    //    unknown myArray_alloc;
+    //    myArray_alloc = __primitive("gpu allocShared", __primitive("*", numBytes(t), k));
+    //    unknwon myArray_cast;
+    //    myArray_cast = __primitive("cast", myArray_alloc, c_ptr(call_tmp));
+    //    unknown myArray = myArray_cast.deref();
+
+    auto hoistDefExpr = toSymExpr(call->get(2))->symbol()->defPoint;
+    printf("CArray hoist start\n");
+    if (!isDefExpr(hoistDefExpr->next)) continue;
+    printf("It's a def expr!\n");
+    auto typeDefExpr = toDefExpr(hoistDefExpr->next);
+    if (!isCallExpr(typeDefExpr->next)) continue;
+    printf("Then a call expr!\n");
+    auto typeAssign = toCallExpr(typeDefExpr->next);
+    if (!typeAssign->isPrimitive(PRIM_MOVE) ||
+        !isCallExpr(typeAssign->get(2))) continue;
+    printf("It's a move of a call expr!\n");
+    auto typeCall = toCallExpr(typeAssign->get(2));
+    if (!isCallExpr(typeAssign->next)) continue;
+    printf("It's another call expr!\n");
+    auto initCall = toCallExpr(typeAssign->next);
+    if (!initCall->isPrimitive(PRIM_DEFAULT_INIT_VAR)) continue;
+    printf("It's a default initializer!\n");
+
+    auto typeConstructor = toSymExpr(typeCall->baseExpr);
+    if (!typeConstructor) continue;
+    printf("Type constructor has a SymExpr! %s\n", typeConstructor->symbol()->name);
+    if (typeConstructor->symbol()->name != astr("c_array")) continue;
+    printf("And it's a c_array!\n");
+
+    SET_LINENO(hoistDefExpr);
+    auto newBlock = new BlockStmt();
+    auto newArr = new VarSymbol(astr("shared_", hoistDefExpr->sym->name));
+    newArr->qual = Qualifier::QUAL_REF;
+    newBlock->insertAtTail(new DefExpr(newArr));
+    newBlock->insertAtTail(new CallExpr(PRIM_MOVE, new SymExpr(newArr), new CallExpr("createSharedCArray", new SymExpr(typeDefExpr->sym))));
+    initCall->insertBefore(newBlock);
+  }
+}
+
+
 void normalize() {
 
   insertModuleInit();
@@ -248,6 +314,8 @@ void normalize() {
 
     }
   }
+
+  earlyGpuTransforms();
 
   find_printModuleInit_stuff();
 }
