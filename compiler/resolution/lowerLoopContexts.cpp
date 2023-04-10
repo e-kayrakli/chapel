@@ -859,14 +859,30 @@ class ContextHandler {
       newBlock->flattenAndRemove();
       call->remove();
     } else if (kind == HoistingKind::CArray) {
+      // The ref-ified version of the array will not need autodestroys;
+      // get rid of them.
+      std::vector<CallExpr*> callsInLoop;
+      collectCallExprs(this->loop(), callsInLoop);
+      for_vector (CallExpr, call, callsInLoop) {
+        if (FnSymbol* fn = call->resolvedFunction()) {
+          if (fn->hasFlag(FLAG_AUTO_DESTROY_FN) &&
+              toSymExpr(call->get(1))->symbol() == toHoist) {
+            call->remove();
+          }
+        }
+      }
+      // Remove the initializer.
       call->prev->remove();
+      // Unpack the pre-generated initialization code for the shared array
       auto replacementBlock = toBlockStmt(call->prev);
       auto replacementDefExpr = toDefExpr(replacementBlock->getFirstExpr());
       replacementBlock->flattenAndRemove();
+      // Replace the old, non-shared array with the new shared array.
       SymbolMap newArrayUpdateMap;
       newArrayUpdateMap.put(toHoist, replacementDefExpr->sym);
       toHoist->defPoint->remove();
       update_symbols(loop(), &newArrayUpdateMap);
+      // Remove the call-to-context call.
       call->remove();
     } else {
       INT_FATAL("currently only array hoisting to vector contexts is supported");
