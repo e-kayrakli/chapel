@@ -657,6 +657,7 @@ CallResolutionResult resolvePrimCall(Context* context,
     case PRIM_VERSION_SHA:
     case PRIM_REF_DESERIALIZE:
     case PRIM_UNKNOWN:
+    case PRIM_INNERMOST_CONTEXT:
     case PRIM_OUTER_CONTEXT:
     case PRIM_HOIST_TO_CONTEXT:
     case NUM_KNOWN_PRIMS:
