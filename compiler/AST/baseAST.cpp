@@ -363,7 +363,7 @@ BaseAST::BaseAST(AstTag type) :
     } else {
       // neither yy* nor currentAstLoc are set
       if (developer || fVerify) {
-        // INT_FATAL("no line number available");
+        INT_FATAL("no line number available");
       } else {
         astloc = astlocT(0, astr("[file unknown]"));
       }

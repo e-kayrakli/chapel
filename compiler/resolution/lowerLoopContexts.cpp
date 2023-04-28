@@ -794,71 +794,7 @@ class ContextHandler {
                                       Symbol* toHoist,
                                       VectorizedLoopContext* context,
                                       HoistingKind kind) {
-    if (kind == HoistingKind::Array) {
-      // Array definitions like this:
-      //
-      //     var A: [R1, ..., Rn] int;
-      //
-      // Are translated into something like this:
-      //
-      //     var D = chpl_ensureDomainExpr(R1, ..., Rn);
-      //     var rtt = chpl__buildArrayRuntimeType(D);
-      //     var A = chpl__convertRuntimeTypeToValue(rtt.domain);
-      //
-      // We have a wrapper function chpl_ensureDomainExprGpuShared that
-      // does the same thing as the original chpl_ensureDomainExpr, but
-      // also sets a flag to make arrays from the domain use shared memory.
-      // Find the call to ensureDomainExpr and replace it with the GpuShared
-      // version.
-
-      CallExpr* callToEnsureDomainExpr = nullptr;
-      const char* nameToFind = astr("chpl__ensureDomainExpr");
-      (void) callToEnsureDomainExpr;
-      Expr* cur = call->prev;
-      while (cur != toHoist->defPoint) {
-        if (auto call = toCallExpr(cur)) {
-          if (auto fn = call->resolvedFunction()) {
-            if (fn->name == nameToFind) {
-              callToEnsureDomainExpr = call;
-              break;
-            }
-          }
-        }
-        cur = cur->prev;
-      }
-
-      if (!callToEnsureDomainExpr) {
-        INT_FATAL("AST is not in the shape expected for GPU array hoisting");
-      }
-
-      // The next definition is a move into a "call return" temporary; use that.
-      INT_ASSERT(callToEnsureDomainExpr->next);
-      auto domainAssign = toCallExpr(callToEnsureDomainExpr->next);
-      INT_ASSERT(domainAssign && domainAssign->primitive && domainAssign->primitive->tag == PRIM_MOVE);
-      auto callResult = toSymExpr(domainAssign->argList.first());
-
-      auto domainType = toAggregateType(callResult->typeInfo());
-      auto valueFieldIdx = domainType->getFieldPosition("_instance");
-      auto valueField = domainType->getField(valueFieldIdx);
-      auto valueFieldType = toAggregateType(valueField->typeInfo());
-      auto gpuFlagIdx = valueFieldType->getFieldPosition("useGpuSharedMemory");
-      auto gpuFlag = valueFieldType->getField(gpuFlagIdx);
-
-      SET_LINENO(callToEnsureDomainExpr);
-      // domain._instance.useGpuSharedMemory = true;
-      auto newBlock = new BlockStmt();
-      auto getValueResult = newTemp("domain_value", valueFieldType->getRefType());
-      newBlock->insertAtTail(new DefExpr(getValueResult));
-      auto getValueCall = new CallExpr(PRIM_GET_MEMBER, new SymExpr(callResult->symbol()), new SymExpr(valueField));
-      auto getValueMove = new CallExpr(PRIM_MOVE, new SymExpr(getValueResult), getValueCall);
-      newBlock->insertAtTail(getValueMove);
-      auto setFieldPrim = new CallExpr(PRIM_SET_MEMBER, new SymExpr(getValueResult), gpuFlag, new SymExpr(gTrue));
-      newBlock->insertAtTail(setFieldPrim);
-
-      domainAssign->insertAfter(newBlock);
-      newBlock->flattenAndRemove();
-      call->remove();
-    } else if (kind == HoistingKind::CArray) {
+     if (kind == HoistingKind::CArray) {
       // The ref-ified version of the array will not need autodestroys;
       // get rid of them.
       std::vector<CallExpr*> callsInLoop;
