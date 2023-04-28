@@ -368,9 +368,6 @@ GpuizableLoop::GpuizableLoop(BlockStmt *blk) {
   INT_ASSERT(blk->getFunction());
 
   this->loop_ = toCForLoop(blk);
-  if (this->loop_->id == 1749760) {
-    debuggerBreakHere();
-  }
 
   this->parentFn_ = toFnSymbol(blk->getFunction());
   this->shouldErrorIfNotGpuizable_ = determineIfShouldErrorIfNotGpuizable();
