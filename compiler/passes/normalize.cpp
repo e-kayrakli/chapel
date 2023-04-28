@@ -156,7 +156,7 @@ static void earlyGpuTransforms() {
     newArr->qual = Qualifier::QUAL_REF;
     newBlock->insertAtTail(new DefExpr(newArr));
     newBlock->insertAtTail(new CallExpr(PRIM_MOVE, new SymExpr(newArr), new CallExpr("createSharedCArray", new SymExpr(typeDefExpr->sym))));
-    initCall->insertBefore(newBlock);
+    initCall->insertAfter(newBlock);
   }
 }
 
