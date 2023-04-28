@@ -605,12 +605,21 @@ class ContextHandler {
                                           int targetCtxIdx,
                                           HoistingKind kind) {
     const int debugDepth = 3;
-    std::vector<CallExpr*>& autoDestroyAnchors =
-        context->getLocalHandleAutoDestroys();
-
     CONTEXT_DEBUG(debugDepth, "will hoist to ["+std::to_string(context->localHandle_->id)+"]",
                   call);
 
+    if (kind == HoistingKind::CArray) {
+      // The early GPU transformations would've added a block here with
+      // additional code to support CArray hoisting to GPU. But it's not
+      // being hoisted to the GPU, so remove that block.
+      auto block = toBlockStmt(call->prev);
+      INT_ASSERT(block && "Expected a generated block before the hoist");
+      CONTEXT_DEBUG(debugDepth, "removing block ["+std::to_string(block->id)+"]", block);
+      block->remove();
+    }
+
+    std::vector<CallExpr*>& autoDestroyAnchors =
+        context->getLocalHandleAutoDestroys();
 
     // TODO cache this stuff somewhere, but we remove some below. Is that a problem?
     std::vector<CallExpr*> callsInLoop;
@@ -808,7 +817,7 @@ class ContextHandler {
         }
       }
       // Remove the initializer.
-      call->prev->remove();
+      call->prev->prev->remove();
       // Unpack the pre-generated initialization code for the shared array
       auto replacementBlock = toBlockStmt(call->prev);
       auto replacementDefExpr = toDefExpr(replacementBlock->getFirstExpr());
