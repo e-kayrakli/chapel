@@ -1,5 +1,5 @@
 use BlockDist;
-use Barriers;
+use Collectives;
 use CommDiagnostics;
 use ChapelContextSupport;
 use Time;
@@ -17,7 +17,7 @@ config const verboseComm = false;
 config const verify = false;
 
 const Space = {0..<n, 0..<n};
-const Dom = newBlockDom(Space);
+const Dom = Block.createDomain(Space);
 var Input: [Dom] int;
 var Output: [Dom] int;
 
@@ -41,7 +41,7 @@ forall (i, j) in Dom.customThese() {
 
   var localBarrier;
   { // AST is too complicated without this block
-    localBarrier = new Barrier(1);
+    localBarrier = new barrier(1);
     localBarrier.multiply(1);
   }
   __primitive("hoist to context", localeContext, localBarrier);

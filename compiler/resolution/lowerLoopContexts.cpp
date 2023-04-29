@@ -843,7 +843,7 @@ class ContextHandler {
     auto& target = contextStack_[targetCtxIdx];
     Symbol* targetHandle = target->localHandle_;
 
-    bool isBarrier = astr(sym->type->symbol->name) == astr("Barrier");
+    bool isBarrier = astr(sym->type->symbol->name) == astr("barrier");
     bool isArray = strncmp(sym->type->symbol->name, "_array(", sizeof("_array(") - 1) == 0;
     bool isCArray = strncmp(sym->type->symbol->name, "c_array(", sizeof("c_array(") - 1) == 0;
     HoistingKind kind;

@@ -1,5 +1,5 @@
 use IO;
-use Barriers;
+use Collectives;
 use Memory.Diagnostics;
 
 use ChapelContextSupport;
@@ -22,7 +22,7 @@ forall i in simpleOneDim(n) {  // context should be coming from a new syntax
 
   var b;
   { // AST is too complicated without this block
-    b = new Barrier(1);
+    b = new barrier(1);
     b.multiply(1);
   }
   __primitive("hoist to context", localeContext, b);

@@ -114,7 +114,7 @@ module Iterators {
     // TODO: Can we just re-use the DefaultRectangularDom follower here?
     //
     iter BlockDom.customThese(param tag: iterKind, followThis) where tag == iterKind.follower {
-      proc anyStridable(rangeTuple, param i: int = 0) param
+      proc anyStridable(rangeTuple, param i: int = 0) param do
         return if i == rangeTuple.size-1 then rangeTuple(i).stridable
         else rangeTuple(i).stridable || anyStridable(rangeTuple, i+1);
 
