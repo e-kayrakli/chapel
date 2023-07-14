@@ -5336,7 +5336,7 @@ static void codegenPutGet(CallExpr* call, GenRet &ret) {
       dt = call->get(1)->typeInfo()->getValType()->symbol;
 
       if (call->get(1)->typeInfo()->symbol->hasFlag(FLAG_REF)) {
-        localAddr = codegenDeref(localAddr);
+        localAddr = codegenValue(localAddr);
       }
 
       // c_ptr/ddata are already addresses, so dereference one level.
