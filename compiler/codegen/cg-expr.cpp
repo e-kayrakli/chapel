@@ -5336,6 +5336,7 @@ static void codegenPutGet(CallExpr* call, GenRet &ret) {
       dt = call->get(1)->typeInfo()->getValType()->symbol;
 
       if (call->get(1)->typeInfo()->symbol->hasFlag(FLAG_REF)) {
+        std::cout << "Codegening the problematic branch\n";
         localAddr = codegenValue(localAddr);
       }
 
