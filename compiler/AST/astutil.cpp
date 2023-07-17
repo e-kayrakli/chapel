@@ -1240,7 +1240,7 @@ Symbol* getSvecSymbol(CallExpr* call) {
   AggregateType* tuple = toAggregateType(type);
   SymExpr* fieldVal = toSymExpr(call->get(2));
   VarSymbol* fieldSym = toVarSymbol(fieldVal->symbol());
-  if (fieldSym) {
+  if (fieldSym && fieldSym->immediate) {
     int immediateVal = fieldSym->immediate->int_value();
 
     INT_ASSERT(immediateVal >= 0 && immediateVal < tuple->fields.length);

@@ -514,7 +514,12 @@ static void buildLocalDefUseMaps(Loop* loop, symToVecSymExprMap& localDefMap, sy
            callExpr->isPrimitive(PRIM_SET_SVEC_MEMBER)) {
           if(SymExpr* symExpr = toSymExpr(callExpr->get(2))) {
             if(callExpr->isPrimitive(PRIM_SET_SVEC_MEMBER)) {
-              addDefOrUse(localDefMap, getSvecSymbol(callExpr), symExpr);
+              if (Symbol* svecSym = getSvecSymbol(callExpr)) {
+                addDefOrUse(localDefMap, svecSym, symExpr);
+              }
+              else {
+                addDefOrUse(localDefMap, symExpr->symbol(), symExpr);
+              }
             } else {
               addDefOrUse(localDefMap, symExpr->symbol(), symExpr);
             }
