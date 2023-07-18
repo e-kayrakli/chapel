@@ -83,11 +83,19 @@ static hipModule_t *chpl_gpu_rocm_modules;
 
 static int *deviceClockRates;
 
+static int num_ignored_gpus;
+
+static inline int get_gpu_for_subloc(c_sublocid_t subloc_id) {
+  return subloc_id-num_ignored_gpus;
+}
+
+
 
 static void chpl_gpu_ensure_context(void) {
   // Some hipCtx* functions are deprecated so we're using `hipSetDevice`
   // in its place
-  ROCM_CALL(hipSetDevice(chpl_task_getRequestedSubloc()));
+  int dev_id = get_gpu_for_subloc(chpl_task_getRequestedSubloc());
+  ROCM_CALL(hipSetDevice(dev_id));
 
   // The below is a direct "hipification" of the CUDA runtime
   // but it's using deprecated APIs
@@ -137,26 +145,30 @@ void chpl_gpu_impl_init(int num_ignored, int* num_devices) {
   ROCM_CALL(hipGetDeviceCount(&num_actual_devices));
 
   *num_devices = num_actual_devices-num_ignored;
+  num_ignored_gpus = num_ignored;
   const int loc_num_devices = *num_devices;
 
   chpl_gpu_rocm_modules = chpl_malloc(sizeof(hipModule_t)*loc_num_devices);
   deviceClockRates = chpl_malloc(sizeof(int)*loc_num_devices);
 
-  int i;
-  for (i=0 ; i<loc_num_devices ; i++) {
+  int phys_id, logic_id;
+  //for (i=0 ; i<loc_num_devices ; i++) {
+  for (phys_id=num_ignored ; phys_id<num_actual_devices ; phys_id++) {
+    logic_id = phys_id - num_ignored;
+
     hipDevice_t device;
     hipCtx_t context;
 
-    ROCM_CALL(hipDeviceGet(&device, i));
+    ROCM_CALL(hipDeviceGet(&device, phys_id));
     ROCM_CALL(hipDevicePrimaryCtxSetFlags(device, hipDeviceScheduleBlockingSync));
     ROCM_CALL(hipDevicePrimaryCtxRetain(&context, device));
 
     ROCM_CALL(hipSetDevice(device));
     hipModule_t module = chpl_gpu_load_module(chpl_gpuBinary);
     chpl_gpu_impl_set_globals(module);
-    chpl_gpu_rocm_modules[i] = module;
+    chpl_gpu_rocm_modules[logic_id] = module;
 
-    hipDeviceGetAttribute(&deviceClockRates[i], hipDeviceAttributeClockRate, device);
+    hipDeviceGetAttribute(&deviceClockRates[logic_id], hipDeviceAttributeClockRate, device);
   }
 }
 
@@ -223,7 +235,8 @@ static void chpl_gpu_launch_kernel_help(int ln,
   CHPL_GPU_STOP_TIMER(context_time);
   CHPL_GPU_START_TIMER(load_time);
 
-  hipDeviceptr_t rocm_module = chpl_gpu_rocm_modules[chpl_task_getRequestedSubloc()];
+  int dev_id = get_gpu_for_subloc(chpl_task_getRequestedSubloc());
+  hipDeviceptr_t rocm_module = chpl_gpu_rocm_modules[dev_id];
   void* function = chpl_gpu_load_function(rocm_module, name);
 
   CHPL_GPU_STOP_TIMER(load_time);
