@@ -40,7 +40,7 @@ int chpl_gpu_num_devices = -1;
 
 static int num_ignored_gpus() {
   const char* env;
-  int32_t num = -1;
+  int32_t num = 0;
   if ((env = chpl_env_rt_get("NUM_IGNORED_GPUS", NULL)) != NULL) {
     if (sscanf(env, "%" SCNi32, &num) != 1) {
       chpl_error("Cannot parse CHPL_RT_NUM_IGNORED_GPUS environment "
@@ -50,8 +50,6 @@ static int num_ignored_gpus() {
     if (num < 0) {
       chpl_error("CHPL_RT_NUM_IGNORED_GPUS must be >= 0", 0, 0);
     }
-
-    assert(num!=-1);
   }
   return num;
 }
