@@ -38,8 +38,27 @@ int chpl_gpu_num_devices = -1;
 #include "chpl-env-gen.h"
 #include "chpl-env.h"
 
+static int num_ignored_gpus() {
+  const char* env;
+  int32_t num = -1;
+  if ((env = chpl_env_rt_get("NUM_IGNORED_GPUS", NULL)) != NULL) {
+    if (sscanf(env, "%" SCNi32, &num) != 1) {
+      chpl_error("Cannot parse CHPL_RT_NUM_IGNORED_GPUS environment "
+                 "variable", 0, 0);
+    }
+
+    if (num < 0) {
+      chpl_error("CHPL_RT_NUM_IGNORED_GPUS must be >= 0", 0, 0);
+    }
+
+    assert(num!=-1);
+  }
+  return num;
+}
+
 void chpl_gpu_init(void) {
-  chpl_gpu_impl_init(&chpl_gpu_num_devices);
+
+  chpl_gpu_impl_init(num_ignored_gpus(), &chpl_gpu_num_devices);
 
   assert(chpl_gpu_num_devices >= 0);
 

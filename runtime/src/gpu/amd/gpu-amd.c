@@ -128,12 +128,17 @@ static void chpl_gpu_impl_set_globals(hipModule_t module) {
 }
 
 
-void chpl_gpu_impl_init(int* num_devices) {
+void chpl_gpu_impl_init(int num_ignored, int* num_devices) {
   ROCM_CALL(hipInit(0));
 
-  ROCM_CALL(hipGetDeviceCount(num_devices));
+  assert(num_ignored >= 0);
+  int num_actual_devices;
 
+  ROCM_CALL(hipGetDeviceCount(&num_actual_devices));
+
+  *num_devices = num_actual_devices-num_ignored;
   const int loc_num_devices = *num_devices;
+
   chpl_gpu_rocm_modules = chpl_malloc(sizeof(hipModule_t)*loc_num_devices);
   deviceClockRates = chpl_malloc(sizeof(int)*loc_num_devices);
 
