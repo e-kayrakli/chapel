@@ -114,32 +114,29 @@ module Iterators {
     // TODO: Can we just re-use the DefaultRectangularDom follower here?
     //
     iter BlockDom.customThese(param tag: iterKind, followThis) where tag == iterKind.follower {
-      proc anyStridable(rangeTuple, param i: int = 0) param do
-        return if i == rangeTuple.size-1 then rangeTuple(i).stridable
-        else rangeTuple(i).stridable || anyStridable(rangeTuple, i+1);
+      if chpl__testParFlag then
+        chpl__testParWriteln("Block domain follower invoked on ", followThis);
 
-        if chpl__testParFlag then
-          chpl__testParWriteln("Block domain follower invoked on ", followThis);
-
-        var t: rank*range(idxType, stridable=stridable||anyStridable(followThis));
-        type strType = chpl__signedType(idxType);
-        for param i in 0..rank-1 {
-          var stride = whole.dim(i).stride: strType;
-          // not checking here whether the new low and high fit into idxType
-          var low = (stride * followThis(i).lowBound:strType):idxType;
-          var high = (stride * followThis(i).highBound:strType):idxType;
-          t(i) = ((low..high by stride:strType) + whole.dim(i).low by followThis(i).stride:strType).safeCast(t(i).type);
-        }
-        for i in {(...t)} {
-          yield i;
-        }
+      var t: rank*range(idxType, strides = chpl_strideProduct(whole.strides,
+            chpl_strideUnion(followThis)));
+      type strType = chpl__signedType(idxType);
+      for param i in 0..rank-1 {
+        var stride = whole.dim(i).stride: strType;
+        // not checking here whether the new low and high fit into idxType
+        var low = (stride * followThis(i).lowBound:strType):idxType;
+        var high = (stride * followThis(i).highBound:strType):idxType;
+        t(i) = ((low..high by stride:strType) + whole.dim(i).low by followThis(i).stride:strType).safeCast(t(i).type);
+      }
+      for i in {(...t)} {
+        yield i;
+      }
     }
 
     iter DefaultRectangularDom.customThese(param tag: iterKind,
                tasksPerLocale = dataParTasksPerLocale,
                ignoreRunning = dataParIgnoreRunningTasks,
                minIndicesPerTask = dataParMinGranularity,
-               offset=createTuple(rank, intIdxType, 0:intIdxType))
+               offset=createTuple(rank, chpl_integralIdxType, 0:chpl_integralIdxType))
       where tag == iterKind.leader {
 
 
@@ -183,11 +180,11 @@ module Iterators {
             const numSublocTasks = (if chunk < dptpl % numChunks
                                     then dptpl / numChunks + 1
                                     else dptpl / numChunks);
-            var locBlock: rank*range(intIdxType);
+            var locBlock: rank*range(chpl_integralIdxType);
             for param i in 0..rank-1 do
-              locBlock(i) = offset(i)..#(ranges(i).sizeAs(intIdxType));
-            var followMe: rank*range(intIdxType) = locBlock;
-            const (lo,hi) = _computeBlock(locBlock(parDim).sizeAs(intIdxType),
+              locBlock(i) = offset(i)..#(ranges(i).sizeAs(chpl_integralIdxType));
+            var followMe: rank*range(chpl_integralIdxType) = locBlock;
+            const (lo,hi) = _computeBlock(locBlock(parDim).sizeAs(chpl_integralIdxType),
                                           numChunks, chunk,
                                           locBlock(parDim)._high,
                                           locBlock(parDim)._low,
@@ -198,13 +195,13 @@ module Iterators {
                                                              minIndicesPerTask,
                                                              followMe);
             coforall chunk2 in 0..#numChunks2 {
-              var locBlock2: rank*range(intIdxType);
+              var locBlock2: rank*range(chpl_integralIdxType);
               for param i in 0..rank-1 do
                 locBlock2(i) = followMe(i).lowBound..followMe(i).highBound;
-              var followMe2: rank*range(intIdxType) = locBlock2;
+              var followMe2: rank*range(chpl_integralIdxType) = locBlock2;
               const low  = locBlock2(parDim2)._low,
                 high = locBlock2(parDim2)._high;
-              const (lo,hi) = _computeBlock(locBlock2(parDim2).sizeAs(intIdxType),
+              const (lo,hi) = _computeBlock(locBlock2(parDim2).sizeAs(chpl_integralIdxType),
                                             numChunks2, chunk2,
                                             high, low, low);
               followMe2(parDim2) = lo..hi;
@@ -245,16 +242,16 @@ module Iterators {
                   "### nranges = ", ranges);
         }
 
-        var locBlock: rank*range(intIdxType);
+        var locBlock: rank*range(chpl_integralIdxType);
         for param i in 0..rank-1 do
-          locBlock(i) = offset(i)..#(ranges(i).sizeAs(intIdxType));
+          locBlock(i) = offset(i)..#(ranges(i).sizeAs(chpl_integralIdxType));
         if debugDefaultDist then
           chpl_debug_writeln("*** DI: locBlock = ", locBlock);
         coforall chunk in 0..#numChunks {
           var innerCtx = new Context(rank=1, taskId=chunk, numTasks=numChunks);
 
-          var followMe: rank*range(intIdxType) = locBlock;
-          const (lo,hi) = _computeBlock(locBlock(parDim).sizeAs(intIdxType),
+          var followMe: rank*range(chpl_integralIdxType) = locBlock;
+          const (lo,hi) = _computeBlock(locBlock(parDim).sizeAs(chpl_integralIdxType),
                                         numChunks, chunk,
                                         locBlock(parDim)._high,
                                         locBlock(parDim)._low,
@@ -278,14 +275,15 @@ module Iterators {
         yield i;
       }
     }
-    pragma "no doc"
+
+    @chpldoc.nodoc
     iter _domain.customThese(param tag: iterKind)
       where tag == iterKind.standalone &&
             __primitive("resolves", _value.these(tag=tag)) {
       for i in _value.customThese(tag) do
         yield i;
     }
-    pragma "no doc"
+    @chpldoc.nodoc
     iter _domain.customThese(param tag: iterKind)
       where tag == iterKind.leader {
       // If I use forall here, it says
@@ -294,7 +292,7 @@ module Iterators {
       for followThis in _value.customThese(tag) do
         yield followThis;
     }
-    pragma "no doc"
+    @chpldoc.nodoc
     iter _domain.customThese(param tag: iterKind, followThis, param fast: bool = false)
       where tag == iterKind.follower {
 

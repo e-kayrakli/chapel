@@ -1,5 +1,5 @@
 use IO;
-use Memory.Diagnostics;
+use MemDiagnostics;
 
 use ChapelContextSupport;
 use Iterators.SimpleOneDim;
