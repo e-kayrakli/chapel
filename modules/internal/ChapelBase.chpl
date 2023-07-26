@@ -1579,6 +1579,9 @@ module ChapelBase {
   proc _ddata_allocate_noinit_gpu_shared(type eltType, size: integral,
                                          out callPostAlloc: bool,
                                          subloc = c_sublocid_none) {
+    if CHPL_LOCALE_MODEL != "gpu" then
+      compilerError("_ddata_allocate_noinit_gpu_shared can't be called in this config");
+
     var ret: _ddata(eltType);
     ret = __primitive("gpu allocShared", 4096*8):ret.type;
     return ret;

@@ -1297,7 +1297,8 @@ module DefaultRectangular {
           chpl_debug_writeln("*** DR alloc ", eltType:string, " ", size);
         }
 
-        if useGpuSharedMemory {
+        import ChplConfig;
+        if ChplConfig.CHPL_LOCALE_MODEL == "gpu" && useGpuSharedMemory {
           data = _ddata_allocate_noinit_gpu_shared(eltType, size, callPostAlloc);
         } else if !localeModelPartitionsIterationOnSublocales {
           data = _ddata_allocate_noinit(eltType, size, callPostAlloc);
