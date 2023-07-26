@@ -1583,7 +1583,8 @@ module ChapelBase {
       compilerError("_ddata_allocate_noinit_gpu_shared can't be called in this config");
 
     var ret: _ddata(eltType);
-    ret = __primitive("gpu allocShared", 4096*8):ret.type;
+    // TODO why fixed size?
+    ret = __primitive("cast", ret.type, __primitive("gpu allocShared", 4096*8));
     return ret;
   }
 
