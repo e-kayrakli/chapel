@@ -14,7 +14,7 @@ module Iterators {
 
     iter simpleOneDim(n) {
       const iterRange = 0..<n;
-      for i in iterRange do yield i;
+      foreach i in iterRange do yield i;
     }
 
     iter simpleOneDim(param tag: iterKind, n) where tag==iterKind.leader {
@@ -46,7 +46,7 @@ module Iterators {
     }
 
     iter simpleOneDim(param tag: iterKind, n, followThis) where tag==iterKind.follower {
-      for i in followThis do yield i;
+      foreach i in followThis do yield i;
     }
   }
 

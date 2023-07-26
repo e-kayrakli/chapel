@@ -423,12 +423,12 @@ class ContextHandler {
     Expr* cur = plainLoop;
     do {
       if (cur->parentExpr) {
-        if (auto surroundingLoop = toCForLoop(cur->parentExpr)) {
-          if (surroundingLoop->isOrderIndependent()) {
+        if (CForLoop* cfl = toCForLoop(cur)) {
+          if (cfl->isOrderIndependent()) {
             // Found a vectorization context.
-            CONTEXT_DEBUG(debugDepth, "found a candidate vectorized loop", surroundingLoop);
+            CONTEXT_DEBUG(debugDepth, "found a candidate vectorized loop", cfl);
 
-            auto outerCtx = std::make_unique<VectorizedLoopContext>(surroundingLoop);
+            auto outerCtx = std::make_unique<VectorizedLoopContext>(cfl);
             outerCtx->setInnermostLooop(plainLoop);
             outerCtx->setCallToInner(callToCurCtx);
             outerCtx->setInnerLoop(findInnermostLoop(callToCurCtx));
@@ -438,7 +438,7 @@ class ContextHandler {
             contextStack_.push_back(std::move(outerCtx));
             cur = cur->parentExpr;
             callToCurCtx = NULL; // vectorized loops aren't impl'ed as fns.
-            plainLoop = surroundingLoop;
+            plainLoop = cfl;
 
             continue;
           }
