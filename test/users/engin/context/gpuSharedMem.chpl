@@ -15,11 +15,11 @@ on here.gpus[0] {
   foreach i in simpleOneDim(N) {  // context should be coming from a new syntax
     assertOnGpu();
     const context = new Context();
-    const localTaskContext = __primitive("outer context", context);
+    const vectorContext = __primitive("outer context", context);
 
     // Each thread independently assigns to shared memory
     var dst_ptr: c_array(uint, N);
-    __primitive("hoist to context", localTaskContext, dst_ptr);
+    __primitive("hoist to context", vectorContext, dst_ptr);
 
     // After the sync the array in shared memory will be:
     //   [100, 200, 300, 400, ...]

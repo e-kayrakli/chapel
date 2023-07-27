@@ -71,9 +71,6 @@ __device__ static inline void chpl_gen_comm_put(void* addr, c_nodeid_t node,
 MAYBE_GPU static inline void chpl_gpu_write(const char *str) { printf("%s", str); }
 
 __device__ static inline void chpl_assert_on_gpu(int32_t lineno, int32_t filenameIdx) { /* no op */ }
-__host__ static inline void chpl_assert_on_gpu(int32_t lineno, int32_t filenameIdx) {
-  chpl_error("assertOnGpu() failed", lineno, filenameIdx);
-}
 
 __device__ static inline unsigned int chpl_gpu_clock(void) {
   return (unsigned int)clock();
