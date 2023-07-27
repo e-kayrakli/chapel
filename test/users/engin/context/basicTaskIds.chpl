@@ -10,7 +10,8 @@ config const doVerboseMem = true;
 if doVerboseMem then startVerboseMem();
 forall i in simpleOneDim(n) {  // context should be coming from a new syntax
   const context = new Context();
-  const localTaskContext = __primitive("outer context", context);
+  const vectorContext = __primitive("outer context", context);
+  const localTaskContext = __primitive("outer context", vectorContext);
   const localeContext = __primitive("outer context", localTaskContext);
   const preLocaleTaskContext = __primitive("outer context", localeContext);
 
