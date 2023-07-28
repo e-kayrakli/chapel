@@ -4247,6 +4247,8 @@ static void linkGpuDeviceLibraries() {
     }
   }
 
+  externals.insert("chpl_nodeID");
+
   if (getGpuCodegenType() == GpuCodegenType::GPU_CG_NVIDIA_CUDA) {
     linkBitCodeFile(CHPL_CUDA_LIBDEVICE_PATH);
   } else {
