@@ -92,6 +92,8 @@ void chpl_gpu_impl_use_device(c_sublocid_t dev_id) {
   switch_context(dev_id);
 }
 
+extern c_nodeid_t chpl_nodeID;
+
 static void chpl_gpu_impl_set_globals(c_sublocid_t dev_id, hipModule_t module) {
   /*
     we expect this to work, but the LLVM backend puts the device version of
@@ -100,14 +102,13 @@ static void chpl_gpu_impl_set_globals(c_sublocid_t dev_id, hipModule_t module) {
     name is complicated, because the compiler explicitly uses "chpl_nodeID" as
     the name. We need to fix by making sure that chpl_nodeID is created in the
     global memory and not in the constant memory.
+    */
 
   hipDeviceptr_t ptr;
   size_t glob_size;
   ROCM_CALL(hipModuleGetGlobal(&ptr, &glob_size, module, "chpl_nodeID"));
   assert(glob_size == sizeof(c_nodeid_t));
-  chpl_gpu_impl_copy_host_to_device(dev_id, (void*)ptr, &chpl_nodeID, glob_size);
-
-  */
+  chpl_gpu_impl_copy_host_to_device((void*)ptr, &chpl_nodeID, glob_size);
 }
 
 
