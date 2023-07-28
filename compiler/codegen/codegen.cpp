@@ -46,6 +46,7 @@
 #include "view.h"
 #include "virtualDispatch.h"
 #include "chpl/util/filesystem.h"
+//#include "llvm/Transforms/Utils/ModuleUtils.h"
 
 #include "global-ast-vecs.h"
 
@@ -299,7 +300,8 @@ genGlobalInt(const char* cname, int value, bool isHeader) {
         info->module->getOrInsertGlobal(
           cname, llvm::IntegerType::getInt32Ty(info->module->getContext())));
     globalInt->setInitializer(info->irBuilder->getInt32(value));
-    globalInt->setConstant(true);
+    //globalInt->setConstant(true);
+    //llvm::appendToUsed(*(info->module), globalInt);
     info->lvt->addGlobalValue(cname, globalInt, GEN_PTR, false, dtInt[INT_SIZE_32]);
 #endif
   }

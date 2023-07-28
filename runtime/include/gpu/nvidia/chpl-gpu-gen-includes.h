@@ -41,6 +41,7 @@ extern __device__ c_nodeid_t chpl_nodeID;
 // implementation for the GPU-driven communication, we just need __device__
 // versions of these functions so that we can compile Chapel applications.
 
+//__attribute__((used))
 __device__ static inline c_nodeid_t get_chpl_nodeID(void) {
   return chpl_nodeID;
 }
