@@ -965,6 +965,9 @@ bool isAutoDestroyedVariable(Symbol* sym) {
         retval = (autoDestroyMap.get(var->type) != NULL);
       }
     }
+    else if (var->type->symbol->hasFlag(FLAG_RUNTIME_TYPE_VALUE)) {
+      return true;
+    }
   }
 
   return retval;

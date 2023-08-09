@@ -322,19 +322,26 @@ static void deinitialize(Expr* before, Expr* after, VarSymbol* var) {
   if (isAutoDestroyedVariable(var) == false)
     return; // nothing to do for variables not to be auto-destroyed
 
-  FnSymbol* autoDestroyFn = autoDestroyMap.get(var->type);
-  if (autoDestroyFn == NULL)
-    return; // nothing to do if there is no auto-destroy fn
-
-  INT_ASSERT(autoDestroyFn->hasFlag(FLAG_AUTO_DESTROY_FN));
-
+  CallExpr* call = nullptr;
   BaseAST* useLoc = before?before:after;
-  SET_LINENO(useLoc);
-  CallExpr* autoDestroy = new CallExpr(autoDestroyFn, var);
-  if (before)
-    before->insertBefore(autoDestroy);
-  else
-    after->insertAfter(autoDestroy);
+
+  if (FnSymbol* autoDestroyFn = autoDestroyMap.get(var->type)) {
+    INT_ASSERT(autoDestroyFn->hasFlag(FLAG_AUTO_DESTROY_FN));
+
+    SET_LINENO(useLoc);
+    call = new CallExpr(autoDestroyFn, var);
+  }
+  else if (var->type->symbol->hasFlag(FLAG_RUNTIME_TYPE_VALUE)) {
+    SET_LINENO(useLoc);
+    call = new CallExpr(PRIM_AUTO_DESTROY_RUNTIME_TYPE, var);
+  }
+
+  if (call) {
+    if (before)
+      before->insertBefore(call);
+    else
+      after->insertAfter(call);
+  }
 }
 
 void AutoDestroyScope::destroyVariable(Expr* after, VarSymbol* var,

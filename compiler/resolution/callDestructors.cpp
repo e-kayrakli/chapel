@@ -2026,70 +2026,6 @@ void RemoveElidedOnBlocks::process(BlockStmt* block) {
   block->blockInfoGet()->remove();
 }
 
-bool AutoDestroyLoopExprTemps::shouldProcess(CallExpr* call) {
-
-  // don't need to touch ArgSymbols
-  if (isArgSymbol(call->parentSymbol)) return false;
-
-  // are we calling a resolved call_forallexpr?
-  FnSymbol* callee = call->resolvedFunction();
-  if (!callee || !callee->hasFlag(FLAG_FN_RETURNS_ITERATOR)) return false;
-  if (!startsWith(callee->name, astr_forallexpr)) return false;
-
-  // is the argument a range? -- if so, this call will create a domain
-  // that we need to clean in the calling scope
-  SymExpr *argSE = toSymExpr(call->get(1));
-  if (!argSE || !argSE->symbol()->type->symbol->hasFlag(FLAG_RANGE))
-    return false;
-
-  // are we moving the result of the call to an expr temp (so that
-  // it is not a user variable) that is a runtime type value?
-  if (CallExpr *parentCall = toCallExpr(call->parentExpr)) {
-    if (parentCall->isPrimitive(PRIM_MOVE)) {
-      if (SymExpr *targetSE = toSymExpr(parentCall->get(1))) {
-        auto targetSym = targetSE->symbol();
-        if (targetSym->hasFlag(FLAG_EXPR_TEMP)) {
-          if (targetSym->type->symbol->hasFlag(FLAG_RUNTIME_TYPE_VALUE)) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-void AutoDestroyLoopExprTemps::process(CallExpr* call) {
-  CallExpr* parentCall = toCallExpr(call->parentExpr);
-  SymExpr* targetSE = toSymExpr(parentCall->get(1));
-  Symbol* targetSym = targetSE->symbol();
-
-  SET_LINENO(call);
-  auto calledFn = call->getFunction();
-  auto destroy = new CallExpr(PRIM_AUTO_DESTROY_RUNTIME_TYPE,
-                              new SymExpr(targetSym));
-
-  calledFn->insertBeforeEpilogue(destroy);
-}
-
-bool InsertDestructorCalls::shouldProcess(CallExpr* call) {
-  return call->isPrimitive(PRIM_CALL_DESTRUCTOR);
-}
-
-void InsertDestructorCalls::process(CallExpr* call) {
-  Type* type = call->get(1)->typeInfo();
-
-  if (type->hasDestructor() == false) {
-    call->remove();
-  } else {
-    SET_LINENO(call);
-
-    call->replace(new CallExpr(type->getDestructor(),
-                               call->get(1)->remove()));
-  }
-}
-
 bool LowerAutoDestroyRuntimeType::shouldProcess(CallExpr* call) {
   return call->inTree() && call->isPrimitive(PRIM_AUTO_DESTROY_RUNTIME_TYPE);
 }
@@ -2113,9 +2049,7 @@ void callDestructors() {
 
   pm.runPass(CreateIteratorBreakBlocks(), gCallExprs);
   pm.runPass(FixupDestructors(), gFnSymbols);
-  pm.runPass(AutoDestroyLoopExprTemps(), gCallExprs);
   pm.runPass(InsertDestructorCalls(), gCallExprs);
-  pm.runPass(LowerAutoDestroyRuntimeType(), gCallExprs);
 
   ReturnByRef::apply();
 
@@ -2138,6 +2072,7 @@ void callDestructors() {
   // TODO: I think 'dyno' can handle all of this elegantly.
   convertClassTypesToCanonical();
 
+  pm.runPass(LowerAutoDestroyRuntimeType(), gCallExprs);
   pm.runPass(CallDestructorsCallCleanup(), gCallExprs);
   pm.runPass(RemoveElidedOnBlocks(), gBlockStmts);
 }
