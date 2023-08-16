@@ -88,6 +88,8 @@ using LlvmOptimizationLevel = llvm::PassBuilder::OptimizationLevel;
 #include "llvm/Support/CodeGen.h"
 #endif
 
+#define HAVE_LLVM_RV
+
 #ifdef HAVE_LLVM_RV
 #ifdef LLVM_USE_OLD_PASSES
 #include "rv/legacy/passes.h"
