@@ -8,5 +8,5 @@ proc main() {
 
   var B:[1..1] owned C = A; // not copy elided
 
-  A;
+  A.locale;
 }

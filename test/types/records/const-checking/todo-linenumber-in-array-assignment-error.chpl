@@ -8,7 +8,7 @@ record RECTYPE {
 
 const D = {1..2};
 var A: [D] RECTYPE;
-A; // prevent split-init for this test as it focuses on error in = operator
+A.locale; // prevent split-init for this test as it focuses on error in = operator
 
 // Error: cannot assign to 'A' because that would modify
 // a 'const' field of A[1] etc.

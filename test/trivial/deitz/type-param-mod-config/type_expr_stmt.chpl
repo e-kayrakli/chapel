@@ -1,4 +1,4 @@
 type t = int;
 
-t;
+t.locale;
 writeln(1);

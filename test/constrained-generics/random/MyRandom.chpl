@@ -2806,7 +2806,7 @@ module MyRandom {
       var cursor = seed:real;
       n -= 1;
       var t = arand;
-      arand;
+      arand.locale;
       while (n != 0) {
         const i = n / 2;
         if (2 * i != n) then

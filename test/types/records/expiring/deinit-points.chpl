@@ -20,7 +20,7 @@ proc t2() {
   var r: R;
   var i: int;
   writeln("middle");
-  r;
+  r.locale;
 }
 t2();
 
@@ -28,7 +28,7 @@ proc t3() {
   writeln("t3");
   var r: R;
   var i: int;
-  r;
+  r.locale;
   writeln("middle");
 }
 t3();
@@ -38,7 +38,7 @@ proc t4() {
   var r: R;
   {
     writeln("begin inner");
-    r;
+    r.locale;
     writeln("end inner");
   }
   writeln("end outer");
@@ -49,10 +49,10 @@ proc t5() {
   writeln("t5");
   var r: R;
   if option {
-    r;
+    r.locale;
     writeln("end if");
   } else {
-    r;
+    r.locale;
     writeln("end else");
   }
   writeln("end outer");
@@ -63,7 +63,7 @@ proc t6() {
   writeln("t6");
   var r: R;
   if option {
-    r;
+    r.locale;
     writeln("end if");
   }
   writeln("end outer");
@@ -74,7 +74,7 @@ proc t7() {
   writeln("t7");
   var r: R;
   for i in 1..2 {
-    r;
+    r.locale;
     writeln("end loop iter");
   }
   writeln("end outer");
@@ -86,7 +86,7 @@ proc t8() {
   var r: R;
   var i = 1;
   while i < 2 {
-    r;
+    r.locale;
     i += 1;
     writeln("end loop iter");
   }
@@ -99,7 +99,7 @@ proc t9() {
   var r: R;
   var i = 1;
   do {
-    r;
+    r.locale;
     i += 1;
     writeln("end loop iter");
   } while i < 2;
@@ -111,7 +111,7 @@ proc t10() {
   writeln("t10");
   var r: R;
   forall i in 1..2 {
-    r;
+    r.locale;
     writeln("end loop iter");
   }
   writeln("end outer");
@@ -122,7 +122,7 @@ proc t10a() {
   writeln("t10a");
   var r: R;
   forall i in 1..2 {
-    r;
+    r.locale;
     writeln("end loop iter");
   }
   writeln(r);
@@ -135,7 +135,7 @@ proc t10b() {
   var r: R;
   ref rr = r;
   forall i in 1..2 {
-    r;
+    r.locale;
     writeln("end loop iter");
   }
   writeln(r);
@@ -147,7 +147,7 @@ proc t11() {
   writeln("t11");
   var r: R;
   coforall i in 1..2 {
-    r;
+    r.locale;
     writeln("end loop iter");
   }
   writeln("end outer");
@@ -159,7 +159,7 @@ proc t11o() {
   var r: R;
   coforall i in 1..2 {
     on Locales[numLocales-1] {
-      r;
+      r.locale;
       writeln("end loop iter");
     }
   }
@@ -173,7 +173,7 @@ proc t12() {
   var i = 1;
   cobegin with (ref i) {
     {
-      r;
+      r.locale;
       writeln("end inner");
     }
     {
@@ -190,7 +190,7 @@ proc t12o() {
   var i = 1;
   cobegin with (ref i) {
     on Locales[numLocales-1] {
-      r;
+      r.locale;
       writeln("end inner");
     }
     {
@@ -205,7 +205,7 @@ proc t13() {
   writeln("t13");
   var r: R;
   on Locales[numLocales-1] {
-    r;
+    r.locale;
     writeln("end inner");
   }
   writeln("end outer");
@@ -219,7 +219,7 @@ proc t14() {
     writeln("begin inner");
     {
       writeln("begin inner inner");
-      r;
+      r.locale;
     }
     writeln("end inner");
   }
@@ -234,7 +234,7 @@ proc t15() {
     writeln("begin inner");
     {
       writeln("begin inner inner");
-      r;
+      r.locale;
     }
     writeln("end inner");
   }
@@ -249,7 +249,7 @@ proc t16() {
     writeln("begin inner");
     {
       writeln("begin inner inner");
-      r;
+      r.locale;
       writeln("end inner inner");
     }
     writeln("end inner");
@@ -264,7 +264,7 @@ proc t17() {
   var i = 1;
   sync {
     begin {
-      r;
+      r.locale;
       writeln("end inner");
     }
   }
@@ -453,7 +453,7 @@ proc t28() {
     {
       begin {
         writeln("begin inner");
-        r;
+        r.locale;
         writeln("end inner");
       }
     }
@@ -469,7 +469,7 @@ proc t29() {
     if option {
       begin {
         writeln("begin inner");
-        r;
+        r.locale;
         writeln("end inner");
       }
     }

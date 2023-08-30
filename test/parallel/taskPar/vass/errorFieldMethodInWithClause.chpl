@@ -20,32 +20,32 @@ proc myClass.test {
 
 
   cobegin with (in myField) {
-    something;
-    something;
+    something.locale;
+    something.locale;
   }
   cobegin with (in myProcc) {
-    something;
-    something;
+    something.locale;
+    something.locale;
   }
   cobegin with (ref ourProc, ref ourIter) {
-    something;
-    something;
+    something.locale;
+    something.locale;
   }
 
   coforall ITER with (in myField) do
-    something;
+    something.locale;
   coforall ITER with (in myProcc) do
-    something;
+    something.locale;
   coforall ITER with (ref ourProc, ref ourIter) do
-    something;
+    something.locale;
 
  sync {
   begin with (in myField)
-    { something;  }
+    { something.locale;  }
   begin with (in myProcc)
-    { something;  }
+    { something.locale;  }
   begin with (ref ourProc, ref ourIter)
-    { something;  }
+    { something.locale;  }
  }
 }
 

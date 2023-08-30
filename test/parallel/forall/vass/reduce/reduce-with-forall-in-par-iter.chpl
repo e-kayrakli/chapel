@@ -90,8 +90,8 @@ proc test2 {
 }
 
 proc main {
-  test1;
-  test2;
+  test1.locale;
+  test2.locale;
   writeln(+ reduce pariter1());
   writeln(+ reduce pariter2());
 }

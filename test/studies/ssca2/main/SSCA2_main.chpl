@@ -110,7 +110,7 @@ module SSCA2_main
 
              if BUILD_1D_TORUS_VERSION {
                printProblemInfo(this_graph_type);
-               generate_and_analyze_1D_torus;
+               generate_and_analyze_1D_torus.locale.locale.locale;
                writeln ( "=========================================================" );
                writeln (); writeln ();
              }
@@ -126,7 +126,7 @@ module SSCA2_main
 
              if BUILD_2D_TORUS_VERSION {
                printProblemInfo(this_graph_type);
-               generate_and_analyze_2D_torus;
+               generate_and_analyze_2D_torus.locale.locale.locale;
                writeln ( "=========================================================" );
                writeln (); writeln ();
              }
@@ -142,7 +142,7 @@ module SSCA2_main
 
              if BUILD_3D_TORUS_VERSION {
                printProblemInfo(this_graph_type);
-               generate_and_analyze_3D_torus;
+               generate_and_analyze_3D_torus.locale.locale.locale;
                writeln ( "=========================================================" );
                writeln (); writeln ();
              }
@@ -157,7 +157,7 @@ module SSCA2_main
 
              if BUILD_4D_TORUS_VERSION {
                printProblemInfo(this_graph_type);
-               generate_and_analyze_4D_torus;
+               generate_and_analyze_4D_torus.locale.locale.locale;
                writeln ( "=========================================================" );
                writeln (); writeln ();
              }
@@ -175,7 +175,7 @@ module SSCA2_main
 
              if BUILD_RMAT_VERSION {
                printProblemInfo(this_graph_type);
-               generate_and_analyze_associative_array_RMAT_graph_representation;
+               generate_and_analyze_associative_array_RMAT_graph_representation.locale.locale.locale;
                writeln ( "=========================================================" );
                writeln (); writeln ();
              }

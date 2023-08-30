@@ -6,5 +6,5 @@ proc foo {
   var r: R;
 }
 
-foo;
+foo.locale;
 writeln("Bye bye!");

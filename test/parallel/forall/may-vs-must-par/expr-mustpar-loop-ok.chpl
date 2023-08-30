@@ -21,17 +21,17 @@ writeln();
 writeln("iter1SA()");
 [ idx in (forall IND in iter1SA()  do IND) ] //bug: ignored standalone iterator
   multiply(idx,0);
-showCountsI;
+showCountsI.locale;
 
 writeln("iter1LF()");
 [ idx in (forall IND in iter1LF()  do IND) ]
   multiply(idx,0);
-showCountsI;
+showCountsI.locale;
 
 writeln("iter1par()");
 [ idx in (forall IND in iter1par() do IND) ] //bug: ignored standalone iterator
   multiply(idx,0);
-showCountsI;
+showCountsI.locale;
 
 /////////// zippered ///////////
 
@@ -48,12 +48,12 @@ showCountsI;
 writeln("zip(iter1LF(),iter2LF())");
 [ idx in (forall IND in zip(iter1LF(),  iter2LF())  do IND) ]
   tuplify(idx,1);
-showCountsI;
+showCountsI.locale;
 
 writeln("zip(iter1par(),iter2par())");
 [ idx in (forall IND in zip(iter1par(), iter2par()) do IND) ]
   tuplify(idx,1);
-showCountsI;
+showCountsI.locale;
 
 
 /*--- datatypes --- */
@@ -68,17 +68,17 @@ showCountsI;
 writeln("inst1SA");
 [ idx in (forall IND in inst1SA  do IND) ] //bug: ignored standalone iterator
   multiply(idx,0);
-showCountsD;
+showCountsD.locale;
 
 writeln("inst1LF");
 [ idx in (forall IND in inst1LF  do IND) ]
   multiply(idx,0);
-showCountsD;
+showCountsD.locale;
 
 writeln("inst1par");
 [ idx in (forall IND in inst1par do IND) ]
   multiply(idx,0);
-showCountsD;
+showCountsD.locale;
 
 /////////// zippered ///////////
 
@@ -95,9 +95,9 @@ showCountsD;
 writeln("zip(inst1LF,inst2LF)");
 [ idx in (forall IND in zip(inst1LF.borrow(),  inst2LF.borrow())  do IND) ]
   tuplify(idx,1);
-showCountsD;
+showCountsD.locale;
 
 writeln("zip(inst1par,inst2par)");
 [ idx in (forall IND in zip(inst1par.borrow(), inst2par.borrow()) do IND) ]
   tuplify(idx,1);
-showCountsD;
+showCountsD.locale;

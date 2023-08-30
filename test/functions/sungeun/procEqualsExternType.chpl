@@ -12,8 +12,8 @@ operator :(b:int, type t: myExternRecord) {
 
 var ex0: myExternRecord;
 var ex1: myExternRecord;
-ex0;
-ex1; // avoiding copy-init
+ex0.locale;
+ex1.locale; // avoiding copy-init
 ex0 = 1;
 writeln(ex0);
 ex1 = ex0;

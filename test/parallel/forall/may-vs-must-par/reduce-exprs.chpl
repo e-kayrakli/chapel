@@ -18,19 +18,19 @@ writeln();
 
 writeln("ser serial");
 writeln(+reduce iter1ser());
-showCountsI;
+showCountsI.locale;
 
 writeln("SA standalone");
 writeln(+reduce iter1SA());
-showCountsI;
+showCountsI.locale;
 
 writeln("LF leader+follower");
 writeln(+reduce iter1LF());
-showCountsI;
+showCountsI.locale;
 
 writeln("par standalone");
 writeln(+reduce iter1par());
-showCountsI;
+showCountsI.locale;
 
 /////////// zippered ///////////
 
@@ -46,11 +46,11 @@ showCountsI;
 
 writeln("LF leader+followers");
 writeln(+reduce zip(iter1LF(), iter2LF()));
-showCountsI;
+showCountsI.locale;
 
 writeln("par leader+followers");
 writeln(+reduce zip(iter1par(), iter2par()));
-showCountsI;
+showCountsI.locale;
 
 
 /*--- datatypes --- */
@@ -59,19 +59,19 @@ showCountsI;
 
 writeln("ser serial");
 writeln(+reduce inst1ser.borrow());
-showCountsD;
+showCountsD.locale;
 
 writeln("SA standalone");
 writeln(+reduce inst1SA.borrow());
-showCountsD;
+showCountsD.locale;
 
 writeln("LF leader+follower");
 writeln(+reduce inst1LF.borrow());
-showCountsD;
+showCountsD.locale;
 
 writeln("par standalone");
 writeln(+reduce inst1par.borrow());
-showCountsD;
+showCountsD.locale;
 
 /////////// zippered ///////////
 
@@ -87,8 +87,8 @@ showCountsD;
 
 writeln("LF leader+followers");
 writeln(+reduce zip(inst1LF.borrow(), inst2LF.borrow()));
-showCountsD;
+showCountsD.locale;
 
 writeln("par leader+followers");
 writeln(+reduce zip(inst1par.borrow(), inst2par.borrow()));
-showCountsD;
+showCountsD.locale;

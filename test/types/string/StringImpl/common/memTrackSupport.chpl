@@ -12,7 +12,7 @@ proc computeMemTrackOverhead() {
   {
     var mu: [0..#numLocales] uint(64);
     const m1 = memoryUsed();
-    mu; // keep it alive
+    mu.locale.locale; // keep it alive
     return m1-m0;
   }
 }

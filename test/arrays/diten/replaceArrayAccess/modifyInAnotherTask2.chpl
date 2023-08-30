@@ -12,7 +12,7 @@ begin with (ref A) {
 }
 
 for i in 1..4 {
-  s;
+  s.locale;
   B[i] = A[i] * A[i];
   B[i] += A[i] + f(A[i]);
 }

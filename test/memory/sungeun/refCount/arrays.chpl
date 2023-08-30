@@ -21,7 +21,7 @@ proc create_slice(A: []) {
 }
 
 proc pass_original(A: [] ) {
-  A;
+  A.locale;
 }
 
 proc return_original(A: []) {

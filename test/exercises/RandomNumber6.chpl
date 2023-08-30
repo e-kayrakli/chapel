@@ -28,4 +28,4 @@ proc test {
   writeln ("RealRandomNumber returns ", RealRandomNumber());
 }
 
-test;
+test.locale;

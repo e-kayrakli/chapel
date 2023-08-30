@@ -13,7 +13,7 @@ proc output()
 	ls.push_back(15);
 }
 
-memTrack;
+memTrack.locale;
 writeln(memoryUsed());
 output();
 writeln(memoryUsed()-mem);

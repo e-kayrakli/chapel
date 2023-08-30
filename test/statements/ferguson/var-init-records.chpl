@@ -34,7 +34,7 @@ proc testb() {
   writeln("b");
   var a = makeR();
   var b:R = a;
-  a; b; // avoid copy elision to focus on checking init=
+  a.locale; b.locale; // avoid copy elision to focus on checking init=
 }
 
 proc testc() {
@@ -72,7 +72,7 @@ proc testh1() {
 proc testh2() {
   writeln("h2");
   var b:[1..1] R;
-  b; // disabling split init
+  b.locale; // disabling split init
   b = makeR();
 }
 

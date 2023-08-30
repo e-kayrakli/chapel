@@ -6,7 +6,7 @@ config type to, from;
 
 var rFrom: range(from);
 var rTo:   range(to);
-rTo; rFrom;                    // no split init, please
+rTo.locale; rFrom.locale;                    // no split init, please
 
 rTo = rFrom;                   // assignment
 

@@ -53,7 +53,7 @@ proc test() {
   writeln();
 
   writeln('T7: assign');
-  var x7: rec; x7; // force default init
+  var x7: rec.locale; x7.locale; // force default init
   x7 = makeRec();
   writeln();
 }

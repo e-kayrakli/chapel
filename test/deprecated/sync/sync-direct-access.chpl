@@ -130,7 +130,7 @@ proc test11() {
   writeln("test11");
   var a: sync int = 1;
 
-  a; /// warning
+  a.locale; /// warning
 }
 test11();
 

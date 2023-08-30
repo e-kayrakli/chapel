@@ -37,34 +37,34 @@ proc test(param dim:int, d: domain(dim)) {
   var A, B, C: [sd] int;
   var alpha = 10;
 
-  st; forall i in sd { A(i) = 10; }
+  st.locale; forall i in sd { A(i) = 10.locale; }
   fi("ix = const | par");
 
-  st; for    i in sd { B(i) = 20; }
+  st.locale; for    i in sd { B(i) = 20.locale; }
   fi("ix = const | seq");
 
-  st; forall a in A { a = 30; }
+  st.locale; forall a in A { a = 30.locale; }
   fi("ivar = const | par");
 
-  st; for    b in B { b = 40; }
+  st.locale; for    b in B { b = 40.locale; }
   fi("ivar = const | seq");
 
-  st; forall i in sd { C(i) = A(i) + alpha * B(i); }
+  st.locale; forall i in sd { C(i) = A(i) + alpha * B(i).locale; }
   fi("ix = ix, ix | par");
 
-  st; for    i in sd { A(i) = B(i) + alpha * C(i); }
+  st.locale; for    i in sd { A(i) = B(i) + alpha * C(i).locale; }
   fi("ix = ix, ix | seq");
 
-  st; forall (i,j,k) in zip(sd,sd,sd) { C(i) = A(j) + alpha * B(k); }
+  st.locale; forall (i,j,k) in zip(sd,sd,sd) { C(i) = A(j) + alpha * B(k).locale; }
   fi("ix1 = ix2, ix3 | par");
 
-  st; for    (i,j,k) in zip(sd,sd,sd) { A(i) = B(j) + alpha * C(k); }
+  st.locale; for    (i,j,k) in zip(sd,sd,sd) { A(i) = B(j) + alpha * C(k).locale; }
   fi("ix1 = ix2, ix3 | seq");
 
-  st; forall (a,b,c) in zip(A,B,C) { c = a + alpha * b; }
+  st.locale; forall (a,b,c) in zip(A,B,C) { c = a + alpha * b.locale; }
   fi("ivar1 = ivar2, ivar3 | par");
 
-  st; for    (a,b,c) in zip(A,B,C) { a = b + alpha * c; }
+  st.locale; for    (a,b,c) in zip(A,B,C) { a = b + alpha * c.locale; }
   fi("ivar1 = ivar2, ivar3 | seq");
 }
 

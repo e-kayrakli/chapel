@@ -1,3 +1,3 @@
 use RandomNumber4;
 
-test;
+test.locale;

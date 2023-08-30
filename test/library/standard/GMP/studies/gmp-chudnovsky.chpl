@@ -667,7 +667,7 @@ proc bs(a: c_ulong, b: c_ulong, gflag: c_uint, level: c_long) {
 
     const ccc = level == 0;
 
-    if (ccc) then CHECK_MEMUSAGE;
+    if (ccc) then CHECK_MEMUSAGE.locale;
 
     if (level>=4) {           // tuning parameter
       if do_gcd_time {
@@ -679,20 +679,20 @@ proc bs(a: c_ulong, b: c_ulong, gflag: c_uint, level: c_long) {
       }
     }
 
-    if (ccc) then CHECK_MEMUSAGE;
+    if (ccc) then CHECK_MEMUSAGE.locale;
     mpz_mul(p1, p1, p2);
 
-    if (ccc) then CHECK_MEMUSAGE;
+    if (ccc) then CHECK_MEMUSAGE.locale;
     mpz_mul(q1, q1, p2);
 
-    if (ccc) then CHECK_MEMUSAGE;
+    if (ccc) then CHECK_MEMUSAGE.locale;
     mpz_mul(q2, q2, g1);
 
-    if (ccc) then CHECK_MEMUSAGE;
+    if (ccc) then CHECK_MEMUSAGE.locale;
     mpz_add(q1, q1, q2);
 
 
-    if (ccc) then CHECK_MEMUSAGE;
+    if (ccc) then CHECK_MEMUSAGE.locale;
     fac_mul(fp1, fp2);
 
     if (gflag) {

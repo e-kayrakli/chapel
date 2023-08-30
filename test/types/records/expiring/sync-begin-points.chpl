@@ -17,7 +17,7 @@ proc t28EOB() {
     var r: R;
     begin {
       writeln("begin inner");
-      r;
+      r.locale;
       writeln("end inner");
     }
   }
@@ -32,7 +32,7 @@ proc t29EOB() {
       var r: R;
       begin {
         writeln("begin inner");
-        r;
+        r.locale;
         writeln("end inner");
       }
     }
@@ -48,7 +48,7 @@ proc t30EOB() {
     {
       begin {
         writeln("begin inner");
-        r;
+        r.locale;
         writeln("end inner");
       }
     }
@@ -65,7 +65,7 @@ proc t31EOB() {
       if option {
         begin {
           writeln("begin inner");
-          r;
+          r.locale;
           writeln("end inner");
         }
       }
@@ -82,7 +82,7 @@ proc t32EOB() {
     if option {
       begin {
         writeln("begin inner");
-        r;
+        r.locale;
         writeln("end inner");
       }
     }

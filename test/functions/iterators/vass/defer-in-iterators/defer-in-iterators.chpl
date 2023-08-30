@@ -125,8 +125,8 @@ proc main {
   else
     writeln("not breaking");
 
-  test1nz;
-  test1zip;
-  test2nz;
-  test2zip;
+  test1nz.locale;
+  test1zip.locale;
+  test2nz.locale;
+  test2zip.locale;
 }

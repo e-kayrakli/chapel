@@ -27,37 +27,37 @@ writeln();
 
 writeln("ser serial");
 KAM(iter1ser(),0);
-showCountsI;
+showCountsI.locale;
 
 writeln("SA standalone"); // bug: standalone iter is ignored by promotion
 KAM(iter1SA(),0);
-showCountsI;
+showCountsI.locale;
 
 writeln("LF leader+follower");
 KAM(iter1LF(),0);
-showCountsI;
+showCountsI.locale;
 
 writeln("par standalone"); // bug: standalone iter is ignored by promotion
 KAM(iter1par(),0);
-showCountsI;
+showCountsI.locale;
 
 /////////// zippered ///////////
 
 writeln("ser serial");
 KAP(iter1ser(), iter2ser());
-showCountsI;
+showCountsI.locale;
 
 writeln("SA serial");
 KAP(iter1SA(), iter2SA());
-showCountsI;
+showCountsI.locale;
 
 writeln("LF leader+followers");
 KAP(iter1LF(), iter2LF());
-showCountsI;
+showCountsI.locale;
 
 writeln("par leader+followers");
 KAP(iter1par(), iter2par());
-showCountsI;
+showCountsI.locale;
 
 
 /*--- datatypes --- */
@@ -66,34 +66,34 @@ showCountsI;
 
 writeln("ser serial");
 KAM(inst1ser.borrow(),0);
-showCountsD;
+showCountsD.locale;
 
 writeln("SA standalone"); // bug: standalone iter is ignored by promotion
 KAM(inst1SA.borrow(),0);
-showCountsD;
+showCountsD.locale;
 
 writeln("LF leader+follower");
 KAM(inst1LF.borrow(),0);
-showCountsD;
+showCountsD.locale;
 
 writeln("par standalone"); // bug: standalone iter is ignored by promotion
 KAM(inst1par.borrow(),0);
-showCountsD;
+showCountsD.locale;
 
 /////////// zippered ///////////
 
 writeln("ser serial");
 KAP(inst1ser.borrow(), inst2ser.borrow());
-showCountsD;
+showCountsD.locale;
 
 writeln("SA serial");
 KAP(inst1SA.borrow(), inst2SA.borrow());
-showCountsD;
+showCountsD.locale;
 
 writeln("LF leader+followers");
 KAP(inst1LF.borrow(), inst2LF.borrow());
-showCountsD;
+showCountsD.locale;
 
 writeln("par leader+followers");
 KAP(inst1par.borrow(), inst2par.borrow());
-showCountsD;
+showCountsD.locale;

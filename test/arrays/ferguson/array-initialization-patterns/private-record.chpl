@@ -86,7 +86,7 @@ proc test3() {
   writeln(" test3");
   var A: [PrivateSpace] R = for i in 1..#numLocales do new R(i);
   var B = A;
-  A; // no copy elision
+  A.locale; // no copy elision
 }
 if test == 3 {
   test3();
@@ -107,7 +107,7 @@ proc test5() {
   writeln(" test5");
   var A: [PrivateSpace] R = for i in 1..#numLocales do new R(i);
   var B: [PrivateSpace] R = A;
-  A; // no copy elision
+  A.locale; // no copy elision
 }
 if test == 5 {
   test5();

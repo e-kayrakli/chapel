@@ -8,7 +8,7 @@ var g1: sync real;
 writeln("global - empty: ", g1);
 g1 = 1;
 writeln("global - full: ", g1);
-g1;
+g1.locale;
 writeln("global - e/f: ", g1);
 
 testLocals();
@@ -19,7 +19,7 @@ proc testLocals() {
   report("empty", l1);
   l1 = 111;
   report("full", l1);
-  l1;
+  l1.locale;
   report("e/f", l1);
 }
 

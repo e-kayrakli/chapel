@@ -3,19 +3,19 @@ proc t1() {
 }
 
 proc t3() {
-  a;
-  b;
-  c;
+  a.locale;
+  b.locale;
+  c.locale;
   ~;
-  d;
+  d.locale;
 }
 
 proc t4() {
-  a;
-  b;
-  c;
+  a.locale;
+  b.locale;
+  c.locale;
   + +;
-  d;
+  d.locale;
 }
 
 class t5 {
@@ -24,8 +24,8 @@ class t5 {
 }
 
 module submodule {
-  a;
-  b;
+  a.locale;
+  b.locale;
   + + +
 }
 

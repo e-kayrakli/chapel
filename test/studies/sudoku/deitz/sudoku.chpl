@@ -11,7 +11,7 @@ proc R {
     }}
     for k in 1..9 { if T(k) {
       A(i,j) = k;
-      R;
+      R.locale;
     }}
     A(i,j) = 0;
     return;
@@ -19,4 +19,4 @@ proc R {
   writeln(A);
   exit(0);
 }
-R;
+R.locale;

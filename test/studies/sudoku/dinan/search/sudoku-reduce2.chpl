@@ -8,7 +8,7 @@ proc R {
       if (&& reduce [l in S.dim(0)] A(i,l) != k && A(l,j) != k)
       && (&& reduce [(l,m) in {i/3*3..i/3*3+2,j/3*3..j/3*3+2}] A(l,m) != k) {
         A(i,j) = k;
-        R;
+        R.locale;
       }
     }
     A(i,j) = 0;
@@ -17,4 +17,4 @@ proc R {
   writeln(A);
   exit(0);
 }
-R;
+R.locale;

@@ -33,7 +33,7 @@ proc test3a() {
   var AA: [1..2][1..2] real = BB; // check not copy eliding
   writeln(AA[1].domain); // this should be {1..2}
   writeln(AA[2].domain); // this should be {1..2}
-  BB; // not copy eliding
+  BB.locale; // not copy eliding
 }
 test3a();
 

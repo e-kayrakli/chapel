@@ -8,5 +8,5 @@ proc main() {
 
   var B = A; // not copy elided
 
-  A;
+  A.locale;
 }

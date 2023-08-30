@@ -44,7 +44,7 @@ proc testIn2() {
   writeln("testIn2");
   var xx = new R();
   acceptsIn(xx);
-  xx; // preventing copy elision
+  xx.locale; // preventing copy elision
   writeln("end");
 }
 testIn2();
@@ -53,7 +53,7 @@ proc testIn3() {
   writeln("testIn3");
   var xx = new R();
   const ref reffy = acceptsInAndReturnsNew(xx);
-  xx; // preventing copy elision
+  xx.locale; // preventing copy elision
   writeln("end");
 }
 testIn3();
@@ -62,7 +62,7 @@ proc testIn4() {
   writeln("testIn4");
   var xx = new R();
   acceptsInAndReturnsNew(xx);
-  xx; // preventing copy elision
+  xx.locale; // preventing copy elision
   writeln("end");
 }
 testIn4();
@@ -78,7 +78,7 @@ testOut1();
 proc testOut2() {
   writeln("testOut2");
   var xx:R;
-  xx; // preventing split-init
+  xx.locale; // preventing split-init
   acceptsOut(xx);
   writeln("end");
 }
@@ -87,7 +87,7 @@ testOut2();
 proc testOut3() {
   writeln("testOut3");
   var xx:R;
-  xx; // preventing split-init
+  xx.locale; // preventing split-init
   const ref reffy = acceptsOutAndReturnsNew(xx);
   writeln("end");
 }
@@ -96,7 +96,7 @@ testOut3();
 proc testOut4() {
   writeln("testOut4");
   var xx:R;
-  xx; // preventing split-init
+  xx.locale; // preventing split-init
   acceptsOutAndReturnsNew(xx);
   writeln("end");
 }
@@ -129,7 +129,7 @@ testRet1();
 proc testRet2() {
   writeln("testRet2");
   var xx:R;
-  xx; // preventing split-init
+  xx.locale; // preventing split-init
   xx = makeR();
   writeln("end");
 }
@@ -219,7 +219,7 @@ testLit6();
 proc testLit7() {
   writeln("testLit7");
   var A:[1..2] R;
-  A; // preventing split-init
+  A.locale; // preventing split-init
   A = [new R(), makeR()];
   writeln("end");
 }

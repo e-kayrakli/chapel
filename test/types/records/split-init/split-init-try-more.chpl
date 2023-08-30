@@ -160,7 +160,7 @@ proc test2eob() {
     return;
   }
 
-  r;
+  r.locale;
 }
 test2eob();
 
@@ -213,7 +213,7 @@ proc testAB10eob() {
     return;
   }
 
-  a; b;
+  a.locale; b.locale;
 }
 testAB10eob();
 
@@ -446,7 +446,7 @@ proc test2001() {
     return;
   }
 
-  outer;
+  outer.locale;
 }
 test2001();
 
@@ -469,7 +469,7 @@ proc test2100() {
     return;
   }
 
-  outer;
+  outer.locale;
 }
 test2100();
 
@@ -492,7 +492,7 @@ proc test2101() {
     return;
   }
 
-  outer;
+  outer.locale;
 }
 test2101();
 
@@ -522,7 +522,7 @@ proc test3000() {
     }
   }
 
-  outer;
+  outer.locale;
 }
 test3000();
 
@@ -552,7 +552,7 @@ proc test3010() {
     }
   }
 
-  outer;
+  outer.locale;
 }
 test3010();
 
@@ -582,7 +582,7 @@ proc test3111() {
     }
   }
 
-  outer;
+  outer.locale;
 }
 test3111();
 

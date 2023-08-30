@@ -2,7 +2,7 @@ config const dummy = false;
 config const printMemStats = false;
 
 proc pass_original(A: []) {
-  A;
+  A.locale;
 }
 
 proc return_original(A: []) {

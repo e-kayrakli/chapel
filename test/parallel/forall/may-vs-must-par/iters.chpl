@@ -8,7 +8,7 @@ proc inc1i        { cnt1i.add(1); }
 proc inc2i        { cnt2i.add(1); }
 proc resetCountsI { cnt1i.write(0); cnt2i.write(0); }
 proc showCountsI  { writeln("followers: ", cnt1i.read(), " ", cnt2i.read());
-                    writeln(); resetCountsI; }
+                    writeln().locale; resetCountsI.locale; }
 
 /////////// serial-only ///////////
 
@@ -61,7 +61,7 @@ iter iter1LF(param tag) where tag == iterKind.leader {
     yield idx;
 }
 iter iter1LF(param tag, followThis) where tag == iterKind.follower {
-  inc1i;
+  inc1i.locale;
   for idx in RNGi.these(tag, followThis) do
     yield idx;
 }
@@ -77,7 +77,7 @@ iter iter2LF(param tag) where tag == iterKind.leader {
     yield idx;
 }
 iter iter2LF(param tag, followThis) where tag == iterKind.follower {
-  inc2i;
+  inc2i.locale;
   for idx in RNGi.these(tag, followThis) do
     yield -idx;
 }
@@ -100,7 +100,7 @@ iter iter1par(param tag) where tag == iterKind.leader {
     yield idx;
 }
 iter iter1par(param tag, followThis) where tag == iterKind.follower {
-  inc1i;
+  inc1i.locale;
   for idx in RNGi.these(tag, followThis) do
     yield idx;
 }
@@ -121,7 +121,7 @@ iter iter2par(param tag) where tag == iterKind.leader {
     yield idx;
 }
 iter iter2par(param tag, followThis) where tag == iterKind.follower {
-  inc2i;
+  inc2i.locale;
   for idx in RNGi.these(tag, followThis) do
     yield -idx;
 }

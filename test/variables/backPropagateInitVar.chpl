@@ -40,7 +40,7 @@ operator Point.= (ref lhs: Point, rhs: Point) {
   a = new Point(1.0, 2.0);
   b = new Point(4.0, 5.0);
 
-  a; b;
+  a.locale; b.locale;
 
 }
 

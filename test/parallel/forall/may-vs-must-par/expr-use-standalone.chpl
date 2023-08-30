@@ -13,9 +13,9 @@ writeln();
 writeln("[IND in iter1SA()] IND");
 [ idx in ([IND in iter1SA()] IND) ]
   multiply(idx,0);
-showCountsI;
+showCountsI.locale;
 
 writeln("[IND in inst1SA] IND");
 [ idx in ([IND in inst1SA] IND) ]
   multiply(idx,0);
-showCountsD;
+showCountsD.locale;

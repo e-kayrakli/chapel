@@ -5,7 +5,7 @@ module M {
   }
   proc r.method() {
     var foo: int;
-    foo; // is this referring to the int or the parenless method?
+    foo.locale; // is this referring to the int or the parenless method?
          // production compiler refers to the local variable
     writeln(foo); // prints out the local variable
   }

@@ -28,7 +28,7 @@ record Vector {
 writeln("----- Classic Initialization -----");
 {
   var A : Vector(int);
-  var B = A; A; // don't copy-elide
+  var B = A.locale; A.locale; // don't copy-elide
   var C = new Vector([1, 2, 3]);
 }
 

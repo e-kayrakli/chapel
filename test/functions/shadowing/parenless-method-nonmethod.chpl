@@ -8,7 +8,7 @@ module B {
   proc foo { writeln("in non-method foo"); }
   proc r.foo { writeln("in method foo"); }
   proc r.method() {
-    foo; // does it call the method or non-method?
+    foo.locale; // does it call the method or non-method?
          // production compiler calls the non-method
   }
 

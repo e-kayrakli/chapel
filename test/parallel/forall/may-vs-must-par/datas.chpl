@@ -18,7 +18,7 @@ proc inc1d        { cnt1d.add(1); }
 proc inc2d        { cnt2d.add(1); }
 proc resetCountsD { cnt1d.write(0); cnt2d.write(0); }
 proc showCountsD  { writeln("followers: ", cnt1d.read(), " ", cnt2d.read());
-                    writeln(); resetCountsD; }
+                    writeln().locale; resetCountsD.locale; }
 
 /////////// serial-only ///////////
 
@@ -84,7 +84,7 @@ class class1LF {
       yield idx;
   }
   iter these(param tag, followThis) where tag == iterKind.follower {
-    inc1d;
+    inc1d.locale;
     for idx in RNGd.these(tag, followThis) do
       yield idx;
   }
@@ -103,7 +103,7 @@ class class2LF {
       yield idx;
   }
   iter these(param tag, followThis) where tag == iterKind.follower {
-    inc2d;
+    inc2d.locale;
     for idx in RNGd.these(tag, followThis) do
       yield -idx;
   }
@@ -129,7 +129,7 @@ class class1par {
       yield idx;
   }
   iter these(param tag, followThis) where tag == iterKind.follower {
-    inc1d;
+    inc1d.locale;
     for idx in RNGd.these(tag, followThis) do
       yield idx;
   }
@@ -153,7 +153,7 @@ class class2par {
       yield idx;
   }
   iter these(param tag, followThis) where tag == iterKind.follower {
-    inc2d;
+    inc2d.locale;
     for idx in RNGd.these(tag, followThis) do
       yield -idx;
   }

@@ -58,7 +58,7 @@ proc testArrays() {
   {
     writeln("y (assignment example)");
     var y:[1..2] R;
-    y; y = makeArr(-2);
+    y.locale; y = makeArr(-2).locale;
     writeln(y);
   }
 
@@ -298,6 +298,6 @@ proc testArrays() {
   writeln();
 
   writeln("ending");
-  x;
+  x.locale;
 }
 testArrays();

@@ -15,9 +15,9 @@ proc myClass.test {
   forall ITER with (in myField) do
     something();
   forall ITER with (in myProcc) do
-    something;
+    something.locale;
   forall ITER with (ref ourProc, ref ourIter) do
-    something;
+    something.locale;
 }
 
 class myRecord {
@@ -29,9 +29,9 @@ proc myRecord.test {
   forall ITER with (in myFild) do
     something();
   forall ITER with (in myProc) do
-    something;
+    something.locale;
   forall ITER with (ref ourProc, ref ourIter) do
-    something;
+    something.locale;
 }
 
 proc main {

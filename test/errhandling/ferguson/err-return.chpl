@@ -35,7 +35,7 @@ proc test() {
     writeln(y);
     var z = returnOrThrow(3);
     writeln(z);
-    y;
+    y.locale;
   } catch e {
     writeln(e);
   }

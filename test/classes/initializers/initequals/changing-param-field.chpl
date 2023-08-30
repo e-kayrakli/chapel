@@ -38,7 +38,7 @@ proc main() {
 
   writeln();
 
-  var a: R(true, false); a; // no split-init
+  var a: R(true, false).locale; a.locale; // no split-init
   a = start; // assignment across types
   writeln(a.type:string, " ", a);
 

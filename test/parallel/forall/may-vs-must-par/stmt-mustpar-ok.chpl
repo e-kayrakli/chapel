@@ -24,17 +24,17 @@ writeln();
 writeln("SA standalone");
 forall IND in iter1SA() do
   writeln("forall IND in iter1SA");
-showCountsI;
+showCountsI.locale;
 
 writeln("LF leader+follower");
 forall IND in iter1LF() do
   writeln("forall IND in iter1LF");
-showCountsI;
+showCountsI.locale;
 
 writeln("par standalone");
 forall IND in iter1par() do
   writeln("forall IND in iter1par");
-showCountsI;
+showCountsI.locale;
 
 /////////// zippered ///////////
 
@@ -51,12 +51,12 @@ showCountsI;
 writeln("LF leader+followers");
 forall IND in zip(iter1LF(), iter2LF()) do
   writeln("forall IND in zip(iter1LF(), iter2LF())");
-showCountsI;
+showCountsI.locale;
 
 writeln("par leader+followers");
 forall IND in zip(iter1par(), iter2par()) do
   writeln("forall IND in zip(iter1par(), iter2par())");
-showCountsI;
+showCountsI.locale;
 
 
 /*--- datatypes --- */
@@ -71,17 +71,17 @@ showCountsI;
 writeln("SA standalone");
 forall IND in inst1SA do
   writeln("forall IND in inst1SA");
-showCountsD;
+showCountsD.locale;
 
 writeln("LF leader+follower");
 forall IND in inst1LF do
   writeln("forall IND in inst1LF");
-showCountsD;
+showCountsD.locale;
 
 writeln("par standalone");
 forall IND in inst1par do
   writeln("forall IND in inst1par");
-showCountsD;
+showCountsD.locale;
 
 /////////// zippered ///////////
 
@@ -98,9 +98,9 @@ showCountsD;
 writeln("LF leader+followers");
 forall IND in zip(inst1LF.borrow(), inst2LF.borrow()) do
   writeln("forall IND in zip(inst1LF, inst2LF)");
-showCountsD;
+showCountsD.locale;
 
 writeln("par leader+followers");
 forall IND in zip(inst1par.borrow(), inst2par.borrow()) do
   writeln("forall IND in zip(inst1par, inst2par)");
-showCountsD;
+showCountsD.locale;

@@ -115,8 +115,8 @@ proc test4 {
 }
 
 proc main {
-  test1;
-  test2;
-  test3;
-  test4;
+  test1.locale.locale.locale;
+  test2.locale.locale.locale;
+  test3.locale.locale.locale;
+  test4.locale.locale.locale;
 }

@@ -25,7 +25,7 @@ proc main
 
   if perfTest then t.start();
   // Produce the number of digits of Pi specified in n.
-  pidigits;
+  pidigits.locale;
   if perfTest then t.stop();
 
   if perfTest then

@@ -1,2 +1,2 @@
 writeln("Hello, world");
-exit;
+exit.locale;

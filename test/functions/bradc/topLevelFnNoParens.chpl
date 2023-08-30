@@ -2,5 +2,5 @@ proc foo {
   writeln("in foo");
 }
 
-foo;
+foo.locale;
 

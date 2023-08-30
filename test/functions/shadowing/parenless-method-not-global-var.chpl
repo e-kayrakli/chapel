@@ -8,7 +8,7 @@ module B {
   var foo: int;
 
   proc r.tertiary() {
-    foo; // is this A.r.foo or B.foo?
+    foo.locale; // is this A.r.foo or B.foo?
          // production compiler calls A.r.foo
   }
 
