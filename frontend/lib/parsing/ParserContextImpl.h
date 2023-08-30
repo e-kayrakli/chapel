@@ -853,7 +853,8 @@ Identifier* ParserContext::buildIdent(YYLTYPE location, PODUniqueString name) {
 
 void ParserContext::warnSingleIdentUnstable(YYLTYPE location, AstNode* ast) {
   auto loc = this->convertLocation(location);
-  std::cerr << loc.path().c_str() << ":" << loc.firstLine();
+  std::cerr << loc.path().c_str() << ":" << loc.firstLine() <<
+               ": single-identifier statements are unstable." << std::endl;
 }
 
 AstNode* ParserContext::buildPrimCall(YYLTYPE location,
