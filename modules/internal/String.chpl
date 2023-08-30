@@ -937,10 +937,11 @@ module String {
       // initialized from a c_string allocated from memory but beginning with
       // a null-terminator.
       if isOwned && this.buff != nil {
-        on __primitive("chpl_on_locale_num",
-                       chpl_buildLocaleID(this.locale_id, c_sublocid_any)) {
+        /*on this {*/
+        /*on __primitive("chpl_on_locale_num",*/
+                       /*chpl_buildLocaleID(this.locale_id, c_sublocid_any)) {*/
           chpl_here_free(this.buff);
-        }
+        /*}*/
       }
     }
 

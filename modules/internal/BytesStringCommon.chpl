@@ -233,11 +233,13 @@ module BytesStringCommon {
                   offset:int, allowEsc: bool ) {
     import OS.{errorCode};
     pragma "fn synchronization free"
+    pragma "codegen for CPU and GPU"
     extern proc qio_decode_char_buf(ref chr:int(32),
                                     ref nBytes:c_int,
                                     buf:c_ptr(c_uchar),
                                     buflen:c_ssize_t): errorCode;
     pragma "fn synchronization free"
+    pragma "codegen for CPU and GPU"
     extern proc qio_decode_char_buf_esc(ref chr:int(32),
                                         ref nBytes:c_int,
                                         buf:c_ptr(c_uchar),

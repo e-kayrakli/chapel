@@ -983,6 +983,7 @@ module OS {
     pragma "fn synchronization free"
     inline proc memcpy(dest:c_ptr(void), const src:c_ptr(void), n: c_size_t) {
       pragma "fn synchronization free"
+      pragma "codegen for CPU and GPU"
       extern proc memcpy(dest: c_ptr(void), const src: c_ptr(void), n: c_size_t);
       memcpy(dest, src, n);
     }

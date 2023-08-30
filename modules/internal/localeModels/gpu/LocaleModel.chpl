@@ -41,11 +41,13 @@ module LocaleModel {
 
   private inline
   proc addrIsInGPU(addr:c_ptr(void)): bool {
+    pragma "codegen for CPU and GPU"
     extern proc chpl_gpu_is_device_ptr(ptr): bool;
     return chpl_gpu_is_device_ptr(addr);
   }
 
   pragma "fn synchronization free"
+  pragma "codegen for CPU and GPU"
   private extern proc chpl_memhook_md_num(): chpl_mem_descInt_t;
 
   extern var chpl_gpu_num_devices: c_int;
@@ -63,10 +65,12 @@ module LocaleModel {
   proc chpl_here_alloc(size:int(64), md:chpl_mem_descInt_t): c_ptr(void) {
     pragma "fn synchronization free"
     pragma "insert line file info"
+    pragma "codegen for CPU and GPU"
     extern proc chpl_mem_alloc(size:c_size_t, md:chpl_mem_descInt_t) : c_ptr(void);
 
     pragma "fn synchronization free"
     pragma "insert line file info"
+    pragma "codegen for CPU and GPU"
     extern proc chpl_gpu_mem_alloc(size:c_size_t, md:chpl_mem_descInt_t) : c_ptr(void);
 
 
@@ -163,6 +167,7 @@ module LocaleModel {
   proc chpl_here_good_alloc_size(min_size:integral): min_size.type {
     pragma "fn synchronization free"
     pragma "insert line file info"
+    pragma "codegen for CPU and GPU"
     extern proc chpl_mem_good_alloc_size(min_size:c_size_t) : c_size_t;
 
     // This is currently here only for completeness: I am not sure if need
@@ -176,15 +181,17 @@ module LocaleModel {
   proc chpl_here_free(ptr:c_ptr(void)): void {
     pragma "fn synchronization free"
     pragma "insert line file info"
+    pragma "codegen for CPU and GPU"
     extern proc chpl_mem_free(ptr:c_ptr(void)) : void;
 
     pragma "fn synchronization free"
     pragma "insert line file info"
+    pragma "codegen for CPU and GPU"
     extern proc chpl_gpu_mem_free(ptr:c_ptr(void)) : void;
 
     if addrIsInGPU(ptr) {
       if !runningOnGPUSublocale() {
-        halt("Trying to free a GPU pointer outside a GPU sublocale");
+        /*halt("Trying to free a GPU pointer outside a GPU sublocale");*/
       }
       chpl_gpu_mem_free(ptr);
     }

@@ -38,6 +38,7 @@ module ByteBufferHelpers {
   // Externs and constants used to implement strings
   //
   pragma "fn synchronization free"
+  pragma "codegen for CPU and GPU"
   private extern proc chpl_memhook_md_num(): chpl_mem_descInt_t;
 
   // Calls to chpl_here_alloc increment the memory descriptor by

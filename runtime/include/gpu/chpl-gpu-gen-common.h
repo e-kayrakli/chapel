@@ -26,6 +26,41 @@
 #include "chpltypes.h"
 #include "chpl-comm.h"
 
+__device__ static inline
+size_t chpl_mem_good_alloc_size(size_t minSize, int32_t lineno,
+                                int32_t filename) {
+  return minSize;
+}
+
+__device__ static inline
+chpl_mem_descInt_t chpl_memhook_md_num(void)
+{
+  //return CHPL_RT_MD_NUM; // where's this defined?
+  return 0;
+}
+
+__device__ static inline
+void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
+                         int32_t lineno, int32_t filename) {
+  return malloc(size);
+}
+
+__device__ static inline
+void* chpl_mem_alloc(size_t size, chpl_mem_descInt_t description,
+                         int32_t lineno, int32_t filename) {
+  return malloc(size);
+}
+
+__device__ static inline
+void chpl_gpu_mem_free(void *ptr, int32_t lineno, int32_t filename) {
+  free(ptr);
+}
+
+__device__ static inline
+void chpl_mem_free(void *ptr, int32_t lineno, int32_t filename) {
+  free(ptr);
+}
+
 __device__ static inline c_sublocid_t chpl_task_getRequestedSubloc(void)
 {
   // TODO
@@ -34,6 +69,10 @@ __device__ static inline c_sublocid_t chpl_task_getRequestedSubloc(void)
   // as the device ID. So, maybe we call some device function to grab that and
   // return it?
   return 0;
+}
+
+__device__ static inline bool chpl_gpu_is_device_ptr(const void* ptr) {
+  return true;
 }
 
 __device__ static inline void* c_pointer_return(void* x) { return x; }

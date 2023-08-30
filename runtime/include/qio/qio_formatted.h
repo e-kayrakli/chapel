@@ -532,7 +532,7 @@ qioerr qio_encode_char_buf(char* dst, int32_t chr)
 // a newly-allocated ASCIIZ string containing the result.
 c_string qio_encode_to_string(int32_t chr);
 
-static inline
+MAYBE_GPU static inline
 qioerr do_qio_decode_char_buf(int32_t* restrict chr, int* restrict nbytes,
                               const char* buf, ssize_t buflen, bool allow_escape)
 {
@@ -550,7 +550,7 @@ qioerr do_qio_decode_char_buf(int32_t* restrict chr, int* restrict nbytes,
   QIO_RETURN_CONSTANT_ERROR(EILSEQ, ""); // this should never be reached.
 }
 
-static inline
+MAYBE_GPU static inline
 qioerr qio_decode_char_buf(int32_t* restrict chr, int* restrict nbytes,
                            const char* buf, ssize_t buflen)
 {
@@ -558,7 +558,7 @@ qioerr qio_decode_char_buf(int32_t* restrict chr, int* restrict nbytes,
 }
 
 // this version allows escaped nonUTF8 data
-static inline
+MAYBE_GPU static inline
 qioerr qio_decode_char_buf_esc(int32_t* restrict chr, int* restrict nbytes,
                                const char* buf, ssize_t buflen)
 {

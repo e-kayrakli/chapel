@@ -547,6 +547,10 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
       bool inLocal = inLocalBlock(call);
       int is = classifyPrimitive(call, inLocal);
       if ((is != FAST_AND_LOCAL)) {
+        if (call->isPrimitive(PRIM_CHPL_COMM_GET) ||
+            call->isPrimitive(PRIM_STRING_LENGTH_BYTES)) {
+          continue;
+        }
         reportNotGpuizable(call, "primitive is not fast and local");
         return false;
       }
@@ -572,8 +576,8 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
         return false;
       }
 
-      if (hasOuterVarAccesses(fn)) {
-        reportNotGpuizable(call, "call has outer var access");
+      if (SymExpr* se = hasOuterVarAccesses(fn)) {
+        reportNotGpuizable(se, "call has outer var access");
         return false;
       }
 
