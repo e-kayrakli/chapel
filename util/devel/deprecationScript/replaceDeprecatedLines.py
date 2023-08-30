@@ -1,6 +1,6 @@
 import sys
 import os
-import regex as re
+import re
 
 num_replaced = 0
 
