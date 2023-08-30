@@ -1,5 +1,6 @@
 import sys
 import os
+import regex as re
 
 num_replaced = 0
 
@@ -29,8 +30,10 @@ def replaceSingleInstance(line, from_string, to_string, files_to_update):
     lines = f.readlines()
     old_line = lines[line_number - 1]
 
+  new_line = re.sub(from_string, to_string, old_line)
+
   # Replace the word with another word
-  new_line = old_line.replace(from_string, to_string)
+  # new_line = old_line.replace(from_string, to_string)
   # Check if the line was actually replaced
   # If it was, increment the number of replacements
   if old_line != new_line:
