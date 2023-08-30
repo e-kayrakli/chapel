@@ -851,6 +851,11 @@ Identifier* ParserContext::buildIdent(YYLTYPE location, PODUniqueString name) {
   return Identifier::build(builder, convertLocation(location), name).release();
 }
 
+void ParserContext::warnSingleIdentUnstable(YYLTYPE location, AstNode* ast) {
+  auto loc = this->convertLocation(location);
+  std::cerr << loc.path().c_str() << ":" << loc.firstLine();
+}
+
 AstNode* ParserContext::buildPrimCall(YYLTYPE location,
                                       MaybeNamedActualList* lst) {
   Location loc = convertLocation(location);

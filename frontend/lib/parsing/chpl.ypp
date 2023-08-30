@@ -3279,7 +3279,7 @@ nil_expr:
    to the statement level. */
 stmt_level_expr:
   nil_expr
-| ident_expr
+| ident_expr                    { context->warnSingleIdentUnstable(@$, $1); }
 | dot_expr
 | call_expr
 | lambda_decl_expr

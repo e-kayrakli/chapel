@@ -195,6 +195,8 @@ struct ParserContext {
     };
     return ret;
   }
+  void warnSingleIdentUnstable(YYLTYPE loc, AstNode* ast);
+
 
   ErroneousExpression* report(YYLTYPE loc, owned<ErrorBase> error);
   ErroneousExpression* error(YYLTYPE loc, const char* fmt, ...);
