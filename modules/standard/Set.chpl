@@ -672,11 +672,9 @@ module Set {
     :return: A new set containing the union between `a` and `b`.
   */
   operator set.|(const ref a: set(?t, ?), const ref b: set(t, ?)) {
-    var result: set(t, (a.parSafe || b.parSafe));
-
-    // TODO: Split-init causes weird errors, remove this line and then run
-    // setCompositionParSafe.chpl to see.
-    result;
+    // TODO: Split-init causes weird errors. We may want `: set(...)` here and
+    // `result=a` later on. But that breaks setCompositionParSafe.chpl.
+    var result = new set(t, (a.parSafe || b.parSafe));
 
     result = a;
     result |= b;
@@ -839,11 +837,9 @@ module Set {
     :return: A new set containing the symmetric difference of `a` and `b`.
   */
   operator set.^(const ref a: set(?t, ?), const ref b: set(t, ?)) {
-    var result: set(t, (a.parSafe || b.parSafe));
-
-    // TODO: Split-init causes weird errors, remove this line and then run
-    // setCompositionParSafe.chpl to see.
-    result;
+    // TODO: Split-init causes weird errors. We may want `: set(...)` here and
+    // `result=a` later on. But that breaks setCompositionParSafe.chpl.
+    var result = new set(t, (a.parSafe || b.parSafe));
 
     /* Expect the loop in ^= to be more expensive than the loop in =,
        so arrange for the rhs of the ^= to be the smaller set. */

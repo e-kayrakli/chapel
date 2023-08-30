@@ -31,7 +31,7 @@ module Reflection {
 // Used to test "--warn-unstable-standard", ignore.
 @unstable
 var chpl_unstableStandardSymbolForTesting: int;
-chpl_unstableStandardSymbolForTesting;
+chpl_unstableStandardSymbolForTesting = 0;
 
 /* Ensure that a query about fields is applied to a class/record/union type.
    Return that type. If it is a class type, strip any decorators/mem managers.

@@ -86,7 +86,7 @@ module ChapelBase {
   @chpldoc.nodoc
   @unstable
   var chpl_unstableInternalSymbolForTesting: int;
-  chpl_unstableInternalSymbolForTesting;
+  chpl_unstableInternalSymbolForTesting = 0;
 
   pragma "object class"
   pragma "global type symbol"
