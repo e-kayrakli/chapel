@@ -25,6 +25,30 @@
 
 #include "chpltypes.h"
 #include "chpl-comm.h"
+//
+// this variable is added by the compiler. See codegenGpuGlobals.
+extern __device__ c_nodeid_t chpl_nodeID;
+
+__device__ static inline
+chpl_bool chpl_is_node_local(c_nodeid_t node)
+{ return node == chpl_nodeID; }
+
+// Assert that the given node ID matches that of the currently-running image
+// If not, format the given error message with the given filename and line number
+// and then halt the current task.  (The exact behavior is dictated by
+// chpl_error()).
+__device__ static inline
+void chpl_check_local(c_nodeid_t node, int32_t ln, int32_t file, const char* error)
+{
+  if (! chpl_is_node_local(node))
+    printf("%s", error);
+}
+__device__ static inline
+void chpl_check_nil(void* ptr, int32_t lineno, int32_t filename)
+{
+  if (ptr == nil)
+    printf("attempt to dereference nil");
+}
 
 __device__ static inline c_sublocid_t chpl_task_getRequestedSubloc(void)
 {

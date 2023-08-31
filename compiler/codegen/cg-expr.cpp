@@ -3047,7 +3047,10 @@ GenRet codegenCallExprWithArgs(const char* fnName,
   } else {
 #ifdef HAVE_LLVM
     fn.val = getFunctionLLVM(fnName);
-    INT_ASSERT(fn.val);
+    if (fn.val == nullptr) {
+      std::cout << fnName << std::endl;
+      INT_ASSERT(fn.val);
+    }
     return codegenCallExprWithArgs(fn, args, fnName,
                                    fnSym, FD, defaultToValues);
 #endif

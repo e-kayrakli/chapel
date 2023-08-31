@@ -1725,14 +1725,14 @@ static void setGPUFlags() {
                " This may impact debuggability. To suppress this warning,"
                " compile with --no-checks explicitly");
 
-      fNoChecks = true;
-      fNoNilChecks    = true;
-      fNoBoundsChecks = true;
-      fNoFormalDomainChecks = true;
-      fNoLocalChecks  = true;
-      fNoStackChecks  = true;
-      fNoCastChecks = true;
-      fNoDivZeroChecks = true;
+      //fNoChecks = true;
+      //fNoNilChecks    = true;
+      //fNoBoundsChecks = true;
+      //fNoFormalDomainChecks = true;
+      //fNoLocalChecks  = true;
+      //fNoStackChecks  = true;
+      //fNoCastChecks = true;
+      //fNoDivZeroChecks = true;
     }
     //
     // set up gpuArch

@@ -62,6 +62,10 @@ void cleanupLoopBlocks(FnSymbol* fn);
 void deadVariableElimination(FnSymbol* fn);
 void deadExpressionElimination(FnSymbol* fn);
 
+void cleanupLoopBlocks(BlockStmt* blk);
+void deadVariableElimination(BlockStmt* blk, std::set<Symbol*> preserve);
+void deadExpressionElimination(BlockStmt* blk);
+
 bool outlivesBlock(LifetimeInformation* info, Symbol* sym, BlockStmt* block);
 
 void checkLifetimesForForallUnorderedOps(FnSymbol* fn,

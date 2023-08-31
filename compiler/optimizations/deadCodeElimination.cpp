@@ -86,9 +86,9 @@ static bool isDeadVariable(Symbol* var) {
   }
 }
 
-void deadVariableElimination(FnSymbol* fn) {
+void deadVariableElimination(BlockStmt* block, std::set<Symbol*> preserve) {
   std::set<Symbol*> symSet;
-  collectSymbolSet(fn, symSet);
+  collectSymbolSet(block, symSet);
 
   // Use 'symSet' and 'todo' together for a unique queue of symbols to process
   // Note: this code is sensitive to traversal order.
@@ -108,7 +108,7 @@ void deadVariableElimination(FnSymbol* fn) {
       continue;
 
     // A method must have a _this symbol, even if it is not used.
-    if (sym == fn->_this)
+    if (preserve.count(sym) == 1)
       continue;
 
     if (isDeadVariable(sym)) {
@@ -147,13 +147,17 @@ void deadVariableElimination(FnSymbol* fn) {
   }
 }
 
-//
-// Removes expression statements that have no effect.
-//
-void deadExpressionElimination(FnSymbol* fn) {
+void deadVariableElimination(FnSymbol* fn) {
+  std::set<Symbol*> preserve;
+  preserve.insert(fn->_this);
+
+  deadVariableElimination(fn->body, preserve);
+}
+
+void deadExpressionElimination(BlockStmt* blk) {
   std::vector<BaseAST*> asts;
 
-  collect_asts(fn, asts);
+  collect_asts(blk, asts);
 
   for_vector(BaseAST, ast, asts) {
     Expr* exprAst = toExpr(ast);
@@ -224,6 +228,13 @@ void deadExpressionElimination(FnSymbol* fn) {
       }
     }
   }
+}
+
+//
+// Removes expression statements that have no effect.
+//
+void deadExpressionElimination(FnSymbol* fn) {
+  deadExpressionElimination(fn->body);
 }
 
 static bool isInCForLoopHeader(Expr* expr) {
@@ -642,9 +653,13 @@ void verifyRemovedIterResumeGotos() {
 //
 
 void cleanupLoopBlocks(FnSymbol* fn) {
+  cleanupLoopBlocks(fn->body);
+}
+
+void cleanupLoopBlocks(BlockStmt* block) {
   std::vector<Expr*> stmts;
 
-  collect_stmts(fn->body, stmts);
+  collect_stmts(block, stmts);
 
   for_vector (Expr, expr, stmts) {
     if (BlockStmt* stmt = toBlockStmt(expr)) {
