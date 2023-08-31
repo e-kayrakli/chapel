@@ -445,7 +445,8 @@ private:
 
   bool callsInBodyAreGpuizableHelp(BlockStmt* blk,
                                    std::set<FnSymbol*>& okFns,
-                                   std::set<FnSymbol*> visitedFns);
+                                   std::set<FnSymbol*> visitedFns,
+                                   CallExpr* caller=nullptr);
 };
 
 std::unordered_map<CForLoop*, GpuizableLoop> eligibleLoops;
@@ -575,23 +576,98 @@ bool GpuizableLoop::callsInBodyAreGpuizable() {
   return callsInBodyAreGpuizableHelp(this->loop_, okFns, visitedFns);
 }
 
-bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
-                                                std::set<FnSymbol*>& okFns,
-                                                std::set<FnSymbol*> visitedFns) {
-  FnSymbol* fn = blk->getFunction();
-  if (debugPrintGPUChecks) {
-    printf("%*s%s:%d: %s[%d]\n", indentGPUChecksLevel, "",
-           fn->fname(), fn->linenum(), fn->name, fn->id);
+static std::map<FnSymbol*, FnSymbol*> haltSimplifiedFns;
+
+static FnSymbol* simplifyHalts(FnSymbol* original) {
+  std::cout << "Fn simplifying " << original->id << std::endl;
+
+  auto cached = haltSimplifiedFns.find(original);
+  if (cached != haltSimplifiedFns.end()) {
+    std::cout << "\treturning cached\n";
+    return cached->second;
   }
 
-  if (visitedFns.count(blk->getFunction()) != 0) {
-    return true; // allow recursive functions
-  }
-
-  visitedFns.insert(blk->getFunction());
+  FnSymbol* simplifiedFn = original;
 
   std::vector<CallExpr*> calls;
-  collectCallExprs(blk, calls);
+  collectCallExprs(original->body, calls);
+
+  bool hasHalts = false;
+  for_vector(CallExpr, call, calls) {
+    if (FnSymbol* callee = call->resolvedFunction()) {
+      if (callee->hasFlag(FLAG_FUNCTION_TERMINATES_PROGRAM)) {
+        hasHalts = true;
+        break;
+      }
+    }
+  }
+
+  if (hasHalts) {
+    SET_LINENO(original);
+
+    simplifiedFn = original->copy();
+    original->defPoint->insertAfter(new DefExpr(simplifiedFn));
+
+    std::vector<CallExpr*> calls;
+    collectCallExprs(simplifiedFn->body, calls);
+
+    for_vector(CallExpr, call, calls) {
+      if (FnSymbol* callee = call->resolvedFunction()) {
+        if (callee->hasFlag(FLAG_FUNCTION_TERMINATES_PROGRAM)) {
+          call->replace(new CallExpr(PRIM_NOOP));
+        }
+      }
+    }
+
+    cleanupLoopBlocks(simplifiedFn);
+    deadVariableElimination(simplifiedFn);
+    cleanupLoopBlocks(simplifiedFn);
+    deadExpressionElimination(simplifiedFn);
+
+    if (original->getModule()->modTag == MOD_USER) {
+      nprint_view(simplifiedFn);
+    }
+  }
+
+  std::cout << "\tcaching " << original->id << "\n";
+  haltSimplifiedFns[original] = simplifiedFn;
+  haltSimplifiedFns[simplifiedFn] = simplifiedFn;
+
+  return simplifiedFn;
+}
+
+bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
+                                                std::set<FnSymbol*>& okFns,
+                                                std::set<FnSymbol*> visitedFns,
+                                                CallExpr* caller) {
+  BlockStmt* curBlk = blk;
+
+  if (caller) {
+    // this must be a function called from inside a loop
+    FnSymbol* fn = blk->getFunction();
+    if (debugPrintGPUChecks) {
+      printf("%*s%s:%d: %s[%d]\n", indentGPUChecksLevel, "",
+             fn->fname(), fn->linenum(), fn->name, fn->id);
+    }
+
+    if (visitedFns.count(blk->getFunction()) != 0) {
+      return true; // allow recursive functions
+    }
+
+    visitedFns.insert(blk->getFunction());
+
+    FnSymbol* newFn = simplifyHalts(fn);
+
+    if (newFn != fn) {
+      INT_ASSERT(caller);
+      // we created an improved clone of the function, use that instead
+      caller->setResolvedFunction(newFn);
+      curBlk = newFn->body;
+    }
+  }
+
+  std::vector<CallExpr*> calls;
+  collectCallExprs(curBlk, calls);
 
   for_vector(CallExpr, call, calls) {
     if (call->primitive) {
@@ -636,7 +712,7 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
 
       indentGPUChecksLevel += 2;
       if (okFns.count(fn) != 0 ||
-          callsInBodyAreGpuizableHelp(fn->body, okFns, visitedFns)) {
+          callsInBodyAreGpuizableHelp(fn->body, okFns, visitedFns, call)) {
         indentGPUChecksLevel -= 2;
         okFns.insert(fn);
       } else {
