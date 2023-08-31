@@ -578,58 +578,82 @@ bool GpuizableLoop::callsInBodyAreGpuizable() {
 
 static std::map<FnSymbol*, FnSymbol*> haltSimplifiedFns;
 
-static FnSymbol* simplifyHalts(FnSymbol* original) {
-  std::cout << "Fn simplifying " << original->id << std::endl;
 
-  auto cached = haltSimplifiedFns.find(original);
-  if (cached != haltSimplifiedFns.end()) {
-    std::cout << "\treturning cached\n";
-    return cached->second;
-  }
-
-  FnSymbol* simplifiedFn = original;
-
+static bool hasHalts(BlockStmt* block) {
   std::vector<CallExpr*> calls;
-  collectCallExprs(original->body, calls);
+  collectCallExprs(block, calls);
 
-  bool hasHalts = false;
   for_vector(CallExpr, call, calls) {
     if (FnSymbol* callee = call->resolvedFunction()) {
       if (callee->hasFlag(FLAG_FUNCTION_TERMINATES_PROGRAM)) {
-        hasHalts = true;
+        return true;
         break;
       }
     }
   }
 
-  if (hasHalts) {
+  return false;
+}
+
+static void replaceHaltsWithTerminate(BlockStmt* block) {
+  std::vector<CallExpr*> calls;
+  collectCallExprs(block, calls);
+
+  for_vector(CallExpr, call, calls) {
+    if (FnSymbol* callee = call->resolvedFunction()) {
+      if (callee->hasFlag(FLAG_FUNCTION_TERMINATES_PROGRAM)) {
+        call->replace(new CallExpr(PRIM_NOOP));
+      }
+    }
+  }
+
+  std::set<Symbol*> dummy;
+  cleanupLoopBlocks(block);
+  deadVariableElimination(block, dummy);
+  cleanupLoopBlocks(block);
+  deadExpressionElimination(block);
+
+}
+
+static BlockStmt* simplifyHalts(BlockStmt* original) {
+
+  BlockStmt* simplifiedBlock = original;
+  if (hasHalts(original)) {
+    SET_LINENO(original);
+
+    simplifiedBlock = original->copy();
+
+    replaceHaltsWithTerminate(simplifiedBlock);
+  }
+
+  return simplifiedBlock;
+}
+
+static FnSymbol* simplifyHalts(FnSymbol* original) {
+
+  auto cached = haltSimplifiedFns.find(original);
+  if (cached != haltSimplifiedFns.end()) {
+    return cached->second;
+  }
+
+  FnSymbol* simplifiedFn = original;
+
+  if (hasHalts(original->body)) {
     SET_LINENO(original);
 
     simplifiedFn = original->copy();
     original->defPoint->insertAfter(new DefExpr(simplifiedFn));
 
-    std::vector<CallExpr*> calls;
-    collectCallExprs(simplifiedFn->body, calls);
+    replaceHaltsWithTerminate(simplifiedFn->body);
 
-    for_vector(CallExpr, call, calls) {
-      if (FnSymbol* callee = call->resolvedFunction()) {
-        if (callee->hasFlag(FLAG_FUNCTION_TERMINATES_PROGRAM)) {
-          call->replace(new CallExpr(PRIM_NOOP));
-        }
-      }
-    }
-
-    cleanupLoopBlocks(simplifiedFn);
-    deadVariableElimination(simplifiedFn);
-    cleanupLoopBlocks(simplifiedFn);
-    deadExpressionElimination(simplifiedFn);
-
-    if (original->getModule()->modTag == MOD_USER) {
-      nprint_view(simplifiedFn);
-    }
+    //if (original->getModule()->modTag == MOD_USER) {
+      //nprint_view(simplifiedFn);
+    //}
+    //std::cout << "Specialized fn in " << original->stringLoc() << std::endl;
+    //nprint_view(original);
+    //nprint_view(simplifiedFn);
   }
 
-  std::cout << "\tcaching " << original->id << "\n";
   haltSimplifiedFns[original] = simplifiedFn;
   haltSimplifiedFns[simplifiedFn] = simplifiedFn;
 
@@ -650,19 +674,31 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
              fn->fname(), fn->linenum(), fn->name, fn->id);
     }
 
-    if (visitedFns.count(blk->getFunction()) != 0) {
-      return true; // allow recursive functions
-    }
-
-    visitedFns.insert(blk->getFunction());
-
     FnSymbol* newFn = simplifyHalts(fn);
-
     if (newFn != fn) {
       INT_ASSERT(caller);
       // we created an improved clone of the function, use that instead
       caller->setResolvedFunction(newFn);
       curBlk = newFn->body;
+    }
+
+    if (visitedFns.count(blk->getFunction()) != 0) {
+      return true; // allow recursive functions
+    }
+
+    visitedFns.insert(blk->getFunction());
+  }
+  else {
+    // we are looking at the body of the loop
+    BlockStmt* newBlock = simplifyHalts(blk);
+
+    if (newBlock != blk) {
+      // we are replacing the loop body
+      // but we don't want to do that if the loop is ineligible because of a
+      // different reason, so leave the loop intact, but use newBlock for the
+      // rest of the function. If the loop is completely eligible, that's when
+      // we replace the loop body
+      curBlk = newBlock;
     }
   }
 
@@ -711,8 +747,7 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
       }
 
       indentGPUChecksLevel += 2;
-      if (okFns.count(fn) != 0 ||
-          callsInBodyAreGpuizableHelp(fn->body, okFns, visitedFns, call)) {
+      if (callsInBodyAreGpuizableHelp(fn->body, okFns, visitedFns, call)) {
         indentGPUChecksLevel -= 2;
         okFns.insert(fn);
       } else {
@@ -721,6 +756,16 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
       }
     }
   }
+
+  // we know that the loop is eligible here, replace its body if needed
+  if (caller == nullptr) {
+    INT_ASSERT(blk == this->loop_);
+    if (curBlk != blk) {
+      std::cout << "replacing loop body " << this->loop_->stringLoc() << std::endl;
+      blk->replace(curBlk);
+    }
+  }
+
   return true;
 }
 
