@@ -753,6 +753,7 @@ class GpuKernel {
   void determineBlockSize();
   static bool isCallToPrimitiveWeShouldNotCopyIntoKernel(CallExpr *call);
   void populateBody(FnSymbol *outlinedFunction);
+  void optimizeBody(FnSymbol *outlinedFunction);
   void normalizeOutlinedFunction();
   void finalize();
 
@@ -773,6 +774,7 @@ GpuKernel::GpuKernel(const GpuizableLoop &gpuLoop, DefExpr* insertionPoint)
   determineBlockSize();
   populateBody(fn_);
   if(!lateGpuizationFailure_) {
+    optimizeBody(fn_);
     finalize();
   }
 }
@@ -923,6 +925,34 @@ bool GpuKernel::isCallToPrimitiveWeShouldNotCopyIntoKernel(CallExpr *call) {
 
   return call->isPrimitive(PRIM_ASSERT_ON_GPU) ||
          call->isPrimitive(PRIM_GPU_SET_BLOCKSIZE);
+}
+
+void GpuKernel::optimizeBody(FnSymbol *outlinedFunction) {
+  std::vector<SymExpr*> symExprs;
+  collectSymExprs(outlinedFunction->body, symExprs);
+
+  for_vector (SymExpr, symExpr, symExprs) {
+    Expr* parent = symExpr->parentExpr;
+    Symbol* sym = symExpr->symbol();
+    if (VarSymbol* varSym = toVarSymbol(sym)) {
+      if (varSym->isImmediate()) {
+        if (symExpr->getModule()->modTag == MOD_USER) {
+          if (CallExpr* parentCall = toCallExpr(parent)) {
+            if (parentCall->isPrimitive(PRIM_ARRAY_GET)) {
+              if (varSym->type == dtInt[INT_SIZE_64]) {
+                std::cout << "Replacing\n";
+                symExpr->replace(new SymExpr(new_IntSymbol(varSym->immediate->v_int64,
+                        INT_SIZE_32)));
+
+              }
+              std::cout << "Loc " << symExpr->stringLoc() << std::endl;
+              nprint_view(parent);
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 void GpuKernel::populateBody(FnSymbol *outlinedFunction) {
