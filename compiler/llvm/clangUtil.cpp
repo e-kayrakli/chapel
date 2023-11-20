@@ -4734,8 +4734,7 @@ static void makeBinaryLLVMForHIP(const std::string& artifactFilename,
     inputs += std::string(",") + gpuOut;
 
   }
-  std::string bundlerCmd = std::string(gGpuSdkPath) +
-                          "/llvm/bin/clang-offload-bundler" +
+  std::string bundlerCmd = findSiblingClangToolPath("clang-offload-bundler") +
                            " -type=o -bundle-align=4096" +
                            " -targets=host-x86_64-unknown-linux" +
                            targets +
