@@ -390,7 +390,7 @@ public:
   GpuizableLoop(GpuizableLoop&&) = default;
 
   static GpuizableLoop fromEligibleClone(BlockStmt* blk) {
-    GpuizableLoop loop{blk};
+    GpuizableLoop loop(blk);
     std::swap(loop.gpuLoop_, loop.loop_);
 
     // Try to recover some fields from existing AST structure.
@@ -449,6 +449,18 @@ private:
                                    CallExpr* caller=nullptr);
 };
 
+static CallExpr* getGpuEligibleMarker(CForLoop* loop) {
+  if (loop->body.length > 0) {
+    if (auto callExpr = toCallExpr(loop->body.get(1))) {
+      if (callExpr->primitive && callExpr->primitive->tag == PRIM_GPU_ELIGIBLE) {
+        return callExpr;
+      }
+    }
+  }
+  return nullptr;
+}
+
+
 std::unordered_map<CForLoop*, GpuizableLoop> eligibleLoops;
 
 GpuizableLoop::GpuizableLoop(BlockStmt *blk) {
@@ -457,8 +469,17 @@ GpuizableLoop::GpuizableLoop(BlockStmt *blk) {
   this->loop_ = toCForLoop(blk);
   this->parentFn_ = toFnSymbol(blk->getFunction());
   this->compileTimeGpuAssertion_ = findCompileTimeGpuAssertions();
-  this->isEligible_ = evaluateLoop();
+  if (!getGpuEligibleMarker(this->loop_)) {
+    this->generateGpuAndNonGpuPaths();
+    this->isEligible_ = evaluateLoop();
+  }
+  else {
+    this->isEligible_ = true;
+  }
 
+  if (!this->isEligible_) {
+    this->makeCpuOnly();
+  }
   // Ideally we should error out earlier than this with a more specific
   // error message but here's a final fallback error.
   // There's one use case we want to exempt, which is failure to
@@ -573,7 +594,9 @@ bool GpuizableLoop::parentFnAllowsGpuization() {
 bool GpuizableLoop::callsInBodyAreGpuizable() {
   std::set<FnSymbol*> okFns;
   std::set<FnSymbol*> visitedFns;
-  return callsInBodyAreGpuizableHelp(this->loop_, okFns, visitedFns);
+  INT_ASSERT(this->gpuLoop_); // make sure we're doing this after we created the
+                              // GPU copy
+  return callsInBodyAreGpuizableHelp(this->gpuLoop_, okFns, visitedFns);
 }
 
 static std::map<FnSymbol*, FnSymbol*> haltSimplifiedFns;
@@ -646,12 +669,12 @@ static FnSymbol* simplifyHalts(FnSymbol* original) {
 
     replaceHaltsWithTerminate(simplifiedFn->body);
 
-    //if (original->getModule()->modTag == MOD_USER) {
-      //nprint_view(simplifiedFn);
-    //}
-    //std::cout << "Specialized fn in " << original->stringLoc() << std::endl;
-    //nprint_view(original);
-    //nprint_view(simplifiedFn);
+
+    if (original->getModule()->modTag == MOD_USER) {
+      std::cout << "Specialized fn in " << original->stringLoc() << std::endl;
+      nprint_view(original);
+      nprint_view(simplifiedFn);
+    }
   }
 
   haltSimplifiedFns[original] = simplifiedFn;
@@ -759,7 +782,7 @@ bool GpuizableLoop::callsInBodyAreGpuizableHelp(BlockStmt* blk,
 
   // we know that the loop is eligible here, replace its body if needed
   if (caller == nullptr) {
-    INT_ASSERT(blk == this->loop_);
+    INT_ASSERT(blk == this->gpuLoop_);
     if (curBlk != blk) {
       std::cout << "replacing loop body " << this->loop_->stringLoc() << std::endl;
       blk->replace(curBlk);
@@ -1392,17 +1415,6 @@ static void generateGPUKernelCall(const GpuizableLoop &gpuLoop,
 
 }
 
-static CallExpr* getGpuEligibleMarker(CForLoop* loop) {
-  if (loop->body.length > 0) {
-    if (auto callExpr = toCallExpr(loop->body.get(1))) {
-      if (callExpr->primitive && callExpr->primitive->tag == PRIM_GPU_ELIGIBLE) {
-        return callExpr;
-      }
-    }
-  }
-  return nullptr;
-}
-
 static void outlineEligibleLoop(FnSymbol *fn, GpuizableLoop &gpuLoop) {
   SET_LINENO(gpuLoop.gpuLoop());
 
@@ -1439,7 +1451,7 @@ static void outlineGpuKernelsInFn(FnSymbol *fn) {
       // copies, they need to be outlined to account for virtual dispatch.
       auto& eligibleLoop = foundLoop->second;
       outlineEligibleLoop(fn, eligibleLoop);
-    } else if (fGpuSpecialization && getGpuEligibleMarker(loop)) {
+    } else if (fGpuSpecialization && getGpuEligibleMarker(loop) != nullptr) {
       // Even if this wasn't a loop originally marked eligible, it could
       // be a copy of one. If that's the case, we inserted a primitive
       // into its body.
@@ -1687,9 +1699,8 @@ static void duplicateEligibleLoopsForAdjustedLICM(FnSymbol* fn) {
     GpuizableLoop gpuLoop(loop);
     if (gpuLoop.isEligible()) {
       SET_LINENO(loop);
-      auto gpuCopy = gpuLoop.generateGpuAndNonGpuPaths();
-      eligibleLoops.insert({ gpuCopy, std::move(gpuLoop) });
-      gpuCopy->body.insertAtHead(new CallExpr(PRIM_GPU_ELIGIBLE));
+      eligibleLoops.insert({ gpuLoop.gpuLoop(), std::move(gpuLoop) });
+      gpuLoop.gpuLoop()->body.insertAtHead(new CallExpr(PRIM_GPU_ELIGIBLE));
     }
   }
 }
