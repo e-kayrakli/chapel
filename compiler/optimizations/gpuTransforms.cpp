@@ -1146,7 +1146,6 @@ Symbol* GpuKernel::addKernelArgument(Symbol* symInLoop) {
   if (isRedTemp) {
     actual.kind |= GpuArgKind::REDUCE;
     if (loopSymbolToInterimReductionFormal.count(symInLoop) == 0) {
-      nprint_view(symInLoop);
       ArgSymbol* interimResultBuffer = new ArgSymbol(INTENT_IN,
                                                      astr(symInLoop->name, "_interim"),
                                                      symInLoop->getRefType());
