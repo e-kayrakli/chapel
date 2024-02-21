@@ -1003,12 +1003,15 @@ struct KernelActual {
   int8_t kind;  // assigned to one or more values of GpuArgKind or'd together
 };
 
+enum ReduceKind { sum, min, max };
+
 struct ReductionInfo {
   Symbol* symInLoop;
   ArgSymbol* buffer;  // argument to the kernel: is a void* pointing at the
                       // reduction buffer
   FnSymbol* wrapper;  // function that wraps around the "fake-generic" runtime
                       // function and casts void* to correct data type 
+  ReduceKind kind;
 };
 
 class KernelArg {
@@ -1017,9 +1020,10 @@ class KernelArg {
     ArgSymbol* formal_;
     int8_t kind_;
     ReductionInfo redInfo_;
+    CForLoop* loop_;
 
   public:
-    KernelArg(Symbol* symInLoop);
+    KernelArg(Symbol* symInLoop, CForLoop* loop);
     int8_t kind() { return kind_; }
     ArgSymbol* formal() { return formal_; }
 
@@ -1031,6 +1035,7 @@ class KernelArg {
   private:
     bool isReduce() const { return kind_&GpuArgKind::REDUCE; }
     FnSymbol* generateFinalReductionWrapper();
+    void deduceReduceKind();
 };
 
 
@@ -1129,6 +1134,17 @@ void GpuKernel::buildStubOutlinedFunction(DefExpr* insertionPoint) {
   insertionPoint->insertBefore(new DefExpr(fn_));
 }
 
+void KernelArg::deduceReduceKind() {
+  for_SymbolUses (use, this->actual_) {
+    if (CallExpr* parentCall = toCallExpr(use->parentExpr)) {
+      if (parentCall->isPrimitive(PRIM_ADD) ||
+          parentCall->isNamed("accumulate")) {
+        nprint_view(parentCall->get(1)->typeInfo());
+      }
+    }
+  }
+}
+
 FnSymbol* KernelArg::generateFinalReductionWrapper() {
   //SET_LINENO(gpuLoop.gpuLoop());
 
@@ -1174,7 +1190,8 @@ FnSymbol* KernelArg::generateFinalReductionWrapper() {
 }
 
 
-KernelArg::KernelArg(Symbol* symInLoop) {
+KernelArg::KernelArg(Symbol* symInLoop, CForLoop* loop) {
+  this->loop_ = loop;
   this->actual_ = symInLoop;
 
   Type* symType = symInLoop->typeInfo();
@@ -1215,6 +1232,8 @@ KernelArg::KernelArg(Symbol* symInLoop) {
                                          astr(symInLoop->name, "_interim"),
                                          symInLoop->getRefType());
     this->redInfo_.wrapper = this->generateFinalReductionWrapper();
+
+    this->deduceReduceKind();
   }
 }
 
@@ -1258,7 +1277,7 @@ CallExpr* KernelArg::generatePrimGpuBlockReduce(Symbol* blockSize) {
 }
 
 Symbol* GpuKernel::addKernelArgument(Symbol* symInLoop) {
-  KernelArg arg(symInLoop);
+  KernelArg arg(symInLoop, gpuLoop.gpuLoop());
 
   ArgSymbol* formal = arg.formal();
   INT_ASSERT(formal);
