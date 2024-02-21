@@ -1033,7 +1033,6 @@ class GpuKernel {
   CallExpr* blockSizeCall_;
   BlockStmt* gpuPrimitivesBlock_;
   Symbol* blockSize_;
-  int64_t staticBlockSize_;
 
   int nReductionBufs_ = 0;
 
@@ -1074,7 +1073,6 @@ GpuKernel::GpuKernel(const GpuizableLoop &gpuLoop, DefExpr* insertionPoint)
   , blockSizeCall_(nullptr)
   , gpuPrimitivesBlock_(nullptr)
   , blockSize_(nullptr)
-  , staticBlockSize_(0)
 {
   buildStubOutlinedFunction(insertionPoint);
   normalizeOutlinedFunction();
@@ -1278,19 +1276,12 @@ void GpuKernel::findGpuPrimitives() {
     } else if (callExpr->isPrimitive(PRIM_GPU_PRIMITIVE_BLOCK)) {
       gpuPrimitivesBlock_ = toBlockStmt(callExpr->parentExpr);
 
-      VarSymbol* arg = toVarSymbol(toSymExpr(callExpr->get(1))->symbol());
-      INT_ASSERT(arg);
-      if (Immediate* imm = getSymbolImmediate(arg)) {
-        staticBlockSize_ = imm->int_value();
-      }
-
       blockSize_ = toSymExpr(callExpr->get(1))->symbol();
     }
   }
 
   if (blockSize_ == nullptr) {
-    staticBlockSize_ = fGPUBlockSize != 0 ? fGPUBlockSize : 512;
-    blockSize_ = new_IntSymbol(staticBlockSize_);
+    blockSize_ = new_IntSymbol(fGPUBlockSize != 0 ? fGPUBlockSize : 512);
   }
 
   INT_ASSERT(blockSize_ != nullptr);
@@ -1435,9 +1426,9 @@ void GpuKernel::populateBody(FnSymbol *outlinedFunction) {
                                          symInLoop,
                                          interimResultFormal);
 
-    if (staticBlockSize_) {
+    if (blockSize()->isImmediate()) {
       std::cout << "Using specialized block-reduce" << std::endl;
-      blockReduce->insertAtTail(new_IntSymbol(staticBlockSize_));
+      blockReduce->insertAtTail(blockSize());
     }
 
     outlinedFunction->insertBeforeEpilogue(blockReduce);
