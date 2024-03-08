@@ -1611,6 +1611,7 @@ CallResolutionResult resolvePrimCall(Context* context,
       break;
 
     case PRIM_GPU_INIT_KERNEL_CFG:
+    case PRIM_GPU_INIT_KERNEL_CFG_3D:
       type = QualifiedType(QualifiedType::CONST_VAR, CPtrType::getCVoidPtrType(context));
       break;
 
