@@ -30,7 +30,7 @@ bool chpl_gpu_use_stream_per_task = true;
 #ifdef HAS_GPU_LOCALE
 
 
-// #define CHPL_GPU_ENABLE_PROFILE
+ #define CHPL_GPU_ENABLE_PROFILE
 
 #include "chplrt.h"
 #include "chpl-atomics.h"
@@ -175,8 +175,6 @@ void chpl_gpu_task_fence(void) {
 static void* get_stream(int dev) {
   if (!has_stream_per_task()) return NULL;
 
-  CHPL_GPU_START_TIMER(stream_time);
-
   // assumes that device has been set correctly with chpl_gpu_impl_use_device
   chpl_gpu_taskPrvData_t* prvData = get_gpu_task_private_data();
 
@@ -194,9 +192,6 @@ static void* get_stream(int dev) {
     *stream = chpl_gpu_impl_stream_create();
     CHPL_GPU_DEBUG("Stream created: %p (subloc %d)\n", *stream, dev);
   }
-
-  CHPL_GPU_STOP_TIMER(stream_time);
-  CHPL_GPU_PRINT_TIMERS("Stream obtained in %.1Lf us\n", stream_time*1000);
 
   CHPL_GPU_DEBUG("Using stream: %p (subloc %d)\n", *stream, dev);
 
@@ -279,11 +274,24 @@ typedef struct kernel_cfg_s {
   // we need this in the config so that we can offload data using this stream,
   // and in the future allocate/deallocate on this stream, too
   void* stream;
+
+#ifdef CHPL_GPU_ENABLE_PROFILE
+  long double base_time;
+  long double prep_time;
+  long double priv_time;
+  long double kernel_time;
+  long double reduce_time;
+  long double teardown_time;
+#endif
+
 } kernel_cfg;
 
 static void cfg_init(kernel_cfg* cfg, const char* fn_name,
                      int n_params, int n_pids, int n_reduce_vars,
+                     long double base_time,
                      int ln, int32_t fn) {
+
+  cfg->base_time = base_time;
 
   cfg->fn_name = fn_name;
 
@@ -336,6 +344,7 @@ static void cfg_init(kernel_cfg* cfg, const char* fn_name,
   cfg->reduce_vars = chpl_mem_alloc(cfg->n_reduce_vars * sizeof(reduce_var),
                                     CHPL_RT_MD_GPU_KERNEL_PARAM_BUFF, ln, fn);
 }
+
 
 static void cfg_init_dims_1d(kernel_cfg* cfg, int64_t num_threads,
                              int blk_dim) {
@@ -549,13 +558,19 @@ static void cfg_finalize_priv_table(kernel_cfg *cfg) {
   CHPL_GPU_DEBUG("Offloaded the new privatization table\n");
 }
 
+
+
 void* chpl_gpu_init_kernel_cfg(const char* fn_name, int64_t num_threads,
                                int blk_dim, int n_params, int n_pids,
                                int n_reduce_vars, int ln, int32_t fn) {
+  long double base_time;
+  CHPL_GPU_START_TIMER(base_time);
+
   void* ret = chpl_mem_alloc(sizeof(kernel_cfg),
                              CHPL_RT_MD_GPU_KERNEL_PARAM_META, ln, fn);
 
-  cfg_init((kernel_cfg*)ret, fn_name, n_params, n_pids, n_reduce_vars, ln, fn);
+  cfg_init((kernel_cfg*)ret, fn_name, n_params, n_pids, n_reduce_vars,
+           base_time, ln, fn);
   cfg_init_dims_1d((kernel_cfg*)ret, num_threads, blk_dim);
 
   CHPL_GPU_DEBUG("Initialized kernel config for %s. num_threads=%ld blk_dim=%d"
@@ -575,7 +590,8 @@ void* chpl_gpu_init_kernel_cfg_3d(const char* fn_name,
   void* ret = chpl_mem_alloc(sizeof(kernel_cfg),
                              CHPL_RT_MD_GPU_KERNEL_PARAM_META, ln, fn);
 
-  cfg_init((kernel_cfg*)ret, fn_name, n_params, n_pids, n_reduce_vars, ln, fn);
+  cfg_init((kernel_cfg*)ret, fn_name, n_params, n_pids, n_reduce_vars, 0,
+           ln, fn);
   cfg_init_dims_3d((kernel_cfg*)ret,
                    grd_dim_x, grd_dim_y, grd_dim_z,
                    blk_dim_x, blk_dim_y, blk_dim_z);
@@ -617,8 +633,34 @@ void chpl_gpu_deinit_kernel_cfg(void* _cfg) {
   }
   chpl_mem_free(cfg->reduce_vars, cfg->ln, cfg->fn);
 
+#ifdef CHPL_GPU_ENABLE_PROFILE
+  long double prep_time = cfg->prep_time - cfg->base_time;
+  long double priv_time = cfg->priv_time - cfg->prep_time;
+  long double kernel_time = cfg->kernel_time - cfg->priv_time;
+  long double reduce_time = cfg->reduce_time - cfg->kernel_time;
+  const char* fn_name = cfg->fn_name;
+
+  long double full_reduce_time = cfg->reduce_time;
+
+#endif
   chpl_mem_free(cfg, ((kernel_cfg*)cfg)->ln, ((kernel_cfg*)cfg)->fn);
   CHPL_GPU_DEBUG("Deinitialized kernel config\n");
+
+#ifdef CHPL_GPU_ENABLE_PROFILE
+  long double teardown_time = get_time()-full_reduce_time;
+
+  printf("%20s,%Lf,%Lf,%Lf,%Lf,%Lf\n", fn_name, prep_time, priv_time,
+         kernel_time, reduce_time, teardown_time);
+
+#endif
+
+
+  /*CHPL_GPU_PRINT_TIMERS("<%20s> Load: %Lf, "*/
+      /*"Prep: %Lf, "*/
+      /*"Kernel: %Lf, "*/
+      /*"Teardown: %Lf\n",*/
+      /*name, load_time, prep_time, kernel_time, teardown_time);*/
+
 }
 
 void chpl_gpu_pid_offload(void* cfg, int64_t pid, size_t size) {
@@ -697,8 +739,6 @@ static void launch_kernel(const char* name,
                                 blk_dim_x, blk_dim_y, blk_dim_z);
   chpl_gpu_diags_incr(kernel_launch);
 
-  CHPL_GPU_START_TIMER(load_time);
-
   CHPL_GPU_DEBUG("Kernel configuration %p\n", cfg);
 
   CHPL_GPU_DEBUG("Loading function named %s\n", name);
@@ -706,7 +746,6 @@ static void launch_kernel(const char* name,
   assert(function);
   CHPL_GPU_DEBUG("\tFunction Address: %p\n", function);
 
-  CHPL_GPU_STOP_TIMER(load_time);
 
   CHPL_GPU_DEBUG("Creating kernel parameters\n");
   CHPL_GPU_DEBUG("\tgridDims=(%d, %d, %d), blockDims(%d, %d, %d)\n",
@@ -718,9 +757,11 @@ static void launch_kernel(const char* name,
     CHPL_GPU_DEBUG("\t\tVal: %p\n", *(cfg->kernel_params[i]));
   }
 
+  CHPL_GPU_RECORD_TIME(cfg->prep_time);
+
   cfg_finalize_priv_table(cfg);
 
-  CHPL_GPU_START_TIMER(kernel_time);
+  CHPL_GPU_RECORD_TIME(cfg->priv_time);
 
   CHPL_GPU_DEBUG("Calling impl's launcher %s\n", name);
   chpl_gpu_impl_launch_kernel(function,
@@ -729,29 +770,22 @@ static void launch_kernel(const char* name,
                               cfg->stream, (void**)(cfg->kernel_params));
   CHPL_GPU_DEBUG("\tLauncher returned %s\n", name);
 
-  cfg_finalize_reductions(cfg);
-
 #ifdef CHPL_GPU_ENABLE_PROFILE
   chpl_gpu_impl_stream_synchronize(cfg->stream);
 #endif
-  CHPL_GPU_STOP_TIMER(kernel_time);
+  CHPL_GPU_RECORD_TIME(cfg->kernel_time);
+
+  cfg_finalize_reductions(cfg);
+
+  CHPL_GPU_RECORD_TIME(cfg->reduce_time);
 
   chpl_task_yield();
 
-  CHPL_GPU_START_TIMER(teardown_time);
 
   // deinit them before synch as a (premature?) optimization
   // Engin: note that we are not using stream-ordered allocators yet. So, I
   // expect the following to serve as a synchornization unfortunately
   cfg_deinit_params(cfg);
-
-  CHPL_GPU_STOP_TIMER(teardown_time);
-
-  CHPL_GPU_PRINT_TIMERS("<%20s> Load: %Lf, "
-      "Prep: %Lf, "
-      "Kernel: %Lf, "
-      "Teardown: %Lf\n",
-      name, load_time, prep_time, kernel_time, teardown_time);
 
 #ifdef CHPL_GPU_MEM_STRATEGY_ARRAY_ON_DEVICE
   if (chpl_gpu_sync_with_host) {
