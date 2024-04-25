@@ -21,7 +21,7 @@
 // section due to the fact that GpuDiagnostics module accesses it (and this
 // module can be used despite what locale model you're using).
 #include <stdbool.h>
-bool chpl_gpu_debug = false;
+bool chpl_gpu_debug = true;
 bool chpl_gpu_no_cpu_mode_warning = false;
 int chpl_gpu_num_devices = -1;
 bool chpl_gpu_sync_with_host = true;
@@ -203,10 +203,14 @@ static void* get_stream(int dev) {
   return *stream;
 }
 
+bool inited = false;
+
 void chpl_gpu_support_module_finished_initializing(void) {
   // we can't use `CHPL_GPU_DEBUG` before the support module is finished
   // initializing. This call back is used to signal the runtime that that module
   // has finished initializing.
+  //
+  inited = true;
 
   CHPL_GPU_DEBUG("GPU layer initialized.\n");
   CHPL_GPU_DEBUG("  Memory allocation strategy for ---\n");
@@ -1305,7 +1309,12 @@ void* chpl_gpu_mem_alloc(size_t size, chpl_mem_descInt_t description,
     chpl_gpu_impl_use_device(chpl_task_getRequestedSubloc());
 
     chpl_memhook_malloc_pre(1, size, description, lineno, filename);
-    ptr = chpl_gpu_impl_mem_alloc(size);
+    if (inited) {
+      ptr = chpl_gpu_impl_mem_array_alloc(size);
+    }
+    else {
+      ptr = chpl_gpu_impl_mem_alloc(size);
+    }
     chpl_memhook_malloc_post((void*)ptr, 1, size, description, lineno, filename);
 
     CHPL_GPU_DEBUG("chpl_gpu_mem_alloc returning %p\n", (void*)ptr);
