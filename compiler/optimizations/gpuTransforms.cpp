@@ -37,6 +37,7 @@
 #include "timer.h"
 #include "misc.h"
 #include "view.h"
+#include "AstVisitorTraverse.h"
 
 #include "global-ast-vecs.h"
 
@@ -496,16 +497,29 @@ class GpuAssertionReporter {
   }
 };
 
+static bool symbolIsAPid(SymExpr* expr) {
+  if (CallExpr *parent = toCallExpr(expr->parentExpr)) {
+    if (parent->isPrimitive(PRIM_ARRAY_GET) && parent->get(2) == expr) {
+      SymExpr* theArray = toSymExpr(parent->get(1));
+      INT_ASSERT(theArray);
+      if (theArray->symbol()->name == astr("chpl_privateObjects")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // ----------------------------------------------------------------------------
 // GpuizableLoop
 // ----------------------------------------------------------------------------
 
 // Used to evaluate if a loop is eligible to be outlined into a GPU kernel and
 // extracts information about the loop's bounds and indices.
-class GpuizableLoop {
+class GpuizableLoop final: public AstVisitorTraverse {
   CForLoop* loop_ = nullptr;
   FnSymbol* parentFn_ = nullptr;
-  bool isEligible_ = false;
+  bool isEligible_ = true;
   Symbol* upperBound_ = nullptr;
   std::vector<Symbol*> loopIndices_;
   std::vector<Symbol*> lowerBounds_;
@@ -542,6 +556,16 @@ public:
     assertionReporter_.reportNotGpuizable(loop_, ast, msg);
   }
 
+  bool enterCForLoop(CForLoop *loop) override ;
+  void exitCForLoop(CForLoop *loop) override ;
+  bool enterBlockStmt(BlockStmt *block) override ;
+  void exitBlockStmt(BlockStmt *block) override ;
+  bool enterCallExpr(CallExpr *call) override ;
+  void exitCallExpr(CallExpr *call) override ;
+  bool enterFnSym(FnSymbol *fn) override ;
+  void exitFnSym(FnSymbol* fn) override ;
+  void visitSymExpr(SymExpr* symExpr) override ;
+
 private:
   CallExpr* findCompileTimeGpuAssertions();
   void printNonGpuizableError(CallExpr* assertion, Expr* loc);
@@ -561,6 +585,11 @@ private:
                                    std::set<FnSymbol*> visitedFns);
 
   FnSymbol* createErroringStubForGpu(FnSymbol* fn);
+
+  std::set<FnSymbol*> okFns_;
+  std::set<FnSymbol*> visitedFns_;
+
+  BlockStmt* primBlock_;
 };
 
 std::unordered_map<CForLoop*, GpuizableLoop> eligibleLoops;
@@ -573,18 +602,22 @@ GpuizableLoop::GpuizableLoop(BlockStmt *blk) {
 
   this->parentFn_ = toFnSymbol(blk->getFunction());
   this->assertionReporter_.noteGpuizableAssertion(findCompileTimeGpuAssertions());
-  this->isEligible_ = evaluateLoop();
+  //this->isEligible_ = evaluateLoop();
 
   // Ideally we should error out earlier than this with a more specific
   // error message but here's a final fallback error.
   // There's one use case we want to exempt, which is failure to
   // gpuize a nested loop. In this case if there was a failure to gpuize
   // the outer loop we already would have errored.
-  if(!this->isEligible_ && !isAlreadyInGpuKernel()) {
-    this->assertionReporter_.fallbackReportGpuizationFailure(blk);
-  }
+  //if(!this->isEligible_ && !isAlreadyInGpuKernel()) {
+    //this->assertionReporter_.fallbackReportGpuizationFailure(blk);
+  //}
 
   cleanupAssertGpuizable();
+
+  if (this->isReportWorthy() && this->parentFnAllowsGpuization()) {
+    this->loop_->accept(this);
+  }
 }
 
 // Given --report-gpu we don't want to report on all 'for' loops, just those
@@ -716,53 +749,12 @@ Symbol* GpuizableLoop::getPidFieldForPrivatizationOffload(SymExpr* symExpr) {
   return NULL;
 }
 
-static bool symbolIsAPid(SymExpr* expr) {
-  if (CallExpr *parent = toCallExpr(expr->parentExpr)) {
-    if (parent->isPrimitive(PRIM_ARRAY_GET) && parent->get(2) == expr) {
-      SymExpr* theArray = toSymExpr(parent->get(1));
-      INT_ASSERT(theArray);
-      if (theArray->symbol()->name == astr("chpl_privateObjects")) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 bool GpuizableLoop::symsInBodyAreGpuizable() {
-  std::vector<SymExpr*> symExprs;
-  collectSymExprs(this->loop_, symExprs);
-  for(auto *symExpr : symExprs) {
-    Symbol* sym = symExpr->symbol();
-    // gotos that jump outside the loop cannot be gpuized
-    if (GotoStmt* gotostmt = toGotoStmt(symExpr->parentExpr)) {
-      if (auto label = toSymExpr(gotostmt->label)) {
-        if (!isDefinedInTheLoop(label->symbol(), this->loop_))
-          return false;
-      }
-    }
-
-    // TODO: at this point we should just record privatized symbols used in the
-    // loop body. Currently, the compiler can sometimes generate two `pidGets`
-    // for the same thing. This should be OK; but runtime is probably doing
-    // redundant work.
-    if(Symbol* pidField = getPidFieldForPrivatizationOffload(symExpr)) {
-      // the symbol is an array/domain record with `_pid` field
-      SET_LINENO(symExpr);
-      CallExpr* pidGet = new CallExpr(PRIM_GET_MEMBER_VALUE, sym, pidField);
-      pidGets_.push_back(pidGet);
-    }
-    else if (symbolIsAPid(symExpr)) {
-      // the symbol is an index into `chpl_privateObjects`
-      CallExpr* move = toCallExpr(sym->getSingleDef()->getStmtExpr());
-      INT_ASSERT(move && move->isPrimitive(PRIM_MOVE));
-
-      CallExpr* rhs = toCallExpr(move->get(2));
-      INT_ASSERT(rhs && rhs->isPrimitive(PRIM_GET_MEMBER_VALUE));
-
-      pidGets_.push_back(rhs);
-    }
-  }
+  INT_FATAL("to be removed");
+  //std::vector<SymExpr*> symExprs;
+  //collectSymExprs(this->loop_, symExprs);
+  //for(auto *symExpr : symExprs) {
+  //}
 
   return true;
 }
@@ -2128,23 +2120,6 @@ static CallExpr* getGpuEligibleMarker(CForLoop* loop) {
   return nullptr;
 }
 
-static void outlineEligibleLoop(FnSymbol *fn, GpuizableLoop &gpuLoop) {
-  SET_LINENO(gpuLoop.loop());
-
-  // The marker is a compile-time only primitive; remove it now.
-  if (auto marker = getGpuEligibleMarker(gpuLoop.loop())) {
-    // TODO probably won't need this anymore
-    marker->remove();
-  }
-
-  // Construction of the GpuKernel will create the outlined function
-  GpuKernel kernel(gpuLoop, fn->defPoint);
-  if(!kernel.lateGpuizationFailure()) {
-    kernel.generateGpuAndNonGpuPaths();
-  } else {
-    kernel.fn()->defPoint->remove();
-  }
-}
 
 static void outlineGpuKernelsInFn(FnSymbol *fn) {
   std::vector<CForLoop*> asts;
@@ -2160,9 +2135,9 @@ static void outlineGpuKernelsInFn(FnSymbol *fn) {
 
     GpuizableLoop gpuLoop(loop);
 
-    if (gpuLoop.isEligible()) {
-      outlineEligibleLoop(fn, gpuLoop);
-    }
+    //if (gpuLoop.isEligible()) {
+      //outlineEligibleLoop(fn, gpuLoop);
+    //}
   }
 }
 
@@ -2360,4 +2335,282 @@ void GpuKernel::generateGpuAndNonGpuPaths() {
     cond->insertAfter(cpuBlock);
   }
 }
+
+//class GpuTransformer final : public AstVisitorTraverse {
+  //public:
+    //GpuTransformer(CForLoop loop)
+  //private:
+    //CForLoop loop_;
+//}
+
+//GpuTransformer::GpuTransformer(CForLoop loop): loop_(loop) {
+
+//}
+
+//bool GpuTransformer::isLoopCandidate() {
+  //CForLoop *cfl = this->loop_;
+  //INT_ASSERT(cfl);
+
+  //if (!cfl->inTree())
+    //return false;
+
+  //if (!cfl->isOrderIndependent())
+    //return false;
+
+  //// We currently don't support launching kernels from kernels. So if
+  //// the loop is within a function already marked for use on the GPU,
+  //// don't GPUize.
+  //if(isAlreadyInGpuKernel()) {
+    //return false;
+  //}
+
+  //return true;
+//}
+
+//bool GpuTransformer::parentFnAllowsGpuization() {
+  //FnSymbol *cur = this->parentFn_;
+  //while (cur) {
+    //if (cur->hasFlag(FLAG_NO_GPU_CODEGEN)) {
+      //assertionReporter_.reportNotGpuizable(loop_, cur, "parent function disallows execution on a GPU");
+      //return false;
+    //}
+
+    //// this is obviously a weak implementation. But the purpose is to track the
+    //// call chain from things like `coforall_fn`, `wrapcoforall_fn` etc, which
+    //// are always single invocation
+    //if (CallExpr *singleCall = cur->singleInvocation()) {
+      //cur = singleCall->getFunction();
+    //}
+    //else {
+      //break;
+    //}
+  //}
+  //return true;
+//}
+//
+static int detailIndent = 0;
+
+static void reportEnter(BaseAST* node) {
+
+  for (int i=0 ; i<detailIndent ; i++) {
+    std::cout << " ";
+  }
+  std::cout << "Entering " << node->astTagAsString() << ": " << node->id << std::endl;
+  detailIndent++;
+}
+
+static void reportVisit(BaseAST* node) {
+  for (int i=0 ; i<detailIndent ; i++) {
+    std::cout << " ";
+  }
+  std::cout << "Visiting " << node->astTagAsString() << ": " << node->id << std::endl;
+}
+
+static void reportExit(BaseAST* node) {
+  detailIndent--;
+
+  for (int i=0 ; i<detailIndent ; i++) {
+    std::cout << " ";
+  }
+  std::cout << "Exiting " << node->astTagAsString() << ": " << node->id << std::endl;
+}
+
+bool GpuizableLoop::enterCForLoop(CForLoop *loop) {
+  reportEnter(loop);
+
+  bool ret = false;
+  if (loop == this->loop_) {
+    // this is the loop that will turn into a kernel
+    ret = attemptToExtractLoopInformation();
+  }
+  else {
+    // this is a loop downstream from it
+    if (!this->isEligible_) return false;
+  }
+
+  if (!ret) reportExit(loop);
+  return ret;
+}
+
+static void outlineEligibleLoop(FnSymbol *fn, GpuizableLoop &gpuLoop) {
+  SET_LINENO(gpuLoop.loop());
+
+  // The marker is a compile-time only primitive; remove it now.
+  if (auto marker = getGpuEligibleMarker(gpuLoop.loop())) {
+    // TODO probably won't need this anymore
+    marker->remove();
+  }
+
+  // Construction of the GpuKernel will create the outlined function
+  GpuKernel kernel(gpuLoop, fn->defPoint);
+  if(!kernel.lateGpuizationFailure()) {
+    kernel.generateGpuAndNonGpuPaths();
+  } else {
+    kernel.fn()->defPoint->remove();
+  }
+}
+
+void GpuizableLoop::exitCForLoop(CForLoop *loop) {
+  // create the kernel if all is dandy
+  std::cout << loop->stringLoc() << std::endl;
+  if (this->isEligible()) {
+    std::cout << "eligible\n";
+    outlineEligibleLoop(this->parentFn_, *this);
+  }
+
+  reportExit(loop);
+}
+
+bool GpuizableLoop::enterBlockStmt(BlockStmt *block) {
+  reportEnter(block);
+
+  if (block->isGpuPrimitivesBlock()) {
+    INT_ASSERT(this->primBlock_ == nullptr);
+    this->primBlock_ = block;
+    reportExit(block);
+    return false;
+  }
+
+  return true;
+}
+
+void GpuizableLoop::exitBlockStmt(BlockStmt *block) {
+  reportExit(block);
+}
+
+bool GpuizableLoop::enterCallExpr(CallExpr *call) {
+  reportEnter(call);
+
+  assertionReporter_.pushCall(call);
+
+  if (call->isPrimitive()) {
+    // classifyPrimitive gets mad that that our internal marker primitives
+    // should already have been removed from the tree. We know it's safe, so just
+    // leave it.
+    if (call->primitive->tag == PRIM_GPU_ELIGIBLE ||
+        call->primitive->tag == PRIM_GPU_PRIMITIVE_BLOCK) return false;
+
+    // only primitives that are fast and local are allowed for now
+    bool inLocal = inLocalBlock(call);
+    int is = classifyPrimitive(call, inLocal);
+    if ((is != FAST_AND_LOCAL)) {
+      assertionReporter_.reportNotGpuizable(loop_, call, "call to a primitive that is not fast and local");
+      this->isEligible_ = false;
+      reportExit(call);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void GpuizableLoop::exitCallExpr(CallExpr *call) {
+
+  assertionReporter_.popCall();
+
+  reportExit(call);
+}
+
+bool GpuizableLoop::enterFnSym(FnSymbol *fn) {
+  reportEnter(fn);
+
+  indentGPUChecksLevel += 2;
+  // nonLocalAccess function is really complicated, on a quick look it has:
+  // - allocation (RAD cache)
+  // - atomics
+  // - communication
+  // I tried adding stubs for these to just to get it to compile, but it
+  // spiraled out too fast. So, we'll just make a new copy for GPU here that
+  // just errors. We don't expect this function to be called until we have
+  // GPU-driven communication.
+  if (fn->hasFlag(FLAG_NOT_CALLED_FROM_GPU)) {
+    INT_FATAL("not ready to handle this yet");
+    //FnSymbol* gpuCopy = createErroringStubForGpu(fn);
+    //call->setResolvedFunction(gpuCopy);
+
+    //// now, this call is safe
+    //continue;
+  }
+
+  if (fn->hasFlag(FLAG_NO_GPU_CODEGEN)) {
+    //assertionReporter_.pushCall(call);
+    assertionReporter_.reportNotGpuizable(loop_, fn, "function is marked as not eligible for GPU execution");
+    //assertionReporter_.popCall();
+    this->isEligible_ = false;
+    reportExit(fn);
+    return false;
+  }
+
+  if(fn->hasFlag(FLAG_EXTERN) &&
+      !fn->hasFlag(FLAG_GPU_CODEGEN) &&
+      !fn->hasFlag(FLAG_GPU_AND_CPU_CODEGEN))
+  {
+    std::string msg = "function calls out to extern function (";
+    msg += fn->name;
+    msg += "), which is not marked as GPU eligible";
+    assertionReporter_.reportNotGpuizable(loop_, fn, msg.c_str());
+    this->isEligible_ = false;
+    reportExit(fn);
+    return false;
+  }
+
+  std::cout << " in enterFnSym\n";
+  if (hasOuterVarAccesses(fn)) {
+  std::cout << " \tin cond\n";
+    assertionReporter_.reportNotGpuizable(loop_, fn, "called function has outer var access");
+
+    this->isEligible_ = false;
+    reportExit(fn);
+    return false;
+  }
+
+  return true;
+}
+
+void GpuizableLoop::exitFnSym(FnSymbol* fn) {
+  indentGPUChecksLevel -= 2;
+  reportExit(fn);
+}
+
+
+void GpuizableLoop::visitSymExpr(SymExpr* symExpr) {
+  if (!this->isEligible_) return;
+  reportVisit(symExpr);
+
+  if (FnSymbol *fn = toFnSymbol(symExpr->symbol())) {
+    fn->accept(this);
+    return;
+  }
+
+  Symbol* sym = symExpr->symbol();
+  // gotos that jump outside the loop cannot be gpuized
+  if (GotoStmt* gotostmt = toGotoStmt(symExpr->parentExpr)) {
+    if (auto label = toSymExpr(gotostmt->label)) {
+      if (!isDefinedInTheLoop(label->symbol(), this->loop_))
+        this->isEligible_ = false;
+    }
+  }
+
+  // TODO: at this point we should just record privatized symbols used in the
+  // loop body. Currently, the compiler can sometimes generate two `pidGets`
+  // for the same thing. This should be OK; but runtime is probably doing
+  // redundant work.
+  if(Symbol* pidField = getPidFieldForPrivatizationOffload(symExpr)) {
+    // the symbol is an array/domain record with `_pid` field
+    SET_LINENO(symExpr);
+    CallExpr* pidGet = new CallExpr(PRIM_GET_MEMBER_VALUE, sym, pidField);
+    pidGets_.push_back(pidGet);
+  }
+  else if (symbolIsAPid(symExpr)) {
+    // the symbol is an index into `chpl_privateObjects`
+    CallExpr* move = toCallExpr(sym->getSingleDef()->getStmtExpr());
+    INT_ASSERT(move && move->isPrimitive(PRIM_MOVE));
+
+    CallExpr* rhs = toCallExpr(move->get(2));
+    INT_ASSERT(rhs && rhs->isPrimitive(PRIM_GET_MEMBER_VALUE));
+
+    pidGets_.push_back(rhs);
+  }
+}
+
 
