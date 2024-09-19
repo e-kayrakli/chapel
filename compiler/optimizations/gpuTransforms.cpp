@@ -604,13 +604,13 @@ GpuizableLoop::GpuizableLoop(BlockStmt *blk) {
 
   this->parentFn_ = toFnSymbol(blk->getFunction());
   this->assertionReporter_.noteGpuizableAssertion(findCompileTimeGpuAssertions());
-  //this->isEligible_ = evaluateLoop();
 
   // Ideally we should error out earlier than this with a more specific
   // error message but here's a final fallback error.
   // There's one use case we want to exempt, which is failure to
   // gpuize a nested loop. In this case if there was a failure to gpuize
   // the outer loop we already would have errored.
+  // TODO what issues these errors?
   //if(!this->isEligible_ && !isAlreadyInGpuKernel()) {
     //this->assertionReporter_.fallbackReportGpuizationFailure(blk);
   //}
@@ -2339,58 +2339,6 @@ void GpuKernel::generateGpuAndNonGpuPaths() {
   }
 }
 
-//class GpuTransformer final : public AstVisitorTraverse {
-  //public:
-    //GpuTransformer(CForLoop loop)
-  //private:
-    //CForLoop loop_;
-//}
-
-//GpuTransformer::GpuTransformer(CForLoop loop): loop_(loop) {
-
-//}
-
-//bool GpuTransformer::isLoopCandidate() {
-  //CForLoop *cfl = this->loop_;
-  //INT_ASSERT(cfl);
-
-  //if (!cfl->inTree())
-    //return false;
-
-  //if (!cfl->isOrderIndependent())
-    //return false;
-
-  //// We currently don't support launching kernels from kernels. So if
-  //// the loop is within a function already marked for use on the GPU,
-  //// don't GPUize.
-  //if(isAlreadyInGpuKernel()) {
-    //return false;
-  //}
-
-  //return true;
-//}
-
-//bool GpuTransformer::parentFnAllowsGpuization() {
-  //FnSymbol *cur = this->parentFn_;
-  //while (cur) {
-    //if (cur->hasFlag(FLAG_NO_GPU_CODEGEN)) {
-      //assertionReporter_.reportNotGpuizable(loop_, cur, "parent function disallows execution on a GPU");
-      //return false;
-    //}
-
-    //// this is obviously a weak implementation. But the purpose is to track the
-    //// call chain from things like `coforall_fn`, `wrapcoforall_fn` etc, which
-    //// are always single invocation
-    //if (CallExpr *singleCall = cur->singleInvocation()) {
-      //cur = singleCall->getFunction();
-    //}
-    //else {
-      //break;
-    //}
-  //}
-  //return true;
-//}
-//
 static int detailIndent = 0;
 
 static void reportEnter(BaseAST* node) {
