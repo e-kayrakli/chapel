@@ -46,6 +46,8 @@ static Timer gpuTransformTimer;
 static bool debugPrintGPUChecks = false;
 static bool allowFnCallsFromGPU = true;
 static int indentGPUChecksLevel = 0;
+static bool reportTraversal = false;
+
 
 // Ideally, if we do gpuSpecialization, we could safely assume that any function
 // that isn't marked with FLAG_GPU_SPECIALIZE would be executed on a CPU locale.
@@ -740,6 +742,7 @@ Symbol* GpuizableLoop::getPidFieldForPrivatizationOffload(SymExpr* symExpr) {
   Symbol* sym = symExpr->symbol();
   if (!isDefinedInTheLoop(sym, this->loop_) &&
       !symbolIsAField(symExpr) &&
+      !isLabelSymbol(sym) &&
       isRecordWrappedType(sym->type)) {
     AggregateType* aggType = toAggregateType(sym->type);
     INT_ASSERT(aggType);
@@ -2391,6 +2394,7 @@ void GpuKernel::generateGpuAndNonGpuPaths() {
 static int detailIndent = 0;
 
 static void reportEnter(BaseAST* node) {
+  if (!reportTraversal) return;
 
   for (int i=0 ; i<detailIndent ; i++) {
     std::cout << " ";
@@ -2400,6 +2404,8 @@ static void reportEnter(BaseAST* node) {
 }
 
 static void reportVisit(BaseAST* node) {
+  if (!reportTraversal) return;
+
   for (int i=0 ; i<detailIndent ; i++) {
     std::cout << " ";
   }
@@ -2407,6 +2413,8 @@ static void reportVisit(BaseAST* node) {
 }
 
 static void reportExit(BaseAST* node) {
+  if (!reportTraversal) return;
+
   detailIndent--;
 
   for (int i=0 ; i<detailIndent ; i++) {
@@ -2452,9 +2460,9 @@ static void outlineEligibleLoop(FnSymbol *fn, GpuizableLoop &gpuLoop) {
 
 void GpuizableLoop::exitCForLoop(CForLoop *loop) {
   // create the kernel if all is dandy
-  std::cout << loop->stringLoc() << std::endl;
+  //std::cout << loop->stringLoc() << std::endl;
   if (this->isEligible()) {
-    std::cout << "eligible\n";
+    //std::cout << "eligible\n";
     outlineEligibleLoop(this->parentFn_, *this);
   }
 
@@ -2554,9 +2562,7 @@ bool GpuizableLoop::enterFnSym(FnSymbol *fn) {
     return false;
   }
 
-  std::cout << " in enterFnSym\n";
   if (hasOuterVarAccesses(fn)) {
-  std::cout << " \tin cond\n";
     assertionReporter_.reportNotGpuizable(loop_, fn, "called function has outer var access");
 
     this->isEligible_ = false;
@@ -2571,7 +2577,6 @@ void GpuizableLoop::exitFnSym(FnSymbol* fn) {
   indentGPUChecksLevel -= 2;
   reportExit(fn);
 }
-
 
 void GpuizableLoop::visitSymExpr(SymExpr* symExpr) {
   if (!this->isEligible_) return;
