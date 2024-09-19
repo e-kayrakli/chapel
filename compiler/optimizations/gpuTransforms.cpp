@@ -654,6 +654,7 @@ static CallExpr* toCallToGpuEligibilityPrimitive(Expr* expr) {
   return nullptr;
 }
 
+// TODO this should be refactored into enterCallExpr etc
 CallExpr* GpuizableLoop::findCompileTimeGpuAssertions() {
   CForLoop *cfl = this->loop_;
   INT_ASSERT(cfl);
@@ -685,6 +686,7 @@ CallExpr* GpuizableLoop::findCompileTimeGpuAssertions() {
   return nullptr;
 }
 
+// TODO by looking at the implemenation, this doesn't have to be a kernel
 bool GpuizableLoop::isAlreadyInGpuKernel() {
   return this->parentFn_->hasFlag(FLAG_GPU_CODEGEN);
 }
@@ -2421,8 +2423,13 @@ bool GpuizableLoop::enterBlockStmt(BlockStmt *block) {
   reportEnter(block);
 
   if (block->isGpuPrimitivesBlock()) {
-    INT_ASSERT(this->primBlock_ == nullptr);
-    this->primBlock_ = block;
+    if (this->primBlock_ == nullptr) {
+      this->primBlock_ = block;
+    }
+    else {
+      // TODO there are multiple primitive blocks in this loop, do we need to
+      // check something
+    }
     reportExit(block);
     return false;
   }
