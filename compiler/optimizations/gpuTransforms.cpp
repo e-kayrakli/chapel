@@ -2373,23 +2373,6 @@ static void reportExit(BaseAST* node) {
   std::cout << "Exiting " << node->astTagAsString() << ": " << node->id << std::endl;
 }
 
-bool GpuizableLoop::enterCForLoop(CForLoop *loop) {
-  reportEnter(loop);
-
-  bool ret = false;
-  if (loop == this->loop_) {
-    // this is the loop that will turn into a kernel
-    ret = attemptToExtractLoopInformation();
-  }
-  else {
-    // this is a loop downstream from it
-    if (!this->isEligible_) return false;
-  }
-
-  if (!ret) reportExit(loop);
-  return ret;
-}
-
 static void outlineEligibleLoop(FnSymbol *fn, GpuizableLoop &gpuLoop) {
   SET_LINENO(gpuLoop.loop());
 
@@ -2406,6 +2389,24 @@ static void outlineEligibleLoop(FnSymbol *fn, GpuizableLoop &gpuLoop) {
   } else {
     kernel.fn()->defPoint->remove();
   }
+}
+
+
+bool GpuizableLoop::enterCForLoop(CForLoop *loop) {
+  reportEnter(loop);
+
+  bool ret = false;
+  if (loop == this->loop_) {
+    // this is the loop that will turn into a kernel
+    ret = attemptToExtractLoopInformation();
+  }
+  else {
+    // this is a loop downstream from it
+    if (!this->isEligible_) return false;
+  }
+
+  if (!ret) reportExit(loop);
+  return ret;
 }
 
 void GpuizableLoop::exitCForLoop(CForLoop *loop) {
