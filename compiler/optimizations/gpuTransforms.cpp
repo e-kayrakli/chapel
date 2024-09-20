@@ -152,8 +152,8 @@ static VarSymbol* generateAssignmentToPrimitive(FnSymbol* fn,
 }
 
 
-static bool isDefinedInTheLoop(Symbol* sym, CForLoop* loop) {
-  LoopStmt* curLoop = LoopStmt::findEnclosingLoop(sym->defPoint);
+static bool isLexicallyInTheLoop(Expr* e, CForLoop* loop) {
+  LoopStmt* curLoop = LoopStmt::findEnclosingLoop(e);
   while (curLoop) {
     if (curLoop == loop) {
       return true;
@@ -162,6 +162,11 @@ static bool isDefinedInTheLoop(Symbol* sym, CForLoop* loop) {
   }
   return false;
 }
+
+static bool isDefinedInTheLoop(Symbol* sym, CForLoop* loop) {
+  return isLexicallyInTheLoop(sym->defPoint, loop);
+}
+
 
 // This is primarily to handle the indexOfInterest generated for promoted
 // expressions. That symbol is a ref that's defined outside the for loop, but
@@ -499,18 +504,18 @@ class GpuAssertionReporter {
   }
 };
 
-static bool symbolIsAPid(SymExpr* expr) {
-  if (CallExpr *parent = toCallExpr(expr->parentExpr)) {
-    if (parent->isPrimitive(PRIM_ARRAY_GET) && parent->get(2) == expr) {
-      SymExpr* theArray = toSymExpr(parent->get(1));
-      INT_ASSERT(theArray);
-      if (theArray->symbol()->name == astr("chpl_privateObjects")) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
+//static bool symbolIsAPid(SymExpr* expr) {
+  //if (CallExpr *parent = toCallExpr(expr->parentExpr)) {
+    //if (parent->isPrimitive(PRIM_ARRAY_GET) && parent->get(2) == expr) {
+      //SymExpr* theArray = toSymExpr(parent->get(1));
+      //INT_ASSERT(theArray);
+      //if (theArray->symbol()->name == astr("chpl_privateObjects")) {
+        //return true;
+      //}
+    //}
+  //}
+  //return false;
+//}
 
 // ----------------------------------------------------------------------------
 // GpuizableLoop
@@ -530,6 +535,8 @@ class GpuizableLoop final: public AstVisitorTraverse {
   GpuAssertionReporter assertionReporter_;
 
   std::vector<CallExpr*> pidGets_;
+
+  int traversalDepth_ = -1;
 
   // To allow move constructor
   GpuizableLoop() {}
@@ -592,6 +599,14 @@ private:
   std::set<FnSymbol*> visitedFns_;
 
   BlockStmt* primBlock_;
+
+  void enter(BaseAST* node);
+  void exit(BaseAST* node);
+  void visit(BaseAST* node);
+
+  void reportEnter(BaseAST* node);
+  void reportExit(BaseAST* node);
+  void reportVisit(BaseAST* node);
 };
 
 std::unordered_map<CForLoop*, GpuizableLoop> eligibleLoops;
@@ -2343,7 +2358,22 @@ void GpuKernel::generateGpuAndNonGpuPaths() {
 
 static int detailIndent = 0;
 
-static void reportEnter(BaseAST* node) {
+
+void GpuizableLoop::enter(BaseAST* node) {
+  traversalDepth_++;
+  reportEnter(node);
+}
+
+void GpuizableLoop::exit(BaseAST* node) {
+  traversalDepth_--;
+  reportEnter(node);
+}
+
+void GpuizableLoop::visit(BaseAST* node) {
+  reportVisit(node);
+}
+
+void GpuizableLoop::reportEnter(BaseAST* node) {
   if (!reportTraversal) return;
 
   for (int i=0 ; i<detailIndent ; i++) {
@@ -2353,7 +2383,7 @@ static void reportEnter(BaseAST* node) {
   detailIndent++;
 }
 
-static void reportVisit(BaseAST* node) {
+void GpuizableLoop::reportVisit(BaseAST* node) {
   if (!reportTraversal) return;
 
   for (int i=0 ; i<detailIndent ; i++) {
@@ -2362,7 +2392,7 @@ static void reportVisit(BaseAST* node) {
   std::cout << "Visiting " << node->astTagAsString() << ": " << node->id << std::endl;
 }
 
-static void reportExit(BaseAST* node) {
+void GpuizableLoop::reportExit(BaseAST* node) {
   if (!reportTraversal) return;
 
   detailIndent--;
@@ -2393,7 +2423,7 @@ static void outlineEligibleLoop(FnSymbol *fn, GpuizableLoop &gpuLoop) {
 
 
 bool GpuizableLoop::enterCForLoop(CForLoop *loop) {
-  reportEnter(loop);
+  enter(loop);
 
   bool ret = false;
   if (loop == this->loop_) {
@@ -2405,7 +2435,7 @@ bool GpuizableLoop::enterCForLoop(CForLoop *loop) {
     if (!this->isEligible_) return false;
   }
 
-  if (!ret) reportExit(loop);
+  if (!ret) exit(loop);
   return ret;
 }
 
@@ -2417,11 +2447,11 @@ void GpuizableLoop::exitCForLoop(CForLoop *loop) {
     outlineEligibleLoop(this->parentFn_, *this);
   }
 
-  reportExit(loop);
+  exit(loop);
 }
 
 bool GpuizableLoop::enterBlockStmt(BlockStmt *block) {
-  reportEnter(block);
+  enter(block);
 
   if (block->isGpuPrimitivesBlock()) {
     if (this->primBlock_ == nullptr) {
@@ -2431,7 +2461,7 @@ bool GpuizableLoop::enterBlockStmt(BlockStmt *block) {
       // TODO there are multiple primitive blocks in this loop, do we need to
       // check something
     }
-    reportExit(block);
+    exit(block);
     return false;
   }
 
@@ -2439,11 +2469,11 @@ bool GpuizableLoop::enterBlockStmt(BlockStmt *block) {
 }
 
 void GpuizableLoop::exitBlockStmt(BlockStmt *block) {
-  reportExit(block);
+  exit(block);
 }
 
 bool GpuizableLoop::enterCallExpr(CallExpr *call) {
-  reportEnter(call);
+  enter(call);
 
   assertionReporter_.pushCall(call);
 
@@ -2460,7 +2490,7 @@ bool GpuizableLoop::enterCallExpr(CallExpr *call) {
     if ((is != FAST_AND_LOCAL)) {
       assertionReporter_.reportNotGpuizable(loop_, call, "call to a primitive that is not fast and local");
       this->isEligible_ = false;
-      reportExit(call);
+      exit(call);
       return false;
     }
   }
@@ -2472,11 +2502,11 @@ void GpuizableLoop::exitCallExpr(CallExpr *call) {
 
   assertionReporter_.popCall();
 
-  reportExit(call);
+  exit(call);
 }
 
 bool GpuizableLoop::enterFnSym(FnSymbol *fn) {
-  reportEnter(fn);
+  enter(fn);
 
   indentGPUChecksLevel += 2;
   // nonLocalAccess function is really complicated, on a quick look it has:
@@ -2501,7 +2531,7 @@ bool GpuizableLoop::enterFnSym(FnSymbol *fn) {
     assertionReporter_.reportNotGpuizable(loop_, fn, "function is marked as not eligible for GPU execution");
     //assertionReporter_.popCall();
     this->isEligible_ = false;
-    reportExit(fn);
+    exit(fn);
     return false;
   }
 
@@ -2514,7 +2544,7 @@ bool GpuizableLoop::enterFnSym(FnSymbol *fn) {
     msg += "), which is not marked as GPU eligible";
     assertionReporter_.reportNotGpuizable(loop_, fn, msg.c_str());
     this->isEligible_ = false;
-    reportExit(fn);
+    exit(fn);
     return false;
   }
 
@@ -2522,7 +2552,7 @@ bool GpuizableLoop::enterFnSym(FnSymbol *fn) {
     assertionReporter_.reportNotGpuizable(loop_, fn, "called function has outer var access");
 
     this->isEligible_ = false;
-    reportExit(fn);
+    exit(fn);
     return false;
   }
 
@@ -2531,12 +2561,12 @@ bool GpuizableLoop::enterFnSym(FnSymbol *fn) {
 
 void GpuizableLoop::exitFnSym(FnSymbol* fn) {
   indentGPUChecksLevel -= 2;
-  reportExit(fn);
+  exit(fn);
 }
 
 void GpuizableLoop::visitSymExpr(SymExpr* symExpr) {
   if (!this->isEligible_) return;
-  reportVisit(symExpr);
+  visit(symExpr);
 
   if (FnSymbol *fn = toFnSymbol(symExpr->symbol())) {
     fn->accept(this);
@@ -2552,25 +2582,20 @@ void GpuizableLoop::visitSymExpr(SymExpr* symExpr) {
     }
   }
 
-  // TODO: at this point we should just record privatized symbols used in the
-  // loop body. Currently, the compiler can sometimes generate two `pidGets`
-  // for the same thing. This should be OK; but runtime is probably doing
-  // redundant work.
-  if(Symbol* pidField = getPidFieldForPrivatizationOffload(symExpr)) {
-    // the symbol is an array/domain record with `_pid` field
-    SET_LINENO(symExpr);
-    CallExpr* pidGet = new CallExpr(PRIM_GET_MEMBER_VALUE, sym, pidField);
-    pidGets_.push_back(pidGet);
-  }
-  else if (symbolIsAPid(symExpr)) {
-    // the symbol is an index into `chpl_privateObjects`
-    CallExpr* move = toCallExpr(sym->getSingleDef()->getStmtExpr());
-    INT_ASSERT(move && move->isPrimitive(PRIM_MOVE));
-
-    CallExpr* rhs = toCallExpr(move->get(2));
-    INT_ASSERT(rhs && rhs->isPrimitive(PRIM_GET_MEMBER_VALUE));
-
-    pidGets_.push_back(rhs);
+  // TODO add syms to a set to avoid redundancy, generate pidGets later
+  if (isLexicallyInTheLoop(symExpr, this->loop_) &&
+      !isDefinedInTheLoop(sym, this->loop_)) {
+    if (AggregateType* aggType = toAggregateType(sym->type)) {
+      if (aggType->symbol->hasFlag(FLAG_ARRAY) ||
+          aggType->symbol->hasFlag(FLAG_DOMAIN) ||
+          aggType->symbol->hasFlag(FLAG_DISTRIBUTION)) {
+        if (Symbol* pid = aggType->getField("_pid", /*fatal=*/ false)) {
+          SET_LINENO(symExpr);
+          CallExpr* pidGet = new CallExpr(PRIM_GET_MEMBER_VALUE, sym, pid);
+          pidGets_.push_back(pidGet);
+        }
+      }
+    }
   }
 }
 
