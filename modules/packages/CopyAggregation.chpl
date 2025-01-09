@@ -110,8 +110,26 @@ module CopyAggregation {
    */
   record DstAggregator {
     type elemType;
+    param custom = false;
+    /*type handlerType;*/
+
     @chpldoc.nodoc
-    var agg: if aggregate then DstAggregatorImpl(elemType) else nothing;
+    var agg: if aggregate then DstAggregatorImpl(elemType, ?)
+                          else nothing;
+
+    proc init(type elemType) {
+      this.elemType = elemType;
+      if aggregate then
+        this.agg = new DstAggregatorImpl(elemType, nil);
+    }
+
+    proc init(type elemType, handler) {
+      this.elemType = elemType;
+      this.custom = true;
+      if aggregate then
+        this.agg = new DstAggregatorImpl(elemType, handler);
+    }
+
     inline proc ref copy(ref dst: elemType, const in srcVal: elemType) {
       if aggregate then agg.copy(dst, srcVal);
                    else dst = srcVal;
@@ -142,6 +160,8 @@ module CopyAggregation {
   @chpldoc.nodoc
   record DstAggregatorImpl {
     type elemType;
+    /*param custom: bool;*/
+    var handler;
     type aggType = (c_ptr(elemType), elemType);
     const bufferSize = dstBuffSize;
     const myLocaleSpace = 0..<numLocales;
@@ -208,6 +228,10 @@ module CopyAggregation {
     }
 
     proc ref _flushBuffer(loc: int, ref bufferIdx, freeData) {
+      if verboseAggregation {
+        writeln("DstAggregator._flushBuffer is called");
+        /*writeln("\tcustom: ", custom);*/
+      }
       const myBufferIdx = bufferIdx;
       if myBufferIdx == 0 then return;
 
@@ -221,7 +245,12 @@ module CopyAggregation {
       // Process remote buffer
       on Locales[loc] {
         for (dstAddr, srcVal) in rBuffer.localIter(remBufferPtr, myBufferIdx) {
-          dstAddr.deref() = srcVal;
+          if !isNothing(handler) {
+            handler.handle(dstAddr, srcVal);
+          }
+          else {
+            dstAddr.deref() = srcVal;
+          }
         }
         if freeData {
           rBuffer.localFree(remBufferPtr);
@@ -410,6 +439,7 @@ module AggregationPrimitives {
         assert(data != nil);
       }
       foreach i in 0..<size {
+        writeln("data.type: ", data.type:string);
         yield data[i];
       }
     }
