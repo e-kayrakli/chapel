@@ -17,7 +17,8 @@ class DestHandler {
     this.locIdxBuf.add(srcVal);
   }
 
-  proc ref deinit() {
+  proc deinit() {
+    writeln("DestHandler.deinit is called");
     this.locIdxBuf.commit();
   }
 

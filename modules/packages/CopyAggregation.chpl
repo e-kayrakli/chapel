@@ -478,6 +478,7 @@ module AggregationPrimitives {
     }
 
     proc deinit() {
+      writeln("remoteHandler.deinit is called");
       delete localHandler;
     }
     /*proc init(type t, original, loc: int) {*/
