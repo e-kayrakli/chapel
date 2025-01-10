@@ -760,6 +760,11 @@ module ChapelDistribution {
     var buf: [bufDom] idxType;
     var cur = 0;
 
+    proc init(param rank: int, obj) {
+      this.rank = rank;
+      this.obj = obj;
+    }
+
     proc init(size, param rank: int, obj) {
       this.rank = rank;
       this.obj = obj;
@@ -779,8 +784,10 @@ module ChapelDistribution {
     }
 
     proc ref commit() {
-      if cur >= 1 then
+      if cur >= 1 then {
+        writeln("committing on ", here, ": ", buf, " this.locale: ", this.locale);
         obj.dsiBulkAdd(buf[..cur-1]);
+      }
       cur = 0;
     }
   }

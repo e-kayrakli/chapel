@@ -120,11 +120,11 @@ module CopyAggregation {
     proc init(type elemType) {
       this.elemType = elemType;
       if aggregate then
-        this.agg = new DstAggregatorImpl(elemType, nil);
+        this.agg = new DstAggregatorImpl(elemType, 0);
     }
 
-    proc init(type elemType, handler) {
-      this.elemType = elemType;
+    proc init(ref handler) {
+      this.elemType = handler.elemType;
       this.custom = true;
       if aggregate then
         this.agg = new DstAggregatorImpl(elemType, handler);
@@ -134,6 +134,12 @@ module CopyAggregation {
       if aggregate then agg.copy(dst, srcVal);
                    else dst = srcVal;
     }
+
+    inline proc ref copy(const in srcVal: elemType) {
+      compilerAssert(aggregate);
+      agg.copy(srcVal);
+    }
+
     inline proc flush() {
       if aggregate then agg.flush();
     }
@@ -163,12 +169,13 @@ module CopyAggregation {
     /*param custom: bool;*/
     var handler;
     type aggType = (c_ptr(elemType), elemType);
-    const bufferSize = dstBuffSize;
+    const bufferSize = 3;
     const myLocaleSpace = 0..<numLocales;
     var lastLocale: int;
     var opsUntilYield = yieldFrequency;
     var lBuffers: c_ptr(c_ptr(aggType));
     var rBuffers: [myLocaleSpace] remoteBuffer(aggType);
+    var rHandlers: [myLocaleSpace] remoteHandler(handler.type);
     var bufferIdxs: c_ptr(int);
 
     proc ref postinit() {
@@ -178,11 +185,16 @@ module CopyAggregation {
         lBuffers[loc] = allocate(aggType, bufferSize);
         bufferIdxs[loc] = 0;
         rBuffers[loc] = new remoteBuffer(aggType, bufferSize, loc);
+        rHandlers[loc] = new remoteHandler(handler.type, handler, loc);
       }
     }
 
     proc ref deinit() {
+      writeln("deinitializing on ", here);
       flush();
+      /*if handler.type == int {*/
+        /*delete handler;*/
+      /*}*/
       for loc in myLocaleSpace {
         deallocate(lBuffers[loc]);
       }
@@ -227,9 +239,40 @@ module CopyAggregation {
       }
     }
 
+    inline proc ref copy(const in srcVal: elemType) {
+      if verboseAggregation {
+        writeln("DstAggregator.copy is called");
+      }
+      // Get the locale of dst and the local address on that locale
+      const loc = handler.destLocale(srcVal).id;
+      lastLocale = loc;
+      const dstAddr = nil;
+
+      // Get our current index into the buffer for dst's locale
+      ref bufferIdx = bufferIdxs[loc];
+
+      /*writeln(srcVal, " is buffered to go to locale ", loc);*/
+      // Buffer the address and desired value
+      lBuffers[loc][bufferIdx] = (dstAddr, srcVal);
+      bufferIdx += 1;
+
+      // Flush our buffer if it's full. If it's been a while since we've let
+      // other tasks run, yield so that we're not blocking remote tasks from
+      // flushing their buffers.
+      if bufferIdx == bufferSize {
+        _flushBuffer(loc, bufferIdx, freeData=false);
+        opsUntilYield = yieldFrequency;
+      } else if opsUntilYield == 0 {
+        currentTask.yieldExecution();
+        opsUntilYield = yieldFrequency;
+      } else {
+        opsUntilYield -= 1;
+      }
+    }
+
     proc ref _flushBuffer(loc: int, ref bufferIdx, freeData) {
       if verboseAggregation {
-        writeln("DstAggregator._flushBuffer is called");
+        writeln("DstAggregator._flushBuffer is called on locale ", loc);
         /*writeln("\tcustom: ", custom);*/
       }
       const myBufferIdx = bufferIdx;
@@ -239,14 +282,19 @@ module CopyAggregation {
       ref rBuffer = rBuffers[loc];
       const remBufferPtr = rBuffer.cachedAlloc();
 
+      ref rHandler = rHandlers[loc].get();
+
       // Copy local buffer to remote buffer
       rBuffer.PUT(lBuffers[loc], myBufferIdx);
 
       // Process remote buffer
       on Locales[loc] {
+        writeln("remote handler locale ", rHandler.locale);
         for (dstAddr, srcVal) in rBuffer.localIter(remBufferPtr, myBufferIdx) {
           if !isNothing(handler) {
-            handler.handle(dstAddr, srcVal);
+            /*writeln("handler.handle on ", here, " ", srcVal, " &handle:",*/
+                    /*c_ptrTo(this));*/
+            rHandler!.handle(dstAddr, srcVal);
           }
           else {
             dstAddr.deref() = srcVal;
@@ -411,6 +459,44 @@ module AggregationPrimitives {
     return try! strval: int;
   }
 
+  record remoteHandler {
+    type t;
+    var original: _to_nilable(t);
+    var localHandler: _to_nilable(_to_unmanaged(original!.sourceCopy().type));
+    var loc: int;
+
+    proc init(type t) {
+      this.t = t;
+      this.localHandler = nil;
+    }
+
+    proc init(type t, ref original, loc) {
+      this.t = t;
+      this.original = original;
+      this.localHandler = nil;
+      this.loc = loc;
+    }
+
+    proc deinit() {
+      delete localHandler;
+    }
+    /*proc init(type t, original, loc: int) {*/
+      /*this.t = t;*/
+      /*this.original = original;*/
+      /*this.loc = loc;*/
+    /*}*/
+
+    inline proc ref get() ref {
+      if localHandler == nil {
+        writeln(here, " called remoteHandler.get. Will move to ", Locales[loc]);
+        on Locales[loc] {
+          localHandler = original!.sourceCopy();
+        }
+      }
+      return localHandler;
+    }
+  }
+
   // A remote buffer with lazy allocation
   record remoteBuffer {
     type elemType;
@@ -439,7 +525,6 @@ module AggregationPrimitives {
         assert(data != nil);
       }
       foreach i in 0..<size {
-        writeln("data.type: ", data.type:string);
         yield data[i];
       }
     }
