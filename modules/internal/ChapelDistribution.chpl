@@ -784,10 +784,8 @@ module ChapelDistribution {
     }
 
     proc ref commit() {
-      if cur >= 1 then {
-        writeln("committing on ", here, ": ", buf, " this.locale: ", this.locale);
+      if cur >= 1 then
         obj.dsiBulkAdd(buf[..cur-1]);
-      }
       cur = 0;
     }
   }
