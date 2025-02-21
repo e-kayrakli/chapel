@@ -5,7 +5,7 @@
 UTIL_CRON_DIR=$(cd $(dirname ${BASH_SOURCE[0]}) ; pwd)
 
 export ARKOUDA_URL=https://github.com/e-kayrakli/arkouda.git
-export ARKOUDA_BRANCH=server-util-pbs
+export ARKOUDA_BRANCH=parquet-triage-playground
 
 export ARKOUDA_DEP_DIR=/hpelustre/chapelu/arkouda-deps
 export ARKOUDA_SKIP_CHECK_DEPS=true
@@ -14,6 +14,12 @@ export CHPL_TEST_ARKOUDA_PERF=false
 export ARKOUDA_QUICK_COMPILE=true
 
 export CHPL_NIGHTLY_TEST_CONFIG_NAME="hpe-apollo-hdr.arkouda"
+
+export CHPL_TEST_ARKOUDA_SKIP_RM_CLONE=true
+export CHPL_TEST_ARKOUDA_SKIP_CHAPEL_PY=true
+export CHPL_TEST_ARKOUDA_SKIP_BUILD=true
+export CHPL_TEST_ARKOUDA_SKIP_MAKE_CHECK=true
+export ARKOUDA_PYTEST_OPTIONS=tests/io_test.py
 
 module list
 
@@ -29,7 +35,7 @@ export GASNET_PHYSMEM_MAX="0.90"
 
 export CHPL_LLVM_GCC_PREFIX='none'
 
-nightly_args="${nightly_args} -no-buildcheck"
+nightly_args="${nightly_args} -no-buildcheck -nobuild"
 
 module list
 
