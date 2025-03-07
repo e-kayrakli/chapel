@@ -26,7 +26,7 @@ export GASNET_PHYSMEM_MAX="0.90"
 
 export CHPL_LLVM_GCC_PREFIX='none'
 
-nightly_args="${nightly_args} -no-buildcheck"
+nightly_args="${nightly_args} -no-buildcheck -nobuild"
 
 module list
 
