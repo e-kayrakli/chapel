@@ -10,7 +10,6 @@ export CHPL_INSTANTIATION_LIMIT=1024  # This is needed for compiling multidim ar
 export ARKOUDA_PARQUET_TEST_DATA_DIR=/nas/store/khandeka/parquet-testing/data  # Enable edge case parquet testing
 
 export CHPL_TEST_ARKOUDA_PERF=false
-export ARKOUDA_DEVELOPER=true
 
 export CHPL_NIGHTLY_TEST_CONFIG_NAME="hpe-apollo-hdr.arkouda"
 
