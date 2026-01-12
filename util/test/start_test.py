@@ -1055,14 +1055,14 @@ def set_up_performance_testing_B():
 def set_up_executables():
     # check for compiler
     global compiler
-    if os.path.isfile(compiler) and os.access(compiler, os.X_OK):
-        compiler = os.path.abspath(compiler)
+    # if os.path.isfile(compiler) and os.access(compiler, os.X_OK):
+        # compiler = os.path.abspath(compiler)
 
-        logger.write('[compiler: "{0}"]'.format(compiler))
-    else:
-        logger.write("[Error: Cannot find or execute compiler: {0}]"
-                .format(compiler))
-        finish()
+        # logger.write('[compiler: "{0}"]'.format(compiler))
+    # else:
+        # logger.write("[Error: Cannot find or execute compiler: {0}]"
+                # .format(compiler))
+        # finish()
 
     # log more options
     logger.write('[compopts: "{0}"]'.format(args.compopts))
