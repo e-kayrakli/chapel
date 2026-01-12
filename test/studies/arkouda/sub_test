@@ -33,7 +33,7 @@ bin_subdir=$($CHPL_HOME/util/chplenv/chpl_bin_subdir.py)
 export "PATH=$CHPL_HOME/bin/$bin_subdir:$PATH"
 chpl --version
 
-export ARKOUDA_HOME=$CWD/arkouda
+export ARKOUDA_HOME=${ARKOUDA_HOME:-$CWD/arkouda}
 
 if [ -z "${CHPL_TEST_ARKOUDA_SKIP_RM_CLONE}" ] ; then
   rm -rf ${ARKOUDA_HOME}
